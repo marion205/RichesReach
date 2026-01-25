@@ -25,13 +25,14 @@ import SocialNav from '../components/SocialNav';
 import PostRow from '../components/PostRow';
 import PredictionModal from '../../../components/forms/PredictionModal';
 import PollModal from '../../../components/forms/PollModal';
-import TickerChips from '../../../components/TickerChips';
+import TickerChips from '../../stocks/components/TickerChips';
 import FollowingRibbon from '../components/FollowingRibbon';
 import useTickerFollows from '../../../shared/hooks/useTickerFollows';
 import { GET_FOLLOWING_FEED } from '../../../feed';
 import { MINI_QUOTES } from '../../../tickerFollows';
 import LoadingErrorState from '../../../components/common/LoadingErrorState';
 import SocialFeed from '../components/SocialFeed';
+import logger from '../../../utils/logger';
 import DiscoverUsers from '../components/DiscoverUsers';
 import FinancialNews from '../../stocks/components/FinancialNews';
 import webSocketService from '../../../services/WebSocketService';
@@ -207,8 +208,9 @@ const [createCategory, setCreateCategory] = useState<string>('general');
 const [selectedImage, setSelectedImage] = useState<string | null>(null);
 const [selectedVideo, setSelectedVideo] = useState<string | null>(null);
 const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
-// TextInput refs
-const contentInputRef = useRef<TextInput>(null);
+  // TextInput refs
+  const contentInputRef = useRef<TextInput>(null);
+  const refetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 // Comment modal state
 const [showCommentModal, setShowCommentModal] = useState(false);
 const [commentContent, setCommentContent] = useState('');
@@ -220,8 +222,8 @@ const [discussionDetail, setDiscussionDetail] = useState<any>(null);
 const [modalUserVote, setModalUserVote] = useState<'upvote' | 'downvote' | null>(null);
 const [modalLocalScore, setModalLocalScore] = useState(0);
 // Feed type state
-const [feedType, setFeedType] = useState<'trending' | 'following' | 'discover' | 'news'>('trending');
-const handleFeedTypeChange = (newFeedType: 'trending' | 'following' | 'discover' | 'news') => {
+  const [feedType, setFeedType] = useState<'trending' | 'following' | 'discover' | 'news' | 'social'>('trending');
+const handleFeedTypeChange = (newFeedType: 'trending' | 'following' | 'discover' | 'news' | 'social') => {
 setFeedType(newFeedType);
 };
 // WebSocket connection state
@@ -265,8 +267,21 @@ const { data: followingData, loading: followingLoading, error: followingError, r
 const refetchDebounced = React.useRef<NodeJS.Timeout | null>(null);
 const safeRefetch = React.useCallback(() => {
   if (refetchDebounced.current) clearTimeout(refetchDebounced.current);
-  refetchDebounced.current = setTimeout(() => { refetchDiscussions(); }, 350);
+  refetchDebounced.current = setTimeout(() => {
+    refetchDiscussions();
+    refetchDebounced.current = null;
+  }, 350);
 }, [refetchDiscussions]);
+
+// Cleanup debounced refetch on unmount
+React.useEffect(() => {
+  return () => {
+    if (refetchDebounced.current) {
+      clearTimeout(refetchDebounced.current);
+      refetchDebounced.current = null;
+    }
+  };
+}, []);
 
 const [commentOnDiscussion] = useMutation(COMMENT_ON_DISCUSSION, {
 onError: (error) => {
@@ -307,9 +322,7 @@ webSocketService.setCallbacks({
       onConnectionStatusChange: (connected) => {
         setIsWebSocketConnected(connected);
         // Don't show error for WebSocket disconnection - it's optional
-        if (__DEV__) {
-          console.log('WebSocket connection status:', connected);
-        }
+        // WebSocket connection status - no need to log
       },
       onNewDiscussion: () => safeRefetch(),
       onNewComment: () => safeRefetch(),
@@ -324,6 +337,10 @@ webSocketService.setCallbacks({
 return () => {
   // clearInterval(pingInterval);
   // webSocketService.disconnect();
+  if (refetchTimeoutRef.current) {
+    clearTimeout(refetchTimeoutRef.current);
+    refetchTimeoutRef.current = null;
+  }
 };
 } catch (error) {
 // Error setting up WebSocket
@@ -373,9 +390,9 @@ const handleUpvote = React.useCallback(async (discussionId: string) => {
         }
       }
     });
-  } catch (error) {
-    console.error('Upvote failed:', error);
-  }
+    } catch (error) {
+      logger.error('Upvote failed:', error);
+    }
 }, [upvoteDiscussion]);
 
 const handleDownvote = React.useCallback(async (discussionId: string) => {
@@ -394,9 +411,9 @@ const handleDownvote = React.useCallback(async (discussionId: string) => {
         }
       }
     });
-  } catch (error) {
-    console.error('Downvote failed:', error);
-  }
+    } catch (error) {
+      logger.error('Downvote failed:', error);
+    }
 }, [downvoteDiscussion]);
 const handleToggleFollow = async (userId: string) => {
 try {
@@ -422,19 +439,19 @@ const handleShareDiscussion = React.useCallback(async (discussion: any) => {
       url: `richesreach://discussion/${discussion.id}`,
     };
     await Share.share(shareContent);
-  } catch (error) {
-    console.error('Error sharing discussion:', error);
-  }
+    } catch (error) {
+      logger.error('Error sharing discussion:', error);
+    }
 }, []);
 
 const handleCopyToClipboard = React.useCallback(async (text: string) => {
   try {
     await Clipboard.setStringAsync(text);
     Alert.alert('Copied!', 'Text copied to clipboard');
-  } catch (error) {
-    console.error('Error copying to clipboard:', error);
-    Alert.alert('Error', 'Failed to copy to clipboard');
-  }
+    } catch (error) {
+      logger.error('Error copying to clipboard:', error);
+      Alert.alert('Error', 'Failed to copy to clipboard');
+    }
 }, []);
 
 const handleSaveDiscussion = React.useCallback(async (discussion: any) => {
@@ -442,9 +459,8 @@ const handleSaveDiscussion = React.useCallback(async (discussion: any) => {
     // For now, copy the discussion content to clipboard as a save action
     const saveText = `${discussion.title}\n\n${discussion.content}`;
     await handleCopyToClipboard(saveText);
-    console.log('Discussion saved to clipboard:', discussion.id);
   } catch (error) {
-    console.error('Error saving discussion:', error);
+    logger.error('Error saving discussion:', error);
   }
 }, [handleCopyToClipboard]);
 // Helper function to determine if submit button should be disabled
@@ -688,17 +704,22 @@ commentCount: (discussionDetail.commentCount || 0) + 1
 });
 }
 // Refetch data in background to get real comment data
-setTimeout(async () => {
-try {
-await client.refetchQueries({ include: ['GetTrendingDiscussions'] });
-// Update discussion detail with fresh data from server
-const freshDiscussion = discussionsData?.stockDiscussions?.find((d: any) => d.id === selectedDiscussionId);
-if (freshDiscussion) {
-setDiscussionDetail(freshDiscussion);
+if (refetchTimeoutRef.current) {
+  clearTimeout(refetchTimeoutRef.current);
 }
-} catch (error) {
-// Failed to refresh discussion
-}
+refetchTimeoutRef.current = setTimeout(async () => {
+  try {
+    await client.refetchQueries({ include: ['GetTrendingDiscussions'] });
+    // Update discussion detail with fresh data from server
+    const freshDiscussion = discussionsData?.stockDiscussions?.find((d: any) => d.id === selectedDiscussionId);
+    if (freshDiscussion) {
+      setDiscussionDetail(freshDiscussion);
+    }
+    refetchTimeoutRef.current = null;
+  } catch (error) {
+    // Failed to refresh discussion
+    refetchTimeoutRef.current = null;
+  }
 }, 1000);
 } catch (error) {
 // Failed to add comment
@@ -837,7 +858,7 @@ const RedditList = (
 
 const renderContent = () => {
   if (feedType === 'following') {
-    return <SocialFeed onNavigate={onNavigate || (() => {})} />;
+    return <SocialFeed {...({ onNavigate: onNavigate || (() => {}) } as any)} />;
   }
   if (feedType === 'discover') {
     return <DiscoverUsers onNavigate={onNavigate || (() => {})} />;

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useQuery, gql } from '@apollo/client';
@@ -64,6 +64,17 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
   const [useDirectFetch, setUseDirectFetch] = React.useState(false);
   const [retryCount, setRetryCount] = React.useState(0);
   const maxRetries = 3;
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Apollo query - will fallback to direct fetch if it fails
   const { data, loading, error, refetch, networkStatus } = useQuery(GET_AI_RECOMMENDATIONS, {
@@ -331,8 +342,12 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
       if (attempt < maxRetries) {
         const delay = 1000 * Math.pow(2, attempt - 1); // 1s, 2s, 4s
         logger.log(`⏳ Retrying in ${delay}ms...`);
-        setTimeout(() => {
+        if (retryTimeoutRef.current) {
+          clearTimeout(retryTimeoutRef.current);
+        }
+        retryTimeoutRef.current = setTimeout(() => {
           performDirectFetch(attempt + 1);
+          retryTimeoutRef.current = null;
         }, delay);
       } else {
         setDirectFetchLoading(false); // Stop loading on final failure
@@ -364,6 +379,11 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
       performDirectFetch(1);
     }
   }, [visible, error, useDirectFetch, directFetchData, directFetchLoading, retryCount, performDirectFetch]);
+
+  // Use direct fetch data if available, otherwise use Apollo data
+  const effectiveData = useDirectFetch ? directFetchData : data;
+  const effectiveLoading = useDirectFetch ? directFetchLoading : loading;
+  const effectiveError = useDirectFetch ? directFetchError : error;
 
   // Additional debug logging
   React.useEffect(() => {
@@ -465,11 +485,6 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
       }
     }
   }, [visible, data, loading, refetch]);
-
-  // Use direct fetch data if available, otherwise use Apollo data
-  const effectiveData = useDirectFetch ? directFetchData : data;
-  const effectiveLoading = useDirectFetch ? directFetchLoading : loading;
-  const effectiveError = useDirectFetch ? directFetchError : error;
 
   const ideas: Idea[] = React.useMemo(() => {
     logger.log('💡 Ideas useMemo called:', {
@@ -601,13 +616,16 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
               data={ideas.length > 0 ? ideas : (() => {
                 // Fallback: transform data directly if ideas array is empty
                 const recs = effectiveData?.aiRecommendations?.buyRecommendations || [];
-                return recs.slice(0, 5).map((rec: any) => ({
-                  symbol: rec.symbol,
-                  action: 'BUY' as const,
-                  conviction: (rec.confidence >= 0.7 ? 'bold' : rec.confidence <= 0.4 ? 'calm' : 'balanced') as const,
-                  sizePct: Math.round(rec.allocation || 0),
-                  thesis: rec.reasoning || `Expected return: ${((rec.expectedReturn || 0) * 100).toFixed(1)}%`,
-                }));
+                return recs.slice(0, 5).map((rec: any) => {
+                  const convictionValue = rec.confidence >= 0.7 ? 'bold' : rec.confidence <= 0.4 ? 'calm' : 'balanced';
+                  return {
+                    symbol: rec.symbol,
+                    action: 'BUY' as const,
+                    conviction: convictionValue as 'bold' | 'calm' | 'balanced',
+                    sizePct: Math.round(rec.allocation || 0),
+                    thesis: rec.reasoning || `Expected return: ${((rec.expectedReturn || 0) * 100).toFixed(1)}%`,
+                  };
+                });
               })()}
               keyExtractor={(i, index) => `${i.symbol}-${index}`}
               renderItem={({ item }) => (

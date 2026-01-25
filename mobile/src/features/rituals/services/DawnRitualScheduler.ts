@@ -6,6 +6,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import logger from '../../../utils/logger';
 
 const DAWN_RITUAL_STORAGE_KEY = 'dawn_ritual_preferences';
 const DAWN_RITUAL_NOTIFICATION_ID = 'dawn_ritual_daily';
@@ -55,10 +56,11 @@ class DawnRitualScheduler {
           sound: true,
         },
         trigger: {
+          type: 'calendar',
           hour: hours,
           minute: minutes,
           repeats: true,
-        },
+        } as Notifications.CalendarTriggerInput,
         ...(Platform.OS === 'android' && {
           channelId: 'dawn_ritual',
         }),
@@ -66,10 +68,8 @@ class DawnRitualScheduler {
 
       // Save preferences
       await AsyncStorage.setItem(DAWN_RITUAL_STORAGE_KEY, JSON.stringify(preferences));
-
-      console.log(`[DawnRitual] Scheduled daily ritual for ${preferences.time}`);
     } catch (error) {
-      console.error('[DawnRitual] Failed to schedule ritual:', error);
+      logger.error('[DawnRitual] Failed to schedule ritual:', error);
     }
   }
 
@@ -88,7 +88,7 @@ class DawnRitualScheduler {
         time: '07:00', // 7 AM default
       };
     } catch (error) {
-      console.error('[DawnRitual] Failed to get preferences:', error);
+      logger.error('[DawnRitual] Failed to get preferences:', error);
       return {
         enabled: true,
         time: '07:00',
@@ -105,7 +105,7 @@ class DawnRitualScheduler {
       preferences.lastPerformed = new Date().toISOString();
       await AsyncStorage.setItem(DAWN_RITUAL_STORAGE_KEY, JSON.stringify(preferences));
     } catch (error) {
-      console.error('[DawnRitual] Failed to mark as performed:', error);
+      logger.error('[DawnRitual] Failed to mark as performed:', error);
     }
   }
 
@@ -134,7 +134,7 @@ class DawnRitualScheduler {
         lastDate.getFullYear() !== today.getFullYear()
       );
     } catch (error) {
-      console.error('[DawnRitual] Failed to check if should perform:', error);
+      logger.error('[DawnRitual] Failed to check if should perform:', error);
       return false;
     }
   }
@@ -149,7 +149,7 @@ class DawnRitualScheduler {
       preferences.enabled = false;
       await AsyncStorage.setItem(DAWN_RITUAL_STORAGE_KEY, JSON.stringify(preferences));
     } catch (error) {
-      console.error('[DawnRitual] Failed to cancel ritual:', error);
+      logger.error('[DawnRitual] Failed to cancel ritual:', error);
     }
   }
 }

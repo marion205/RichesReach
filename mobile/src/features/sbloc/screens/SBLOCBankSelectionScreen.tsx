@@ -15,6 +15,7 @@ import { useQuery, useMutation, gql } from '@apollo/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import TopHeader from '../../../components/common/TopHeader';
 import Feather from 'react-native-vector-icons/Feather';
+import logger from '../../../utils/logger';
 
 type Bank = {
   id: string;
@@ -89,7 +90,9 @@ const K_ONLY_ELIG = 'sbloc.onlyEligible';
 // Analytics tracking
 const track = (event: string, props?: Record<string, any>) => {
   // plug in Segment/Amplitude later
-  console.log('[analytics]', event, props || {});
+  if (__DEV__) {
+    logger.log('[analytics]', event, props || {});
+  }
 };
 
 export default function SblocBankSelectionScreen({ route, navigation }: any) {

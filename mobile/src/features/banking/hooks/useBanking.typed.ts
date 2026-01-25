@@ -7,11 +7,8 @@
 import { useQuery, useMutation } from '@apollo/client';
 import { gql } from '@apollo/client';
 import type {
-  ExtendedQueryBankAccountsQuery,
-  ExtendedQueryBankTransactionsQuery,
-  ExtendedQueryBankTransactionsQueryVariables,
-  ExtendedMutationLinkBankAccountMutation,
-  ExtendedMutationLinkBankAccountMutationVariables,
+  ExtendedQuery,
+  ExtendedMutationLinkBankAccountArgs,
   BankAccountType,
   BankTransactionType,
 } from '../../../generated/graphql';
@@ -45,8 +42,7 @@ const GET_BANK_TRANSACTIONS = gql`
       name
       merchantName
       category
-      primaryCategory
-      detailedCategory
+      subcategory
       accountOwner
       pending
       isoCurrencyCode
@@ -81,8 +77,7 @@ const GET_SPENDING_ANALYSIS = gql`
       date
       name
       category
-      primaryCategory
-      detailedCategory
+      subcategory
       merchantName
     }
   }
@@ -94,7 +89,7 @@ const GET_SPENDING_ANALYSIS = gql`
  * @returns Typed bank accounts with loading/error states
  */
 export const useBankAccounts = () => {
-  const { data, loading, error, refetch } = useQuery<ExtendedQueryBankAccountsQuery>(
+  const { data, loading, error, refetch } = useQuery<{ bankAccounts?: BankAccountType[] }>(
     GET_BANK_ACCOUNTS,
     {
       fetchPolicy: 'cache-and-network',
@@ -120,10 +115,8 @@ export const useBankAccounts = () => {
  * @returns Typed transactions with loading/error states
  */
 export const useBankTransactions = (accountId?: string, startDate?: string, endDate?: string) => {
-  const { data, loading, error, refetch } = useQuery<
-    ExtendedQueryBankTransactionsQuery,
-    ExtendedQueryBankTransactionsQueryVariables
-  >(GET_BANK_TRANSACTIONS, {
+  const { data, loading, error, refetch } = useQuery<{ bankTransactions?: BankTransactionType[] }>(
+    GET_BANK_TRANSACTIONS, {
     variables: { accountId, startDate, endDate },
     fetchPolicy: 'cache-and-network',
     errorPolicy: 'all',
@@ -199,7 +192,7 @@ export function calculateSpendingByCategory(
   // ✅ TypeScript knows all transaction fields
   transactions.forEach(transaction => {
     if (transaction.amount && transaction.amount < 0) {
-      const category = transaction.primaryCategory || transaction.category || 'Other';
+      const category = transaction.category || 'Other';
       spending[category] = (spending[category] || 0) + Math.abs(transaction.amount);
     }
   });
@@ -217,9 +210,8 @@ export function getTransactionsByCategory(
   // ✅ TypeScript knows category fields
   return transactions.filter(
     transaction =>
-      transaction.primaryCategory === category ||
       transaction.category === category ||
-      transaction.detailedCategory === category
+      transaction.subcategory === category
   );
 }
 
@@ -234,10 +226,11 @@ export function calculateMonthlySpending(
   // ✅ TypeScript knows date and amount fields
   return transactions
     .filter(transaction => {
-      if (!transaction.date) {
+      const date = transaction.transactionDate || transaction.postedDate;
+      if (!date) {
         return false;
       }
-      const transactionDate = new Date(transaction.date);
+      const transactionDate = new Date(date);
       return (
         transactionDate.getMonth() === month &&
         transactionDate.getFullYear() === year &&

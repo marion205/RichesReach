@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { connectWallet } from '../blockchain/wallet/walletConnect';
-import { HybridTransactionService } from '../services/hybridTransactionService';
+import { HybridTransactionService } from '../services/HybridTransactionService';
 import { CHAIN } from '../blockchain/web3Service';
 
 const AAVE_POOL_ADDRESS = '<AAVE_POOL_ADDRESS>'; // e.g., Polygon v3 Pool

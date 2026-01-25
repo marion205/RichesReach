@@ -21,6 +21,7 @@ import { useQuery, useMutation, gql } from '@apollo/client';
 import { Ionicons } from '@expo/vector-icons';
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { Dimensions } from 'react-native';
+import logger from '../utils/logger';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -230,7 +231,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         refetchUsers(),
       ]);
     } catch (error) {
-      console.error('Error refreshing data:', error);
+      logger.error('Error refreshing data:', error);
     } finally {
       setRefreshing(false);
     }
@@ -352,11 +353,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       ],
     };
 
-    const topSymbolsData = {
-      labels: trading.topSymbols.map(s => s.symbol),
-      data: trading.topSymbols.map(s => s.volume),
-      colors: ['#00ff88', '#ff4444', '#ffbb00', '#007bff', '#ff8800'],
-    };
+    const topSymbolsData = trading.topSymbols.map((s, index) => ({
+      name: s.symbol,
+      population: s.volume,
+      color: ['#00ff88', '#ff4444', '#ffbb00', '#007bff', '#ff8800'][index % 5],
+      legendFontColor: '#fff',
+      legendFontSize: 12,
+    }));
 
     return (
       <ScrollView
@@ -443,6 +446,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             chartConfig={chartConfig}
             style={styles.chart}
             showValuesOnTopOfBars={true}
+            yAxisLabel=""
+            yAxisSuffix=""
           />
         </View>
 
@@ -454,7 +459,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             width={screenWidth - 40}
             height={220}
             chartConfig={chartConfig}
-            accessor="data"
+            accessor="population"
             backgroundColor="transparent"
             paddingLeft="15"
             center={[10, 0]}
@@ -491,7 +496,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               style={styles.actionButton}
               onPress={() => handleRestartService('database')}
             >
-              <Ionicons name="database-outline" size={24} color="#ff4444" />
+              <Ionicons name="server-outline" size={24} color="#ff4444" />
               <Text style={styles.actionButtonText}>Restart DB</Text>
             </TouchableOpacity>
           </View>

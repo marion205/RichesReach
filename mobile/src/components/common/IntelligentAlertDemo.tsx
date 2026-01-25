@@ -9,6 +9,7 @@ Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import intelligentPriceAlertService, { IntelligentAlert, StockPrice, MarketConditions } from '../../features/stocks/services/IntelligentPriceAlertService';
+import logger from '../../utils/logger';
 const IntelligentAlertDemo: React.FC = () => {
 const [alerts, setAlerts] = useState<IntelligentAlert[]>([]);
 const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -45,7 +46,7 @@ try {
 const activeAlerts = await intelligentPriceAlertService.getActiveAlerts();
 setAlerts(activeAlerts);
 } catch (error) {
-console.error('Error loading alerts:', error);
+  logger.error('Error loading alerts:', error);
 }
 };
 const runAnalysis = async () => {

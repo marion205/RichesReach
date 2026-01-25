@@ -152,6 +152,9 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
   const chartPollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const client = useApolloClient();
   const { selectedVoice, getVoiceParameters } = useVoice();
+  const [logOutcome] = useMutation(LOG_DAY_TRADING_OUTCOME, {
+    errorPolicy: 'all',
+  });
 
   const handleNavigateToOnboarding = () => {
     // Navigate to login if not authenticated, or onboarding if authenticated but not completed
@@ -164,9 +167,9 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
       // Fallback: try alternative navigation
       try {
         // Try nested navigation for onboarding
-        navigation.navigate('Home' as never, {
+        (navigation as any).navigate('Home', {
           screen: 'onboarding',
-        } as never);
+        });
       } catch (nestedError) {
         logger.error('Nested navigation error:', nestedError);
         // Final fallback
@@ -331,7 +334,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
       onError: (err) => {
         // Log error but don't block UI - we'll use mock data fallback
         if (__DEV__) {
-          console.log('⚠️ Day Trading query error (will use mock data):', err.message);
+          logger.log('⚠️ Day Trading query error (will use mock data):', err.message);
         }
       },
     },
@@ -341,55 +344,51 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
   useEffect(() => {
     if (error?.graphQLErrors?.some((e: any) => e.message?.includes('Cannot query field'))) {
       if (__DEV__) {
-        console.log('🔄 Schema mismatch detected - clearing Apollo cache and retrying');
+        logger.log('🔄 Schema mismatch detected - clearing Apollo cache and retrying');
       }
       // Clear cache and reset store to force schema re-introspection
       client.resetStore()
         .then(() => {
           if (__DEV__) {
-            console.log('✅ Apollo cache cleared - retrying query');
+            logger.log('✅ Apollo cache cleared - retrying query');
           }
           // Retry the query after cache is cleared
           refetch({ mode });
         })
         .catch((e) => {
           if (__DEV__) {
-            console.log('⚠️ Cache reset error (non-fatal):', e);
+            logger.log('⚠️ Cache reset error (non-fatal):', e);
           }
         });
     }
   }, [error, client, refetch, mode]);
 
-  const [logOutcome] = useMutation(LOG_DAY_TRADING_OUTCOME, {
-    errorPolicy: 'all',
-  });
-
   // GraphQL returns camelCase - Apollo Client handles the transformation
   // Debug: log the raw data to see what we're getting
   if (__DEV__) {
     if (error) {
-      console.log('❌ GraphQL Error:', JSON.stringify(error, null, 2));
+      logger.log('❌ GraphQL Error:', JSON.stringify(error, null, 2));
       if (error.networkError) {
-        console.log('❌ Network Error Details:', {
+        logger.log('❌ Network Error Details:', {
           message: error.networkError.message,
           name: error.networkError.name,
-          statusCode: error.networkError.statusCode,
-          bodyText: error.networkError.bodyText,
+          statusCode: (error.networkError as any).statusCode,
+          bodyText: (error.networkError as any).bodyText,
         });
       }
       // Log the GraphQL URL being used
       const graphqlUrl = require('../../../config/api').API_GRAPHQL;
-      console.log('🔗 GraphQL URL:', graphqlUrl);
+      logger.log('🔗 GraphQL URL:', graphqlUrl);
     }
     if (data?.dayTradingPicks) {
-      console.log('📊 Day Trading Data:', JSON.stringify(data.dayTradingPicks, null, 2));
-      console.log('📊 Picks Array:', data.dayTradingPicks.picks);
-      console.log('📊 Picks Length:', data.dayTradingPicks.picks?.length ?? 0);
+      logger.log('📊 Day Trading Data:', JSON.stringify(data.dayTradingPicks, null, 2));
+      logger.log('📊 Picks Array:', data.dayTradingPicks.picks);
+      logger.log('📊 Picks Length:', data.dayTradingPicks.picks?.length ?? 0);
     } else if (data) {
-      console.log('📊 Data (no dayTradingPicks):', JSON.stringify(data, null, 2));
+      logger.log('📊 Data (no dayTradingPicks):', JSON.stringify(data, null, 2));
     }
     if (loading) {
-      console.log('⏳ Loading state:', loading);
+      logger.log('⏳ Loading state:', loading);
     }
   }
   
@@ -548,14 +547,14 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
   // Also use mock data if there's a network error (similar to Budget/Spending screens)
   const picks = useMemo(() => {
     if (__DEV__) {
-      console.log('🔍 useMemo picks - effectiveData:', effectiveData);
-      console.log('🔍 useMemo picks - effectiveData?.picks:', effectiveData?.picks);
-      console.log('🔍 useMemo picks - effectiveData?.picks?.length:', effectiveData?.picks?.length ?? 0);
+      logger.log('🔍 useMemo picks - effectiveData:', effectiveData);
+      logger.log('🔍 useMemo picks - effectiveData?.picks:', effectiveData?.picks);
+      logger.log('🔍 useMemo picks - effectiveData?.picks?.length:', effectiveData?.picks?.length ?? 0);
       if (error) {
-        console.log('⚠️ Network error detected, will use mock data:', error.message);
+        logger.log('⚠️ Network error detected, will use mock data:', error.message);
       }
       if (effectiveData) {
-        console.log('📊 Diagnostics:', {
+        logger.log('📊 Diagnostics:', {
           scanned: effectiveData.scannedCount,
           passedLiquidity: effectiveData.passedLiquidity,
           passedQuality: effectiveData.passedQuality,
@@ -570,7 +569,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
     // If there's a network error, use mock data immediately
     if (error && !effectiveData?.picks) {
       if (__DEV__) {
-        console.log('⚠️ Network error - using mock data for development');
+        logger.log('⚠️ Network error - using mock data for development');
       }
       return getMockPicks();
     }
@@ -579,13 +578,13 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
       // Backend now returns up to 10 picks - use all of them
       const result = effectiveData.picks;
       if (__DEV__) {
-        console.log('✅ Returning picks:', result.length, result.map(p => p.symbol));
+        logger.log('✅ Returning picks:', result.length, result.map(p => p.symbol));
       }
       return result;
     }
     // Return mock data if no real data available (for testing educational features)
     if (__DEV__) {
-      console.log('⚠️ No picks available - returning mock data for testing');
+      logger.log('⚠️ No picks available - returning mock data for testing');
     }
     return getMockPicks();
   }, [dayTradingData?.picks, getMockPicks, error]);
@@ -653,6 +652,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
     // Generate mock quotes for mock picks (when backend returns empty)
     const mockQuotes: Record<string, TradingQuote> = {
       'AAPL': {
+        symbol: 'AAPL',
         currentPrice: 150.0,
         change: 1.5,
         changePercent: 1.01,
@@ -661,6 +661,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
         ask: 150.05,
       },
       'TSLA': {
+        symbol: 'TSLA',
         currentPrice: 172.5,
         change: -2.3,
         changePercent: -1.32,
@@ -669,6 +670,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
         ask: 172.60,
       },
       'NVDA': {
+        symbol: 'NVDA',
         currentPrice: 180.0,
         change: 3.2,
         changePercent: 1.81,
@@ -786,7 +788,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
     try {
       // Force network fetch (bypass cache) - fetchPolicy is set to 'network-only' in useQuery
       if (__DEV__) {
-        console.log('🔄 Refreshing picks for mode:', mode);
+        logger.log('🔄 Refreshing picks for mode:', mode);
         // Clear Apollo cache for this query to ensure fresh data and schema
         try {
           await client.cache.evict({ fieldName: 'dayTradingPicks' });
@@ -794,15 +796,15 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
           // Also reset the cache to force schema refresh
           await client.resetStore();
         } catch (e) {
-          console.log('⚠️ Cache clear error (non-fatal):', e);
+          logger.log('⚠️ Cache clear error (non-fatal):', e);
         }
       }
       const result = await refetch({ mode });
       if (__DEV__) {
-        console.log('🔄 Refetch result:', JSON.stringify(result.data?.dayTradingPicks, null, 2));
-        console.log('🔄 Refetch picks count:', result.data?.dayTradingPicks?.picks?.length ?? 0);
+        logger.log('🔄 Refetch result:', JSON.stringify(result.data?.dayTradingPicks, null, 2));
+        logger.log('🔄 Refetch picks count:', result.data?.dayTradingPicks?.picks?.length ?? 0);
         if (result.data?.dayTradingPicks?.picks) {
-          console.log('🔄 Refetch picks symbols:', result.data.dayTradingPicks.picks.map((p: DayTradingPick) => p.symbol));
+          logger.log('🔄 Refetch picks symbols:', result.data.dayTradingPicks.picks.map((p: DayTradingPick) => p.symbol));
         }
       }
       const symbols = [...new Set(picks.map((p) => p.symbol))];
@@ -810,7 +812,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
       await fetchCharts(symbols);
     } catch (err) {
       if (__DEV__) {
-        console.error('❌ Refresh error:', err);
+        logger.error('❌ Refresh error:', err);
       }
     } finally {
       setRefreshing(false);
@@ -831,14 +833,8 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
   );
 
   // Handle visible items change
-  interface ViewableItem {
-    item: DayTradingPick;
-    index: number;
-    isViewable: boolean;
-    [key: string]: unknown;
-  }
-  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: ViewableItem[] }) => {
-    const newVisible = new Set(viewableItems.map((item) => item.item.symbol));
+  const onViewableItemsChanged = useCallback(({ viewableItems }: { viewableItems: any[] }) => {
+    const newVisible = new Set(viewableItems.map((item: any) => item.item?.symbol || item.symbol).filter(Boolean));
     setVisibleSymbols(newVisible);
     fetchCharts(Array.from(newVisible));
   }, [fetchCharts]);
@@ -908,6 +904,9 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
       warnBg: '#FEFCBF',
       warnBorder: '#FAD999',
       warnText: '#B7791F',
+      warning: '#F59E0B', // Amber/warning color
+      amber: '#F59E0B', // Amber color
+      red: '#E53E3E', // Red color
       shadow: 'rgba(0, 0, 0, 0.06)',
       shadowLight: 'rgba(0, 0, 0, 0.04)',
     }),
@@ -999,7 +998,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
     if (!navigateTo) return null;
     
     if (__DEV__) {
-      console.log('🔧 Creating HeaderButtons element');
+      logger.log('🔧 Creating HeaderButtons element');
     }
     
     return (
@@ -1014,7 +1013,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
   // Memoize just the top header bar separately to keep buttons stable
   const HeaderTopBar = useMemo(() => {
     if (__DEV__) {
-      console.log('🔧 Creating HeaderTopBar');
+      logger.log('🔧 Creating HeaderTopBar');
     }
     
     return (
@@ -1143,7 +1142,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
           changePercent={quotes[selectedPick.symbol]?.changePercent || 0}
           onTakeTrade={() => {
             setShowWhisper(false);
-            handleTradeExecution(selectedPick, selectedPick.side);
+            handleTradeExecution(selectedPick);
           }}
           onJustWatching={() => setShowWhisper(false)}
         />
@@ -1381,7 +1380,7 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
                     style={[styles.retryButton, { backgroundColor: C.primary, marginTop: 16 }]}
                     onPress={() => {
                       if (__DEV__) {
-                        console.log('🔄 Manual retry triggered');
+                        logger.log('🔄 Manual retry triggered');
                       }
                       refetch({ mode });
                     }}
@@ -1414,7 +1413,13 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
         const rrRatio = risk > 0 ? reward / risk : 0;
         
         // Generate trade signals from pick features
-        const signals = [
+        const signals: Array<{
+          name: string;
+          value: number | string;
+          strength: 'strong' | 'moderate' | 'weak';
+          explanation: string;
+          color: string;
+        }> = [
           {
             name: 'Momentum (15m)',
             value: pick.features?.momentum15m ?? 0,
@@ -1564,7 +1569,7 @@ const MemoizedPick = React.memo(function MemoizedPick({
         targets: item.risk?.targets || [],
         sizeShares: item.risk?.sizeShares || 100,
         atr5m: item.risk?.atr5m,
-        atr1d: item.risk?.atr1d,
+        // atr1d not available in day trading risk type
       },
       features: {
         spreadBps: item.features?.spreadBps || 5.0,
@@ -1576,7 +1581,7 @@ const MemoizedPick = React.memo(function MemoizedPick({
     
     // Debug log the signal being sent
     if (__DEV__) {
-      console.log(`📤 [${item.symbol}] Building execution suggestion query:`, {
+      logger.log(`📤 [${item.symbol}] Building execution suggestion query:`, {
         signalObj,
         signalStr,
         signalLength: signalStr.length,
@@ -1595,7 +1600,7 @@ const MemoizedPick = React.memo(function MemoizedPick({
     item.risk?.targets,
     item.risk?.sizeShares,
     item.risk?.atr5m,
-    item.risk?.atr1d,
+    // item.risk?.atr1d, // atr1d not available in day trading risk type
     item.features?.spreadBps,
     item.features?.executionQualityScore,
   ]);
@@ -1606,7 +1611,7 @@ const MemoizedPick = React.memo(function MemoizedPick({
 
   // Debug: Log query variables to see if they're valid
   if (__DEV__) {
-    console.log(`🔍 [${item.symbol}] Execution suggestion query variables:`, {
+    logger.log(`🔍 [${item.symbol}] Execution suggestion query variables:`, {
       hasSignal: !!queryVariables.signal,
       signalLength: queryVariables.signal?.length,
       signalType: queryVariables.signalType,
@@ -1626,8 +1631,8 @@ const MemoizedPick = React.memo(function MemoizedPick({
       setQueryError(err);
       setHasTimedOut(true);
       if (__DEV__) {
-        console.log(`❌ [${item.symbol}] Execution suggestion query error:`, err);
-        console.log(`❌ [${item.symbol}] Error details:`, {
+        logger.log(`❌ [${item.symbol}] Execution suggestion query error:`, err);
+        logger.log(`❌ [${item.symbol}] Error details:`, {
           message: err.message,
           graphQLErrors: err.graphQLErrors,
           networkError: err.networkError,
@@ -1638,7 +1643,7 @@ const MemoizedPick = React.memo(function MemoizedPick({
       setQueryError(null);
       setHasTimedOut(false);
       if (__DEV__) {
-        console.log(`✅ [${item.symbol}] Execution suggestion query completed:`, {
+        logger.log(`✅ [${item.symbol}] Execution suggestion query completed:`, {
           hasData: !!data,
           hasExecutionSuggestion: !!data?.executionSuggestion,
           executionSuggestion: data?.executionSuggestion,
@@ -1654,7 +1659,7 @@ const MemoizedPick = React.memo(function MemoizedPick({
         if (loading && !stableSuggestion) {
           setHasTimedOut(true);
           if (__DEV__) {
-            console.log(`⏱️ Execution suggestion query timed out for ${item.symbol} after 15s`);
+            logger.log(`⏱️ Execution suggestion query timed out for ${item.symbol} after 15s`);
           }
         }
       }, 15000); // 15 second timeout
@@ -1670,7 +1675,7 @@ const MemoizedPick = React.memo(function MemoizedPick({
     const rawSuggestion = data?.executionSuggestion;
 
     if (__DEV__) {
-      console.log(`🔍 [${item.symbol}] Execution suggestion effect:`, {
+      logger.log(`🔍 [${item.symbol}] Execution suggestion effect:`, {
         hasData: !!data,
         hasExecutionSuggestion: !!rawSuggestion,
         rawSuggestionKeys: rawSuggestion ? Object.keys(rawSuggestion) : [],
@@ -1683,7 +1688,7 @@ const MemoizedPick = React.memo(function MemoizedPick({
       setStableSuggestion(rawSuggestion);
 
       if (__DEV__) {
-        console.log(`✅ Execution suggestion received for ${item.symbol}:`, {
+        logger.log(`✅ Execution suggestion received for ${item.symbol}:`, {
           hasOrderType: 'orderType' in rawSuggestion,
           hasPriceBand: !!rawSuggestion.priceBand,
           hasRationale: !!rawSuggestion.rationale,
@@ -1693,7 +1698,7 @@ const MemoizedPick = React.memo(function MemoizedPick({
     } else if (data && !rawSuggestion) {
       // Data exists but no executionSuggestion field - log this
       if (__DEV__) {
-        console.log(`⚠️ [${item.symbol}] Query returned data but no executionSuggestion field:`, data);
+        logger.log(`⚠️ [${item.symbol}] Query returned data but no executionSuggestion field:`, data);
       }
     }
 
@@ -1705,7 +1710,7 @@ const MemoizedPick = React.memo(function MemoizedPick({
   useEffect(() => {
     if (!__DEV__) return;
 
-    console.log(`🔍 ExecutionSuggestion query for ${item.symbol}:`, {
+    logger.log(`🔍 ExecutionSuggestion query for ${item.symbol}:`, {
       loading,
       hasData: !!data?.executionSuggestion,
       hasStableData: !!stableSuggestion,
@@ -1721,7 +1726,7 @@ const MemoizedPick = React.memo(function MemoizedPick({
 
   // Debug logging for render decision
   if (__DEV__) {
-    console.log(`🎨 [${item.symbol}] Render decision:`, {
+    logger.log(`🎨 [${item.symbol}] Render decision:`, {
       loading,
       hasEffectiveSuggestion: !!effectiveSuggestion,
       hasTimedOut,
@@ -1731,10 +1736,10 @@ const MemoizedPick = React.memo(function MemoizedPick({
     });
     
     if (!effectiveSuggestion && !loading) {
-      console.log(`⚠️ No execution suggestion for ${item.symbol} - error:`, error?.message || queryError?.message);
+      logger.log(`⚠️ No execution suggestion for ${item.symbol} - error:`, error?.message || queryError?.message);
     }
     if (effectiveSuggestion) {
-      console.log(`✅ Execution suggestion available for ${item.symbol}:`, {
+      logger.log(`✅ Execution suggestion available for ${item.symbol}:`, {
         hasOrderType: !!effectiveSuggestion.orderType,
         hasPriceBand: !!effectiveSuggestion.priceBand,
         hasRationale: !!effectiveSuggestion.rationale,

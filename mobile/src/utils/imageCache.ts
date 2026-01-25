@@ -4,6 +4,7 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Image } from 'react-native';
+import logger from './logger';
 
 interface CacheEntry {
   uri: string;
@@ -56,7 +57,7 @@ class ImageCache {
       // Cleanup if cache is too large
       this.cleanupMemoryCache();
     } catch (error) {
-      console.warn('Failed to preload image:', uri, error);
+      logger.warn('Failed to preload image:', uri, error);
     }
   }
 
@@ -77,7 +78,7 @@ class ImageCache {
       
       this.cleanupMemoryCache();
     } catch (error) {
-      console.warn('Failed to cache data:', key, error);
+      logger.warn('Failed to cache data:', key, error);
     }
   }
 
@@ -109,7 +110,7 @@ class ImageCache {
 
       return null;
     } catch (error) {
-      console.warn('Failed to get cached data:', key, error);
+      logger.warn('Failed to get cached data:', key, error);
       return null;
     }
   }
@@ -123,7 +124,7 @@ class ImageCache {
       this.memoryCache.delete(cacheKey);
       await AsyncStorage.removeItem(cacheKey);
     } catch (error) {
-      console.warn('Failed to clear cache:', key, error);
+      logger.warn('Failed to clear cache:', key, error);
     }
   }
 
@@ -137,7 +138,7 @@ class ImageCache {
       const cacheKeys = keys.filter(key => key.startsWith(CACHE_PREFIX));
       await AsyncStorage.multiRemove(cacheKeys);
     } catch (error) {
-      console.warn('Failed to clear all cache:', error);
+      logger.warn('Failed to clear all cache:', error);
     }
   }
 

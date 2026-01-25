@@ -12,7 +12,8 @@ import { useMutation, useSubscription } from '@apollo/client';
 import { gql } from '@apollo/client';
 import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
-import { useVoice } from '../../contexts/VoiceContext';
+import { useVoice } from '../contexts/VoiceContext';
+import logger from '../utils/logger';
 
 // GraphQL Mutations and Subscriptions
 const PARSE_VOICE_COMMAND = gql`
@@ -97,7 +98,17 @@ interface VoiceTradingState {
 }
 
 const VoiceTradingAssistant: React.FC = () => {
-  const { getSelectedVoice, speakText } = useVoice();
+  const { getSelectedVoice, getVoiceParameters, selectedVoice } = useVoice();
+  
+  const speakText = (text: string, options?: { voice?: string }) => {
+    const voiceId = options?.voice || getSelectedVoice();
+    const params = getVoiceParameters(voiceId);
+    Speech.speak(text, {
+      voice: voiceId,
+      pitch: params.pitch,
+      rate: params.rate,
+    });
+  };
   const [state, setState] = useState<VoiceTradingState>({
     isListening: false,
     parsedOrder: null,
@@ -189,7 +200,7 @@ const VoiceTradingAssistant: React.FC = () => {
       }
       
     } catch (error) {
-      console.error('Voice command parsing failed:', error);
+      logger.error('Voice command parsing failed:', error);
       speakText('Sorry, there was an error processing your command.', { voice: getSelectedVoice() });
     }
   }, [parseVoiceCommand, getSelectedVoice, speakText, triggerHapticFeedback]);
@@ -238,7 +249,7 @@ const VoiceTradingAssistant: React.FC = () => {
       }
       
     } catch (error) {
-      console.error('Order placement failed:', error);
+      logger.error('Order placement failed:', error);
       speakText('Sorry, there was an error placing your order.', { voice: getSelectedVoice() });
     }
   }, [state.parsedOrder, placeOrder, getSelectedVoice, speakText, triggerHapticFeedback]);

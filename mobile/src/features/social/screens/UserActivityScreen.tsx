@@ -9,6 +9,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import logger from '../../../utils/logger';
 // Mock service removed - using real API
 
 interface UserActivityScreenProps {
@@ -32,8 +33,12 @@ const UserActivityScreen: React.FC<UserActivityScreenProps> = ({ userId, onNavig
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const mockUserService = MockUserService.getInstance();
-  const user = mockUserService.getUserById(userId);
+  // Mock user data - replace with real API call
+  const user = {
+    id: userId,
+    name: 'User',
+    email: 'user@example.com',
+  };
 
   // Generate mock activity data
   const generateMockActivities = (): ActivityItem[] => {
@@ -121,7 +126,7 @@ const UserActivityScreen: React.FC<UserActivityScreenProps> = ({ userId, onNavig
       setActivities(mockActivities);
     } catch (err) {
       setError('Failed to load activities');
-      console.error('Error loading activities:', err);
+      logger.error('Error loading activities:', err);
     } finally {
       setLoading(false);
     }
@@ -132,7 +137,7 @@ const UserActivityScreen: React.FC<UserActivityScreenProps> = ({ userId, onNavig
     try {
       loadActivities();
     } catch (error) {
-      console.error('Error refreshing activities:', error);
+      logger.error('Error refreshing activities:', error);
     } finally {
       setRefreshing(false);
     }

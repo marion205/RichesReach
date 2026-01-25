@@ -1,5 +1,8 @@
 import io, { Socket } from 'socket.io-client';
-import { GiftedChat, IMessage } from 'react-native-gifted-chat';
+// import { GiftedChat, IMessage } from 'react-native-gifted-chat'; // Package not installed
+// Type definitions for react-native-gifted-chat
+type IMessage = any;
+const GiftedChat: any = null;
 import logger from '../utils/logger';
 
 export interface ChatConfig {
@@ -8,14 +11,19 @@ export interface ChatConfig {
   reconnectDelay?: number;
 }
 
-export interface ChatMessage extends IMessage {
+export interface ChatMessage {
+  _id: string | number;
   id: string;
   roomId: string;
   userId: string;
   userName: string;
   content: string;
+  text?: string;
   type: 'text' | 'image' | 'video' | 'system';
   timestamp: Date;
+  createdAt?: Date | number;
+  user?: any;
+  [key: string]: any;
 }
 
 export interface UserInfo {

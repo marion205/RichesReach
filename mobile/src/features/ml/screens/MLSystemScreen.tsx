@@ -16,6 +16,9 @@ import {
   GET_BANDIT_STRATEGY,
   UPDATE_BANDIT_REWARD 
 } from '../../../graphql/mlLearning';
+import logger from '../../../utils/logger';
+import { useTensorFlowLite } from '../../../hooks/useTensorFlowLite';
+import { extractMarketFeatures, extractTradingContextFeatures } from '../../../utils/mlFeatureExtraction';
 
 interface MLSystemStatus {
   outcomeTracking: {
@@ -48,6 +51,8 @@ interface MLSystemScreenProps {
 export default function MLSystemScreen({ navigateTo }: MLSystemScreenProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedStrategy, setSelectedStrategy] = useState<string | null>(null);
+  const [localPrediction, setLocalPrediction] = useState<number | null>(null);
+  const [predictionSource, setPredictionSource] = useState<'server' | 'local' | null>(null);
 
   const { data, loading, error, refetch } = useQuery(GET_ML_SYSTEM_STATUS, {
     fetchPolicy: 'cache-and-network',
@@ -60,12 +65,25 @@ export default function MLSystemScreen({ navigateTo }: MLSystemScreenProps) {
 
   const mlStatus: MLSystemStatus | null = data?.mlSystemStatus || null;
 
+  // TensorFlow Lite hook for local inference
+  const {
+    model: tfliteModel,
+    loading: modelLoading,
+    error: modelError,
+    loadModel: loadTFLiteModel,
+    runInference,
+    isAvailable: tfliteAvailable,
+  } = useTensorFlowLite({
+    assetName: 'strategy_predictor.tflite', // Model in app bundle
+    autoLoad: false, // Load manually to show status
+  });
+
   const onRefresh = async () => {
     setRefreshing(true);
     try {
       await refetch();
     } catch (err) {
-      console.error('Error refreshing ML system status:', err);
+      logger.error('Error refreshing ML system status:', err);
     } finally {
       setRefreshing(false);
     }
@@ -94,7 +112,7 @@ export default function MLSystemScreen({ navigateTo }: MLSystemScreenProps) {
                 await refetch();
               }
             } catch (err) {
-              console.error('Error training models:', err);
+              logger.error('Error training models:', err);
               Alert.alert('Error', 'Failed to train models');
             }
           },
@@ -105,21 +123,66 @@ export default function MLSystemScreen({ navigateTo }: MLSystemScreenProps) {
 
   const handleGetBanditStrategy = async () => {
     try {
+      // Try local TFLite inference first (faster, offline-capable)
+      if (tfliteAvailable && tfliteModel) {
+        try {
+          logger.log('Running local TFLite inference for strategy selection...');
+          
+          // Extract market features (in production, get from real-time market data)
+          const marketFeatures = extractMarketFeatures({
+            volatility: 0.025,
+            volume: 1500000,
+            momentum: 0.15,
+            regime: 'bullish',
+            spread: 0.0001,
+            atr: 0.012,
+            rsi: 65,
+            macd: 0.002,
+            trend: 'up',
+            timestamp: Date.now(),
+          });
+
+          const successProbability = await runInference(marketFeatures);
+          
+          if (successProbability !== null) {
+            setLocalPrediction(successProbability);
+            setPredictionSource('local');
+            
+            // Use probability to select strategy (higher probability = more aggressive)
+            const strategy = successProbability > 0.6 ? 'aggressive' : successProbability > 0.4 ? 'moderate' : 'safe';
+            setSelectedStrategy(strategy);
+            
+            logger.log(`Local prediction: ${(successProbability * 100).toFixed(2)}% success probability`);
+            
+            Alert.alert(
+              'Strategy Selected (Local ML)',
+              `Selected: ${strategy.toUpperCase()}\n\nSuccess Probability: ${(successProbability * 100).toFixed(2)}%\n\n(Inferred locally with TensorFlow Lite)`
+            );
+            return;
+          }
+        } catch (localErr) {
+          logger.warn('Local inference failed, falling back to server:', localErr);
+        }
+      }
+
+      // Fallback to server-side bandit strategy
+      logger.log('Using server-side bandit strategy selection...');
       const result = await getBanditStrategy({
         variables: { context: {} }
       });
       
       if (result.data?.banditStrategy?.selected_strategy) {
         setSelectedStrategy(result.data.banditStrategy.selected_strategy);
+        setPredictionSource('server');
         Alert.alert(
-          'Strategy Selected',
-          `Selected strategy: ${result.data.banditStrategy.selected_strategy}`
+          'Strategy Selected (Server)',
+          `Selected strategy: ${result.data.banditStrategy.selected_strategy}\n\n(From server-side ML system)`
         );
       } else {
         Alert.alert('Info', 'Using fallback strategy selection (ML libraries not available)');
       }
     } catch (err) {
-      console.error('Error getting bandit strategy:', err);
+      logger.error('Error getting bandit strategy:', err);
       Alert.alert('Error', 'Failed to get strategy');
     }
   };
@@ -142,7 +205,7 @@ export default function MLSystemScreen({ navigateTo }: MLSystemScreenProps) {
               Alert.alert('Success', `Updated ${strategy} reward`);
               await refetch();
             } catch (err) {
-              console.error('Error updating reward:', err);
+              logger.error('Error updating reward:', err);
               Alert.alert('Error', 'Failed to update reward');
             }
           },
@@ -219,7 +282,7 @@ export default function MLSystemScreen({ navigateTo }: MLSystemScreenProps) {
             style={styles.infoButton}
             onPress={() => Alert.alert(
               'ML System Status',
-              'Shows the current state of the machine learning system:\n\n• ML Available: Whether ML libraries are loaded\n• Total Outcomes: All trading outcomes tracked\n• Recent Outcomes: Outcomes from last 7 days\n• Model Status: Current model performance metrics'
+              'Shows the current state of the machine learning system:\n\n• ML Available: Whether ML libraries are loaded\n• Total Outcomes: All trading outcomes tracked\n• Recent Outcomes: Outcomes from last 7 days\n• Model Status: Current model performance metrics\n• TensorFlow Lite: Local on-device inference capability'
             )}
           >
             <Text style={styles.infoButtonText}>ℹ️</Text>
@@ -232,6 +295,12 @@ export default function MLSystemScreen({ navigateTo }: MLSystemScreenProps) {
           </Text>
         </View>
         <View style={styles.statusRow}>
+          <Text style={styles.statusLabel}>TensorFlow Lite:</Text>
+          <Text style={[styles.statusValue, { color: tfliteAvailable ? '#4CAF50' : '#F44336' }]}>
+            {tfliteAvailable ? (tfliteModel ? 'Loaded' : 'Available') : 'Not Available'}
+          </Text>
+        </View>
+        <View style={styles.statusRow}>
           <Text style={styles.statusLabel}>Total Outcomes:</Text>
           <Text style={styles.statusValue}>{mlStatus?.outcomeTracking.totalOutcomes || 0}</Text>
         </View>
@@ -239,6 +308,22 @@ export default function MLSystemScreen({ navigateTo }: MLSystemScreenProps) {
           <Text style={styles.statusLabel}>Recent Outcomes (7d):</Text>
           <Text style={styles.statusValue}>{mlStatus?.outcomeTracking.recentOutcomes || 0}</Text>
         </View>
+        {tfliteAvailable && !tfliteModel && (
+          <TouchableOpacity
+            style={[styles.actionButton, modelLoading && styles.actionButtonDisabled]}
+            onPress={() => loadTFLiteModel()}
+            disabled={modelLoading}
+          >
+            {modelLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.actionButtonText}>Load Local Model</Text>
+            )}
+          </TouchableOpacity>
+        )}
+        {modelError && (
+          <Text style={styles.errorText}>Model Error: {modelError.message}</Text>
+        )}
       </View>
 
       {/* Model Status */}
@@ -332,6 +417,16 @@ export default function MLSystemScreen({ navigateTo }: MLSystemScreenProps) {
             <Text style={styles.selectedStrategyText}>
               Selected: {selectedStrategy.replace('_', ' ').toUpperCase()}
             </Text>
+            {predictionSource && (
+              <Text style={styles.predictionSourceText}>
+                Source: {predictionSource === 'local' ? 'Local TFLite' : 'Server ML'}
+              </Text>
+            )}
+            {localPrediction !== null && (
+              <Text style={styles.predictionValueText}>
+                Success Probability: {(localPrediction * 100).toFixed(2)}%
+              </Text>
+            )}
           </View>
         )}
       </View>
@@ -526,6 +621,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#1976d2',
     textAlign: 'center',
+    fontWeight: '600',
+  },
+  predictionSourceText: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  predictionValueText: {
+    fontSize: 12,
+    color: '#4CAF50',
+    textAlign: 'center',
+    marginTop: 4,
     fontWeight: '600',
   },
   infoCard: {

@@ -54,7 +54,7 @@ class AlpacaAnalyticsService {
       metadata: {
         ...metadata,
         sessionId: this.sessionId,
-      },
+      } as any, // sessionId is a custom property
     };
 
     // Add to local queue
@@ -67,9 +67,7 @@ class AlpacaAnalyticsService {
     });
 
     // In production, send to analytics backend
-    if (__DEV__) {
-      console.log(`[AlpacaAnalytics] ${event}`, metadata);
-    }
+    // Debug logging removed - not important
   }
 
   /**

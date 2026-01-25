@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserProfile } from '../../auth/screens/OnboardingScreen';
+import logger from '../../../utils/logger';
 const USER_PROFILE_KEY = 'user_profile';
 const ONBOARDING_COMPLETED_KEY = 'onboarding_completed';
 export interface UserPreferences {
@@ -72,7 +73,7 @@ updatedAt: new Date().toISOString(),
 await AsyncStorage.setItem(USER_PROFILE_KEY, JSON.stringify(extendedProfile));
 this.currentProfile = extendedProfile;
 } catch (error) {
-console.error('Error saving user profile:', error);
+logger.error('Error saving user profile:', error);
 throw error;
 }
 }
@@ -89,7 +90,7 @@ return this.currentProfile;
 }
 return null;
 } catch (error) {
-console.error('Error getting user profile:', error);
+logger.error('Error getting user profile:', error);
 return null;
 }
 }
@@ -107,7 +108,7 @@ await AsyncStorage.setItem(USER_PROFILE_KEY, JSON.stringify(updatedProfile));
 this.currentProfile = updatedProfile;
 }
 } catch (error) {
-console.error('Error updating preferences:', error);
+logger.error('Error updating preferences:', error);
 throw error;
 }
 }
@@ -125,7 +126,7 @@ await AsyncStorage.setItem(USER_PROFILE_KEY, JSON.stringify(updatedProfile));
 this.currentProfile = updatedProfile;
 }
 } catch (error) {
-console.error('Error updating stats:', error);
+logger.error('Error updating stats:', error);
 throw error;
 }
 }
@@ -134,7 +135,7 @@ async markOnboardingCompleted(): Promise<void> {
 try {
 await AsyncStorage.setItem(ONBOARDING_COMPLETED_KEY, 'true');
 } catch (error) {
-console.error('Error marking onboarding completed:', error);
+logger.error('Error marking onboarding completed:', error);
 throw error;
 }
 }
@@ -144,7 +145,7 @@ try {
 const completed = await AsyncStorage.getItem(ONBOARDING_COMPLETED_KEY);
 return completed === 'true';
 } catch (error) {
-console.error('Error checking onboarding status:', error);
+logger.error('Error checking onboarding status:', error);
 return false;
 }
 }
@@ -230,7 +231,7 @@ lastActiveDate: new Date().toISOString(),
 await this.updateStats(updatedStats);
 }
 } catch (error) {
-console.error('Error updating learning progress:', error);
+logger.error('Error updating learning progress:', error);
 throw error;
 }
 }
@@ -241,7 +242,7 @@ await AsyncStorage.removeItem(USER_PROFILE_KEY);
 await AsyncStorage.removeItem(ONBOARDING_COMPLETED_KEY);
 this.currentProfile = null;
 } catch (error) {
-console.error('Error clearing user data:', error);
+logger.error('Error clearing user data:', error);
 throw error;
 }
 }

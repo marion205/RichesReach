@@ -5,6 +5,7 @@
 import { Linking, Alert } from 'react-native';
 import { API_BASE } from '../config/api';
 import { alpacaAnalytics } from './alpacaAnalyticsService';
+import logger from '../utils/logger';
 
 const OAUTH_INITIATE_URL = `${API_BASE}/api/auth/alpaca/initiate`;
 
@@ -40,12 +41,11 @@ export const initiateAlpacaOAuth = async (redirectUri?: string): Promise<void> =
     await Linking.openURL(url);
     
   } catch (error: any) {
-    console.error('Failed to initiate OAuth flow:', error);
+    logger.error('Failed to initiate OAuth flow:', error);
     alpacaAnalytics.track('connect_oauth_error', {
       error: 'initiation_failed',
       errorCode: 'INITIATION_ERROR',
-      message: error?.message,
-    });
+    } as any);
     
     Alert.alert(
       'Connection Error',
@@ -75,8 +75,7 @@ export const handleOAuthCallback = (url: string): OAuthResult => {
       alpacaAnalytics.track('connect_oauth_error', {
         error,
         errorCode: 'OAUTH_ERROR',
-        errorDescription,
-      });
+      } as any);
       
       return {
         success: false,
@@ -107,13 +106,12 @@ export const handleOAuthCallback = (url: string): OAuthResult => {
     };
     
   } catch (error: any) {
-    console.error('Failed to handle OAuth callback:', error);
+    logger.error('Failed to handle OAuth callback:', error);
     
     alpacaAnalytics.track('connect_oauth_error', {
       error: 'callback_parse_failed',
       errorCode: 'CALLBACK_ERROR',
-      message: error?.message,
-    });
+    } as any);
     
     return {
       success: false,

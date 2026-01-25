@@ -14,6 +14,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import logger from '../utils/logger';
 
 interface LicensingDisclosureScreenProps {
   onClose?: () => void;
@@ -21,7 +22,7 @@ interface LicensingDisclosureScreenProps {
 
 const LicensingDisclosureScreen: React.FC<LicensingDisclosureScreenProps> = ({ onClose }) => {
   const openLink = (url: string) => {
-    Linking.openURL(url).catch((err) => console.error('Failed to open URL:', err));
+    Linking.openURL(url).catch((err) => logger.error('Failed to open URL:', err));
   };
 
   return (

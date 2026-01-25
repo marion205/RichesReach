@@ -6,6 +6,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import logger from '../../../utils/logger';
 
 const DAILY_BRIEF_STORAGE_KEY = 'daily_brief_notification_preferences';
 const DAILY_BRIEF_NOTIFICATION_ID = 'daily_brief_morning_reminder';
@@ -43,7 +44,7 @@ class DailyBriefNotificationScheduler {
       if (status !== 'granted') {
         const { status: newStatus } = await Notifications.requestPermissionsAsync();
         if (newStatus !== 'granted') {
-          console.warn('[DailyBrief] Notification permission not granted');
+          logger.warn('[DailyBrief] Notification permission not granted');
           return;
         }
       }
@@ -64,10 +65,11 @@ class DailyBriefNotificationScheduler {
           sound: true,
         },
         trigger: {
+          type: 'calendar',
           hour: hours,
           minute: minutes,
           repeats: true,
-        },
+        } as Notifications.CalendarTriggerInput,
         ...(Platform.OS === 'android' && {
           channelId: 'daily_brief',
         }),
@@ -76,9 +78,9 @@ class DailyBriefNotificationScheduler {
       // Save preferences
       await AsyncStorage.setItem(DAILY_BRIEF_STORAGE_KEY, JSON.stringify(preferences));
 
-      console.log(`[DailyBrief] Scheduled daily reminder for ${preferences.time}`);
+      // Scheduled successfully - no need to log
     } catch (error) {
-      console.error('[DailyBrief] Failed to schedule reminder:', error);
+      logger.error('[DailyBrief] Failed to schedule reminder:', error);
     }
   }
 
@@ -92,7 +94,7 @@ class DailyBriefNotificationScheduler {
         return JSON.parse(stored);
       }
     } catch (error) {
-      console.error('[DailyBrief] Error loading preferences:', error);
+      logger.error('[DailyBrief] Error loading preferences:', error);
     }
     
     // Default preferences
@@ -109,9 +111,9 @@ class DailyBriefNotificationScheduler {
     try {
       await Notifications.cancelScheduledNotificationAsync(DAILY_BRIEF_NOTIFICATION_ID);
       await AsyncStorage.removeItem(DAILY_BRIEF_STORAGE_KEY);
-      console.log('[DailyBrief] Cancelled all notifications');
+      // Cancelled successfully - no need to log
     } catch (error) {
-      console.error('[DailyBrief] Error cancelling notifications:', error);
+      logger.error('[DailyBrief] Error cancelling notifications:', error);
     }
   }
 }

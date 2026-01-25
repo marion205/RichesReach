@@ -18,6 +18,19 @@ interface FinancialNewsProps {
 symbol?: string; // Optional: show news for specific stock
 limit?: number; // Optional: limit number of articles
 }
+
+interface MarketNews {
+  id: string;
+  title: string;
+  summary: string;
+  source: string;
+  publishedAt: string;
+  url: string;
+  imageUrl?: string;
+  sentiment?: 'positive' | 'negative' | 'neutral';
+  relatedSymbols?: string[];
+}
+
 const FinancialNews: React.FC<FinancialNewsProps> = ({ symbol, limit = 20 }) => {
 const [news, setNews] = useState<MarketNews[]>([]);
 const [loading, setLoading] = useState(true);

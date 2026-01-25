@@ -77,7 +77,7 @@ interface StablePortfolioData {
   }>;
 }
 
-const PortfolioScreen: React.FC<PortfolioScreenProps> = ({ navigateTo }) => {
+const PortfolioScreen: React.FC<PortfolioScreenProps> = React.memo(({ navigateTo }) => {
 const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   
@@ -106,6 +106,10 @@ const insets = useSafeAreaInsets();
   
   // Credit Quest state
   const [showCreditQuest, setShowCreditQuest] = useState(false);
+  
+  // Refs for timeout management
+  const debugLogTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const priceFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const { data: portfolioData, loading: portfolioLoading, error: portfolioError, refetch } = useQuery(GET_MY_PORTFOLIOS, {
     errorPolicy: 'all', // Continue even if there are errors
@@ -169,22 +173,31 @@ const insets = useSafeAreaInsets();
   useEffect(() => {
     if (__DEV__) {
       // Use timeout to debounce logging and prevent blocking
-      const timeoutId = setTimeout(() => {
+      if (debugLogTimeoutRef.current) {
+        clearTimeout(debugLogTimeoutRef.current);
+      }
+      debugLogTimeoutRef.current = setTimeout(() => {
         logger.log('[PortfolioScreen] Constellation Orb Debug:', {
           hasBankLinked,
-          hasSnapshot: !!snapshot,
+          hasSnapshot: !!baseSnapshot,
           snapshotLoading,
           snapshotError: snapshotError?.message,
-          bankAccountsCount: snapshot?.breakdown?.bankAccountsCount,
-          willShowOrb: hasBankLinked && !!snapshot,
+          bankAccountsCount: baseSnapshot?.breakdown?.bankAccountsCount,
+          willShowOrb: hasBankLinked && !!baseSnapshot,
           hasFamilyGroup: !!familyGroup,
           familyMembers: familyGroup?.members.length || 0,
         });
+        debugLogTimeoutRef.current = null;
       }, 500); // Debounce by 500ms
       
-      return () => clearTimeout(timeoutId);
+      return () => {
+        if (debugLogTimeoutRef.current) {
+          clearTimeout(debugLogTimeoutRef.current);
+          debugLogTimeoutRef.current = null;
+        }
+      };
     }
-  }, [hasBankLinked, snapshot, snapshotLoading, snapshotError, familyGroup]);
+  }, [hasBankLinked, baseSnapshot, snapshotLoading, snapshotError, familyGroup]);
   
   // Timeout handling: Stop loading after 3 seconds and use mock data
   const [portfolioLoadingTimeout, setPortfolioLoadingTimeout] = useState(false);
@@ -221,7 +234,7 @@ const insets = useSafeAreaInsets();
       if (navigation && 'navigate' in navigation && typeof navigation.navigate === 'function') {
         logger.log('PortfolioScreen: Using navigation.navigate with mapped name:', mappedName);
         // For screens in the same stack (InvestStack), navigate directly
-        navigation.navigate(mappedName as never, params as never);
+        (navigation.navigate as any)(mappedName, params);
         return;
       }
     } catch (error) {
@@ -232,10 +245,10 @@ const insets = useSafeAreaInsets();
         const investStackScreens = ['premium-analytics', 'PortfolioManagement', 'trading', 'Stocks', 'StockDetail', 'AIPortfolio'];
         if (investStackScreens.includes(mappedName) && 'navigate' in navigation && typeof navigation.navigate === 'function') {
           logger.log('PortfolioScreen: Trying nested navigation to Invest stack');
-          navigation.navigate('Invest' as never, {
+          (navigation.navigate as any)('Invest', {
             screen: mappedName,
             params: params
-          } as never);
+          });
           return;
         }
       } catch (nestedError) {
@@ -244,7 +257,9 @@ const insets = useSafeAreaInsets();
     }
     logger.log('PortfolioScreen: Using navigateTo fallback');
     if (navigateTo) {
-      navigateTo(name, params);
+      if (navigateTo) {
+        (navigateTo as any)(name, params);
+      }
     } else {
       logger.warn('PortfolioScreen: No navigation method available');
     }
@@ -297,7 +312,7 @@ const fetchRealTimePrices = useCallback(async (holdings: HoldingForPrice[]) => {
     }
     holdings.forEach((holding: HoldingWithPrice) => {
       const symbol = holding.stock?.symbol || holding.symbol;
-      const price = holding.currentPrice || holding.stock?.currentPrice || 0;
+      const price = (holding as any).currentPrice || ((holding.stock as any)?.currentPrice as number) || 0;
       if (symbol && price > 0) {
         mockPrices[symbol] = price;
       }
@@ -343,7 +358,10 @@ useEffect(() => {
     portfoliosRef.current = portfoliosDataString;
     
     // Use a timeout to debounce and prevent blocking the main thread
-    const timeoutId = setTimeout(() => {
+    if (priceFetchTimeoutRef.current) {
+      clearTimeout(priceFetchTimeoutRef.current);
+    }
+    priceFetchTimeoutRef.current = setTimeout(() => {
       if (portfolioData?.myPortfolios?.portfolios) {
         const allHoldings = portfolioData.myPortfolios.portfolios.flatMap((p: Portfolio) => p.holdings || []);
         if (allHoldings.length > 0) {
@@ -360,10 +378,16 @@ useEffect(() => {
         // No portfolio data yet, but don't block rendering
         setLoadingPrices(false);
       }
+      priceFetchTimeoutRef.current = null;
     }, 100); // Small delay to prevent blocking initial render
-    
-    return () => clearTimeout(timeoutId);
   }
+  
+  return () => {
+    if (priceFetchTimeoutRef.current) {
+      clearTimeout(priceFetchTimeoutRef.current);
+      priceFetchTimeoutRef.current = null;
+    }
+  };
   // Only depend on portfoliosDataString - fetchRealTimePrices is stable (empty deps)
   // eslint-disable-next-line react-hooks/exhaustive-deps
 }, [portfoliosDataString]);
@@ -1117,9 +1141,13 @@ Advanced options strategies and market sentiment
 </ScrollView>
   {/* Celebration Overlay */}
   <MilestoneUnlockOverlay visible={!!celebrateTitle} title={celebrateTitle ?? ''} onClose={() => setCelebrateTitle(null)} />
-</View>
+  </View>
 );
-};
+
+});
+
+PortfolioScreen.displayName = 'PortfolioScreen';
+
 const styles = StyleSheet.create({
 container: {
 flex: 1,
@@ -1485,4 +1513,7 @@ analyticsButtonText: {
     lineHeight: 20,
   },
 });
+
+PortfolioScreen.displayName = 'PortfolioScreen';
+
 export default PortfolioScreen;

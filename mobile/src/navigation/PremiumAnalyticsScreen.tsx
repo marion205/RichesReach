@@ -20,6 +20,7 @@ import RebalancingStorageService from '../features/portfolio/services/Rebalancin
 import RebalancingResultsDisplay from '../features/portfolio/components/RebalancingResultsDisplay';
 import TaxOptimizationScreen from '../screens/TaxOptimizationScreen';
 import RustCorrelationWidget from '../components/rust/RustCorrelationWidget';
+import logger from '../utils/logger';
 
 // Custom Slider Component
 const CustomSlider = ({ value, onValueChange, minimumValue = 0, maximumValue = 100, step = 1, style, ...props }) => {
@@ -278,14 +279,14 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
           return;
         }
       } catch (error) {
-        console.error('Error navigating to subscription:', error);
+        logger.error('Error navigating to subscription:', error);
       }
     }
     // Default navigation
     try {
       navigation.navigate(screen as never, params as never);
     } catch (error) {
-      console.error(`Error navigating to ${screen}:`, error);
+      logger.error(`Error navigating to ${screen}:`, error);
       // Fallback: try parent navigator
       try {
         const parentNav = navigation.getParent?.();
@@ -293,7 +294,7 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
           parentNav.navigate(screen as never, params as never);
         }
       } catch (parentError) {
-        console.error('Parent navigation also failed:', parentError);
+        logger.error('Parent navigation also failed:', parentError);
       }
     }
   });
@@ -337,11 +338,8 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
     GET_PREMIUM_PORTFOLIO_METRICS,
     {
       errorPolicy: 'all',
-      onCompleted: (data) => {
-        console.log('🔍 Portfolio metrics loaded:', data);
-      },
       onError: (error) => {
-        console.error('❌ PremiumAnalyticsScreen: Metrics query error:', error);
+        logger.error('❌ PremiumAnalyticsScreen: Metrics query error:', error);
       }
     }
   );
@@ -360,11 +358,8 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
       },
       errorPolicy: 'all',
       fetchPolicy: 'network-only',
-      onCompleted: (data) => {
-        console.log('🔍 AI recommendations loaded:', data);
-      },
       onError: (error) => {
-        console.error('❌ PremiumAnalyticsScreen: AI Recommendations query error:', error);
+        logger.error('❌ PremiumAnalyticsScreen: AI Recommendations query error:', error);
       },
     },
   );
@@ -408,11 +403,8 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
     {
       variables: { symbol: selectedSymbol },
       errorPolicy: 'all',
-      onCompleted: (data) => {
-        console.log('🔍 Options analysis loaded:', data);
-      },
       onError: (error) => {
-        console.error('❌ PremiumAnalyticsScreen: Options Analysis Error:', error);
+        logger.error('❌ PremiumAnalyticsScreen: Options Analysis Error:', error);
       }
     }
   );
@@ -420,14 +412,6 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
   // Options data - only use real data, no mock fallback
   const options = optionsData?.optionsAnalysis || null;
   const isUsingMockOptionsData = !optionsData?.optionsAnalysis;
-  
-  // Debug logging
-  console.log('🔍 Options Debug:', {
-    optionsData: optionsData?.optionsAnalysis,
-    finalOptions: options,
-    isUsingMockOptionsData,
-    hasStrategies: options?.recommendedStrategies?.length
-  });
 
   // Only use real data - no mock fallback
   const displayMetrics = metricsData?.portfolioMetrics || null;
@@ -442,7 +426,7 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
         refetchOptions()
       ]);
     } catch (error) {
-      console.error('Error refreshing data:', error);
+      logger.error('Error refreshing data:', error);
     } finally {
       setRefreshing(false);
     }
@@ -489,7 +473,7 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
         setScreeningResults([]);
       }
     } catch (error) {
-      console.error('Screening search error:', error);
+      logger.error('Screening search error:', error);
       setScreeningResults([]);
     } finally {
       setScreeningLoading(false);
@@ -1070,7 +1054,7 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
                           );
                         }
                       } catch (error) {
-                        console.error('Error adding to watchlist:', error);
+                        logger.error('Error adding to watchlist:', error);
                         Alert.alert(
                           'Error',
                           'Failed to add to watchlist. Please try again.',
@@ -1656,7 +1640,7 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
                           );
                         }
                       } catch (error) {
-                        console.error('Error adding to watchlist:', error);
+                        logger.error('Error adding to watchlist:', error);
                         Alert.alert(
                           'Error',
                           'Failed to add to watchlist. Please try again.',

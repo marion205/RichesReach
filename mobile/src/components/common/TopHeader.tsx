@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, StatusBar, DeviceEventEmitter } from 'react-native';
 import Feather from 'react-native-vector-icons/Feather';
 import { globalNavigate } from '../../navigation/NavigationService';
+import logger from '../../utils/logger';
 
 interface TopHeaderProps {
   currentScreen: string;
@@ -24,6 +25,18 @@ const TopHeader: React.FC<TopHeaderProps> = ({
   hideMicButton = false,
   hideProfileButton = false,
 }) => {
+  const navigationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (navigationTimeoutRef.current) {
+        clearTimeout(navigationTimeoutRef.current);
+        navigationTimeoutRef.current = null;
+      }
+    };
+  }, []);
+  
   const getScreenTitle = () => {
     if (title) return title;
     
@@ -62,39 +75,43 @@ const TopHeader: React.FC<TopHeaderProps> = ({
             <TouchableOpacity
               style={styles.micButton}
               onPress={() => {
-                console.log('🎤 [TopHeader] Microphone button pressed');
+                logger.log('🎤 [TopHeader] Microphone button pressed');
                 
                 // Always emit the event - don't wait for navigation
                 // The event listener in HomeScreen will handle it regardless of current screen
-                console.log('🎤 [TopHeader] Emitting calm_goal_mic event immediately');
+                logger.log('🎤 [TopHeader] Emitting calm_goal_mic event immediately');
                 DeviceEventEmitter.emit('calm_goal_mic');
                 
                 // Try to navigate to home (but don't block on it)
                 // Use a small delay to ensure event is emitted first
-                setTimeout(() => {
+                if (navigationTimeoutRef.current) {
+                  clearTimeout(navigationTimeoutRef.current);
+                }
+                navigationTimeoutRef.current = setTimeout(() => {
                   try {
                     // Try custom navigateTo first (for shell screens), then globalNavigate, then onNavigate
                     if (navigateTo) {
-                      console.log('🎤 [TopHeader] Using navigateTo to go to home');
+                      logger.log('🎤 [TopHeader] Using navigateTo to go to home');
                       navigateTo('home');
                     } else {
                       try { 
-                        console.log('🎤 [TopHeader] Using globalNavigate to go to Home');
+                        logger.log('🎤 [TopHeader] Using globalNavigate to go to Home');
                         globalNavigate('Home'); 
                       } catch (navError) {
-                        console.warn('🎤 [TopHeader] globalNavigate failed, trying onNavigate:', navError);
+                        logger.warn('🎤 [TopHeader] globalNavigate failed, trying onNavigate:', navError);
                         try {
                           onNavigate('home');
                         } catch (onNavError) {
-                          console.warn('🎤 [TopHeader] onNavigate also failed:', onNavError);
+                          logger.warn('🎤 [TopHeader] onNavigate also failed:', onNavError);
                           // Navigation failed, but event was already emitted, so it's okay
                         }
                       }
                     }
                   } catch (error) {
-                    console.warn('🎤 [TopHeader] Navigation error (non-critical):', error);
+                    logger.warn('🎤 [TopHeader] Navigation error (non-critical):', error);
                     // Navigation failed, but event was already emitted, so it's okay
                   }
+                  navigationTimeoutRef.current = null;
                 }, 100);
               }}
               accessibilityLabel="Voice"

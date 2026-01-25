@@ -85,7 +85,7 @@ export function useSlideIn(
 /**
  * Format animated value for currency display
  */
-export function formatAnimatedCurrency(value: Animated.Value): Animated.AnimatedInterpolation {
+export function formatAnimatedCurrency(value: Animated.Value): Animated.AnimatedInterpolation<string> {
   return value.interpolate({
     inputRange: [0, 1000, 10000, 100000, 1000000],
     outputRange: ['$0', '$1K', '$10K', '$100K', '$1M'],

@@ -8,18 +8,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'rea
 import Slider from '@react-native-community/slider';
 import Icon from 'react-native-vector-icons/Feather';
 import { ScoreSimulatorInputs, ScoreSimulation } from '../types/CreditTypes';
-
-// Debug: Log imports to verify they're loaded
-if (__DEV__) {
-  console.log('[ScoreSimulator] Imports check:', {
-    React: !!React,
-    Slider: !!Slider,
-    Icon: !!Icon,
-    hasUseState: typeof useState !== 'undefined',
-    hasUseCallback: typeof useCallback !== 'undefined',
-    hasUseMemo: typeof useMemo !== 'undefined',
-  });
-}
+import logger from '../../../utils/logger';
 
 
 interface ScoreSimulatorProps {
@@ -53,7 +42,7 @@ function ScoreSimulator({
       },
     };
   } catch (error) {
-    console.error('ScoreSimulator: onSimulate error', error);
+    logger.error('ScoreSimulator: onSimulate error', error);
     simulation = {
       minScore: currentScore - 30,
       likelyScore: currentScore,

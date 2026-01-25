@@ -122,11 +122,6 @@ async function postJSON<T>(
   const url = `${BASE_URL}${path}`;
   const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   
-  // Debug logging
-  console.log(`🌐 [Coach Client] Making request to: ${url}`);
-  console.log(`🌐 [Coach Client] BASE_URL: ${BASE_URL}`);
-  console.log(`🌐 [Coach Client] Timeout: ${opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS}ms`);
-  
   const resPromise = fetch(url, {
     method: 'POST',
     headers: {

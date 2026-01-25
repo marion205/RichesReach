@@ -16,6 +16,8 @@ import type {
 // Example 1: Typing a user object
 const exampleUser: UserType = {
   __typename: 'UserType',
+  id: '1',
+  name: 'Example User',
   email: 'user@example.com',
   // TypeScript will autocomplete all available fields
   // and catch any typos or missing required fields

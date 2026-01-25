@@ -17,6 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/Feather';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import logger from '../../../utils/logger';
 
 const { width } = Dimensions.get('window');
 
@@ -101,7 +102,7 @@ export default function DailyBriefOnboardingScreen({
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onComplete();
     } catch (error) {
-      console.error('Error saving onboarding completion:', error);
+      logger.error('Error saving onboarding completion:', error);
       onComplete(); // Still complete even if storage fails
     }
   };
@@ -115,7 +116,7 @@ export default function DailyBriefOnboardingScreen({
         onComplete();
       }
     } catch (error) {
-      console.error('Error saving onboarding skip:', error);
+      logger.error('Error saving onboarding skip:', error);
       if (onSkip) {
         onSkip();
       } else {
@@ -215,7 +216,7 @@ export const isDailyBriefOnboardingCompleted = async (): Promise<boolean> => {
     const completed = await AsyncStorage.getItem(DAILY_BRIEF_ONBOARDING_KEY);
     return completed === 'true';
   } catch (error) {
-    console.error('Error checking onboarding status:', error);
+    logger.error('Error checking onboarding status:', error);
     return false;
   }
 };

@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { Alert } from 'react-native';
+import logger from '../utils/logger';
 
 interface OfflineData {
   timestamp: number;
@@ -32,6 +33,8 @@ class OfflineInsightsService {
   private pendingActionsKey = 'richesreach_pending_actions';
   private maxCacheSize = 50; // MB
   private cacheExpiryTime = 24 * 60 * 60 * 1000; // 24 hours
+  private syncInterval: NodeJS.Timeout | null = null;
+  private cacheCleanupInterval: NodeJS.Timeout | null = null;
 
   constructor() {
     this.isOnline = true;
@@ -79,7 +82,7 @@ class OfflineInsightsService {
         this.pendingActions = JSON.parse(pendingActions);
       }
     } catch (error) {
-      console.error('Error loading cached data:', error);
+      logger.error('Error loading cached data:', error);
     }
   }
 
@@ -98,7 +101,10 @@ class OfflineInsightsService {
 
   private setupPeriodicSync() {
     // Sync every 5 minutes when online
-    setInterval(() => {
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval);
+    }
+    this.syncInterval = setInterval(() => {
       if (this.isOnline && this.pendingActions.length > 0) {
         this.syncPendingActions();
       }
@@ -107,14 +113,31 @@ class OfflineInsightsService {
 
   private setupCacheCleanup() {
     // Clean up expired cache every hour
-    setInterval(() => {
+    if (this.cacheCleanupInterval) {
+      clearInterval(this.cacheCleanupInterval);
+    }
+    this.cacheCleanupInterval = setInterval(() => {
       this.cleanupExpiredCache();
     }, 60 * 60 * 1000);
+  }
+  
+  /**
+   * Cleanup method to stop all intervals
+   */
+  cleanup(): void {
+    if (this.syncInterval) {
+      clearInterval(this.syncInterval);
+      this.syncInterval = null;
+    }
+    if (this.cacheCleanupInterval) {
+      clearInterval(this.cacheCleanupInterval);
+      this.cacheCleanupInterval = null;
+    }
   }
 
   private handleGoOffline() {
     this.isOfflineMode = true;
-    console.log('📱 App went offline - switching to offline mode');
+    logger.log('📱 App went offline - switching to offline mode');
     
     // Show offline notification
     this.showOfflineNotification();
@@ -125,7 +148,7 @@ class OfflineInsightsService {
 
   private handleComeOnline() {
     this.isOfflineMode = false;
-    console.log('📱 App came online - syncing data');
+    logger.log('📱 App came online - syncing data');
     
     // Hide offline notification
     this.hideOfflineNotification();
@@ -148,7 +171,7 @@ class OfflineInsightsService {
 
   private hideOfflineNotification() {
     // Hide offline indicator
-    console.log('📱 Back online - full functionality restored');
+    logger.log('📱 Back online - full functionality restored');
   }
 
   // Core Offline Functionality
@@ -384,7 +407,7 @@ class OfflineInsightsService {
       return;
     }
 
-    console.log(`📱 Syncing ${this.pendingActions.length} pending actions`);
+    logger.log(`📱 Syncing ${this.pendingActions.length} pending actions`);
     
     const actionsToSync = [...this.pendingActions];
     this.pendingActions = [];
@@ -395,9 +418,9 @@ class OfflineInsightsService {
       }
       
       await this.savePendingActions();
-      console.log('📱 Successfully synced all pending actions');
+      logger.log('📱 Successfully synced all pending actions');
     } catch (error) {
-      console.error('Error syncing pending actions:', error);
+      logger.error('Error syncing pending actions:', error);
       // Re-add failed actions
       this.pendingActions = [...actionsToSync, ...this.pendingActions];
       await this.savePendingActions();
@@ -417,7 +440,7 @@ class OfflineInsightsService {
         // Execute tax harvesting
         break;
       default:
-        console.log('Unknown action type:', action.type);
+        logger.warn('Unknown action type:', action.type);
     }
   }
 
@@ -432,7 +455,7 @@ class OfflineInsightsService {
     try {
       await AsyncStorage.setItem(this.insightsKey, JSON.stringify(this.cachedInsights));
     } catch (error) {
-      console.error('Error saving cached insights:', error);
+      logger.error('Error saving cached insights:', error);
     }
   }
 
@@ -440,7 +463,7 @@ class OfflineInsightsService {
     try {
       await AsyncStorage.setItem(this.pendingActionsKey, JSON.stringify(this.pendingActions));
     } catch (error) {
-      console.error('Error saving pending actions:', error);
+      logger.error('Error saving pending actions:', error);
     }
   }
 
@@ -459,7 +482,7 @@ class OfflineInsightsService {
     
     for (const insight of criticalInsights) {
       // Trigger refresh of critical insights
-      console.log(`📱 Refreshing critical insight: ${insight.id}`);
+      logger.log(`📱 Refreshing critical insight: ${insight.id}`);
     }
   }
 
@@ -493,7 +516,7 @@ class OfflineInsightsService {
       
       return (insightsSize + actionsSize) / (1024 * 1024); // MB
     } catch (error) {
-      console.error('Error calculating cache size:', error);
+      logger.error('Error calculating cache size:', error);
       return 0;
     }
   }

@@ -14,6 +14,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation } from '@apollo/client';
 import { GET_NEWS_PREFERENCES, UPDATE_NEWS_PREFERENCES, NewsPreferences } from '../../../graphql/newsPreferences';
+import logger from '../../../utils/logger';
 
 
 const NewsPreferencesScreen = ({ navigation }: { navigation?: any }) => {
@@ -52,7 +53,7 @@ const NewsPreferencesScreen = ({ navigation }: { navigation?: any }) => {
         }
       }
     } catch (error) {
-      console.error('Error loading news preferences:', error);
+      logger.error('Error loading news preferences:', error);
       // Fallback to local storage
       try {
         const saved = await AsyncStorage.getItem('newsPreferences');
@@ -60,7 +61,7 @@ const NewsPreferencesScreen = ({ navigation }: { navigation?: any }) => {
           setPreferences(JSON.parse(saved));
         }
       } catch (localError) {
-        console.error('Error loading from local storage:', localError);
+        logger.error('Error loading from local storage:', localError);
       }
     } finally {
       setLoading(false);
@@ -82,14 +83,14 @@ const NewsPreferencesScreen = ({ navigation }: { navigation?: any }) => {
         throw new Error(data?.updateNewsPreferences?.error || 'Failed to save preferences');
       }
     } catch (error) {
-      console.error('Error saving news preferences:', error);
+      logger.error('Error saving news preferences:', error);
       // Fallback to local storage
       try {
         await AsyncStorage.setItem('newsPreferences', JSON.stringify(newPreferences));
         setPreferences(newPreferences);
         Alert.alert('Warning', 'Preferences saved locally only. Check your connection.');
       } catch (localError) {
-        console.error('Error saving to local storage:', localError);
+        logger.error('Error saving to local storage:', localError);
         Alert.alert('Error', 'Failed to save preferences');
       }
     }

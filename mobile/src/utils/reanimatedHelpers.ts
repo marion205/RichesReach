@@ -60,7 +60,7 @@ export function safeAnimate(
   
   // If already on UI thread, we need to bounce back to JS first
   if (isWorklet()) {
-    runOnJS((val, anim, tgt) => {
+    runOnJS((val: any, anim: any, tgt: number) => {
       val.value = anim(tgt);
     })(value, animation, target);
     return;

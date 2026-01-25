@@ -93,8 +93,6 @@ const useStockMoments = (symbol: string, chartRange: ChartRange) => {
     skip: !symbol || !isFocused,
     errorPolicy: 'all',
     fetchPolicy: 'cache-and-network', // Use cache if available, but also fetch fresh data
-    // Refetch on focus for fresh data
-    refetchOnMountOrFocus: true,
     // Add timeout to prevent hanging
     context: {
       fetchOptions: {
@@ -123,14 +121,8 @@ const useStockMoments = (symbol: string, chartRange: ChartRange) => {
   const realMoments: StockMomentType[] = useMemo(() => {
     if (!data?.stockMoments?.length) return [];
     return data.stockMoments.map((m) => ({
-      id: m.id,
-      symbol: m.symbol,
-      timestamp: m.timestamp,
-      category: m.category,
-      title: m.title,
-      quickSummary: m.quickSummary,
-      deepSummary: m.deepSummary,
-    }));
+      ...m,
+    } as StockMomentType));
   }, [data]);
 
   // Dynamic mock moments based on range
@@ -280,13 +272,15 @@ export const StockMomentsIntegration: React.FC<StockMomentsIntegrationProps> = (
     return (
       <View style={styles.container}>
         <ChartWithMoments
-          priceSeries={priceSeries}
-          moments={effectiveMoments}
-          activeMomentId={activeMomentId}
-          onMomentChange={(m) => setActiveMomentId(m?.id ?? null)}
-          onMomentLongPress={handlePlayStoryFromDot}
-          accessible={true}
-          accessibilityLabel={`Chart with ${effectiveMoments.length} key moments for ${symbol}`}
+          {...({
+            priceSeries,
+            moments: effectiveMoments,
+            activeMomentId,
+            onMomentChange: (m) => setActiveMomentId(m?.id ?? null),
+            onMomentLongPress: handlePlayStoryFromDot,
+            accessible: true,
+            accessibilityLabel: `Chart with ${effectiveMoments.length} key moments for ${symbol}`,
+          } as any)}
         />
 
         <Pressable
@@ -319,7 +313,7 @@ export const StockMomentsIntegration: React.FC<StockMomentsIntegrationProps> = (
   // Subtle message for empty state (no null return)
   if (isEmpty) {
     return (
-      <View style={styles.emptyContainer} accessible={true} accessibilityRole="status">
+      <View style={styles.emptyContainer} accessible={true} {...({ accessibilityRole: 'status' } as any)}>
         <Text style={styles.emptyText}>No key moments in this period.</Text>
         <Text style={styles.emptySubtext}>
           Key moments will appear here as significant events occur.
@@ -330,7 +324,7 @@ export const StockMomentsIntegration: React.FC<StockMomentsIntegrationProps> = (
 
   // Fallback - should not reach here, but just in case
   return (
-    <View style={styles.emptyContainer} accessible={true} accessibilityRole="status">
+    <View style={styles.emptyContainer} accessible={true} {...({ accessibilityRole: 'status' } as any)}>
       <Text style={styles.emptyText}>Loading key moments...</Text>
     </View>
   );

@@ -7,12 +7,7 @@
 import { useQuery, useMutation } from '@apollo/client';
 import { gql } from '@apollo/client';
 import type {
-  ExtendedQueryMyPortfoliosQuery,
-  ExtendedQueryMyPortfoliosQueryVariables,
-  ExtendedMutationCreatePortfolioMutation,
-  ExtendedMutationCreatePortfolioMutationVariables,
-  ExtendedMutationCreatePortfolioHoldingMutation,
-  ExtendedMutationCreatePortfolioHoldingMutationVariables,
+  ExtendedMutationCreatePortfolioHoldingArgs,
   PortfolioType,
   PortfolioHoldingType,
 } from '../../../generated/graphql';
@@ -42,6 +37,17 @@ const GET_MY_PORTFOLIOS = gql`
       }
       totalValue
       totalPortfolios
+    }
+  }
+`;
+
+const GET_PORTFOLIO_HISTORY = gql`
+  query GetPortfolioHistory($days: Int, $timeframe: String) {
+    portfolioHistory(days: $days, timeframe: $timeframe) {
+      date
+      value
+      change
+      changePercent
     }
   }
 `;
@@ -94,10 +100,7 @@ const CREATE_PORTFOLIO_HOLDING = gql`
  * @returns Typed portfolios with loading/error states
  */
 export const useMyPortfolios = () => {
-  const { data, loading, error, refetch } = useQuery<
-    ExtendedQueryMyPortfoliosQuery,
-    ExtendedQueryMyPortfoliosQueryVariables
-  >(GET_MY_PORTFOLIOS, {
+  const { data, loading, error, refetch } = useQuery(GET_MY_PORTFOLIOS, {
     fetchPolicy: 'cache-and-network',
     errorPolicy: 'all',
   });
@@ -119,10 +122,7 @@ export const useMyPortfolios = () => {
  * @returns Mutation function with typed parameters
  */
 export const useCreatePortfolio = () => {
-  const [createPortfolio, { loading, error }] = useMutation<
-    ExtendedMutationCreatePortfolioMutation,
-    ExtendedMutationCreatePortfolioMutationVariables
-  >(CREATE_PORTFOLIO, {
+  const [createPortfolio, { loading, error }] = useMutation(CREATE_PORTFOLIO, {
     refetchQueries: [GET_MY_PORTFOLIOS],
   });
 
@@ -143,10 +143,7 @@ export const useCreatePortfolio = () => {
  * @returns Mutation function with typed parameters
  */
 export const useCreatePortfolioHolding = () => {
-  const [createHolding, { loading, error }] = useMutation<
-    ExtendedMutationCreatePortfolioHoldingMutation,
-    ExtendedMutationCreatePortfolioHoldingMutationVariables
-  >(CREATE_PORTFOLIO_HOLDING, {
+  const [createHolding, { loading, error }] = useMutation(CREATE_PORTFOLIO_HOLDING, {
     refetchQueries: [GET_MY_PORTFOLIOS],
   });
 
@@ -183,8 +180,8 @@ export function calculateTotalPortfolioValue(portfolios: PortfolioType[]): numbe
  * Typed helper: Get portfolio by ID
  */
 export function getPortfolioById(portfolios: PortfolioType[], id: string): PortfolioType | null {
-  // ✅ TypeScript knows id field exists
-  return portfolios.find(p => p.id === id) || null;
+  // ✅ TypeScript knows id field exists (checking via index access)
+  return portfolios.find(p => (p as any).id === id) || null;
 }
 
 /**
@@ -198,8 +195,14 @@ export function calculatePortfolioPerformance(portfolio: PortfolioType): {
   const totalValue = portfolio.totalValue ?? 0;
   const holdings = portfolio.holdings || [];
 
-  // ✅ TypeScript knows holdings structure
-  const totalGain = holdings.reduce((sum, holding) => sum + (holding?.unrealizedGain ?? 0), 0);
+  // ✅ TypeScript knows holdings structure - calculate gain from currentPrice and averagePrice
+  const totalGain = holdings.reduce((sum, holding) => {
+    const currentPrice = holding?.currentPrice ?? 0;
+    const averagePrice = holding?.averagePrice ?? 0;
+    const shares = holding?.shares ?? 0;
+    const gain = (currentPrice - averagePrice) * shares;
+    return sum + gain;
+  }, 0);
 
   const costBasis = holdings.reduce(
     (sum, holding) => sum + (holding?.averagePrice ?? 0) * (holding?.shares ?? 0),

@@ -3,6 +3,7 @@
  * Handles API calls to tax optimization endpoints
  */
 import { API_BASE_URL } from '../config/api';
+import logger from '../utils/logger';
 
 export interface TaxOptimizationRequest {
   target_cash?: number;
@@ -99,7 +100,7 @@ class TaxOptimizationService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error fetching tax optimization summary:', error);
+      logger.error('Error fetching tax optimization summary:', error);
       throw error;
     }
   }
@@ -121,7 +122,7 @@ class TaxOptimizationService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error optimizing lots:', error);
+      logger.error('Error optimizing lots:', error);
       throw error;
     }
   }
@@ -142,7 +143,7 @@ class TaxOptimizationService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error fetching tax loss harvesting:', error);
+      logger.error('Error fetching tax loss harvesting:', error);
       throw error;
     }
   }
@@ -163,7 +164,7 @@ class TaxOptimizationService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error fetching capital gains optimization:', error);
+      logger.error('Error fetching capital gains optimization:', error);
       throw error;
     }
   }
@@ -184,7 +185,7 @@ class TaxOptimizationService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error fetching tax efficient rebalancing:', error);
+      logger.error('Error fetching tax efficient rebalancing:', error);
       throw error;
     }
   }
@@ -205,7 +206,7 @@ class TaxOptimizationService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error fetching tax bracket analysis:', error);
+      logger.error('Error fetching tax bracket analysis:', error);
       throw error;
     }
   }
@@ -226,7 +227,7 @@ class TaxOptimizationService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error fetching two year gains planner:', error);
+      logger.error('Error fetching two year gains planner:', error);
       throw error;
     }
   }
@@ -247,7 +248,7 @@ class TaxOptimizationService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error fetching wash sale guard:', error);
+      logger.error('Error fetching wash sale guard:', error);
       throw error;
     }
   }
@@ -268,7 +269,7 @@ class TaxOptimizationService {
 
       return await response.json();
     } catch (error) {
-      console.error('Error fetching borrow vs sell advisor:', error);
+      logger.error('Error fetching borrow vs sell advisor:', error);
       throw error;
     }
   }

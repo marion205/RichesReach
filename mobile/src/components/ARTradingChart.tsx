@@ -4,15 +4,15 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  PanGestureHandler,
-  State,
   Dimensions,
   Alert,
   Vibration,
   Platform,
 } from 'react-native';
+import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
+// @ts-ignore - VoiceContext may not be available in all builds
 import { useVoice } from '../../contexts/VoiceContext';
 import { useMutation, gql } from '@apollo/client';
 import { PreExecutionRiskCheckModal } from './common/PreExecutionRiskCheckModal';
@@ -184,7 +184,7 @@ const ARTradingChart: React.FC<ARTradingChartProps> = ({
     }
   };
 
-  const handleGesture = (event: any) => {
+  const handleGesture = async (event: any) => {
     const { translationX, translationY, state } = event.nativeEvent;
     
     if (state === State.BEGAN) {
@@ -362,7 +362,7 @@ const ARTradingChart: React.FC<ARTradingChartProps> = ({
           onClose={() => setShowRiskCheck(false)}
           onConfirm={handleRiskCheckConfirm}
           symbol={pick.symbol}
-          side={pick.side}
+          side={pick.side === 'LONG' ? 'BUY' : 'SELL'}
           quantity={pick.risk.size_shares}
           entryPrice={pick.risk.stop ? pick.risk.stop + (pick.risk.atr_5m || 1) : 0}
           stopPrice={pick.risk.stop}

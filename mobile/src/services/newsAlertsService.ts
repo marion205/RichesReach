@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NewsArticle } from './newsService';
+import logger from '../utils/logger';
 export interface NewsAlert {
 id: string;
 title: string;
@@ -48,7 +49,7 @@ if (saved) {
 this.alerts = JSON.parse(saved);
 }
 } catch (error) {
-console.error('Error loading news alerts:', error);
+logger.error('Error loading news alerts:', error);
 }
 }
 // Load preferences from storage
@@ -59,7 +60,7 @@ if (saved) {
 this.preferences = { ...this.preferences, ...JSON.parse(saved) };
 }
 } catch (error) {
-console.error('Error loading alert preferences:', error);
+logger.error('Error loading alert preferences:', error);
 }
 }
 // Save alerts to storage
@@ -67,7 +68,7 @@ private async saveAlerts() {
 try {
 await AsyncStorage.setItem('newsAlerts', JSON.stringify(this.alerts));
 } catch (error) {
-console.error('Error saving news alerts:', error);
+logger.error('Error saving news alerts:', error);
 }
 }
 // Save preferences to storage
@@ -75,7 +76,7 @@ private async savePreferences() {
 try {
 await AsyncStorage.setItem('newsAlertPreferences', JSON.stringify(this.preferences));
 } catch (error) {
-console.error('Error saving alert preferences:', error);
+logger.error('Error saving alert preferences:', error);
 }
 }
 // Create a new alert

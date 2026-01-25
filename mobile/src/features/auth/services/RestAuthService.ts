@@ -1,6 +1,7 @@
 // RestAuthService.ts - REST-based authentication service
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_AUTH } from '../../../config';
+import logger from '../../../utils/logger';
 
 interface TokenPayload {
   sub: string;
@@ -37,14 +38,14 @@ class RestAuthService {
     try {
       // Check if token exists and is a string
       if (!token || typeof token !== 'string') {
-        console.warn('Token is undefined or not a string:', token);
+        logger.warn('Token is undefined or not a string:', token);
         return null;
       }
       
       // Check if token has the expected JWT format (3 parts separated by dots)
       const parts = token.split('.');
       if (parts.length !== 3) {
-        console.warn('Invalid JWT format - expected 3 parts, got:', parts.length);
+        logger.warn('Invalid JWT format - expected 3 parts, got:', parts.length);
         return null;
       }
       
@@ -58,7 +59,7 @@ class RestAuthService {
       );
       return JSON.parse(jsonPayload);
     } catch (error) {
-      console.error('Error decoding token:', error);
+      logger.error('Error decoding token:', error);
       return null;
     }
   }
@@ -88,7 +89,7 @@ class RestAuthService {
     try {
       return await AsyncStorage.getItem('token');
     } catch (error) {
-      console.error('Error getting token from storage:', error);
+      logger.error('Error getting token from storage:', error);
       return null;
     }
   }
@@ -100,7 +101,7 @@ class RestAuthService {
     try {
       await AsyncStorage.setItem('token', token);
     } catch (error) {
-      console.error('Error storing token:', error);
+      logger.error('Error storing token:', error);
       throw error;
     }
   }
@@ -113,7 +114,7 @@ class RestAuthService {
       await AsyncStorage.removeItem('token');
       this.clearRefreshTimer();
     } catch (error) {
-      console.error('Error removing token:', error);
+      logger.error('Error removing token:', error);
     }
   }
 
@@ -122,8 +123,6 @@ class RestAuthService {
    */
   async login(email: string, password: string): Promise<{ token: string; payload: any }> {
     try {
-      console.log('🔐 Attempting login to:', API_AUTH);
-      
       const response = await fetch(API_AUTH, {
         method: 'POST',
         headers: {
@@ -152,13 +151,13 @@ class RestAuthService {
         await this.storeToken(token);
         this.scheduleTokenRefresh(token);
         
-        console.log('✅ Login successful, token stored');
+        // Login successful - no need to log
         return { token, payload };
       } else {
         throw new Error('Login failed: No token received');
       }
     } catch (error) {
-      console.error('Login error:', error);
+      logger.error('Login error:', error);
       throw error;
     }
   }
@@ -216,13 +215,13 @@ class RestAuthService {
     const expirationTime = payload.exp;
     const timeUntilExpiration = (expirationTime - now) * 1000; // Convert to milliseconds
 
-    console.log(`Token will expire in ${Math.round(timeUntilExpiration / 1000 / 60)} minutes`);
+    // Token expiration tracking - no need to log
     
     // Set a timer to warn when token is about to expire
     const warningTime = Math.max(timeUntilExpiration - (5 * 60 * 1000), 60000); // 5 minutes before expiration
     
     this.refreshTimer = setTimeout(() => {
-      console.log('Token is about to expire, user may need to login again soon');
+      // Token about to expire - no need to log
       if (this.onTokenRefreshFailure) {
         this.onTokenRefreshFailure();
       }

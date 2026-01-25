@@ -1,5 +1,6 @@
 import { gql, useQuery, useLazyQuery } from '@apollo/client';
 import { useEffect, useState } from 'react';
+import logger from '../../utils/logger';
 
 const GET_STOCKS = gql`
   query GetStocks($search: String, $limit: Int, $offset: Int) {
@@ -107,17 +108,13 @@ export function useStockSearch(searchText: string, skip = false) {
   
   const [getStockData] = useLazyQuery(GET_STOCK_CHART_DATA, {
     onCompleted: (data) => {
-      console.log('🔍 Real-time data received:', data);
       if (data?.stockChartData) {
         const stockData = data.stockChartData;
-        console.log('🔍 Processing stock data for:', stockData.symbol);
         setRealTimeStocks(prev => {
           const existing = prev.find(s => s.symbol === stockData.symbol);
           if (existing) {
-            console.log('🔍 Stock already exists:', stockData.symbol);
             return prev;
           }
-          console.log('🔍 Adding new stock to real-time results:', stockData.symbol);
           const newStock = {
             id: stockData.symbol,
             symbol: stockData.symbol,
@@ -175,9 +172,7 @@ export function useStockSearch(searchText: string, skip = false) {
               ]
             }
           };
-          console.log('🔍 New stock object created:', newStock);
           const updatedStocks = [...prev, newStock];
-          console.log('🔍 Updated real-time stocks array:', updatedStocks.map(s => s.symbol));
           return updatedStocks;
         });
       }
@@ -325,14 +320,11 @@ export function useStockSearch(searchText: string, skip = false) {
     notifyOnNetworkStatusChange: true,
     skip: skip,
     onCompleted: (data) => {
-      console.log('🔍 Database search completed:', { searchTerm: debounced, results: data?.stocks?.length || 0, stocks: data?.stocks?.map(s => s.symbol) });
       if (data?.stocks && data.stocks.length > 0 && (!debounced || !debounced.trim())) {
-        console.log('🔍 Database has results and no search term, using database data');
         setAllStocks(data.stocks);
         setHasMore(data.stocks.length === 10);
         setRealTimeStocks([]); // Clear real-time results when database has results
       } else if (debounced && debounced.trim()) {
-        console.log('🔍 Database search empty, trying real-time fallback for:', debounced);
         // Force clear all results to ensure fresh search
         setAllStocks([]);
         setRealTimeStocks([]);
@@ -355,12 +347,6 @@ export function useStockSearch(searchText: string, skip = false) {
           // Add AI-like symbol suggestions based on common patterns
           const symbolSuggestions = getSymbolSuggestions(searchUpper);
           symbolsToSearch = [...symbolsToSearch, ...symbolSuggestions];
-          
-          console.log('🔍 AI Search Debug:', {
-            searchTerm: searchUpper,
-            symbolSuggestions,
-            symbolsToSearch
-          });
         }
         
         if (symbolsToSearch.length > 0) {
@@ -376,9 +362,7 @@ export function useStockSearch(searchText: string, skip = false) {
             // If neither is in popularSymbols, maintain original order
             return 0;
           });
-          console.log('🔍 Fetching real-time data for symbols:', sortedMatchingSymbols);
           sortedMatchingSymbols.forEach((symbol) => {
-            console.log('🔍 Fetching data for symbol:', symbol);
             getStockData({ variables: { symbol } });
           });
         }
@@ -411,7 +395,7 @@ export function useStockSearch(searchText: string, skip = false) {
         }
       });
     } catch (error) {
-      console.error('Error loading more stocks:', error);
+      logger.error('Error loading more stocks:', error);
     } finally {
       setLoadingMore(false);
     }
@@ -421,7 +405,7 @@ export function useStockSearch(searchText: string, skip = false) {
     variables: { limit: 50, sortBy: 'ml_score' },
     fetchPolicy: 'cache-and-network',
     errorPolicy: 'all',
-    onError: (e) => console.warn('Advanced screening error:', e?.graphQLErrors ?? e?.message),
+    onError: (e) => logger.warn('Advanced screening error:', e?.graphQLErrors ?? e?.message),
   });
 
   // Combine database results with real-time results

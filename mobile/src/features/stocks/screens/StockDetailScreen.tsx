@@ -76,7 +76,7 @@ interface NewsArticle {
   [key: string]: unknown;
 }
 
-interface StockDataExtended extends StockData {
+interface StockDataExtended {
   pegRatio?: number;
   priceToBook?: number;
   roe?: number;
@@ -398,9 +398,9 @@ const ChartRoute = React.memo(({
     [onTimeframeChange]
   );
 
-  const onGestureEvent = (event: GestureEventPayload) => {
-    if (event.nativeEvent.state === State.END) {
-      const { translationX } = event.nativeEvent;
+  const onGestureEvent = (event: any) => {
+    if (event.nativeEvent?.state === State.END) {
+      const { translationX } = event.nativeEvent || {};
       if (Math.abs(translationX) > 50) {
         const timeframes = ['1D', '5D', '1M', '3M', '1Y'];
         const currentIndex = timeframes.indexOf(timeframe);
@@ -458,7 +458,7 @@ const ChartRoute = React.memo(({
       return [];
     }
     const series = processedData.map((d: ChartDataPoint) => ({
-      timestamp: d.timestamp || d.date || new Date().toISOString(),
+      timestamp: typeof d.timestamp === 'string' ? d.timestamp : (d.date || new Date().toISOString()),
       price: d.close || d.price || d.value || 0,
     }));
     logger.log('[ChartRoute] Generated priceSeriesForMoments:', series.length, 'points');
@@ -597,7 +597,7 @@ const ChartRoute = React.memo(({
           {/* Advanced Candlestick Chart with Volume Bars */}
           {chartType === 'candlestick' && (
           <View style={styles.chartContainer}>
-            <CandlestickChart.Provider data={processedData}>
+            <CandlestickChart.Provider data={processedData as any}>
               <CandlestickChart
                 height={300}
                 width={width - 40}
@@ -887,13 +887,13 @@ const FinancialsRoute = React.memo(({ marketCap, peRatio, dividendYield, earning
                     <View style={styles.earningsMetric}>
                       <Text style={styles.earningsMetricLabel}>Actual</Text>
                       <Text style={styles.earningsMetricValue}>
-                        ${quarter.actualEps?.toFixed(2) || 'N/A'}
+                        ${(typeof quarter.actualEps === 'number' ? quarter.actualEps.toFixed(2) : 'N/A')}
                       </Text>
                     </View>
                     <View style={styles.earningsMetric}>
                       <Text style={styles.earningsMetricLabel}>Estimate</Text>
                       <Text style={styles.earningsMetricValue}>
-                        ${quarter.estimatedEps?.toFixed(2) || 'N/A'}
+                        ${(typeof quarter.estimatedEps === 'number' ? quarter.estimatedEps.toFixed(2) : 'N/A')}
                       </Text>
                     </View>
                     <View style={styles.earningsMetric}>
@@ -962,12 +962,12 @@ const TradeRoute = React.memo(({ position, symbol, onOpenTrade, currentPrice }: 
       {position ? (
         <View style={styles.positionCard}>
           <Text style={styles.positionShares}>Shares: {position.quantity}</Text>
-          <Text style={styles.positionValue}>Value: ${position.marketValue?.toFixed(2)}</Text>
+          <Text style={styles.positionValue}>Value: ${(typeof position.marketValue === 'number' ? position.marketValue.toFixed(2) : 'N/A')}</Text>
           <Text style={[
             styles.positionPl,
-            { color: position.unrealizedPl >= 0 ? theme.colors.primary : theme.colors.secondary },
+            { color: (typeof position.unrealizedPl === 'number' && position.unrealizedPl >= 0) ? theme.colors.primary : theme.colors.secondary },
           ]}>
-            P&L: {position.unrealizedPl >= 0 ? '+' : ''}${position.unrealizedPl?.toFixed(2)}
+            P&L: {(typeof position.unrealizedPl === 'number' && position.unrealizedPl >= 0) ? '+' : ''}${(typeof position.unrealizedPl === 'number' ? position.unrealizedPl.toFixed(2) : 'N/A')}
           </Text>
         </View>
       ) : (
@@ -1214,7 +1214,7 @@ const TrendsRoute = React.memo(({ symbol, insiderData, institutionalData, sentim
             {insiderData.slice(0, 5).map((trade: InsiderTrade, idx: number) => (
               <View key={idx} style={styles.insiderCard}>
                 <View style={styles.insiderCardHeader}>
-                  <Text style={styles.insiderName}>{trade.insiderName}</Text>
+                  <Text style={styles.insiderName}>{String(trade.insiderName || '')}</Text>
                   <Text style={[
                     styles.insiderType,
                     { color: trade.type === 'BUY' ? theme.colors.primary : theme.colors.secondary }
@@ -1255,9 +1255,9 @@ const TrendsRoute = React.memo(({ symbol, insiderData, institutionalData, sentim
                   <Text style={styles.institutionalValue}>${institution.valueHeld?.toLocaleString() || 'N/A'}</Text>
                   <Text style={[
                     styles.institutionalChange,
-                    { color: (institution.changeFromPrevious || 0) >= 0 ? theme.colors.primary : theme.colors.secondary }
+                    { color: (typeof institution.changeFromPrevious === 'number' && institution.changeFromPrevious >= 0) ? theme.colors.primary : theme.colors.secondary }
                   ]}>
-                    {institution.changeFromPrevious >= 0 ? '+' : ''}{institution.changeFromPrevious?.toFixed(2) || '0.00'}%
+                    {(typeof institution.changeFromPrevious === 'number' && institution.changeFromPrevious >= 0) ? '+' : ''}{(typeof institution.changeFromPrevious === 'number' ? institution.changeFromPrevious.toFixed(2) : '0.00')}%
                   </Text>
                 </View>
               </View>
@@ -1358,7 +1358,6 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
         const duration = endTime - queryPerformance.startTime;
         setQueryPerformance(prev => ({ ...prev, endTime, duration }));
         logger.log(`⏱️ [PERF] GraphQL query completed in ${duration}ms`);
-        console.log(`⏱️ [PERF] rustStockAnalysis query: ${duration}ms`);
       }
     },
     onError: (error) => {
@@ -1456,12 +1455,12 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
 
   // Memoize renderScene to prevent recreation
   const renderScene = useMemo(() => SceneMap({
-    overview: () => <OverviewRoute data={stockData} />,
+    overview: () => <OverviewRoute data={stockData as any} />,
     chart: () => (
       <ChartRoute
         symbol={symbol}
         chartData={chartData}
-        stockData={stockData}
+        stockData={stockData as any}
         changePercent={stockData?.changePercent || changePercent}
         timeframe={timeframe}
         onTimeframeChange={setTimeframe}
@@ -1473,7 +1472,7 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
         marketCap={stockData?.marketCap}
         peRatio={stockData?.peRatio}
         dividendYield={stockData?.dividendYield}
-        earningsData={stockData?.earnings}
+        earningsData={stockData?.earnings as any}
         stockData={{
           ...stockData,
           // Map keyMetrics to top-level properties for FinancialsRoute
@@ -1495,10 +1494,10 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
     trends: () => (
       <TrendsRoute
         symbol={symbol}
-        insiderData={stockData?.insiderTrades}
-        institutionalData={stockData?.institutionalOwnership}
-        sentimentData={stockData?.sentiment}
-        analystData={stockData?.analystRatings}
+        insiderData={stockData?.insiderTrades as any}
+        institutionalData={stockData?.institutionalOwnership as any}
+        sentimentData={stockData?.sentiment as any}
+        analystData={stockData?.analystRatings as any}
       />
     ),
     insights: () => {
@@ -1735,6 +1734,10 @@ const styles = StyleSheet.create({
   changeHeader: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
   },
   headerAction: {
     padding: theme.spacing.sm,

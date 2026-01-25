@@ -13,8 +13,9 @@ Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { gql, useQuery, useMutation } from '@apollo/client';
-import UserProfileCard from '../../UserProfileCard';
+import UserProfileCard from './UserProfileCard';
 import { User } from '../../../types/social';
+import logger from '../../../utils/logger';
 // Mock data for Discover tab - showing 10+ users since everything is brand new
 // GraphQL Queries
 const GET_DISCOVER_USERS = gql`
@@ -113,7 +114,7 @@ if (sortBy === 'followers') {
 setUsers(filteredUsers);
 } catch (err) {
 setError('Failed to load users');
-console.error('Error loading users:', err);
+logger.error('Error loading users:', err);
 } finally {
 setLoading(false);
 }
@@ -123,7 +124,7 @@ setRefreshing(true);
 try {
 loadUsers();
 } catch (error) {
-console.error('Error refreshing users:', error);
+  logger.error('Error refreshing users:', error);
 } finally {
 setRefreshing(false);
 }
@@ -143,8 +144,8 @@ setUsers(prevUsers =>
   )
 );
 } catch (error) {
-console.error('Error toggling follow:', error);
-Alert.alert('Error', 'Failed to update follow status. Please try again.');
+  logger.error('Error toggling follow:', error);
+  Alert.alert('Error', 'Failed to update follow status. Please try again.');
 }
 };
 // Load users when component mounts or filters change

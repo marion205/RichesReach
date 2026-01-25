@@ -1,4 +1,5 @@
 import { Alert, ToastAndroid, Platform } from 'react-native';
+import logger from '../utils/logger';
 export interface ErrorInfo {
 code?: string;
 message: string;
@@ -68,7 +69,7 @@ this.showErrorToast(errorInfo.message);
 }
 // Log to console in development
 if (__DEV__) {
-console.error('Error handled:', errorInfo);
+logger.error('Error handled:', errorInfo);
 }
 }
 /**

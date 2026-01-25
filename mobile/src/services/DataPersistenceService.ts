@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert } from 'react-native';
+import logger from '../utils/logger';
 export interface CachedData {
 data: any;
 timestamp: number;
@@ -41,7 +42,7 @@ expiresAt,
 };
 await AsyncStorage.setItem(key, JSON.stringify(cachedData));
 } catch (error) {
-console.error(`Error caching data for key ${key}:`, error);
+logger.error(`Error caching data for key ${key}:`, error);
 }
 }
 /**
@@ -62,7 +63,7 @@ return null;
 }
 return cachedData.data;
 } catch (error) {
-console.error(`Error retrieving cached data for key ${key}:`, error);
+logger.error(`Error retrieving cached data for key ${key}:`, error);
 return null;
 }
 }
@@ -146,7 +147,7 @@ this.CACHE_KEYS.OFFLINE_DATA,
 JSON.stringify(offlineData)
 );
 } catch (error) {
-console.error('Error saving offline data:', error);
+logger.error('Error saving offline data:', error);
 }
 }
 /**
@@ -166,7 +167,7 @@ lastSync: 0,
 }
 return JSON.parse(offlineString);
 } catch (error) {
-console.error('Error retrieving offline data:', error);
+logger.error('Error retrieving offline data:', error);
 return {
 discussions: [],
 watchlists: [],
@@ -191,7 +192,7 @@ const age = now - cachedData.timestamp;
 const threshold = maxAge || this.CACHE_DURATION.DISCUSSIONS;
 return age > threshold;
 } catch (error) {
-console.error(`Error checking if data is stale for key ${key}:`, error);
+logger.error(`Error checking if data is stale for key ${key}:`, error);
 return true; // Assume stale on error
 }
 }
@@ -203,7 +204,7 @@ try {
 const keys = Object.values(this.CACHE_KEYS);
 await AsyncStorage.multiRemove(keys);
 } catch (error) {
-console.error('Error clearing cache:', error);
+logger.error('Error clearing cache:', error);
 }
 }
 /**
@@ -213,7 +214,7 @@ public async clearCache(key: string): Promise<void> {
 try {
 await AsyncStorage.removeItem(key);
 } catch (error) {
-console.error(`Error clearing cache for key ${key}:`, error);
+logger.error(`Error clearing cache for key ${key}:`, error);
 }
 }
 /**
@@ -242,7 +243,7 @@ totalSize,
 keys: cacheKeys,
 };
 } catch (error) {
-console.error('Error getting cache stats:', error);
+logger.error('Error getting cache stats:', error);
 return {
 totalKeys: 0,
 totalSize: 0,
@@ -268,7 +269,7 @@ timestamp: Date.now(),
 };
 await AsyncStorage.setItem('user_backup', JSON.stringify(backupData));
 } catch (error) {
-console.error('Error backing up user data:', error);
+logger.error('Error backing up user data:', error);
 }
 }
 /**
@@ -296,7 +297,7 @@ await this.cachePortfolios(backupData.portfolios);
 }
 return true;
 } catch (error) {
-console.error('Error restoring user data:', error);
+logger.error('Error restoring user data:', error);
 return false;
 }
 }
@@ -317,7 +318,7 @@ Alert.alert(
 }
 return isOffline;
 } catch (error) {
-console.error('Error checking offline status:', error);
+logger.error('Error checking offline status:', error);
 return false;
 }
 }

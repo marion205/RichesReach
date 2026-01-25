@@ -7,34 +7,24 @@ podfile_properties = JSON.parse(File.read(File.join(__dir__, 'Podfile.properties
 def ccache_enabled?(podfile_properties)
   # Environment variable takes precedence
   return ENV['USE_CCACHE'] == '1' if ENV['USE_CCACHE']
-
+  
   # Fall back to Podfile properties
   podfile_properties['apple.ccacheEnabled'] == 'true'
 end
 
-# New Architecture toggle
 ENV['RCT_NEW_ARCH_ENABLED'] ||= '0' if podfile_properties['newArchEnabled'] == 'false'
 ENV['EX_DEV_CLIENT_NETWORK_INSPECTOR'] ||= podfile_properties['EX_DEV_CLIENT_NETWORK_INSPECTOR']
-
-# Use prebuilt RN core when allowed
-if podfile_properties['ios.buildReactNativeFromSource'] != 'true' && podfile_properties['newArchEnabled'] != 'false'
-  ENV['RCT_USE_RN_DEP'] ||= '1'
-  ENV['RCT_USE_PREBUILT_RNCORE'] ||= '1'
-end
-
+ENV['RCT_USE_RN_DEP'] ||= '1' if podfile_properties['ios.buildReactNativeFromSource'] != 'true' && podfile_properties['newArchEnabled'] != 'false'
+ENV['RCT_USE_PREBUILT_RNCORE'] ||= '1' if podfile_properties['ios.buildReactNativeFromSource'] != 'true' && podfile_properties['newArchEnabled'] != 'false'
 platform :ios, podfile_properties['ios.deploymentTarget'] || '15.1'
-
-install! 'cocoapods',
-  :deterministic_uuids => false
 
 prepare_react_native_project!
 
 target 'RichesReach' do
   use_expo_modules!
 
-  # Autolinking config
   if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
-    config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"]
+    config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
   else
     config_command = [
       'npx',
@@ -48,280 +38,35 @@ target 'RichesReach' do
 
   config = use_native_modules!(config_command)
 
-  # Frameworks config
-  if podfile_properties['ios.useFrameworks']
-    use_frameworks! linkage: podfile_properties['ios.useFrameworks'].to_sym
-  end
-
-  if ENV['USE_FRAMEWORKS']
-    use_frameworks! linkage: ENV['USE_FRAMEWORKS'].to_sym
-  end
+  use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
+  use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
 
   use_react_native!(
-    path: config[:reactNativePath],
-    hermes_enabled: podfile_properties['expo.jsEngine'].nil? || podfile_properties['expo.jsEngine'] == 'hermes',
-    # Absolute path to your app root
-    app_path: "#{Pod::Config.instance.installation_root}/..",
-    privacy_file_aggregation_enabled: podfile_properties['apple.privacyManifestAggregationEnabled'] != 'false',
+    :path => config[:reactNativePath],
+    :hermes_enabled => podfile_properties['expo.jsEngine'] == nil || podfile_properties['expo.jsEngine'] == 'hermes',
+    # An absolute path to your application root.
+    :app_path => "#{Pod::Config.instance.installation_root}/..",
+    :privacy_file_aggregation_enabled => podfile_properties['apple.privacyManifestAggregationEnabled'] != 'false',
   )
-
-  # --- Force RN's versions of these third-party pods (fixes Folly / fmt / glog issues) ---
-  pod 'RCT-Folly',  :podspec => '../node_modules/react-native/third-party-podspecs/RCT-Folly.podspec'
-  pod 'fast_float', :podspec => '../node_modules/react-native/third-party-podspecs/fast_float.podspec'
-  pod 'fmt',        :podspec => '../node_modules/react-native/third-party-podspecs/fmt.podspec'
-  # IMPORTANT: use RN's patched glog, not the ancient trunk one
-  pod 'glog',       :podspec => '../node_modules/react-native/third-party-podspecs/glog.podspec'
-  # ---------------------------------------------------------------------------------------
 
   post_install do |installer|
     react_native_post_install(
       installer,
       config[:reactNativePath],
-      mac_catalyst_enabled: false,
-      ccache_enabled: ccache_enabled?(podfile_properties),
+      :mac_catalyst_enabled => false,
+      :ccache_enabled => ccache_enabled?(podfile_properties),
     )
-
-    # --- Xcode 15/16 C++ compatibility fixes (Boost / unary_function / auto_ptr, etc.) ---
+    
+    # Fix for RCT-Folly dependency resolution when using prebuilt ReactNativeDependencies
+    # Make RCT-Folly available to pods that depend on it
     installer.pods_project.targets.each do |target|
-      target.build_configurations.each do |config|
-        # Make sure all pods share the same deployment target
-        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.1'
-
-        # Ensure we have a definitions array
-        defs = config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] || ['$(inherited)']
-
-        # Bring back removed std::unary_function / std::binary_function in libc++
-        unless defs.include?('_LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION')
-          defs << '_LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION'
+      if target.name == 'ReactNativeDependencies'
+        # Ensure RCT-Folly headers are accessible
+        target.build_configurations.each do |config|
+          config.build_settings['HEADER_SEARCH_PATHS'] ||= ['$(inherited)']
+          config.build_settings['HEADER_SEARCH_PATHS'] << '$(PODS_ROOT)/ReactNativeDependencies/Headers'
         end
-
-        # Bring back std::auto_ptr for old Boost headers
-        unless defs.include?('_LIBCPP_ENABLE_CXX17_REMOVED_AUTO_PTR')
-          defs << '_LIBCPP_ENABLE_CXX17_REMOVED_AUTO_PTR'
-        end
-
-        config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] = defs
-
-        # Work around old Boost (std::unary_function / std::auto_ptr removed in C++17+)
-        config.build_settings['OTHER_CPLUSPLUSFLAGS'] ||= ['$(inherited)']
-        config.build_settings['OTHER_CPLUSPLUSFLAGS'] << '-D_LIBCPP_ENABLE_CXX17_REMOVED_UNARY_FUNCTION'
-        config.build_settings['OTHER_CPLUSPLUSFLAGS'] << '-D_LIBCPP_ENABLE_CXX17_REMOVED_AUTO_PTR'
       end
     end
-    # -----------------------------------------------------------------------
-
-    # --- Create RelaxedAtomic.h compatibility header for RCT-Folly ---
-    folly_sync_dir = File.join(installer.sandbox.root, 'RCT-Folly', 'folly', 'synchronization')
-    relaxed_atomic_header = File.join(folly_sync_dir, 'RelaxedAtomic.h')
-    
-    unless File.exist?(relaxed_atomic_header)
-      FileUtils.mkdir_p(folly_sync_dir)
-      File.write(relaxed_atomic_header, <<~HEADER
-        /*
-         * Compatibility header for RelaxedAtomic.h
-         * 
-         * This header provides RelaxedAtomic and relaxed_atomic for React Native 0.81.5 compatibility.
-         * These are type aliases for std::atomic with relaxed memory ordering.
-         */
-
-        #pragma once
-
-        #include <atomic>
-        #include <type_traits>
-
-        namespace folly {
-
-        /**
-         * RelaxedAtomic is a type alias for std::atomic with relaxed memory ordering semantics.
-         * This is a compatibility shim for code that expects RelaxedAtomic but we're using
-         * std::atomic directly.
-         */
-        template <typename T>
-        using RelaxedAtomic = std::atomic<T>;
-
-        /**
-         * relaxed_atomic is the lowercase version used throughout Folly code.
-         */
-        template <typename T>
-        using relaxed_atomic = std::atomic<T>;
-
-        } // namespace folly
-      HEADER
-      )
-      puts "✅ Created RelaxedAtomic.h compatibility header"
-    end
-
-    # --- Create SanitizeThread.h compatibility header for RCT-Folly ---
-    sanitize_thread_header = File.join(folly_sync_dir, 'SanitizeThread.h')
-    
-    unless File.exist?(sanitize_thread_header)
-      FileUtils.mkdir_p(folly_sync_dir)
-      File.write(sanitize_thread_header, <<~HEADER
-        /*
-         * Copyright (c) Meta Platforms, Inc. and affiliates.
-         *
-         * Licensed under the Apache License, Version 2.0 (the "License");
-         * you may not use this file except in compliance with the License.
-         * You may obtain a copy of the License at
-         *
-         *     http://www.apache.org/licenses/LICENSE-2.0
-         *
-         * Unless required by applicable law or agreed to in writing, software
-         * distributed under the License is distributed on an "AS IS" BASIS,
-         * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-         * See the License for the specific language governing permissions and
-         * limitations under the License.
-         */
-
-        #pragma once
-
-        #include <folly/Portability.h>
-        #include <cstddef>
-
-        namespace folly {
-        namespace detail {
-
-        // Function pointer types for thread sanitizer annotations
-        using annotate_rwlock_cd_t = void(char const*, int, const volatile void*);
-        using annotate_rwlock_ar_t = void(char const*, int, const volatile void*, long);
-        using annotate_benign_race_sized_t = void(
-            char const*, int, const volatile void*, long, char const*);
-        using annotate_ignore_t = void(char const*, int);
-
-        // Extern declarations for the actual annotation functions
-        extern annotate_rwlock_cd_t* const annotate_rwlock_create_v;
-        extern annotate_rwlock_cd_t* const annotate_rwlock_create_static_v;
-        extern annotate_rwlock_cd_t* const annotate_rwlock_destroy_v;
-        extern annotate_rwlock_ar_t* const annotate_rwlock_acquired_v;
-        extern annotate_rwlock_ar_t* const annotate_rwlock_released_v;
-        extern annotate_benign_race_sized_t* const annotate_benign_race_sized_v;
-        extern annotate_ignore_t* const annotate_ignore_reads_begin_v;
-        extern annotate_ignore_t* const annotate_ignore_reads_end_v;
-        extern annotate_ignore_t* const annotate_ignore_writes_begin_v;
-        extern annotate_ignore_t* const annotate_ignore_writes_end_v;
-        extern annotate_ignore_t* const annotate_ignore_sync_begin_v;
-        extern annotate_ignore_t* const annotate_ignore_sync_end_v;
-
-        } // namespace detail
-
-        // Enum for read-write lock levels
-        enum class annotate_rwlock_level : long {
-          rdlock = 0,
-          wrlock = 1,
-        };
-
-        // Inline wrapper functions that check kIsSanitizeThread
-        FOLLY_ALWAYS_INLINE static void annotate_rwlock_create(
-            const volatile void* addr, char const* f, int l) {
-          auto fun = detail::annotate_rwlock_create_v;
-          return kIsSanitizeThread && fun ? fun(f, l, addr) : void();
-        }
-
-        FOLLY_ALWAYS_INLINE static void annotate_rwlock_create_static(
-            const volatile void* addr, char const* f, int l) {
-          auto fun = detail::annotate_rwlock_create_static_v;
-          return kIsSanitizeThread && fun ? fun(f, l, addr) : void();
-        }
-
-        FOLLY_ALWAYS_INLINE static void annotate_rwlock_destroy(
-            const volatile void* addr, char const* f, int l) {
-          auto fun = detail::annotate_rwlock_destroy_v;
-          return kIsSanitizeThread && fun ? fun(f, l, addr) : void();
-        }
-
-        FOLLY_ALWAYS_INLINE static void annotate_rwlock_acquired(
-            const volatile void* addr, annotate_rwlock_level w, char const* f, int l) {
-          auto fun = detail::annotate_rwlock_acquired_v;
-          return kIsSanitizeThread && fun ? fun(f, l, addr, static_cast<long>(w)) : void();
-        }
-
-        FOLLY_ALWAYS_INLINE static void annotate_rwlock_released(
-            const volatile void* addr, annotate_rwlock_level w, char const* f, int l) {
-          auto fun = detail::annotate_rwlock_released_v;
-          return kIsSanitizeThread && fun ? fun(f, l, addr, static_cast<long>(w)) : void();
-        }
-
-        FOLLY_ALWAYS_INLINE static void annotate_rwlock_try_acquired(
-            const volatile void* addr,
-            annotate_rwlock_level w,
-            bool result,
-            char const* f,
-            int l) {
-          // ThreadSanitizer doesn't have a separate try_acquired function,
-          // so we just call acquired if successful
-          if (result) {
-            annotate_rwlock_acquired(addr, w, f, l);
-          }
-        }
-
-        FOLLY_ALWAYS_INLINE static void annotate_benign_race_sized(
-            const volatile void* addr,
-            std::size_t size,
-            char const* desc,
-            char const* f,
-            int l) {
-          auto fun = detail::annotate_benign_race_sized_v;
-          return kIsSanitizeThread && fun ? fun(f, l, addr, static_cast<long>(size), desc) : void();
-        }
-
-        FOLLY_ALWAYS_INLINE static void annotate_ignore_reads_begin(char const* f, int l) {
-          auto fun = detail::annotate_ignore_reads_begin_v;
-          return kIsSanitizeThread && fun ? fun(f, l) : void();
-        }
-
-        FOLLY_ALWAYS_INLINE static void annotate_ignore_reads_end(char const* f, int l) {
-          auto fun = detail::annotate_ignore_reads_end_v;
-          return kIsSanitizeThread && fun ? fun(f, l) : void();
-        }
-
-        FOLLY_ALWAYS_INLINE static void annotate_ignore_writes_begin(char const* f, int l) {
-          auto fun = detail::annotate_ignore_writes_begin_v;
-          return kIsSanitizeThread && fun ? fun(f, l) : void();
-        }
-
-        FOLLY_ALWAYS_INLINE static void annotate_ignore_writes_end(char const* f, int l) {
-          auto fun = detail::annotate_ignore_writes_end_v;
-          return kIsSanitizeThread && fun ? fun(f, l) : void();
-        }
-
-        FOLLY_ALWAYS_INLINE static void annotate_ignore_sync_begin(char const* f, int l) {
-          auto fun = detail::annotate_ignore_sync_begin_v;
-          return kIsSanitizeThread && fun ? fun(f, l) : void();
-        }
-
-        FOLLY_ALWAYS_INLINE static void annotate_ignore_sync_end(char const* f, int l) {
-          auto fun = detail::annotate_ignore_sync_end_v;
-          return kIsSanitizeThread && fun ? fun(f, l) : void();
-        }
-
-        // RAII guard for ignoring thread sanitizer annotations
-        class annotate_ignore_thread_sanitizer_guard {
-         public:
-          annotate_ignore_thread_sanitizer_guard(char const* f, int l)
-              : file_(f), line_(l) {
-            annotate_ignore_sync_begin(file_, line_);
-          }
-
-          ~annotate_ignore_thread_sanitizer_guard() {
-            annotate_ignore_sync_end(file_, line_);
-          }
-
-          // Non-copyable, non-movable
-          annotate_ignore_thread_sanitizer_guard(
-              annotate_ignore_thread_sanitizer_guard const&) = delete;
-          annotate_ignore_thread_sanitizer_guard& operator=(
-              annotate_ignore_thread_sanitizer_guard const&) = delete;
-
-         private:
-          char const* file_;
-          int line_;
-        };
-
-        } // namespace folly
-      HEADER
-      )
-      puts "✅ Created SanitizeThread.h compatibility header"
-    end
-    # -----------------------------------------------------------------------
   end
 end

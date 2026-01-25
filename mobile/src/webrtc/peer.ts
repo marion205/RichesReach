@@ -1,4 +1,5 @@
 import { isExpoGo } from '../utils/expoGoCheck';
+import logger from '../utils/logger';
 
 // WebRTC is not available in Expo Go - make conditional
 let RTCPeerConnection: any = null;
@@ -10,7 +11,7 @@ try {
     RTCPeerConnection = webrtc.RTCPeerConnection;
   }
 } catch (e) {
-  console.warn('react-native-webrtc not available (Expo Go mode)');
+  logger.warn('react-native-webrtc not available (Expo Go mode)');
 }
 
 import { buildRtcConfig } from './ice';
@@ -23,10 +24,10 @@ export function createPeer() {
   const pc = new RTCPeerConnection(buildRtcConfig());
   pc.onicecandidate = e => {
     // Hook up to signaling in screen/service
-    console.log('[RTC] candidate', e.candidate ? 'present' : 'null');
+    // Candidate events - no need to log (too verbose)
   };
   pc.onconnectionstatechange = () => {
-    console.log('[RTC] state:', pc.connectionState);
+    // Connection state changes - no need to log (too verbose)
   };
   return pc;
 }

@@ -1,3 +1,5 @@
+import logger from '../utils/logger';
+
 type OptStr = string | undefined | null;
 const pick = (v: OptStr) => (typeof v === 'string' ? v.trim() : '');
 
@@ -38,7 +40,7 @@ try {
   };
   const res = Schema.safeParse(raw);
   if (!res.success) {
-    if (__DEV__) console.warn('Env validation issues:', res.error.flatten().fieldErrors);
+    if (__DEV__) logger.warn('Env validation issues:', res.error.flatten().fieldErrors);
   }
   const d: any = res.success ? res.data : raw;
   ENV = {

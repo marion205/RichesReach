@@ -278,6 +278,101 @@ export default function OrderMonitoringDashboardScreen({
     }
   }, []);
 
+  // Render functions for FlatList items
+  const renderActiveOrder = useCallback(({ item }: { item: any }) => {
+    return (
+      <View style={styles.orderCard}>
+        <View style={styles.orderHeader}>
+          <Text style={styles.orderSymbol}>{item.symbol}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + '20' }]}>
+            <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+              {item.status}
+            </Text>
+          </View>
+        </View>
+        <View style={styles.orderDetails}>
+          <Text style={styles.orderDetailText}>
+            {item.side} {item.quantity} @ {formatCurrency(item.limitPrice || item.price)}
+          </Text>
+          <Text style={styles.orderDetailText}>
+            {item.orderType} • {item.timeInForce}
+          </Text>
+        </View>
+      </View>
+    );
+  }, [formatCurrency, getStatusColor]);
+
+  const renderFilledOrder = useCallback(({ item }: { item: any }) => {
+    return (
+      <View style={styles.orderCard}>
+        <View style={styles.orderHeader}>
+          <Text style={styles.orderSymbol}>{item.symbol}</Text>
+          <Text style={[styles.orderPnl, { color: (item.realizedPl || 0) >= 0 ? '#10B981' : '#EF4444' }]}>
+            {formatCurrency(item.realizedPl)} ({formatPercent(item.realizedPlpc)})
+          </Text>
+        </View>
+        <View style={styles.orderDetails}>
+          <Text style={styles.orderDetailText}>
+            {item.side} {item.filledQuantity} @ {formatCurrency(item.avgFillPrice)}
+          </Text>
+          <Text style={styles.orderDetailText}>
+            Filled: {new Date(item.filledAt).toLocaleString()}
+          </Text>
+        </View>
+      </View>
+    );
+  }, [formatCurrency, formatPercent]);
+
+  const renderRahaOrder = useCallback(({ item }: { item: any }) => {
+    return (
+      <View style={styles.orderCard}>
+        <View style={styles.orderHeader}>
+          <Text style={styles.orderSymbol}>{item.symbol}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: '#F59E0B20' }]}>
+            <Icon name="zap" size={14} color="#F59E0B" />
+            <Text style={[styles.statusText, { color: '#F59E0B' }]}>RAHA</Text>
+          </View>
+        </View>
+        <View style={styles.orderDetails}>
+          <Text style={styles.orderDetailText}>
+            {item.side} {item.quantity} @ {formatCurrency(item.price)}
+          </Text>
+          <Text style={styles.orderDetailText}>
+            Signal: {item.signalType} • Confidence: {(item.confidence || 0).toFixed(2)}
+          </Text>
+        </View>
+      </View>
+    );
+  }, [formatCurrency]);
+
+  // Layout functions for FlatList optimization
+  const orderItemLayout = useCallback(
+    (data: any, index: number) => ({
+      length: 80,
+      offset: 80 * index,
+      index,
+    }),
+    []
+  );
+
+  const tradeItemLayout = useCallback(
+    (data: any, index: number) => ({
+      length: 80,
+      offset: 80 * index,
+      index,
+    }),
+    []
+  );
+
+  const rahaOrderItemLayout = useCallback(
+    (data: any, index: number) => ({
+      length: 80,
+      offset: 80 * index,
+      index,
+    }),
+    []
+  );
+
   if (loading && !data) {
     return (
       <SafeAreaView style={styles.container}>
@@ -797,6 +892,14 @@ const styles = StyleSheet.create({
   },
   orderDetails: {
     gap: 4,
+  },
+  orderDetailText: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  orderPnl: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   orderDetailRow: {
     flexDirection: 'row',

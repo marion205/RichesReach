@@ -142,9 +142,9 @@ const YieldOptimizerScreen: React.FC<YieldOptimizerScreenProps> = memo(({ naviga
   };
 
   const getRiskLevel = (risk: number) => {
-    if (risk <= 0.3) return { label: 'Conservative', color: '#10B981', icon: 'shield-checkmark' };
-    if (risk <= 0.7) return { label: 'Balanced', color: '#F59E0B', icon: 'scale' };
-    return { label: 'Aggressive', color: '#EF4444', icon: 'flame' };
+    if (risk <= 0.3) return { label: 'Conservative', color: '#10B981', icon: 'shield-checkmark' as const };
+    if (risk <= 0.7) return { label: 'Balanced', color: '#F59E0B', icon: 'scale' as const };
+    return { label: 'Aggressive', color: '#EF4444', icon: 'flame' as const };
   };
 
   const riskLevel = getRiskLevel(riskTolerance);
@@ -194,8 +194,6 @@ const YieldOptimizerScreen: React.FC<YieldOptimizerScreenProps> = memo(({ naviga
               minimumTrackTintColor={riskLevel.color}
               maximumTrackTintColor="#e5e7eb"
               thumbTintColor="#fff"
-              thumbStyle={styles.sliderThumb}
-              trackStyle={styles.sliderTrack}
             />
             <View style={styles.riskLabels}>
               <Text style={styles.riskLabelText}>Conservative</Text>
@@ -377,8 +375,8 @@ const getColorForProtocol = (protocol: string): string => {
 };
 
 // Helper function for protocol icons
-const getProtocolIcon = (protocol: string): string => {
-  const icons: { [key: string]: string } = {
+const getProtocolIcon = (protocol: string): any => {
+  const icons: { [key: string]: any } = {
     'Aave V3': 'shield',
     'Compound V3': 'library',
     'Uniswap V3': 'swap-horizontal',
@@ -562,7 +560,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
     paddingVertical: 12,
     borderRadius: 12,
-    alignItems: 'center',
     justifyContent: 'center',
   },
   optimizeButtonText: {

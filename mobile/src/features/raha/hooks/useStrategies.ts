@@ -72,6 +72,8 @@ export const useStrategy = (id: string) => {
 export const useUserStrategySettings = () => {
   const { data, loading, error, refetch } = useQuery(GET_USER_STRATEGY_SETTINGS, {
     fetchPolicy: 'cache-and-network',
+    errorPolicy: 'all', // Return partial data even with errors - don't block UI
+    notifyOnNetworkStatusChange: false, // Don't update loading state on network changes
   });
 
   return {

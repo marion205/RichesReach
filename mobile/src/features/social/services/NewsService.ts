@@ -1,4 +1,5 @@
 import { NewsItem } from '../types/news';
+import logger from '../../../utils/logger';
 
 interface NewsApiResponse {
   articles: NewsApiArticle[];
@@ -47,7 +48,7 @@ class NewsService {
       const data: NewsApiResponse = await response.json();
       return this.transformNewsData(data.articles);
     } catch (error) {
-      console.error('Error fetching financial news:', error);
+      logger.error('Error fetching financial news:', error);
       // Return empty array instead of mock data
       return [];
     }
@@ -72,7 +73,7 @@ class NewsService {
       const data: NewsApiResponse = await response.json();
       return this.transformNewsData(data.articles);
     } catch (error) {
-      console.error('Error fetching market news:', error);
+      logger.error('Error fetching market news:', error);
       // Return empty array instead of mock data
       return [];
     }
@@ -97,7 +98,7 @@ class NewsService {
       const data: NewsApiResponse = await response.json();
       return this.transformNewsData(data.articles);
     } catch (error) {
-      console.error('Error fetching crypto news:', error);
+      logger.error('Error fetching crypto news:', error);
       // Return empty array instead of mock data
       return [];
     }
@@ -122,7 +123,7 @@ class NewsService {
       const data: NewsApiResponse = await response.json();
       return this.transformNewsData(data.articles);
     } catch (error) {
-      console.error('Error fetching earnings news:', error);
+      logger.error('Error fetching earnings news:', error);
       // Return empty array instead of mock data
       return [];
     }

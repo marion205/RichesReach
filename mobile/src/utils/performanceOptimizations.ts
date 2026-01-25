@@ -7,6 +7,7 @@
 import React from 'react';
 import { QueryHookOptions } from '@apollo/client';
 import { useMemo, useCallback, DependencyList } from 'react';
+import logger from './logger';
 
 // ============================================================================
 // GraphQL Query Optimization
@@ -88,7 +89,17 @@ export function useDebounce<T extends (...args: any[]) => any>(
   delay: number,
   deps: DependencyList
 ): T {
-  const timeoutRef = React.useRef<NodeJS.Timeout>();
+  const timeoutRef = React.useRef<NodeJS.Timeout | undefined>(undefined);
+  
+  // Cleanup timeout on unmount
+  React.useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = undefined;
+      }
+    };
+  }, []);
   
   return useCallback(
     ((...args: Parameters<T>) => {
@@ -97,6 +108,7 @@ export function useDebounce<T extends (...args: any[]) => any>(
       }
       timeoutRef.current = setTimeout(() => {
         callback(...args);
+        timeoutRef.current = undefined;
       }, delay);
     }) as T,
     [delay, ...deps]
@@ -160,7 +172,7 @@ export function useRenderTime(componentName: string) {
     React.useEffect(() => {
       const renderTime = Date.now() - renderStart;
       if (renderTime > 16) { // Warn if render takes longer than one frame (16ms)
-        console.warn(`⚠️ [PERF] ${componentName} render took ${renderTime}ms`);
+        logger.warn(`⚠️ [PERF] ${componentName} render took ${renderTime}ms`);
       }
     }, [componentName, renderStart]);
   }
@@ -178,12 +190,12 @@ export async function measureAsync<T>(
     const result = await operation();
     const duration = Date.now() - start;
     if (__DEV__ && duration > 100) {
-      console.warn(`⚠️ [PERF] ${label} took ${duration}ms`);
+      logger.warn(`⚠️ [PERF] ${label} took ${duration}ms`);
     }
     return result;
   } catch (error) {
     const duration = Date.now() - start;
-    console.error(`❌ [PERF] ${label} failed after ${duration}ms:`, error);
+    logger.error(`❌ [PERF] ${label} failed after ${duration}ms:`, error);
     throw error;
   }
 }

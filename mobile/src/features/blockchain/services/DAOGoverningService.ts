@@ -3,7 +3,7 @@
  * Handles DAO governance operations including voting, proposals, and delegation
  */
 import { gql } from '@apollo/client';
-import { Web3Service } from '../../../services/Web3Service';
+import Web3Service from '../../../services/Web3Service';
 import logger from '../../../utils/logger';
 
 export interface GovernanceProposal {
@@ -75,10 +75,10 @@ const GET_USER_VOTING_POWER = gql`
 
 export class DAOGoverningService {
   private static instance: DAOGoverningService;
-  private web3Service: Web3Service;
+  private web3Service: typeof Web3Service;
 
   private constructor() {
-    this.web3Service = Web3Service.getInstance();
+    this.web3Service = Web3Service;
   }
 
   public static getInstance(): DAOGoverningService {
@@ -108,7 +108,7 @@ export class DAOGoverningService {
   public async castVote(vote: Vote): Promise<{ success: boolean; txHash?: string; error?: string }> {
     try {
       // Implementation would interact with governance contract
-      const txHash = await this.web3Service.sendTransaction({
+      const txHash = await (this.web3Service as any).sendTransaction({
         to: '', // Governance contract address
         data: '', // Encoded vote function call
         value: '0',
@@ -131,7 +131,7 @@ export class DAOGoverningService {
   ): Promise<{ success: boolean; proposalId?: string; txHash?: string; error?: string }> {
     try {
       // Implementation would create proposal on-chain
-      const txHash = await this.web3Service.sendTransaction({
+      const txHash = await (this.web3Service as any).sendTransaction({
         to: '', // Governance contract address
         data: '', // Encoded propose function call
         value: '0',
@@ -154,7 +154,7 @@ export class DAOGoverningService {
     delegatee: string
   ): Promise<{ success: boolean; txHash?: string; error?: string }> {
     try {
-      const txHash = await this.web3Service.sendTransaction({
+      const txHash = await (this.web3Service as any).sendTransaction({
         to: '', // Governance token contract address
         data: '', // Encoded delegate function call
         value: '0',
@@ -205,7 +205,7 @@ export class DAOGoverningService {
     proposalId: string
   ): Promise<{ success: boolean; txHash?: string; error?: string }> {
     try {
-      const txHash = await this.web3Service.sendTransaction({
+      const txHash = await (this.web3Service as any).sendTransaction({
         to: '', // Governance contract address
         data: '', // Encoded execute function call
         value: '0',

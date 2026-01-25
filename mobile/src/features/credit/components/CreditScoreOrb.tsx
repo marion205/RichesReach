@@ -16,6 +16,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { CreditScore, CreditProjection } from '../types/CreditTypes';
+import logger from '../../../utils/logger';
 
 // Polyfill structuredClone for React Native (if not available)
 if (typeof structuredClone === 'undefined') {
@@ -43,7 +44,7 @@ const safeClone = <T,>(obj: T | null | undefined): T | null => {
     }
     return obj;
   } catch (error) {
-    console.warn('[CreditScoreOrb] Clone failed, using fallback:', error);
+    logger.warn('[CreditScoreOrb] Clone failed, using fallback:', error);
     // Last resort: try JSON roundtrip
     try {
       return JSON.parse(JSON.stringify(obj)) as T;
@@ -100,7 +101,7 @@ const CreditScoreOrbInternal: React.FC<{
         stiffness: 100,
       });
     } catch (error) {
-      console.warn('[CreditScoreOrb] Reanimated mutation guarded:', error);
+      logger.warn('[CreditScoreOrb] Reanimated mutation guarded:', error);
       // Fallback: set directly without animation
       try {
         animatedScoreValue.value = value;
@@ -119,7 +120,7 @@ const CreditScoreOrbInternal: React.FC<{
         true
       );
     } catch (error) {
-      console.warn('[CreditScoreOrb] Pulse animation guarded:', error);
+      logger.warn('[CreditScoreOrb] Pulse animation guarded:', error);
       // Fallback: static pulse
       try {
         pulseAnim.value = 1;
@@ -150,7 +151,7 @@ const CreditScoreOrbInternal: React.FC<{
         isFocused.value = withTiming(0, { duration: 300 });
       });
     } catch (error) {
-      console.warn('[CreditScoreOrb] Tap animation guarded:', error);
+      logger.warn('[CreditScoreOrb] Tap animation guarded:', error);
     }
   }, [orbScale, isFocused]);
 
@@ -255,7 +256,7 @@ export const CreditScoreOrb: React.FC<CreditScoreOrbProps> = (props) => {
           scoreRange = (scoreProp.scoreRange as any) || 'Fair';
         } catch (e) {
           // If access fails, use defaults
-          console.warn('[CreditScoreOrb] Could not access score prop, using defaults');
+          logger.warn('[CreditScoreOrb] Could not access score prop, using defaults');
         }
       }
       
@@ -267,7 +268,7 @@ export const CreditScoreOrb: React.FC<CreditScoreOrbProps> = (props) => {
           projectionGain = typeof projectionProp.scoreGain6m === 'number' ? projectionProp.scoreGain6m : 0;
         } catch (e) {
           // If access fails, use default
-          console.warn('[CreditScoreOrb] Could not access projection prop, using defaults');
+          logger.warn('[CreditScoreOrb] Could not access projection prop, using defaults');
         }
       }
       
@@ -278,7 +279,7 @@ export const CreditScoreOrb: React.FC<CreditScoreOrbProps> = (props) => {
         size: props.size || ORB_SIZE,
       };
     } catch (error) {
-      console.warn('[CreditScoreOrb] Error extracting values:', error);
+      logger.warn('[CreditScoreOrb] Error extracting values:', error);
       // Return safe defaults on error
       return {
         scoreValue: 580,

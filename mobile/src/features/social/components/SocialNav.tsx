@@ -2,8 +2,8 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 interface SocialNavProps {
-feedType: 'trending' | 'following' | 'discover' | 'news';
-onFeedTypeChange: (type: 'trending' | 'following' | 'discover' | 'news') => void;
+feedType: 'trending' | 'following' | 'discover' | 'news' | 'social';
+onFeedTypeChange: (type: 'trending' | 'following' | 'discover' | 'news' | 'social') => void;
 }
 const SocialNav: React.FC<SocialNavProps> = ({ feedType, onFeedTypeChange }) => {
 return (
@@ -113,7 +113,6 @@ color: '#8E8E93',
 marginTop: 2,
 fontWeight: '500',
 textAlign: 'center',
-numberOfLines: 1,
 },
 activeTabLabel: {
 color: '#34C759',

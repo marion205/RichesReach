@@ -10,6 +10,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import StrategyStoreScreen from './StrategyStoreScreen';
 import BacktestViewerScreen from './BacktestViewerScreen';
+import logger from '../../../utils/logger';
 
 type ProLabsView = 'menu' | 'strategies' | 'backtests';
 
@@ -31,7 +32,7 @@ export default function ProLabsScreen({ navigateTo }: ProLabsScreenProps = {}) {
   const [currentView, setCurrentView] = useState<ProLabsView>('menu');
   
   useEffect(() => {
-    console.log('✅ ProLabsScreen mounted');
+    // Screen mounted - initialization complete
   }, []);
 
   // Custom navigation helper (not using React Navigation)
@@ -171,60 +172,111 @@ export default function ProLabsScreen({ navigateTo }: ProLabsScreenProps = {}) {
           </TouchableOpacity>
         </View>
 
-        {/* Coming Soon Section */}
+        {/* Advanced Features Section */}
         <View style={styles.menuSection}>
-          <Text style={styles.sectionTitle}>Coming Soon</Text>
+          <Text style={styles.sectionTitle}>Advanced Features</Text>
 
-          <View style={[styles.menuCard, styles.menuCardDisabled]}>
-            <View style={[styles.menuCardIcon, styles.menuCardIconDisabled]}>
-              <Icon name="sliders" size={24} color="#9CA3AF" />
+          {/* Strategy Builder */}
+          <TouchableOpacity
+            style={styles.menuCard}
+            onPress={() => {
+              logger.log('🔍 Strategy Builder pressed');
+              if (navigateTo) {
+                logger.log('🔍 Using navigateTo function to go to strategy-builder');
+                navigateTo('strategy-builder');
+              } else if (typeof window !== 'undefined') {
+                if ((window as any).__navigateToGlobal) {
+                  logger.log('🔍 Using window.__navigateToGlobal to go to strategy-builder');
+                  (window as any).__navigateToGlobal('strategy-builder');
+                } else if ((window as any).__setCurrentScreen) {
+                  logger.log('🔍 Using window.__setCurrentScreen to go to strategy-builder');
+                  (window as any).__setCurrentScreen('strategy-builder');
+                }
+              } else {
+                logger.error('🔍 No navigation method available!');
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuCardIcon, { backgroundColor: '#FEF3C7' }]}>
+              <Icon name="sliders" size={24} color="#F59E0B" />
             </View>
             <View style={styles.menuCardContent}>
-              <Text style={[styles.menuCardTitle, styles.menuCardTitleDisabled]}>
-                Strategy Builder
-              </Text>
+              <Text style={styles.menuCardTitle}>Strategy Builder</Text>
               <Text style={styles.menuCardDescription}>
                 Create and test your own trading strategies
               </Text>
             </View>
-            <View style={styles.comingSoonBadge}>
-              <Text style={styles.comingSoonText}>Soon</Text>
-            </View>
-          </View>
+            <Icon name="chevron-right" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
 
-          <View style={[styles.menuCard, styles.menuCardDisabled]}>
-            <View style={[styles.menuCardIcon, styles.menuCardIconDisabled]}>
-              <Icon name="cpu" size={24} color="#9CA3AF" />
+          {/* ML Model Training */}
+          <TouchableOpacity
+            style={styles.menuCard}
+            onPress={() => {
+              logger.log('🔍 ML Model Training pressed');
+              if (navigateTo) {
+                logger.log('🔍 Using navigateTo function to go to ml-training');
+                navigateTo('ml-training');
+              } else if (typeof window !== 'undefined') {
+                if ((window as any).__navigateToGlobal) {
+                  logger.log('🔍 Using window.__navigateToGlobal to go to ml-training');
+                  (window as any).__navigateToGlobal('ml-training');
+                } else if ((window as any).__setCurrentScreen) {
+                  logger.log('🔍 Using window.__setCurrentScreen to go to ml-training');
+                  (window as any).__setCurrentScreen('ml-training');
+                }
+              } else {
+                logger.error('🔍 No navigation method available!');
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuCardIcon, { backgroundColor: '#DBEAFE' }]}>
+              <Icon name="cpu" size={24} color="#3B82F6" />
             </View>
             <View style={styles.menuCardContent}>
-              <Text style={[styles.menuCardTitle, styles.menuCardTitleDisabled]}>
-                ML Model Training
-              </Text>
+              <Text style={styles.menuCardTitle}>ML Model Training</Text>
               <Text style={styles.menuCardDescription}>
                 Train custom models on your trading history
               </Text>
             </View>
-            <View style={styles.comingSoonBadge}>
-              <Text style={styles.comingSoonText}>Soon</Text>
-            </View>
-          </View>
+            <Icon name="chevron-right" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
 
-          <View style={[styles.menuCard, styles.menuCardDisabled]}>
-            <View style={[styles.menuCardIcon, styles.menuCardIconDisabled]}>
-              <Icon name="git-branch" size={24} color="#9CA3AF" />
+          {/* Multi-Strategy Blending */}
+          <TouchableOpacity
+            style={styles.menuCard}
+            onPress={() => {
+              logger.log('🔍 Multi-Strategy Blending pressed');
+              if (navigateTo) {
+                logger.log('🔍 Using navigateTo function to go to strategy-blend-builder');
+                navigateTo('strategy-blend-builder');
+              } else if (typeof window !== 'undefined') {
+                if ((window as any).__navigateToGlobal) {
+                  logger.log('🔍 Using window.__navigateToGlobal to go to strategy-blend-builder');
+                  (window as any).__navigateToGlobal('strategy-blend-builder');
+                } else if ((window as any).__setCurrentScreen) {
+                  logger.log('🔍 Using window.__setCurrentScreen to go to strategy-blend-builder');
+                  (window as any).__setCurrentScreen('strategy-blend-builder');
+                }
+              } else {
+                logger.error('🔍 No navigation method available!');
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuCardIcon, { backgroundColor: '#E0E7FF' }]}>
+              <Icon name="git-branch" size={24} color="#6366F1" />
             </View>
             <View style={styles.menuCardContent}>
-              <Text style={[styles.menuCardTitle, styles.menuCardTitleDisabled]}>
-                Multi-Strategy Blending
-              </Text>
+              <Text style={styles.menuCardTitle}>Multi-Strategy Blending</Text>
               <Text style={styles.menuCardDescription}>
                 Combine multiple strategies with custom weights
               </Text>
             </View>
-            <View style={styles.comingSoonBadge}>
-              <Text style={styles.comingSoonText}>Soon</Text>
-            </View>
-          </View>
+            <Icon name="chevron-right" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
         </View>
 
         {/* Info Section */}

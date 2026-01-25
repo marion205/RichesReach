@@ -12,6 +12,7 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import logger from '../utils/logger';
 
 export interface ErrorBoundaryProps {
   children: ReactNode;
@@ -53,10 +54,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     const errorCount = this.state.errorCount + 1;
     
     // Log error
-    console.error('🚨 ErrorBoundary caught error:', error);
-    console.error('🚨 Error info:', errorInfo);
+    logger.error('🚨 ErrorBoundary caught error:', error);
+    logger.error('🚨 Error info:', errorInfo);
     if (this.props.context) {
-      console.error('🚨 Error context:', this.props.context);
+      logger.error('🚨 Error context:', this.props.context);
     }
     
     // Update state
@@ -76,13 +77,13 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       try {
         this.props.reportError(error, errorInfo);
       } catch (reportError) {
-        console.error('Failed to report error:', reportError);
+        logger.error('Failed to report error:', reportError);
       }
     }
 
     // Prevent infinite error loops
     if (errorCount > 5) {
-      console.error('⚠️ Too many errors detected, preventing further error handling');
+      logger.error('⚠️ Too many errors detected, preventing further error handling');
     }
   }
 

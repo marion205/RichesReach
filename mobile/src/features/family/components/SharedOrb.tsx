@@ -15,11 +15,12 @@ import {
   Vibration,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { Haptics } from 'expo-haptics';
+import * as Haptics from 'expo-haptics';
 import ConstellationOrb from '../../portfolio/components/ConstellationOrb';
 import { familySharingService, FamilyMember, OrbSyncEvent } from '../services/FamilySharingService';
 import { MoneySnapshot } from '../../portfolio/services/MoneySnapshotService';
 import { getFamilyWebSocketService, OrbSyncEvent as WSEvent } from '../services/FamilyWebSocketService';
+import logger from '../../../utils/logger';
 
 interface SharedOrbProps {
   snapshot: MoneySnapshot;
@@ -44,6 +45,9 @@ export const SharedOrb: React.FC<SharedOrbProps> = ({
   const wsUnsubscribeRef = useRef<(() => void) | null>(null);
   const lastSyncRef = useRef<number>(0);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const syncOrbStateRef = useRef<(() => Promise<void>) | null>(null);
+  const fetchRecentEventsRef = useRef<(() => Promise<void>) | null>(null);
+  const triggerPulseAnimationRef = useRef<(() => void) | null>(null);
 
   // Memoize filtered members for performance
   const otherMembers = useMemo(() => {
@@ -79,7 +83,7 @@ export const SharedOrb: React.FC<SharedOrbProps> = ({
           clearInterval(checkConnection);
         };
       } catch (error) {
-        console.error('[SharedOrb] WebSocket connection failed:', error);
+        logger.error('[SharedOrb] WebSocket connection failed:', error);
         // Fallback to polling will be handled by useEffect when wsConnected is false
       }
     };
@@ -101,7 +105,7 @@ export const SharedOrb: React.FC<SharedOrbProps> = ({
       case 'orb_sync':
         if (event.userId !== currentUser.userId && event.netWorth !== undefined) {
           // Someone else updated the orb
-          triggerPulseAnimation();
+          if (triggerPulseAnimationRef.current) triggerPulseAnimationRef.current();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         }
         break;
@@ -109,7 +113,7 @@ export const SharedOrb: React.FC<SharedOrbProps> = ({
       case 'gesture':
         if (event.userId !== currentUser.userId && event.gesture) {
           // Someone else performed a gesture
-          triggerPulseAnimation();
+          if (triggerPulseAnimationRef.current) triggerPulseAnimationRef.current();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           
           // Add to recent events
@@ -141,7 +145,7 @@ export const SharedOrb: React.FC<SharedOrbProps> = ({
         setActiveMembers(group.members);
       }
     } catch (error) {
-      console.error('[SharedOrb] Failed to load members:', error);
+      logger.error('[SharedOrb] Failed to load members:', error);
     }
   }, []);
 
@@ -163,13 +167,13 @@ export const SharedOrb: React.FC<SharedOrbProps> = ({
     
     // Start polling fallback
     syncIntervalRef.current = setInterval(async () => {
-      await syncOrbState();
-      await fetchRecentEvents();
+      if (syncOrbStateRef.current) await syncOrbStateRef.current();
+      if (fetchRecentEventsRef.current) await fetchRecentEventsRef.current();
     }, 5000);
 
     // Initial sync
-    syncOrbState();
-    fetchRecentEvents();
+    if (syncOrbStateRef.current) syncOrbStateRef.current();
+    if (fetchRecentEventsRef.current) fetchRecentEventsRef.current();
     
     return () => {
       if (syncIntervalRef.current) {
@@ -177,7 +181,7 @@ export const SharedOrb: React.FC<SharedOrbProps> = ({
         syncIntervalRef.current = null;
       }
     };
-  }, [wsConnected, syncOrbState, fetchRecentEvents]);
+  }, [wsConnected]);
 
   // Debounced sync to avoid too many updates
   const syncOrbState = useCallback(async () => {
@@ -201,11 +205,12 @@ export const SharedOrb: React.FC<SharedOrbProps> = ({
         });
       }
     } catch (error) {
-      console.warn('[SharedOrb] Sync failed:', error);
+      logger.warn('[SharedOrb] Sync failed:', error);
     } finally {
       setIsSyncing(false);
     }
   }, [snapshot.netWorth, wsConnected]);
+  syncOrbStateRef.current = syncOrbState;
 
   const fetchRecentEvents = useCallback(async () => {
     try {
@@ -218,13 +223,14 @@ export const SharedOrb: React.FC<SharedOrbProps> = ({
         if (latestEvent.userId !== currentUser.userId) {
           // Someone else interacted with the orb
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-          triggerPulseAnimation();
+          if (triggerPulseAnimationRef.current) triggerPulseAnimationRef.current();
         }
       }
     } catch (error) {
-      console.warn('[SharedOrb] Failed to fetch events:', error);
+      logger.warn('[SharedOrb] Failed to fetch events:', error);
     }
-  }, [currentUser.userId, triggerPulseAnimation]);
+  }, [currentUser.userId]);
+  fetchRecentEventsRef.current = fetchRecentEvents;
 
   const triggerPulseAnimation = useCallback(() => {
     Animated.sequence([
@@ -240,6 +246,7 @@ export const SharedOrb: React.FC<SharedOrbProps> = ({
       }),
     ]).start();
   }, [pulseAnim]);
+  triggerPulseAnimationRef.current = triggerPulseAnimation;
 
   // Optimized gesture handler with WebSocket
   const handleGesture = useCallback(async (gesture: string) => {

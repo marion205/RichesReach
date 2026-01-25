@@ -59,13 +59,10 @@ export default function SHAPFeatureImportanceChart({
     datasets: [
       {
         data: values,
-        color: (opacity = 1) => {
-          // Return color based on value
-          return values.map((v, i) => colors[i] + Math.floor(opacity * 255).toString(16).padStart(2, '0'));
-        },
+        color: (opacity = 1) => `rgba(0, 204, 153, ${opacity})`,
       },
     ],
-  };
+  } as any;
   
   const chartConfig = {
     backgroundColor: isDark ? '#1a1a1a' : '#ffffff',

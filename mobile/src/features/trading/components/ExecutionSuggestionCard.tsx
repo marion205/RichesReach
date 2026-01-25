@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import logger from '../../../utils/logger';
 
 interface ExecutionSuggestion {
   orderType?: string;
@@ -44,47 +45,18 @@ const C = {
 };
 
 function ExecutionSuggestionCardComponent({ suggestion, isRefreshing = false }: ExecutionSuggestionCardProps) {
-  // Debug logging to see if it's remount or re-render
-  useEffect(() => {
-    if (__DEV__) {
-      console.log(`🔄 ExecutionSuggestionCard MOUNT: ${suggestion?.orderType || 'no-suggestion'}`);
-      return () => {
-        console.log(`🗑️ ExecutionSuggestionCard UNMOUNT: ${suggestion?.orderType || 'no-suggestion'}`);
-      };
-    }
-  }, []);
-
-  if (__DEV__) {
-    console.log(`📊 ExecutionSuggestionCard RENDER:`, {
-      hasSuggestion: !!suggestion,
-      orderType: suggestion?.orderType,
-      isRefreshing,
-    });
-  }
+  // Component lifecycle - no need to log
 
   // Pure presentational component - no conditional rendering that would cause blinking
   // Only hide if we truly have no suggestion at all
   // We render even if orderType is missing - the card will show whatever data is available
   // IMPORTANT: Render even if suggestion is empty object - show a placeholder so user knows the feature exists
   if (!suggestion) {
-    if (__DEV__) {
-      console.log(`⚠️ ExecutionSuggestionCard: No suggestion provided, returning null`);
-    }
     return null;
   }
 
   // Even if suggestion is an empty object, show the card header so user knows the feature exists
   const hasAnyData = Object.keys(suggestion).length > 0;
-  
-  if (__DEV__) {
-    console.log(`📊 ExecutionSuggestionCard rendering:`, {
-      hasSuggestion: !!suggestion,
-      hasAnyData,
-      keys: Object.keys(suggestion),
-      orderType: suggestion.orderType,
-      rationale: suggestion.rationale,
-    });
-  }
 
   const priceBand = suggestion.priceBand || [];
   const bracketLegs = suggestion.bracketLegs || suggestion.bracket_legs || {};

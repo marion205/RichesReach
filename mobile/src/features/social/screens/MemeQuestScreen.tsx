@@ -17,6 +17,7 @@ import { safeSpeak, stopAllSpeech } from '../../../hooks/useSafeSpeak';
 import * as Haptics from 'expo-haptics';
 import ConfettiCannon from 'react-native-confetti-cannon';
 import SocialFeed from '../components/SocialFeed';
+import logger from '../../../utils/logger';
 
 const { width, height } = Dimensions.get('window');
 
@@ -261,13 +262,9 @@ const MemeQuestScreen: React.FC = () => {
     );
 
     pulse.start();
-    
-    // Debug: Log when animations start
-    console.log('🎤 Starting microphone animations - Pulse only (scroll-based movement)');
 
     return () => {
       pulse.stop();
-      console.log('🎤 Stopping microphone animations');
     };
   }, []);
 
@@ -390,7 +387,7 @@ const MemeQuestScreen: React.FC = () => {
       }
       
     } catch (error) {
-      console.error('MemeQuest Launch Error:', error);
+      logger.error('MemeQuest Launch Error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       Alert.alert('Launch Failed', `Failed to launch meme: ${errorMessage}`);
     }

@@ -4,6 +4,7 @@
  */
 
 import { ethers } from 'ethers';
+import logger from '../utils/logger';
 
 export interface WalletInfo {
   address: string;
@@ -69,7 +70,7 @@ class Web3Service {
         );
       }
     } catch (error) {
-      console.log('Web3 provider not available:', error);
+      logger.log('Web3 provider not available:', error);
     }
   }
 
@@ -99,7 +100,7 @@ class Web3Service {
 
       return this.walletInfo;
     } catch (error) {
-      console.error('Failed to connect wallet:', error);
+      logger.error('Failed to connect wallet:', error);
       throw new Error('Failed to connect wallet. Please try again.');
     }
   }
@@ -138,7 +139,7 @@ class Web3Service {
         params: [{ chainId: `0x${chainId.toString(16)}` }],
       });
     } catch (error) {
-      console.error('Failed to switch network:', error);
+      logger.error('Failed to switch network:', error);
       throw new Error('Failed to switch network. Please try again.');
     }
   }
@@ -171,13 +172,13 @@ class Web3Service {
             supplyRate: 0.03, // Default
           });
         } catch (error) {
-          console.log(`Failed to get data for reserve ${address}:`, error);
+          logger.log(`Failed to get data for reserve ${address}:`, error);
         }
       }
 
       return reserves;
     } catch (error) {
-      console.error('Failed to get AAVE reserves:', error);
+      logger.error('Failed to get AAVE reserves:', error);
       throw new Error('Failed to fetch AAVE reserves');
     }
   }
@@ -202,7 +203,7 @@ class Web3Service {
         healthFactor: ethers.utils.formatEther(accountData[5]),
       };
     } catch (error) {
-      console.error('Failed to get user account data:', error);
+      logger.error('Failed to get user account data:', error);
       throw new Error('Failed to fetch account data');
     }
   }
@@ -226,7 +227,7 @@ class Web3Service {
       const receipt = await tx.wait();
       return receipt.transactionHash;
     } catch (error) {
-      console.error('Failed to supply asset:', error);
+      logger.error('Failed to supply asset:', error);
       throw new Error('Failed to supply asset');
     }
   }
@@ -249,7 +250,7 @@ class Web3Service {
       const receipt = await tx.wait();
       return receipt.transactionHash;
     } catch (error) {
-      console.error('Failed to withdraw asset:', error);
+      logger.error('Failed to withdraw asset:', error);
       throw new Error('Failed to withdraw asset');
     }
   }
@@ -279,7 +280,7 @@ class Web3Service {
       const receipt = await tx.wait();
       return receipt.transactionHash;
     } catch (error) {
-      console.error('Failed to borrow asset:', error);
+      logger.error('Failed to borrow asset:', error);
       throw new Error('Failed to borrow asset');
     }
   }
@@ -308,7 +309,7 @@ class Web3Service {
       const receipt = await tx.wait();
       return receipt.transactionHash;
     } catch (error) {
-      console.error('Failed to repay asset:', error);
+      logger.error('Failed to repay asset:', error);
       throw new Error('Failed to repay asset');
     }
   }
@@ -330,7 +331,7 @@ class Web3Service {
       const receipt = await tx.wait();
       return receipt.transactionHash;
     } catch (error) {
-      console.error('Failed to toggle collateral:', error);
+      logger.error('Failed to toggle collateral:', error);
       throw new Error('Failed to toggle collateral');
     }
   }
@@ -347,7 +348,7 @@ class Web3Service {
       const gasEstimate = await this.provider.estimateGas(transaction);
       return gasEstimate.toString();
     } catch (error) {
-      console.error('Failed to estimate gas:', error);
+      logger.error('Failed to estimate gas:', error);
       throw new Error('Failed to estimate gas');
     }
   }
@@ -364,11 +365,15 @@ class Web3Service {
       const gasPrice = await this.provider.getGasPrice();
       return ethers.utils.formatUnits(gasPrice, 'gwei');
     } catch (error) {
-      console.error('Failed to get gas price:', error);
+      logger.error('Failed to get gas price:', error);
       throw new Error('Failed to get gas price');
     }
   }
 }
 
 // Export singleton instance
-export default new Web3Service();
+const web3ServiceInstance = new Web3Service();
+export default web3ServiceInstance;
+
+// Export class type for type annotations
+export type { Web3Service as Web3ServiceType };

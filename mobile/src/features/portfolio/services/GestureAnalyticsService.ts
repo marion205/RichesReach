@@ -5,6 +5,7 @@
 
 import { logUX } from '../../../utils/telemetry';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import logger from '../../../utils/logger';
 
 export type GestureType = 
   | 'tap' 
@@ -84,13 +85,10 @@ class GestureAnalyticsService {
       this.storeGestureEvent(event);
 
       // In production, you might want to batch and send to analytics service
-      if (__DEV__) {
-        console.log(`[GestureAnalytics] ${gesture} (count: ${count})`, event);
-      }
     } catch (error) {
       // Don't let analytics break the app
       if (__DEV__) {
-        console.warn('Gesture analytics error:', error);
+        logger.warn('Gesture analytics error:', error);
       }
     }
   }

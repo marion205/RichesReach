@@ -12,8 +12,6 @@ import {
   StyleSheet,
   Dimensions,
   Animated,
-  PanGestureHandler,
-  State,
   Vibration,
   Alert,
   Modal,
@@ -23,9 +21,10 @@ import {
   SafeAreaView,
   Platform,
 } from 'react-native';
+import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
-import { useVoice } from '../contexts/VoiceContext';
+// import { BlurView } from 'expo-blur'; // Removed for compatibility
+import * as Speech from 'expo-speech';
 import { useMutation, useQuery } from '@apollo/client';
 import { gql } from '@apollo/client';
 
@@ -90,7 +89,7 @@ export const AdvancedMobileDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [refreshing, setRefreshing] = useState(false);
   const [showVoiceModal, setShowVoiceModal] = useState(false);
-  const { speak, parseCommand } = useVoice();
+  // Voice functionality removed - use Speech API directly if needed
   
   const { data: dashboardData, loading, refetch } = useQuery(GET_USER_DASHBOARD);
   const { data: educationData } = useQuery(GET_EDUCATION_PROGRESS);
@@ -120,13 +119,13 @@ export const AdvancedMobileDashboard = () => {
   };
 
   const handleVoiceCommand = async (command: string) => {
-    const parsed = await parseCommand(command);
-    if (parsed.intent === 'trade') {
+    // Voice command parsing removed - implement with Speech API if needed
+    if (command.includes('trade')) {
       // Navigate to trading screen
-      speak(`Executing trade for ${parsed.symbol}`, { voice: 'Nova' });
-    } else if (parsed.intent === 'education') {
+      Speech.speak(`Executing trade`);
+    } else if (command.includes('education')) {
       // Navigate to education screen
-      speak(`Starting lesson on ${parsed.topic}`, { voice: 'Shimmer' });
+      Speech.speak(`Starting lesson`);
     }
   };
 
@@ -519,7 +518,7 @@ const VoiceCommandModal = ({
 }) => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const { speak } = useVoice();
+  // Voice functionality removed
 
   const handleVoiceCommand = async () => {
     setIsListening(true);
@@ -538,7 +537,7 @@ const VoiceCommandModal = ({
 
   return (
     <Modal visible={visible} transparent animationType="slide">
-      <BlurView intensity={20} style={styles.modalOverlay}>
+      <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.7)' }]}>
         <View style={styles.voiceModal}>
           <Text style={styles.voiceModalTitle}>Voice Command</Text>
           
@@ -570,7 +569,7 @@ const VoiceCommandModal = ({
             )}
           </View>
         </View>
-      </BlurView>
+      </View>
     </Modal>
   );
 };

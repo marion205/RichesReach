@@ -417,8 +417,8 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
             id: post.id?.toString() || Date.now().toString(),
             content: post.content || post.text || 'No content',
             media: post.media ? {
-              uri: post.media.url || post.media,
-              type: post.media.type || 'image'
+              uri: typeof post.media === 'object' ? (post.media.url || '') : String(post.media),
+              type: typeof post.media === 'object' ? (post.media.type || 'image') : 'image'
             } : undefined,
             user: {
               id: post.user?.id?.toString() || post.author_id?.toString() || '1',
@@ -432,9 +432,9 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
           }));
           
           if (append) {
-            setPosts(prev => [...prev, ...transformed]);
+            setPosts(prev => [...prev, ...transformed] as Post[]);
           } else {
-            setPosts(transformed);
+            setPosts(transformed as Post[]);
           }
           setHasMore(transformed.length === 10); // If we got 10 posts, there might be more
           logger.log('🎉 Using real API data for posts');
@@ -625,15 +625,17 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
   }));
 
   const renderPost = ({ item }: { item: Post }) => {
-    interface PostWithFlexibleFields extends Post {
+    interface PostWithFlexibleFields {
+      id?: string | number;
       user?: { name?: string } | string;
       content?: string | object;
       timestamp?: string | Date;
       likes?: number | { count?: number };
       comments?: number | { count?: number };
+      media?: any;
       [key: string]: unknown;
     }
-    const flexibleItem = item as PostWithFlexibleFields;
+    const flexibleItem = item as unknown as PostWithFlexibleFields;
     const safeUser = typeof flexibleItem.user === 'object'
       ? flexibleItem.user?.name || 'Anonymous'
       : String(flexibleItem.user ?? 'Unknown');
@@ -705,9 +707,9 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
           <Text style={styles.voiceAILabel}>AI Financial Advisor</Text>
           <VoiceAI
             text={generateAIResponse(safeContent)}
-            voice={String(voiceAISettings.voice)}
+            voice={String(voiceAISettings.voice) as 'default' | 'finance_expert' | 'friendly_advisor' | 'confident_analyst'}
             speed={voiceAISettings.speed}
-            emotion={String(voiceAISettings.emotion)}
+            emotion={String(voiceAISettings.emotion) as 'neutral' | 'confident' | 'friendly' | 'analytical' | 'encouraging'}
             autoPlay={voiceAISettings.autoPlay}
             style={styles.voiceAIComponent}
           />
@@ -759,7 +761,7 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
     autoPlay?: boolean;
     [key: string]: unknown;
   }
-  const handleVoiceSettingsChange = (settings: VoiceSettings) => {
+  const handleVoiceSettingsChange = (settings: VoiceSettings): void => {
     setVoiceAISettings({
       enabled: settings.enabled ?? voiceAISettings.enabled,
       voice: settings.voice ?? voiceAISettings.voice,
@@ -978,7 +980,7 @@ export default function SimpleCircleDetailScreen({ route, navigation }: SimpleCi
         visible={voiceAIModalVisible}
         onClose={closeVoiceAIModal}
         text="Your portfolio is performing well today. Consider diversifying your investments for better risk management."
-        onVoiceSettingsChange={handleVoiceSettingsChange}
+        onVoiceSettingsChange={handleVoiceSettingsChange as any}
       />
     </KeyboardAvoidingView>
   );

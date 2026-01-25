@@ -82,17 +82,7 @@ export async function synthesize(text: string, cfg: TTSConfig): Promise<ArrayBuf
     }
   }
 
-  // Loud log (without secrets)
-  console.log('🗣️ TTS request:', {
-    provider: cfg.provider,
-    url,
-    method,
-    headers: Object.fromEntries(
-      Object.entries(headers).map(([k, v]) => [k, k.toLowerCase().includes('key') || k.toLowerCase().includes('auth') ? '***' : v]),
-    ),
-    bodyPreview: typeof body === 'string' ? body.slice(0, 180) : '[binary]',
-    platform: Platform.OS,
-  });
+  // TTS request - no need to log (too verbose)
 
   const res = await fetch(url, { method, headers, body });
   if (!res.ok) {

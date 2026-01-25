@@ -10,6 +10,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
+import logger from '../utils/logger';
 
 interface SubscriptionPlan {
   tier: string;
@@ -75,7 +76,7 @@ const SubscriptionScreen: React.FC = () => {
         setCurrentSubscription(subscriptionData.subscription || null);
       }
     } catch (error) {
-      console.error('Error loading subscription data:', error);
+      logger.error('Error loading subscription data:', error);
       Alert.alert('Error', 'Failed to load subscription data. Please try again.');
     } finally {
       setLoading(false);
@@ -116,7 +117,7 @@ const SubscriptionScreen: React.FC = () => {
         Alert.alert('Error', errorData.error || 'Failed to create subscription.');
       }
     } catch (error) {
-      console.error('Error creating subscription:', error);
+      logger.error('Error creating subscription:', error);
       Alert.alert('Error', 'Failed to create subscription. Please try again.');
     }
   };
@@ -153,7 +154,7 @@ const SubscriptionScreen: React.FC = () => {
                 Alert.alert('Error', errorData.error || 'Failed to cancel subscription.');
               }
             } catch (error) {
-              console.error('Error cancelling subscription:', error);
+              logger.error('Error cancelling subscription:', error);
               Alert.alert('Error', 'Failed to cancel subscription. Please try again.');
             }
           },

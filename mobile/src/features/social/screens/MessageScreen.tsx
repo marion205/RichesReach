@@ -28,8 +28,12 @@ const MessageScreen: React.FC<MessageScreenProps> = ({ userId, onNavigate }) => 
     },
   ]);
 
-  const mockUserService = MockUserService.getInstance();
-  const user = mockUserService.getUserById(userId);
+  // Mock user data - replace with real API call
+  const user = {
+    id: userId,
+    name: 'User',
+    email: 'user@example.com',
+  };
 
   const handleSendMessage = () => {
     if (message.trim()) {

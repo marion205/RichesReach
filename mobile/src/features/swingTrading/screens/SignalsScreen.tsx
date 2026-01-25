@@ -17,6 +17,7 @@ import { useQuery, useMutation } from '@apollo/client';
 import { gql } from '@apollo/client';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
+import logger from '../../../utils/logger';
 import {
   GET_SWING_SIGNALS,
   LIKE_SIGNAL,
@@ -152,21 +153,21 @@ const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigateTo: navigateToPro
     try {
       navigation.navigate(screen as never);
     } catch (error) {
-      console.warn('Navigation error:', error);
+      logger.warn('Navigation error:', error);
       // Fallback to globalNavigate if available
       try {
         if (typeof window !== 'undefined' && (window as any).__navigateToGlobal) {
           (window as any).__navigateToGlobal(screen);
         }
       } catch (fallbackError) {
-        console.error('All navigation methods failed:', fallbackError);
+        logger.error('All navigation methods failed:', fallbackError);
       }
     }
   });
   
   // Ensure navigateTo is always a function
   if (typeof navigateTo !== 'function') {
-    console.error('navigateTo is not a function:', typeof navigateTo, navigateTo);
+    logger.error('navigateTo is not a function:', typeof navigateTo, navigateTo);
   }
 
   const { data, loading, error, refetch } = useQuery(GET_SWING_SIGNALS, {
@@ -215,7 +216,7 @@ const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigateTo: navigateToPro
     try {
       await refetch();
     } catch (error) {
-      console.error('Error refreshing signals:', error);
+      logger.error('Error refreshing signals:', error);
     } finally {
       setRefreshing(false);
     }
@@ -235,7 +236,7 @@ const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigateTo: navigateToPro
         },
       });
     } catch (error) {
-      console.error('Error liking signal:', error);
+      logger.error('Error liking signal:', error);
       Alert.alert('Error', 'Failed to like signal');
     }
   }, [likeSignal, signals]);
@@ -255,7 +256,7 @@ const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigateTo: navigateToPro
       setSelectedSignal(null);
       Alert.alert('Success', 'Comment added successfully');
     } catch (error) {
-      console.error('Error commenting on signal:', error);
+      logger.error('Error commenting on signal:', error);
       Alert.alert('Error', 'Failed to add comment');
     }
   }, [commentSignal, selectedSignal, commentText]);

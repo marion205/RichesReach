@@ -8,15 +8,6 @@
 import { useQuery, useMutation } from '@apollo/client';
 import { gql } from '@apollo/client';
 import type {
-  ExtendedQueryStrategiesQuery,
-  ExtendedQueryStrategiesQueryVariables,
-  ExtendedQueryStrategyQuery,
-  ExtendedQueryStrategyQueryVariables,
-  ExtendedQueryUserStrategySettingsQuery,
-  ExtendedMutationEnableStrategyMutation,
-  ExtendedMutationEnableStrategyMutationVariables,
-  ExtendedMutationDisableStrategyMutation,
-  ExtendedMutationDisableStrategyMutationVariables,
   StrategyType,
   UserStrategySettingsType,
 } from '../../../generated/graphql';
@@ -114,10 +105,7 @@ export type UserStrategySettings = UserStrategySettingsType;
  * @returns Typed strategies array with loading/error states
  */
 export const useStrategies = (marketType?: string, category?: string) => {
-  const { data, loading, error, refetch } = useQuery<
-    ExtendedQueryStrategiesQuery,
-    ExtendedQueryStrategiesQueryVariables
-  >(GET_STRATEGIES, {
+  const { data, loading, error, refetch } = useQuery(GET_STRATEGIES, {
     variables: { marketType, category },
     fetchPolicy: 'cache-first',
     nextFetchPolicy: 'cache-first',
@@ -141,10 +129,7 @@ export const useStrategies = (marketType?: string, category?: string) => {
  * @returns Typed strategy with loading/error states
  */
 export const useStrategy = (id: string) => {
-  const { data, loading, error, refetch } = useQuery<
-    ExtendedQueryStrategyQuery,
-    ExtendedQueryStrategyQueryVariables
-  >(GET_STRATEGY, {
+  const { data, loading, error, refetch } = useQuery(GET_STRATEGY, {
     variables: { id },
     fetchPolicy: 'cache-first',
     skip: !id,
@@ -165,8 +150,7 @@ export const useStrategy = (id: string) => {
  * @returns Typed user strategy settings
  */
 export const useUserStrategySettings = () => {
-  const { data, loading, error, refetch } = useQuery<ExtendedQueryUserStrategySettingsQuery>(
-    GET_USER_STRATEGY_SETTINGS,
+  const { data, loading, error, refetch } = useQuery(GET_USER_STRATEGY_SETTINGS,
     {
       fetchPolicy: 'cache-first',
     },
@@ -187,10 +171,7 @@ export const useUserStrategySettings = () => {
  * @returns Mutation function with typed parameters
  */
 export const useEnableStrategy = () => {
-  const [enableStrategy, { loading, error }] = useMutation<
-    ExtendedMutationEnableStrategyMutation,
-    ExtendedMutationEnableStrategyMutationVariables
-  >(ENABLE_STRATEGY);
+  const [enableStrategy, { loading, error }] = useMutation(ENABLE_STRATEGY);
 
   return {
     enableStrategy: async (strategyVersionId: string, customConfig?: Record<string, unknown>) => {
@@ -212,10 +193,7 @@ export const useEnableStrategy = () => {
  * @returns Mutation function with typed parameters
  */
 export const useDisableStrategy = () => {
-  const [disableStrategy, { loading, error }] = useMutation<
-    ExtendedMutationDisableStrategyMutation,
-    ExtendedMutationDisableStrategyMutationVariables
-  >(DISABLE_STRATEGY);
+  const [disableStrategy, { loading, error }] = useMutation(DISABLE_STRATEGY);
 
   return {
     disableStrategy: async (strategyVersionId: string) => {

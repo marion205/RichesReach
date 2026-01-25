@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useMutation } from '@apollo/client';
+import logger from '../../utils/logger';
 import { gql } from '@apollo/client';
 
 const PLACE_OPTIONS_ORDER = gql`
@@ -177,7 +178,7 @@ export default function OptionsReviewModal({
         Alert.alert('Trade Failed', response?.error || 'Unknown error occurred');
       }
     } catch (error: any) {
-      console.error('Error placing options order:', error);
+      logger.error('Error placing options order:', error);
       Alert.alert('Error', error.message || 'Failed to place trade. Please try again.');
     } finally {
       setPlacingOrder(false);

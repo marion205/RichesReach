@@ -17,6 +17,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme/PersonalizedThemes';
+import logger from '../utils/logger';
 
 const { width } = Dimensions.get('window');
 
@@ -78,8 +79,6 @@ interface WealthCircles2Props {
 }
 
 export default function WealthCircles2({ onCirclePress, onCreateCircle, onJoinCircle }: WealthCircles2Props) {
-  console.log('🚀 WealthCircles2: Component rendering - Version 2.3');
-  
   // Provide safe no-ops if not supplied (when used via navigator)
   onCirclePress = onCirclePress || (() => {});
   onCreateCircle = onCreateCircle || (() => {});
@@ -108,8 +107,6 @@ export default function WealthCircles2({ onCirclePress, onCreateCircle, onJoinCi
     { id: 'tax_optimization', name: 'Tax Optimization', icon: '💰', color: '#30D158' },
   ];
 
-  // Debug log to ensure categories is available
-  console.log('🔍 WealthCircles2: categories available:', categories.length);
 
   useEffect(() => {
     loadCircles();
@@ -134,7 +131,6 @@ export default function WealthCircles2({ onCirclePress, onCreateCircle, onJoinCi
   const loadCircles = async () => {
     try {
       setLoading(true);
-      console.log('🔄 Loading circles from API...');
       
       // Use real API endpoint - updated to use working server
       const response = await fetch(`${process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.1.236:8000'}/api/wealth-circles/`, {
@@ -144,18 +140,14 @@ export default function WealthCircles2({ onCirclePress, onCreateCircle, onJoinCi
         },
       });
       
-      console.log('📡 API Response status:', response.status);
-      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const apiCircles = await response.json();
-      console.log('✅ API Circles loaded:', apiCircles?.length || 0, 'circles');
       
       // Safety check - ensure apiCircles is an array
       if (!apiCircles || !Array.isArray(apiCircles)) {
-        console.log('❌ API Circles is not an array:', apiCircles);
         throw new Error('Invalid API response: circles data is not an array');
       }
       
@@ -181,22 +173,21 @@ export default function WealthCircles2({ onCirclePress, onCreateCircle, onJoinCi
           lastActive: activity.timestamp || 'Unknown',
         })) || [],
         recentActivity: circle.recentActivity || [],
+        rules: [],
         tags: [circle.category || 'investment'],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdBy: circle.createdBy || 'unknown',
+        createdAt: circle.createdAt || new Date().toISOString(),
       }));
       
       setCircles(transformedCircles);
-      console.log('🎉 Successfully loaded', transformedCircles.length, 'circles from API');
       
     } catch (error) {
-      console.error('❌ Error loading circles:', error);
-      console.log('🔄 Falling back to mock data...');
+      logger.error('❌ Error loading circles:', error);
       
       // Provide more specific error information
       if (error instanceof Error) {
-        console.error('Error message:', error.message);
-        console.error('Error stack:', error.stack);
+        logger.error('Error message:', error.message);
+        logger.error('Error stack:', error.stack);
       }
       
       // Fallback to mock data if API fails
@@ -481,7 +472,6 @@ export default function WealthCircles2({ onCirclePress, onCreateCircle, onJoinCi
 
   const getCategoryIcon = (category: string) => {
     if (!categories || !Array.isArray(categories)) {
-      console.log('⚠️ getCategoryIcon: categories not available');
       return '🌟';
     }
     const cat = categories.find(c => c.id === category);
@@ -490,7 +480,6 @@ export default function WealthCircles2({ onCirclePress, onCreateCircle, onJoinCi
 
   const getCategoryColor = (category: string) => {
     if (!categories || !Array.isArray(categories)) {
-      console.log('⚠️ getCategoryColor: categories not available');
       return '#667eea';
     }
     const cat = categories.find(c => c.id === category);
@@ -499,7 +488,6 @@ export default function WealthCircles2({ onCirclePress, onCreateCircle, onJoinCi
 
   const getCategoryName = (category: string) => {
     if (!categories || !Array.isArray(categories)) {
-      console.log('⚠️ getCategoryName: categories not available');
       return 'Unknown';
     }
     const cat = categories.find(c => c.id === category);
@@ -601,7 +589,7 @@ export default function WealthCircles2({ onCirclePress, onCreateCircle, onJoinCi
     </Animated.View>
   );
   } catch (error) {
-    console.error('❌ WealthCircles2: Error in component:', error);
+    logger.error('❌ WealthCircles2: Error in component:', error);
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.loadingText}>Error loading wealth circles</Text>

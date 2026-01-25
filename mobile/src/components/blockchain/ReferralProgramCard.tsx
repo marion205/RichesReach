@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import logger from '../../utils/logger';
 import { View, Text, StyleSheet, TouchableOpacity, Share, Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import * as Clipboard from 'expo-clipboard';
@@ -59,7 +60,7 @@ export default function ReferralProgramCard() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch (error) {
-      console.error('Failed to share:', error);
+      logger.error('Failed to share:', error);
     }
   };
 

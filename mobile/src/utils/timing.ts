@@ -4,6 +4,7 @@
  */
 
 import { ENABLE_PERFORMANCE_LOGGING } from '../config/flags';
+import logger from './logger';
 
 export interface TimingResult {
   label: string;
@@ -23,7 +24,7 @@ export const mark = (label: string): (() => TimingResult) => {
     const result = { label, ms: duration, timestamp };
     
     if (ENABLE_PERFORMANCE_LOGGING) {
-      console.log(`[PERF] ${label}: ${duration}ms`);
+      logger.log(`[PERF] ${label}: ${duration}ms`);
     }
     
     return result;
@@ -45,7 +46,7 @@ export const measureAsync = async <T>(
   } catch (error) {
     const timing = stop();
     if (ENABLE_PERFORMANCE_LOGGING) {
-      console.error(`[PERF] ${label} failed after ${timing.ms}ms:`, error);
+      logger.error(`[PERF] ${label} failed after ${timing.ms}ms:`, error);
     }
     throw error;
   }
@@ -66,7 +67,7 @@ export const measureSync = <T>(
   } catch (error) {
     const timing = stop();
     if (ENABLE_PERFORMANCE_LOGGING) {
-      console.error(`[PERF] ${label} failed after ${timing.ms}ms:`, error);
+      logger.error(`[PERF] ${label} failed after ${timing.ms}ms:`, error);
     }
     throw error;
   }
@@ -95,7 +96,7 @@ export class PerformanceTracker {
       this.timings.push(timing);
       
       if (ENABLE_PERFORMANCE_LOGGING) {
-        console.log(`[PERF] ${timing.label}: ${duration}ms`);
+        logger.log(`[PERF] ${timing.label}: ${duration}ms`);
       }
     };
   }
@@ -111,8 +112,8 @@ export class PerformanceTracker {
     this.timings.push(totalTiming);
     
     if (ENABLE_PERFORMANCE_LOGGING) {
-      console.log(`[PERF] ${totalTiming.label}: ${totalDuration}ms`);
-      console.log(`[PERF] ${this.label} breakdown:`, this.timings);
+      logger.log(`[PERF] ${totalTiming.label}: ${totalDuration}ms`);
+      logger.log(`[PERF] ${this.label} breakdown:`, this.timings);
     }
     
     return this.timings;
@@ -127,7 +128,7 @@ export const logPerformanceMetrics = (timings: TimingResult[]) => {
   
   // In production, you might want to send these to your analytics service
   // For now, just log them
-  console.log('[PERF] Performance metrics:', timings);
+  logger.log('[PERF] Performance metrics:', timings);
   
   // Example: Send to analytics service
   // analytics.track('performance_metrics', {

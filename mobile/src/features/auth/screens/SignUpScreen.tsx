@@ -16,6 +16,7 @@ SafeAreaView
 import { gql, useMutation, useApolloClient } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import * as ImagePicker from 'expo-image-picker';
+import logger from '../../../utils/logger';
 import { StableNumberInput } from '../../../components/StableNumberInput';
 const { width } = Dimensions.get('window');
 // Income Profile Constants
@@ -112,8 +113,8 @@ if (!result.canceled && result.assets.length > 0) {
 setProfilePic(result.assets[0].uri);
 }
 } catch (error) {
-console.error('Error picking image:', error);
-Alert.alert('Error', 'Failed to pick image. Please try again.');
+  logger.error('Error picking image:', error);
+  Alert.alert('Error', 'Failed to pick image. Please try again.');
 }
 };
 const showImagePickerOptions = () => {
@@ -176,8 +177,8 @@ profilePic: profilePic || null
 await client.cache.reset();
 onSignUp();
 } catch (err) {
-console.error('Signup error:', err);
-Alert.alert('Signup Failed', 'There was an error creating your account. Please try again.');
+  logger.error('Signup error:', err);
+  Alert.alert('Signup Failed', 'There was an error creating your account. Please try again.');
 }
 };
 return (

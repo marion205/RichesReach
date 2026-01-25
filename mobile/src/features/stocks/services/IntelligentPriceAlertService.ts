@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 // Use Expo Go compatible notification service to avoid crashes
-import expoGoCompatibleNotificationService from '../../ExpoGoCompatibleNotificationService';
+import expoGoCompatibleNotificationService from '../../notifications/services/ExpoGoCompatibleNotificationService';
 import logger from '../../../utils/logger';
 export interface StockPrice {
 symbol: string;

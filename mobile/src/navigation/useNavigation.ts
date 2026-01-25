@@ -140,7 +140,7 @@ export function useNavigation(): UseNavigationReturn {
       if (typeof window !== 'undefined') {
         const windowWithNav = window as Window & WindowNavigationGlobals;
         windowWithNav.__navigateToGlobal = navigateTo;
-        windowWithNav.__setCurrentScreen = setCurrentScreen;
+        windowWithNav.__setCurrentScreen = setCurrentScreen as any; // Dispatch type
         windowWithNav.__currentScreenParams = params || {};
       }
 

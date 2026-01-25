@@ -17,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { MoneySnapshot } from '../services/MoneySnapshotService';
 import { constellationAIService, PersonalizedRecommendation } from '../services/ConstellationAIService';
+import logger from '../../../utils/logger';
 
 interface BreakdownItem {
   label: string;
@@ -48,18 +49,7 @@ export const DetailedBreakdownModal: React.FC<DetailedBreakdownModalProps> = ({
   const cashflowOut = snapshot?.cashflow?.out ?? 0;
   const cashflowDelta = snapshot?.cashflow?.delta ?? 0;
 
-  // Debug logging
-  useEffect(() => {
-    if (visible) {
-      console.log('[DetailedBreakdownModal] Modal opened with snapshot:', {
-        netWorth,
-        cashflowIn,
-        cashflowOut,
-        cashflowDelta,
-        hasCashflow: !!snapshot?.cashflow,
-      });
-    }
-  }, [visible, snapshot]);
+  // Modal visibility tracking removed (debug logging)
 
   // Fetch AI recommendations when modal opens
   useEffect(() => {
@@ -81,7 +71,7 @@ export const DetailedBreakdownModal: React.FC<DetailedBreakdownModalProps> = ({
         setAiEnabled(false);
       }
     } catch (error) {
-      console.warn('[DetailedBreakdownModal] AI loading failed:', error);
+      logger.warn('[DetailedBreakdownModal] AI loading failed:', error);
       setRecommendations([]);
       setAiEnabled(false);
     } finally {

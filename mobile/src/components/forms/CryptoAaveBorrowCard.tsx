@@ -13,10 +13,10 @@ import {
 } from 'react-native';
 import { gql, useMutation, useQuery } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
-import AAVEWhatIfSlider from '../crypto/AAVEWhatIfSlider';
+import AAVEWhatIfSlider from '../crypto/AaveWhatIfSlider';
 import WalletConnection from '../crypto/WalletConnection';
 import useWallet from '../../shared/hooks/useWallet';
-import { HybridTransactionService } from '../../services/HybridTransactionService';
+import logger from '../../utils/logger';
 
 /* ===================== GraphQL (adjust to your schema) ===================== */
 const GET_AAVE_RESERVES = gql`
@@ -234,34 +234,38 @@ const CryptoAAVEBorrowCard: React.FC<Props> = ({
 
     setSubmitting(true);
     try {
-      // 1) Supply (optional) - Use hybrid transaction service
+      // 1) Supply (optional) - Use GraphQL mutation
       if (qtyNum > 0) {
-        const supplyResult = await HybridTransactionService.supplyAsset({
-          assetSymbol: collSymbol,
-          amount: qtyNum.toString(),
-          useAsCollateral: true,
+        const { data: supplyData } = await doSupply({
+          variables: {
+            symbol: collSymbol,
+            quantity: qtyNum,
+            useAsCollateral: true,
+          },
         });
 
-        if (!supplyResult.success) {
-          throw new Error(supplyResult.message);
+        if (!supplyData?.defiSupply?.success) {
+          throw new Error(supplyData?.defiSupply?.message || 'Supply failed');
         }
 
-        HybridTransactionService.showTransactionResult(supplyResult);
+        Alert.alert('Success', 'Asset supplied successfully');
       }
 
-      // 2) Borrow (optional) - Use hybrid transaction service
+      // 2) Borrow (optional) - Use GraphQL mutation
       if (borNum > 0) {
-        const borrowResult = await HybridTransactionService.borrowAsset({
-          assetSymbol: borrowSymbol,
-          amount: borNum.toString(),
-          interestRateMode: 'VARIABLE',
+        const { data: borrowData } = await doBorrow({
+          variables: {
+            symbol: borrowSymbol,
+            amount: borNum,
+            rateMode: 'VARIABLE',
+          },
         });
 
-        if (!borrowResult.success) {
-          throw new Error(borrowResult.message);
+        if (!borrowData?.defiBorrow?.success) {
+          throw new Error(borrowData?.defiBorrow?.message || 'Borrow failed');
         }
 
-        HybridTransactionService.showTransactionResult(borrowResult);
+        Alert.alert('Success', 'Asset borrowed successfully');
       }
 
       // Refresh data from both backend and blockchain
@@ -270,7 +274,7 @@ const CryptoAAVEBorrowCard: React.FC<Props> = ({
       setBorrowUsd('');
       onSuccess?.();
     } catch (e: any) {
-      console.error(e);
+      logger.error('Transaction error:', e);
       Alert.alert('Error', e.message || 'Transaction failed');
     } finally {
       setSubmitting(false);
@@ -283,13 +287,10 @@ const CryptoAAVEBorrowCard: React.FC<Props> = ({
       {/* Wallet Connection */}
       <WalletConnection 
         onWalletConnected={() => {
-          console.log('Wallet connected, refreshing data...');
           refetchRes();
           refetchAcct();
         }}
-        onWalletDisconnected={() => {
-          console.log('Wallet disconnected');
-        }}
+        onWalletDisconnected={() => {}}
         style={{ marginBottom: 16 }}
       />
 
@@ -484,7 +485,6 @@ const CryptoAAVEBorrowCard: React.FC<Props> = ({
           ltv={weightedLTV}
           liqThreshold={weightedLiq}
           onStressChange={(result) => {
-            console.log('AAVE stress test result:', result);
             // You can call your /defi/stress-test endpoint and show HF under shocks
           }}
         />

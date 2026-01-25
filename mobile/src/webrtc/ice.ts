@@ -1,4 +1,5 @@
 import { ENV } from '../config/env';
+import logger from '../utils/logger';
 
 const ALLOWED_SCHEMES = new Set(['stun:', 'turn:', 'turns:']);
 
@@ -39,10 +40,7 @@ export function buildIceServers(opts?: {
     : undefined;
 
   const iceServers = [stunServer, turnServer].filter(Boolean) as RTCIceServer[];
-  try {
-    const redacted = iceServers.map(s => ({ urls: s.urls, username: s.username ? '***' : undefined, credential: s.credential ? '***' : undefined }));
-    console.log('[ICE] servers', JSON.stringify(redacted, null, 2));
-  } catch {}
+  // ICE server configuration - no need to log (sensitive info)
   return iceServers;
 }
 

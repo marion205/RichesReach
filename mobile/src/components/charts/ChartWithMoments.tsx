@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import Svg, { Polyline, Circle, Line } from "react-native-svg";
 import * as Haptics from "expo-haptics";
+import logger from "../../utils/logger";
 
 export type ChartPoint = {
   timestamp: string; // ISO string
@@ -254,7 +255,7 @@ const ChartWithMoments: React.FC<ChartWithMomentsProps> = ({
         const newId = moment?.id ?? null;
         if (newId !== prevId && moment) {
           // subtle tick when user hits a new moment dot
-          Haptics.selectionAsync().catch(console.warn); // Handle potential errors
+          Haptics.selectionAsync().catch((e) => logger.warn('Haptic error:', e)); // Handle potential errors
         }
         setInternalActiveMomentId(newId);
       }
@@ -365,7 +366,6 @@ const ChartWithMoments: React.FC<ChartWithMomentsProps> = ({
       <View
         style={[styles.chartContainer, { height }]}
         accessible={true}
-        accessibilityRole="status"
         accessibilityLabel="No price data available"
       >
         <Text style={styles.emptyText}>No price data</Text>

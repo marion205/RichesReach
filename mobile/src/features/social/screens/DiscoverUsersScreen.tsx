@@ -15,6 +15,7 @@ FlatList,
 import Icon from 'react-native-vector-icons/Feather';
 import { gql, useQuery, useMutation } from '@apollo/client';
 import UserProfileCard from '../components/UserProfileCard';
+import logger from '../../../utils/logger';
 // GraphQL Queries
 const GET_DISCOVER_USERS = gql`
 query GetDiscoverUsers($limit: Int, $offset: Int, $searchTerm: String, $experienceLevel: String, $sortBy: String) {
@@ -90,7 +91,7 @@ setRefreshing(true);
 try {
 await refetch();
 } catch (error) {
-console.error('Error refreshing users:', error);
+logger.error('Error refreshing users:', error);
 } finally {
 setRefreshing(false);
 }
@@ -120,7 +121,7 @@ message: 'Followed successfully',
 }
 refetch();
 } catch (error) {
-console.error('Error toggling follow:', error);
+logger.error('Error toggling follow:', error);
 Alert.alert('Error', 'Failed to update follow status. Please try again.');
 }
 };

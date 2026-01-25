@@ -5,6 +5,8 @@ export * from './DataPersistenceService';
 export * from './ErrorService';
 export * from './newsService';
 export * from './newsAlertsService';
-export * from './ProductionErrorService';
+// Re-export ProductionErrorService without conflicting ErrorType/ErrorSeverity
+export { default as ProductionErrorService } from './ProductionErrorService';
+export { ErrorType as ProductionErrorType, ErrorSeverity as ProductionErrorSeverity } from './ProductionErrorService';
 export * from './PerformanceMonitoringService';
 export * from './ProductionSecurityService';

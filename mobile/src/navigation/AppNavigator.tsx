@@ -161,7 +161,8 @@ import BacktestingScreen from '../features/swingTrading/screens/BacktestingScree
 import LeaderboardScreen from '../features/swingTrading/screens/LeaderboardScreen';
 
 const Tab = createBottomTabNavigator();
-const Stack = createNativeStackNavigator();
+const Stack = createNativeStackNavigator<any>();
+const TabNavigator = Tab.Navigator as any;
 
 // Wrapper components for screens that need props
 function SubscriptionScreenWrapper(props: any) {
@@ -208,8 +209,9 @@ function OnboardingScreenWrapper(props: any) {
 }
 
 function HomeStack() {
+  const StackNavigator = Stack.Navigator as any;
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <StackNavigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="HomeMain" component={HomeScreen} />
       {/* Legacy alias to preserve existing navigations */}
       <Stack.Screen name="home" component={HomeScreen} />
@@ -270,7 +272,7 @@ function HomeStack() {
       <Stack.Screen name="PaperTrading" component={PaperTradingScreen} options={{ headerShown: true, title: 'Paper Trading' }} />
       {/* Allow navigation to Options Copilot from HomeStack */}
       <Stack.Screen name="options-copilot" component={OptionsCopilotScreen} options={{ headerShown: true, title: 'Options Copilot' }} />
-    </Stack.Navigator>
+    </StackNavigator>
   );
 }
 
@@ -303,8 +305,9 @@ function BacktestingScreenWrapper(props: any) {
 }
 
 function InvestStack() {
+  const StackNavigator = Stack.Navigator as any;
   return (
-    <Stack.Navigator 
+    <StackNavigator 
       screenOptions={{ headerBackTitleVisible: false }}
       initialRouteName="InvestMain"
     >
@@ -367,13 +370,14 @@ function InvestStack() {
       {/* Legacy aliases for header buttons */}
       <Stack.Screen name="ml-system" component={MLSystemScreen} options={{ headerShown: true, title: 'ML System' }} />
       <Stack.Screen name="risk-management" component={RiskManagementScreen} options={{ headerShown: true, title: 'Risk Management' }} />
-    </Stack.Navigator>
+    </StackNavigator>
   );
 }
 
 function LearnStack() {
+  const StackNavigator = Stack.Navigator as any;
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <StackNavigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="LearnMain" component={TutorScreen} />
       {/* Legacy alias */}
       <Stack.Screen name="tutor" component={TutorScreen} />
@@ -383,7 +387,7 @@ function LearnStack() {
       <Stack.Screen name="tutor-module" component={TutorModuleScreen} />
       <Stack.Screen name="lesson-library" component={require('../features/learning/screens/LessonLibraryScreen').default} options={{ headerShown: false }} />
       <Stack.Screen name="lesson-detail" component={require('../features/learning/screens/LessonDetailScreen').default} options={{ headerShown: false }} />
-    </Stack.Navigator>
+    </StackNavigator>
   );
 }
 
@@ -392,8 +396,9 @@ function CommunityStack() {
   const CommunityMain = () => (
     <SocialTrading userId={'me'} initialTab={'news'} />
   );
+  const StackNavigator = Stack.Navigator as any;
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <StackNavigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="CommunityMain" component={CommunityMain} />
       {/* Legacy alias to keep deep links working */}
       <Stack.Screen name="social" component={CommunityMain} />
@@ -405,7 +410,7 @@ function CommunityStack() {
       <Stack.Screen name="chart-test" component={ChartTestScreen} options={{ headerShown: false }} />
       {/* Social features */}
       <Stack.Screen name="portfolio-leaderboard" component={PortfolioLeaderboardScreen} options={{ headerShown: true, title: 'Leaderboard' }} />
-    </Stack.Navigator>
+    </StackNavigator>
   );
 }
 
@@ -432,7 +437,7 @@ export default function AppNavigator() {
       // Use setTimeout to ensure ref is fully initialized
       setTimeout(() => {
         setNavigator(ref);
-        console.log('✅ NavigationService: Navigator set via ref callback');
+        logger.log('✅ NavigationService: Navigator set via ref callback');
       }, 0);
     }
   }, []);
@@ -441,13 +446,13 @@ export default function AppNavigator() {
     // Try to set navigator immediately
     if (navRef.current) {
       setNavigator(navRef.current);
-      console.log('✅ NavigationService: Navigator set in useEffect');
+      logger.log('✅ NavigationService: Navigator set in useEffect');
     }
     // Also set it after a short delay to ensure it's ready
     const timeout = setTimeout(() => {
       if (navRef.current) {
         setNavigator(navRef.current);
-        console.log('✅ NavigationService: Navigator set in useEffect (delayed)');
+        logger.log('✅ NavigationService: Navigator set in useEffect (delayed)');
       }
     }, 50);
     return () => clearTimeout(timeout);
@@ -461,12 +466,12 @@ export default function AppNavigator() {
         // onReady is called when NavigationContainer is fully ready
         if (navRef.current) {
           setNavigator(navRef.current);
-          console.log('✅ NavigationService: Navigator set on ready (NavigationContainer ready)');
+          logger.log('✅ NavigationService: Navigator set on ready (NavigationContainer ready)');
           // Ensure navigator is definitely set with a small delay
           setTimeout(() => {
             if (navRef.current) {
               setNavigator(navRef.current);
-              console.log('✅ NavigationService: Navigator re-set after onReady delay');
+              logger.log('✅ NavigationService: Navigator re-set after onReady delay');
             }
           }, 50);
         }
@@ -502,11 +507,11 @@ export default function AppNavigator() {
         }}
       >
         <View style={{ flex: 1 }}>
-          <Tab.Navigator
-          screenOptions={({ route }) => ({
+          <TabNavigator
+            screenOptions={({ route }: any) => ({
             headerShown: false,
             tabBarLabelStyle: { fontSize: 12, fontWeight: '700', marginBottom: 4 },
-            tabBarIcon: ({ color, size }) => {
+            tabBarIcon: ({ color, size }: any) => {
               const iconMap: Record<string, keyof typeof Feather.glyphMap> = {
                 Home: 'home',
                 Invest: 'bar-chart-2',
@@ -536,14 +541,14 @@ export default function AppNavigator() {
             ),
             lazy: true,
           })}
-        >
+          >
           <Tab.Screen 
             name="Home" 
             component={HomeStack}
             options={{
-              tabBarTestID: TID.tabs.voiceAI, // Voice AI features are in Home tab
+              // tabBarTestID: TID.tabs.voiceAI, // Not available in this version
               tabBarAccessibilityLabel: TID.tabs.voiceAI,
-              tabBarButton: (props) => (
+              tabBarButton: (props: any) => (
                 <TouchableOpacity
                   {...props}
                   testID={TID.tabs.voiceAI}
@@ -562,9 +567,9 @@ export default function AppNavigator() {
             name="Invest" 
             component={InvestStack}
             options={{
-              tabBarTestID: TID.tabs.memeQuest, // MemeQuest features are in Invest tab
+              // tabBarTestID: TID.tabs.memeQuest, // Not available in this version
               tabBarAccessibilityLabel: TID.tabs.memeQuest,
-              tabBarButton: (props) => (
+              tabBarButton: (props: any) => (
                 <TouchableOpacity
                   {...props}
                   testID={TID.tabs.memeQuest}
@@ -583,7 +588,7 @@ export default function AppNavigator() {
                   const currentRoute = investRoute.state.routes?.[investRoute.state.index || 0];
                   logger.log('Current Invest stack route:', currentRoute?.name);
                   if (currentRoute?.name !== 'InvestMain') {
-                    e.preventDefault();
+                    (e as any).preventDefault();
                     // Navigate to InvestMain
                     logger.log('Navigating to InvestMain from:', currentRoute?.name);
                     navigation.navigate('Invest', { 
@@ -595,7 +600,7 @@ export default function AppNavigator() {
                   }
                 } else {
                   // If no state, navigate to InvestMain
-                  e.preventDefault();
+                  (e as any).preventDefault();
                   logger.log('No Invest stack state, navigating to InvestMain');
                   navigation.navigate('Invest', { 
                     screen: 'InvestMain',
@@ -609,9 +614,9 @@ export default function AppNavigator() {
             name="Learn"
             component={LearnStack}
             options={{
-              tabBarTestID: TID.tabs.learning,
+              // tabBarTestID: TID.tabs.learning, // Not available in this version
               tabBarAccessibilityLabel: TID.tabs.learning,
-              tabBarButton: (props) => (
+              tabBarButton: (props: any) => (
                 <TouchableOpacity
                   {...props}
                   testID={TID.tabs.learning}
@@ -630,7 +635,7 @@ export default function AppNavigator() {
                   const currentRoute = learnRoute.state.routes?.[learnRoute.state.index || 0];
                   logger.log('Current Learn stack route:', currentRoute?.name);
                   if (currentRoute?.name !== 'LearnMain') {
-                    e.preventDefault();
+                    (e as any).preventDefault();
                     // Navigate to LearnMain
                     logger.log('Navigating to LearnMain from:', currentRoute?.name);
                     navigation.navigate('Learn', { 
@@ -642,7 +647,7 @@ export default function AppNavigator() {
                   }
                 } else {
                   // If no state, navigate to LearnMain
-                  e.preventDefault();
+                  (e as any).preventDefault();
                   logger.log('No Learn stack state, navigating to LearnMain');
                   navigation.navigate('Learn', { 
                     screen: 'LearnMain',
@@ -656,9 +661,9 @@ export default function AppNavigator() {
             name="Community" 
             component={CommunityStack}
             options={{
-              tabBarTestID: TID.tabs.community,
+              // tabBarTestID: TID.tabs.community, // Not available in this version
               tabBarAccessibilityLabel: TID.tabs.community,
-              tabBarButton: (props) => (
+              tabBarButton: (props: any) => (
                 <TouchableOpacity
                   {...props}
                   testID={TID.tabs.community}
@@ -673,7 +678,7 @@ export default function AppNavigator() {
               },
             }}
           />
-        </Tab.Navigator>
+        </TabNavigator>
       </View>
       </GestureNavigation>
     </NavigationContainer>

@@ -14,6 +14,9 @@ import {
   GET_CRYPTO_PRICE,
   EXECUTE_CRYPTO_TRADE,
 } from '../../cryptoQueries';
+import logger from '../../utils/logger';
+import { FEATURES } from '../../config/featureFlags';
+import LicensingDisclosureScreen from '../LicensingDisclosureScreen';
 
 type TradeSide = 'BUY' | 'SELL';
 type InputMode = 'QTY' | 'USD';
@@ -268,7 +271,7 @@ const CryptoTradingCard: React.FC<CryptoTradingCardProps> = ({
         Alert.alert('Error', data?.executeCryptoTrade?.message || 'Trade failed');
       }
     } catch (e) {
-      console.error('Trade error:', e);
+      logger.error('Trade error:', e);
       Alert.alert('Error', 'Failed to execute trade. Please try again.');
     } finally {
       setIsSubmitting(false);

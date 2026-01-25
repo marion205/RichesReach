@@ -21,6 +21,7 @@ import {
   CREATE_SBLOC_LOAN
 } from '../../cryptoQueries';
 import WhatIfSlider from './WhatIfSlider';
+import logger from '../../utils/logger';
 
 // Add this lightweight holdings query (adjust to your schema if needed)
 import { gql } from '@apollo/client';
@@ -142,7 +143,7 @@ const CryptoSBLOCCard: React.FC<Props> = ({ onLoanSuccess, onTopUpCollateral }) 
         Alert.alert('Error', res.data?.createSblocLoan?.message || 'Failed to create loan');
       }
     } catch (e) {
-      console.error(e);
+      logger.error('Failed to create SBLOC loan:', e);
       Alert.alert('Error', 'Failed to create SBLOC loan. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -402,7 +403,6 @@ const CryptoSBLOCCard: React.FC<Props> = ({ onLoanSuccess, onTopUpCollateral }) 
           loanUsd={parseFloat(loanAmount) || 0}
           onStressChange={(stress) => {
             // Handle stress test results
-            console.log('Stress test result:', stress);
           }}
         />
       )}

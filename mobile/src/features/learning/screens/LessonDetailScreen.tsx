@@ -3,7 +3,7 @@
  * Displays full lesson content with completion tracking
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { API_HTTP } from '../../../config/api';
 import { useAuth } from '../../../contexts/AuthContext';
 import * as Haptics from 'expo-haptics';
+import logger from '../../../utils/logger';
 
 interface LessonDetail {
   id: string;
@@ -53,23 +54,31 @@ export default function LessonDetailScreen({ navigateTo }: { navigateTo?: (scree
     ((route as any).params?.lessonId) ||
     '';
   
-  console.log('[LessonDetail] Route params:', route.params);
-  console.log('[LessonDetail] Extracted lessonId:', lessonId);
+  logger.log('[LessonDetail] Route params:', route.params);
+  logger.log('[LessonDetail] Extracted lessonId:', lessonId);
   
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState(false);
   const [lesson, setLesson] = useState<LessonDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const navigationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    console.log('[LessonDetail] useEffect triggered, lessonId:', lessonId);
+    logger.log('[LessonDetail] useEffect triggered, lessonId:', lessonId);
     if (lessonId) {
       loadLesson();
     } else {
-      console.error('[LessonDetail] No lessonId provided in route params');
+      logger.error('[LessonDetail] No lessonId provided in route params');
       setError('Lesson ID is required');
       setLoading(false);
     }
+    
+    return () => {
+      if (navigationTimeoutRef.current) {
+        clearTimeout(navigationTimeoutRef.current);
+        navigationTimeoutRef.current = null;
+      }
+    };
   }, [lessonId, token]);
 
   const loadLesson = async () => {
@@ -85,9 +94,9 @@ export default function LessonDetailScreen({ navigateTo }: { navigateTo?: (scree
         throw new Error('Lesson ID required');
       }
 
-      console.log('[LessonDetail] Loading lesson:', lessonId);
+      logger.log('[LessonDetail] Loading lesson:', lessonId);
       const url = `${API_HTTP}/api/lessons/${lessonId}`;
-      console.log('[LessonDetail] Fetching from:', url);
+      logger.log('[LessonDetail] Fetching from:', url);
       
       const response = await fetch(url, {
         method: 'GET',
@@ -104,7 +113,7 @@ export default function LessonDetailScreen({ navigateTo }: { navigateTo?: (scree
       const data = await response.json();
       setLesson(data);
     } catch (error: any) {
-      console.error('Error loading lesson:', error);
+      logger.error('Error loading lesson:', error);
       setError(error.message || 'Failed to load lesson');
     } finally {
       setLoading(false);
@@ -140,19 +149,23 @@ export default function LessonDetailScreen({ navigateTo }: { navigateTo?: (scree
       // Show achievement if any unlocked
       if (data.achievements_unlocked && data.achievements_unlocked.length > 0) {
         // TODO: Show achievement celebration
-        console.log('Achievements unlocked:', data.achievements_unlocked);
+        logger.log('Achievements unlocked:', data.achievements_unlocked);
       }
 
       // Navigate back after a short delay
-      setTimeout(() => {
+      if (navigationTimeoutRef.current) {
+        clearTimeout(navigationTimeoutRef.current);
+      }
+      navigationTimeoutRef.current = setTimeout(() => {
         if (navigateTo) {
           navigateTo('lesson-library');
         } else {
           navigation.goBack();
         }
+        navigationTimeoutRef.current = null;
       }, 1000);
     } catch (error: any) {
-      console.error('Error completing lesson:', error);
+      logger.error('Error completing lesson:', error);
       // Still mark as completed locally
       if (lesson) {
         setLesson({ ...lesson, completed: true, progress_percent: 100 });

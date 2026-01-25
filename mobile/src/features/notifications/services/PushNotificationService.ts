@@ -347,7 +347,7 @@ public async schedulePaymentReminder(
           body: `${billName}: $${amount.toFixed(2)} due ${daysUntilDue <= 1 ? 'today' : `in ${daysUntilDue} day${daysUntilDue > 1 ? 's' : ''}`}`,
           data: { billName, amount, dueDate: dueDate.toISOString(), daysUntilDue },
         },
-        { date: reminderTime }
+        { type: 'date' as const, date: reminderTime } as any
       );
       notificationIds.push(notificationId);
     }
@@ -517,8 +517,9 @@ public removeNotificationListeners(
 notificationListener: Notifications.Subscription,
 responseListener: Notifications.Subscription
 ): void {
-Notifications.removeNotificationSubscription(notificationListener);
-Notifications.removeNotificationSubscription(responseListener);
+// Subscriptions have a .remove() method
+notificationListener.remove();
+responseListener.remove();
 }
 /**
 * Check if notifications are enabled

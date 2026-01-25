@@ -1,5 +1,6 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+import logger from '../utils/logger';
 
 /**
  * API Configuration
@@ -43,15 +44,15 @@ if (isDev) {
   // User can override with env var if on physical device
   apiBase = `http://${LOCALHOST}:8000`;
   apiBaseRust = `http://${LOCALHOST}:3001`;
-  console.log('🔧 [API Config] Dev mode: using localhost for Python', apiBase);
-  console.log('🔧 [API Config] Dev mode: using localhost for Rust', apiBaseRust);
-  console.log('🔧 [API Config] If on physical device, set EXPO_PUBLIC_API_BASE_URL and EXPO_PUBLIC_RUST_API_URL');
+  logger.log('🔧 [API Config] Dev mode: using localhost for Python', apiBase);
+  logger.log('🔧 [API Config] Dev mode: using localhost for Rust', apiBaseRust);
+  logger.log('🔧 [API Config] If on physical device, set EXPO_PUBLIC_API_BASE_URL and EXPO_PUBLIC_RUST_API_URL');
 } else {
   // Production mode
   apiBase = PROD_HOST;
   apiBaseRust = PROD_HOST_RUST;
-  console.log('🔧 [API Config] Production mode (Python):', apiBase);
-  console.log('🔧 [API Config] Production mode (Rust):', apiBaseRust);
+  logger.log('🔧 [API Config] Production mode (Python):', apiBase);
+  logger.log('🔧 [API Config] Production mode (Rust):', apiBaseRust);
 }
 
 // Check for environment variable override
@@ -69,24 +70,24 @@ if (ENV_API_BASE_URL) {
     // In dev mode, NEVER use localhost from env var (it breaks physical devices)
     // Always prefer LAN IP for physical devices
     if (hasLocalhost) {
-      console.warn('⚠️ [API Config] ENV var has localhost - IGNORING (will break on physical devices)');
-      console.warn('⚠️ [API Config] ENV var value:', ENV_API_BASE_URL);
-      console.warn('⚠️ [API Config] Using LAN IP instead:', apiBase);
+      logger.warn('⚠️ [API Config] ENV var has localhost - IGNORING (will break on physical devices)');
+      logger.warn('⚠️ [API Config] ENV var value:', ENV_API_BASE_URL);
+      logger.warn('⚠️ [API Config] Using LAN IP instead:', apiBase);
       // Don't use the env var - keep using LAN IP
     } else if (hasOldIP) {
-      console.warn('⚠️ [API Config] ENV var has old/stale IP in dev mode!');
-      console.warn('⚠️ [API Config] ENV var value:', ENV_API_BASE_URL);
-      console.warn('⚠️ [API Config] Using current LAN IP instead:', apiBase);
+      logger.warn('⚠️ [API Config] ENV var has old/stale IP in dev mode!');
+      logger.warn('⚠️ [API Config] ENV var value:', ENV_API_BASE_URL);
+      logger.warn('⚠️ [API Config] Using current LAN IP instead:', apiBase);
       // Don't use the env var - keep using current LAN IP
     } else {
       // For physical devices, allow LAN IP override (if it's a valid LAN IP)
       apiBase = ENV_API_BASE_URL;
-      console.log('🔧 [API Config] Using ENV var (LAN IP for physical device):', apiBase);
+      logger.log('🔧 [API Config] Using ENV var (LAN IP for physical device):', apiBase);
     }
   } else {
     // Production: use env var as-is
     apiBase = ENV_API_BASE_URL;
-    console.log('🔧 [API Config] Using ENV var (production):', apiBase);
+    logger.log('🔧 [API Config] Using ENV var (production):', apiBase);
   }
 }
 
@@ -103,11 +104,11 @@ if (ENV_API_BASE_URL_RUST) {
   if (isDev && hasLocalhost) {
     // Allow localhost override in dev (for simulator)
     API_RUST_BASE = ENV_API_BASE_URL_RUST;
-    console.log('🔧 [API Config] Using ENV var for Rust backend (localhost for simulator):', API_RUST_BASE);
+    logger.log('🔧 [API Config] Using ENV var for Rust backend (localhost for simulator):', API_RUST_BASE);
   } else if (!hasLocalhost || !isDev) {
     // Use env var if it's not localhost (physical device) or in production
     API_RUST_BASE = ENV_API_BASE_URL_RUST;
-    console.log('🔧 [API Config] Using ENV var for Rust backend:', API_RUST_BASE);
+    logger.log('🔧 [API Config] Using ENV var for Rust backend:', API_RUST_BASE);
   }
 }
 
@@ -132,18 +133,18 @@ export const API_WS      = API_BASE.startsWith("https")
   : API_BASE.replace("http","ws").replace(/\/+$/, '') + "/ws/";
 
 // Debug logging - CRITICAL for debugging
-console.log('📡 [API Config] ========================================');
-console.log('📡 [API Config] Final configuration:');
-console.log('📡 [API Config]   API_BASE:', API_BASE);
-console.log('📡 [API Config]   API_RUST_BASE:', API_RUST_BASE);
-console.log('📡 [API Config]   API_HTTP:', API_HTTP);
-console.log('📡 [API Config]   API_GRAPHQL:', API_GRAPHQL);
-console.log('📡 [API Config]   API_AUTH:', API_AUTH);
-console.log('📡 [API Config]   TTS_API_BASE_URL:', TTS_API_BASE_URL);
-console.log('📡 [API Config]   Platform:', Platform.OS);
-console.log('📡 [API Config]   isDev:', isDev);
-console.log('📡 [API Config]   ENV_API_BASE_URL:', ENV_API_BASE_URL);
-console.log('📡 [API Config] ========================================');
+logger.log('📡 [API Config] ========================================');
+logger.log('📡 [API Config] Final configuration:');
+logger.log('📡 [API Config]   API_BASE:', API_BASE);
+logger.log('📡 [API Config]   API_RUST_BASE:', API_RUST_BASE);
+logger.log('📡 [API Config]   API_HTTP:', API_HTTP);
+logger.log('📡 [API Config]   API_GRAPHQL:', API_GRAPHQL);
+logger.log('📡 [API Config]   API_AUTH:', API_AUTH);
+logger.log('📡 [API Config]   TTS_API_BASE_URL:', TTS_API_BASE_URL);
+logger.log('📡 [API Config]   Platform:', Platform.OS);
+logger.log('📡 [API Config]   isDev:', isDev);
+logger.log('📡 [API Config]   ENV_API_BASE_URL:', ENV_API_BASE_URL);
+logger.log('📡 [API Config] ========================================');
 
 // Legacy exports for backward compatibility
 export const API_BASE_URL = API_HTTP;

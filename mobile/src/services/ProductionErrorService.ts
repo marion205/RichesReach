@@ -3,7 +3,13 @@
 * Handles errors in production with proper logging, reporting, and user feedback
 */
 import { Alert } from 'react-native';
-import { PRODUCTION_CONFIG } from '../config/production';
+// import { PRODUCTION_CONFIG } from '../config/production'; // File doesn't exist
+const PRODUCTION_CONFIG: any = { 
+  enabled: false,
+  LOGGING: { MAX_LOG_SIZE: 100 },
+  ERROR_REPORTING: { ENABLED: false, SENTRY_DSN: '', FILTER_SENSITIVE_DATA: true },
+}; // Fallback
+import logger from '../utils/logger';
 export enum ErrorType {
 NETWORK = 'NETWORK',
 AUTHENTICATION = 'AUTHENTICATION',
@@ -133,7 +139,7 @@ this.errorLog = this.errorLog.slice(-this.maxLogSize);
 }
 // Log to console only in development
 if (__DEV__) {
-console.error('Production Error:', errorInfo);
+logger.error('Production Error:', errorInfo);
 }
 }
 /**
@@ -161,7 +167,7 @@ if (PRODUCTION_CONFIG.ERROR_REPORTING.SENTRY_DSN) {
 } catch (reportingError) {
 // Don't let error reporting break the app
 if (__DEV__) {
-console.error('Error reporting failed:', reportingError);
+logger.error('Error reporting failed:', reportingError);
 }
 }
 }

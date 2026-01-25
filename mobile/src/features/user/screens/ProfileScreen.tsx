@@ -27,6 +27,7 @@ import { PrivacyDashboard } from '../../privacy/components/PrivacyDashboard';
 import { useAuth } from '../../../contexts/AuthContext';
 import AccountManagementScreen from './AccountManagementScreen';
 import LicensingDisclosureScreen from '../../../components/LicensingDisclosureScreen';
+import logger from '../../../utils/logger';
 
 // --- Design tokens (light theme) ---
 const UI = {
@@ -151,7 +152,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
   
   // Helper function to navigate - tries React Navigation first, then fallback
   const navigate = (screen: string, params?: any) => {
-    console.log('ProfileScreen: Navigating to', screen, params);
+    logger.log('ProfileScreen: Navigating to', screen, params);
     try {
       // Try direct navigation first
       navigation.navigate(screen as never, params as never);
@@ -160,7 +161,7 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
       try {
         globalNavigate(screen, params);
       } catch (globalError) {
-        console.error('ProfileScreen: Navigation error', globalError);
+        logger.error('ProfileScreen: Navigation error', globalError);
         // Final fallback to navigateTo prop
         navigateTo?.(screen, params);
       }
@@ -187,9 +188,9 @@ const ProfileScreen: React.FC<ProfileScreenProps> = ({ navigateTo, onLogout }) =
           errorMessage.includes('Not authenticated') ||
           errorMessage.includes('401') ||
           errorMessage.includes('Unauthorized')) {
-        console.warn('⚠️ Authentication error in Profile, clearing token');
+        logger.warn('⚠️ Authentication error in Profile, clearing token');
         // Clear token to trigger login screen
-        AsyncStorage.removeItem('token').catch(console.error);
+        AsyncStorage.removeItem('token').catch((err) => logger.error('Failed to remove token:', err));
       }
     }
   }, [meError]);
@@ -206,7 +207,7 @@ const { data: portfoliosData, loading: portfoliosLoading, error: portfoliosError
 // Fetch portfolios in background if cache miss
 useEffect(() => {
   if (!portfoliosData && !portfoliosLoading && meData?.me?.id) {
-    client.query({ query: GET_MY_PORTFOLIOS, fetchPolicy: 'network-only' }).catch(console.warn);
+    client.query({ query: GET_MY_PORTFOLIOS, fetchPolicy: 'network-only' }).catch((err) => logger.warn('Failed to fetch portfolios:', err));
   }
 }, [portfoliosData, portfoliosLoading, meData, client]);
 
@@ -222,7 +223,7 @@ returnPartialData: true,
 // Fetch watchlist in background if cache miss
 useEffect(() => {
   if (!watchlistData && !watchlistLoading && meData?.me?.id) {
-    client.query({ query: GET_MY_WATCHLIST, fetchPolicy: 'network-only' }).catch(console.warn);
+    client.query({ query: GET_MY_WATCHLIST, fetchPolicy: 'network-only' }).catch((err) => logger.warn('Failed to fetch watchlist:', err));
   }
 }, [watchlistData, watchlistLoading, meData, client]);
 
@@ -240,7 +241,7 @@ const effectiveMeData = useMemo(() => {
   }
   // Production: Return null if no data - let UI handle loading/error states
   if (meError) {
-    console.error('❌ Error loading user profile:', meError.message);
+    logger.error('❌ Error loading user profile:', meError.message);
   }
   return null;
 }, [meData, meError]);
@@ -291,7 +292,7 @@ refreshQueries.push(client.query({ query: GET_MY_WATCHLIST, fetchPolicy: 'networ
 }
 await Promise.all(refreshQueries);
 } catch (error) {
-console.warn('Refresh error:', error);
+logger.warn('Refresh error:', error);
 // Failed to refresh - continue with cached data
 } finally {
 setRefreshing(false);
@@ -322,7 +323,7 @@ const effectiveWatchlistData = useMemo(() => {
 }, [watchlistData, watchlistLoadingTimeout, watchlistError]);
 
 // Debug logging
-console.log('Portfolio Data Debug:', {
+logger.log('Portfolio Data Debug:', {
   portfoliosData,
   portfolioValue,
   investmentGoals,
@@ -331,23 +332,23 @@ console.log('Portfolio Data Debug:', {
 
 const handleLogout = async () => {
 try {
-    console.log('🔴 Logout button pressed');
+    logger.log('🔴 Logout button pressed');
     
     // Clear Apollo cache
     await client.cache.reset();
-    console.log('✅ ProfileScreen: Apollo cache cleared');
+    logger.log('✅ ProfileScreen: Apollo cache cleared');
     
     // ✅ ONLY call AuthContext logout - no navigation here
     // The root App will handle rendering LoginScreen based on auth state
     await authLogout();
-    console.log('✅ ProfileScreen: AuthContext logout completed');
+    logger.log('✅ ProfileScreen: AuthContext logout completed');
     
     // Also call onLogout if provided (for backwards compatibility)
     if (onLogout) {
         await onLogout();
     }
 } catch (error) {
-    console.error('❌ ProfileScreen logout error:', error);
+    logger.error('❌ ProfileScreen logout error:', error);
     Alert.alert('Error', 'Failed to logout properly. Please try again.');
 }
 };
@@ -355,7 +356,7 @@ try {
 // Mock data ensures user, portfolios, and watchlist are always available
 // Handle error state gracefully - use demo user if query fails
 if (meError && !meData) {
-  console.warn('ProfileScreen: Error loading user data, using demo user:', meError);
+  logger.warn('ProfileScreen: Error loading user data, using demo user:', meError);
   // Continue rendering with demo user - don't block the UI
 }
 return (

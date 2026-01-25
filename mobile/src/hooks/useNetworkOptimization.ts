@@ -88,7 +88,7 @@ export const useNetworkOptimization = (config: Partial<NetworkOptimizationConfig
         ...prev,
         isOnline: netInfo.isConnected ?? false,
         connectionType: netInfo.type,
-        isDataSaverEnabled: netInfo.isConnectionExpensive ?? false,
+        isDataSaverEnabled: (netInfo as any).isConnectionExpensive ?? false,
       }));
     });
     

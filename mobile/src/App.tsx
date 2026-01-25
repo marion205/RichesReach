@@ -16,7 +16,7 @@ import 'react-native-url-polyfill/auto';
 // Note: LogBox setup moved to index.js (before App import) to catch early errors
 
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator, LogBox, DeviceEventEmitter } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, LogBox, DeviceEventEmitter, TouchableOpacity } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import ApolloProvider from './ApolloProvider';
@@ -33,6 +33,7 @@ import ARPortfolioPreview from './components/ARPortfolioPreview';
 import SentryTestButton from './components/SentryTestButton';
 import OfflineInsightsService from './services/OfflineInsightsService';
 import logger from './utils/logger';
+import { TIMING } from './config/constants';
 // Use only Expo Go compatible services to avoid "Exception in HostFunction" errors
 import expoGoCompatibleNotificationService from './features/notifications/services/ExpoGoCompatibleNotificationService';
 import expoGoCompatiblePriceAlertService from './features/stocks/services/ExpoGoCompatiblePriceAlertService';
@@ -123,6 +124,9 @@ import StrategyDetailScreen from './features/raha/screens/StrategyDetailScreen';
 import BacktestViewerScreen from './features/raha/screens/BacktestViewerScreen';
 import TheWhisperScreen from './features/raha/screens/TheWhisperScreen';
 import ProLabsScreen from './features/raha/screens/ProLabsScreen';
+import StrategyBuilderScreen from './features/raha/screens/StrategyBuilderScreen';
+import MLTrainingScreen from './features/raha/screens/MLTrainingScreen';
+import StrategyBlendBuilderScreen from './features/raha/screens/StrategyBlendBuilderScreen';
 // Components
 import { TopHeader, PersonalizedDashboard } from './components';
 // Services
@@ -255,7 +259,7 @@ React.useEffect(() => {
         });
       }
     }
-  }, 50); // Check every 50ms for faster response
+  }, TIMING.NAVIGATION_POLL_INTERVAL);
   
   return () => {
     clearInterval(pollInterval);
@@ -337,19 +341,19 @@ useEffect(() => {
 
 // Global listener for calm_goal_mic event (works from any screen)
 useEffect(() => {
-  console.log('🎤 [App] Registering global calm_goal_mic event listener');
+  logger.log('🎤 [App] Registering global calm_goal_mic event listener');
   const sub = DeviceEventEmitter.addListener('calm_goal_mic', () => {
-    console.log('🎤 [App] Received calm_goal_mic event globally, navigating to home and opening sheet');
+    logger.log('🎤 [App] Received calm_goal_mic event globally, navigating to home and opening sheet');
     // Navigate to home first
     setCurrentScreen('home');
     // Then open the Calm Goal sheet after a short delay to ensure HomeScreen is mounted
     setTimeout(() => {
       setShowCalmSheet(true);
-      console.log('🎤 [App] Calm Goal sheet should now be visible');
+      logger.log('🎤 [App] Calm Goal sheet should now be visible');
     }, 500);
   });
   return () => {
-    console.log('🎤 [App] Removing global calm_goal_mic event listener');
+    logger.log('🎤 [App] Removing global calm_goal_mic event listener');
     sub.remove();
   };
 }, []);
@@ -357,7 +361,7 @@ useEffect(() => {
 // Close CalmGoalSheet when navigating away from home screen
 useEffect(() => {
   if (currentScreen !== 'home' && showCalmSheet) {
-    console.log('🎤 [App] Closing CalmGoalSheet because we navigated away from home');
+    logger.log('🎤 [App] Closing CalmGoalSheet because we navigated away from home');
     setShowCalmSheet(false);
   }
 }, [currentScreen, showCalmSheet]);
@@ -394,7 +398,7 @@ if (priceAlertService) {
       // }
       
       // Cancel any existing Dawn Ritual notifications
-      const { Notifications } = await import('expo-notifications');
+      const Notifications = (await import('expo-notifications')).default;
       await Notifications.cancelScheduledNotificationAsync('dawn_ritual_daily');
 } catch (error) {
 logger.error('Error initializing services:', error);
@@ -571,7 +575,7 @@ logger.log('🔍 renderScreen called:', { currentScreen, isLoggedIn, isLoading, 
     'bank-accounts',
   ] as const);
   
-  const isShellScreen = SHELL_SCREENS.has(currentScreen);
+  const isShellScreen = SHELL_SCREENS.has(currentScreen as typeof SHELL_SCREENS extends Set<infer T> ? T : never);
   
   // ============================================================================
   // 1) AUTH & ONBOARDING GATES
@@ -681,7 +685,7 @@ logger.log('🔍 renderScreen called:', { currentScreen, isLoggedIn, isLoading, 
             (window as any).__navigateToGlobal(targetScreen, params);
           }
         }
-        return <BankAccountScreen navigateTo={navigateTo || ((window as any)?.__navigateToGlobal)} navigation={{ navigate: navigateTo || ((window as any)?.__navigateToGlobal), goBack: () => setCurrentScreen('home') }} />;
+        return <BankAccountScreen navigateTo={navigateTo || ((window as any)?.__navigateToGlobal)} />;
       case 'SBLOCBankSelection':
         const sblocParams = (window as any).__sblocParams || { amountUsd: 25000 };
         logger.log('🔍 Rendering SBLOCBankSelectionScreen with params:', sblocParams);
@@ -694,9 +698,9 @@ logger.log('🔍 renderScreen called:', { currentScreen, isLoggedIn, isLoading, 
           route={{ params: sblocParams }} 
         />;
       case 'SBLOCApplication':
-        return <SBLOCApplicationScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionUrl: '', referral: { id: '', bank: { id: '', name: '', minLtv: 0, maxLtv: 0, minLineUsd: 0, maxLineUsd: 0, typicalAprMin: 0, typicalAprMax: 0, isActive: true, priority: 0 } } } }} />;
+        return <SBLOCApplicationScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionUrl: '', referral: { id: '', requestedAmountUsd: 0, status: 'pending' as any, portfolioValueUsd: 0, eligibleCollateralUsd: 0, estimatedLtv: 0, consentGiven: false, dataScope: 'full' as any, timeline: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), bank: { id: '', name: '', minLtv: 0, maxLtv: 0, minLineUsd: 0, maxLineUsd: 0, typicalAprMin: 0, typicalAprMax: 0, isActive: true, priority: 0 } } } }} />;
       case 'SblocStatus':
-        return <SBLOCApplicationScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionId: '' } }} />;
+        return <SBLOCApplicationScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('SBLOCBankSelection') }} route={{ params: { sessionUrl: '', referral: { id: '', requestedAmountUsd: 0, status: 'pending' as any, portfolioValueUsd: 0, eligibleCollateralUsd: 0, estimatedLtv: 0, consentGiven: false, dataScope: 'full' as any, timeline: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), bank: { id: '', name: '', minLtv: 0, maxLtv: 0, minLineUsd: 0, maxLineUsd: 0, typicalAprMin: 0, typicalAprMax: 0, isActive: true, priority: 0 } } } }} />;
       default:
         // If not logged in and not on a shell screen, show login
         if (!isLoggedIn) {
@@ -723,6 +727,9 @@ logger.log('🔍 renderScreen called:', { currentScreen, isLoggedIn, isLoading, 
     'raha-strategy-store',
     'raha-strategy-detail',
     'raha-backtest-viewer',
+    'strategy-builder',
+    'ml-training',
+    'strategy-blend-builder',
   ];
   
   if (isLoggedIn && hasCompletedOnboarding && !isShellScreen && !screensThatNeedDirectRendering.includes(currentScreen)) {
@@ -838,7 +845,7 @@ return (
 case 'tutor':
 return <TutorScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('home') }} />;
 case 'scan-playbook':
-return <ScanPlaybookScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('ai-scans') }} route={{ params: { scan: { id: '', name: '', description: '', category: '', icon: '', tags: [], isActive: true } } }} />;
+return <ScanPlaybookScreen navigation={{ navigate: navigateTo, goBack: () => setCurrentScreen('ai-scans') }} route={{ params: { scan: { id: crypto.randomUUID() as any, name: '', description: '', category: 'momentum', riskLevel: 'low', timeHorizon: 'intraday', isActive: true, parameters: { universe: [], minPrice: 1, maxPrice: 1000, minVolume: 1000, minMarketCap: 0, sectors: [], technicalIndicators: [], fundamentalFilters: [], altDataSources: [], riskTolerance: 'low', timeHorizon: 'intraday' } } } }} />;
 case 'trading':
 return <TradingScreen navigateTo={navigateTo} />;
 case 'day-trading':
@@ -865,6 +872,18 @@ return <DayTradingScreen navigateTo={navigateTo} />;
           // Pro/Labs - Advanced RAHA controls (Strategy Store, Backtest Viewer, etc.)
           logger.log('🔍 Rendering ProLabsScreen');
           return <ProLabsScreen navigateTo={navigateTo} />;
+        case 'strategy-builder':
+          // Strategy Builder - Create custom trading strategies
+          logger.log('🔍 Rendering StrategyBuilderScreen');
+          return <StrategyBuilderScreen navigateTo={navigateTo} onBack={() => navigateTo('pro-labs')} />;
+        case 'ml-training':
+          // ML Model Training - Train custom models on trading history
+          logger.log('🔍 Rendering MLTrainingScreen');
+          return <MLTrainingScreen navigateTo={navigateTo} onBack={() => navigateTo('pro-labs')} />;
+        case 'strategy-blend-builder':
+          // Strategy Blend Builder - Combine strategies with custom weights
+          logger.log('🔍 Rendering StrategyBlendBuilderScreen');
+          return <StrategyBlendBuilderScreen navigateTo={navigateTo} onBack={() => navigateTo('pro-labs')} />;
         case 'the-whisper':
           // The Whisper - The one magical P&L moment
           // This is accessed from DayTradingScreen when user wants to see their likely outcome
@@ -947,7 +966,7 @@ return <TradingCoachScreen />;
 case 'ai-trading-coach':
 return <AITradingCoachScreen onNavigate={navigateTo} />;
 case 'subscription':
-return <SubscriptionScreen />;
+return <SubscriptionScreen navigateTo={navigateTo} />;
 // Version 2 New Routes
 case 'viral-growth':
 return <ViralGrowthSystem onNavigate={navigateTo} />;

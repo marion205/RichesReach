@@ -553,7 +553,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  categoryText: {
+  categoryTextSecondary: {
     fontSize: 12,
     color: '#6B7280',
     marginLeft: 4,

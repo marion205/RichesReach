@@ -13,6 +13,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import { API_RUST_BASE } from '../../config/api';
 import QuantTerminalWidget from './QuantTerminalWidget';
+import logger from '../../utils/logger';
 
 // REST API response type (matches Rust backend)
 interface ForexAnalysisResponse {
@@ -262,7 +263,7 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
       const data: ForexAnalysisResponse = await response.json();
       setAnalysis(data);
     } catch (err: any) {
-      console.error('Forex analysis error:', err);
+      logger.error('Forex analysis error:', err);
       setError(err);
       setAnalysis(null);
     } finally {

@@ -399,7 +399,7 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           autoCorrect={false}
           accessibilityLabel="Stock symbol input"
           accessibilityHint="Enter the stock symbol you want to trade, for example AAPL for Apple"
-          accessibilityRole="textbox"
+          
         />
         {validations.symbol.touched && !validations.symbol.isValid && (
           <Text style={styles.errorText}>{validations.symbol.error}</Text>
@@ -428,7 +428,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           keyboardType="numeric"
           accessibilityLabel="Quantity input"
           accessibilityHint="Enter the number of shares you want to buy or sell"
-          accessibilityRole="textbox"
         />
         {validations.quantity.touched && !validations.quantity.isValid && (
           <Text style={styles.errorText}>{validations.quantity.error}</Text>
@@ -458,7 +457,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             keyboardType="numeric"
             accessibilityLabel="Limit price input"
             accessibilityHint="Enter the maximum price you're willing to pay per share for a buy order, or minimum price for a sell order"
-            accessibilityRole="textbox"
           />
           {validations.price.touched && !validations.price.isValid && (
             <Text style={styles.errorText}>{validations.price.error}</Text>
@@ -500,7 +498,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
             keyboardType="numeric"
             accessibilityLabel="Stop price input"
             accessibilityHint="Enter the stop price that will trigger this order"
-            accessibilityRole="textbox"
           />
           {validations.stopPrice.touched && !validations.stopPrice.isValid && (
             <Text style={styles.errorText}>{validations.stopPrice.error}</Text>
@@ -553,9 +550,8 @@ export const OrderForm: React.FC<OrderFormProps> = ({
                       entryPrice={currentPrice}
                       stopPrice={stopPriceNum}
                       targetPrice={targetPrice}
-                      side={orderSide.toUpperCase() as 'BUY' | 'SELL'}
-                      showLabels={true}
-                      height={180}
+                      riskAmount={Math.abs(currentPrice - stopPriceNum) * parseFloat(quantity || '0')}
+                      rewardAmount={Math.abs(targetPrice - currentPrice) * parseFloat(quantity || '0')}
                     />
                   </View>
                 );
@@ -575,7 +571,6 @@ export const OrderForm: React.FC<OrderFormProps> = ({
           placeholder="Add a note about this order"
           accessibilityLabel="Order notes input"
           accessibilityHint="Optional: Add a note or reminder about this order"
-          accessibilityRole="textbox"
         />
       </View>
 
@@ -922,6 +917,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#92400E',
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  inputValid: {
+    borderColor: C.green,
+    borderWidth: 2,
+  },
+  inputError: {
+    borderColor: C.red,
+    borderWidth: 2,
+  },
+  hintText: {
+    fontSize: 12,
+    color: C.sub,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  errorText: {
+    fontSize: 12,
+    color: C.red,
+    marginTop: 4,
   },
 });
 

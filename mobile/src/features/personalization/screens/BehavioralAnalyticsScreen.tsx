@@ -10,6 +10,7 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import logger from '../../../utils/logger';
 
 interface BehaviorPattern {
   id: string;
@@ -114,7 +115,7 @@ const BehavioralAnalyticsScreen: React.FC = () => {
       setEngagementProfile(mockProfile);
       setChurnPrediction(mockChurn);
     } catch (error) {
-      console.error('Error loading behavioral analytics data:', error);
+      logger.error('Error loading behavioral analytics data:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);

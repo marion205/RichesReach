@@ -96,6 +96,68 @@ export default function OptionsPositionCard({
   const isProfit = position.unrealized_pl >= 0;
   const isLoss = position.unrealized_pl < 0;
 
+  const handleClosePosition = async () => {
+    setClosingPosition(true);
+    try {
+      const result = await closePosition({
+        variables: {
+          symbol: position.symbol,
+          qty: position.qty,
+        },
+      });
+
+      if (result.data?.closeOptionsPosition?.success) {
+        Alert.alert('Success', 'Position closed successfully');
+        onClosePosition?.();
+        onPositionUpdated?.();
+      } else {
+        Alert.alert('Error', result.data?.closeOptionsPosition?.message || 'Failed to close position');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to close position');
+    } finally {
+      setClosingPosition(false);
+    }
+  };
+
+  const handleTakeProfits = async () => {
+    if (!takeProfitPrice) {
+      Alert.alert('Error', 'Please enter a target price');
+      return;
+    }
+
+    const price = parseFloat(takeProfitPrice);
+    if (isNaN(price) || price <= 0) {
+      Alert.alert('Error', 'Please enter a valid price');
+      return;
+    }
+
+    setTakingProfits(true);
+    try {
+      const result = await takeProfits({
+        variables: {
+          symbol: position.symbol,
+          qty: position.qty,
+          targetPrice: price,
+        },
+      });
+
+      if (result.data?.takeOptionsProfits?.success) {
+        Alert.alert('Success', 'Take profit order placed successfully');
+        setShowTakeProfitModal(false);
+        setTakeProfitPrice('');
+        onTakeProfits?.();
+        onPositionUpdated?.();
+      } else {
+        Alert.alert('Error', result.data?.takeOptionsProfits?.message || 'Failed to place take profit order');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to place take profit order');
+    } finally {
+      setTakingProfits(false);
+    }
+  };
+
   // Generate AI recommendation
   const recommendation = useMemo(() => {
     const bullets: string[] = [];
@@ -278,62 +340,6 @@ export default function OptionsPositionCard({
       </Modal>
     </View>
   );
-
-  const handleClosePosition = async () => {
-    setClosingPosition(true);
-    try {
-      const result = await closePosition({
-        variables: {
-          symbol: position.symbol,
-          quantity: position.qty,
-        },
-      });
-
-      const response = result.data?.closeOptionsPosition;
-      if (response?.success) {
-        Alert.alert('Position Closed', `Order ID: ${response.orderId}`);
-        onPositionUpdated?.();
-      } else {
-        Alert.alert('Error', response?.error || 'Failed to close position');
-      }
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to close position');
-    } finally {
-      setClosingPosition(false);
-    }
-  };
-
-  const handleTakeProfits = async () => {
-    if (!takeProfitPrice) {
-      Alert.alert('Error', 'Please enter a target price');
-      return;
-    }
-
-    setTakingProfits(true);
-    try {
-      const result = await takeProfits({
-        variables: {
-          symbol: position.symbol,
-          quantity: position.qty,
-          limitPrice: parseFloat(takeProfitPrice),
-        },
-      });
-
-      const response = result.data?.takeOptionsProfits;
-      if (response?.success) {
-        Alert.alert('Take Profit Order Placed', `Order ID: ${response.orderId}`);
-        setShowTakeProfitModal(false);
-        setTakeProfitPrice('');
-        onPositionUpdated?.();
-      } else {
-        Alert.alert('Error', response?.error || 'Failed to place order');
-      }
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to place order');
-    } finally {
-      setTakingProfits(false);
-    }
-  };
 }
 
 const styles = StyleSheet.create({
@@ -465,6 +471,76 @@ const styles = StyleSheet.create({
   },
   actionButtonTextDanger: {
     color: '#DC2626',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginBottom: 20,
+  },
+  modalInputGroup: {
+    marginBottom: 20,
+  },
+  modalLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: '#111827',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalCancelButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  modalConfirmButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: '#059669',
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
 });
 

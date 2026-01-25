@@ -15,6 +15,7 @@ import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import { NewsItem } from '../types/news';
 import NewsService from '../services/NewsService';
+import logger from '../../../utils/logger';
 
 const { width, height } = Dimensions.get('window');
 
@@ -61,7 +62,7 @@ const NewsFeed: React.FC = () => {
       }
       setNewsItems(news);
     } catch (e) {
-      console.error('Error loading news by category:', e);
+      logger.error('Error loading news by category:', e);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -93,7 +94,6 @@ const NewsFeed: React.FC = () => {
           { text: 'Close', style: 'default' },
           { text: 'Read More', style: 'default', onPress: () => {
             // In a real app, this would open the full article URL
-            console.log(`Opening full article: ${newsItem.title}`);
             // You could use Linking.openURL(newsItem.url) if you had real URLs
           }}
         ]
@@ -102,19 +102,12 @@ const NewsFeed: React.FC = () => {
   };
 
   const handleVideoPress = async (newsItem: NewsItem) => {
-    console.log(`🎬 Video press for ${newsItem.id}:`, {
-      currentSelected: selectedNews?.id,
-      currentPlaying: isPlaying,
-      newItem: newsItem.id
-    });
-    
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
     if (selectedNews?.id === newsItem.id) {
       // Same video - toggle play/pause or restart if finished
       if (isPlaying) {
         setIsPlaying(false);
-        console.log(`⏸️ Pausing video`);
       } else {
         // Check if video finished - if so, restart from beginning
         const videoRef = videoRefs.current[newsItem.id];
@@ -123,13 +116,11 @@ const NewsFeed: React.FC = () => {
             const status = await videoRef.getStatusAsync();
             if (status.isLoaded && status.didJustFinish) {
               await videoRef.replayAsync();
-              console.log(`🔄 Restarting finished video from beginning`);
             } else {
               setIsPlaying(true);
-              console.log(`▶️ Resuming video`);
             }
           } catch (error) {
-            console.error('Error checking video status:', error);
+            logger.error('Error checking video status:', error);
             setIsPlaying(true);
           }
         } else {
@@ -140,7 +131,6 @@ const NewsFeed: React.FC = () => {
       // Different video - start new one
       setSelectedNews(newsItem);
       setIsPlaying(true);
-      console.log(`▶️ Starting new video: ${newsItem.id}`);
     }
   };
 
@@ -226,11 +216,9 @@ const NewsFeed: React.FC = () => {
                   useNativeControls={false}
                   isMuted={false}
                   onPlaybackStatusUpdate={(status) => {
-                    console.log(`Video ${item.id} status:`, status);
                     if (status.isLoaded) {
                       // Store duration when video loads
                       if (status.durationMillis && !videoDurations[item.id]) {
-                        console.log(`📏 Storing duration for ${item.id}: ${status.durationMillis}ms`);
                         setVideoDurations(prev => ({
                           ...prev,
                           [item.id]: status.durationMillis || 0
@@ -239,16 +227,13 @@ const NewsFeed: React.FC = () => {
                       // Auto-pause when video finishes
                       if (status.didJustFinish) {
                         setIsPlaying(false);
-                        console.log(`Video ${item.id} finished, pausing`);
                       }
                     }
                   }}
-                  onError={(err) => console.error(`Video ${item.id} error:`, err)}
-                  onLoadStart={() => console.log(`Video ${item.id} load start`)}
+                  onError={(err) => logger.error(`Video ${item.id} error:`, err)}
+                  onLoadStart={() => {}}
                   onLoad={(status) => {
-                    console.log(`Video ${item.id} loaded:`, status);
                     if (status.isLoaded && status.durationMillis) {
-                      console.log(`📏 onLoad storing duration for ${item.id}: ${status.durationMillis}ms`);
                       setVideoDurations(prev => ({
                         ...prev,
                         [item.id]: status.durationMillis || 0

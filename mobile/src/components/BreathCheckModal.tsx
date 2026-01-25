@@ -33,6 +33,17 @@ export default function BreathCheckModal({ visible, onClose, onComplete }: Breat
   const [timeRemaining, setTimeRemaining] = useState(BREATH_CYCLE_DURATION);
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const opacityAnim = useRef(new Animated.Value(0.5)).current;
+  const completeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (completeTimeoutRef.current) {
+        clearTimeout(completeTimeoutRef.current);
+        completeTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!visible) {
@@ -97,9 +108,13 @@ export default function BreathCheckModal({ visible, onClose, onComplete }: Breat
       // Check if all cycles complete
       if (cycleNumber >= TOTAL_CYCLES) {
         // Complete the exercise
-        setTimeout(() => {
+        if (completeTimeoutRef.current) {
+          clearTimeout(completeTimeoutRef.current);
+        }
+        completeTimeoutRef.current = setTimeout(() => {
           const suggestion = { type: 'dca' as const, amount: 25, instrument: 'VTI' };
           onComplete(suggestion);
+          completeTimeoutRef.current = null;
         }, 500);
         return;
       }

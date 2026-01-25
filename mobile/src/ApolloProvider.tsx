@@ -3,6 +3,7 @@ import React, { useMemo } from 'react';
 import { ApolloProvider as Provider } from '@apollo/client';
 import { makeApolloClient, getApiBase } from './lib/apolloFactory';
 import JWTAuthService from './features/auth/services/JWTAuthService';
+import logger from './utils/logger';
 
 // Quick health check probe - safe version
 (async () => {
@@ -19,32 +20,37 @@ import JWTAuthService from './features/auth/services/JWTAuthService';
           signal: controller.signal,
         } as RequestInit);
         clearTimeout(timeoutId);
-        console.log('[health] Status:', response.status, 'Text:', await response.text());
+        logger.log('[health] Status:', response.status);
       } catch (fetchError) {
         clearTimeout(timeoutId);
         throw fetchError;
       }
     } else {
-      console.log('[health] Skipping - no API base URL set yet');
+      logger.log('[health] Skipping - no API base URL set yet');
     }
   } catch (e: any) {
-    console.log('[health:error]', e?.message || 'Unknown error');
+    logger.log('[health:error]', e?.message || 'Unknown error');
   }
 })();
 
 export default function ApolloProvider({ children }: { children: React.ReactNode }) {
   const client = useMemo(() => {
-    console.log('[ApolloProvider] Creating Apollo client...');
+    logger.log('[ApolloProvider] Creating Apollo client...');
     const apolloClient = makeApolloClient();
     // Initialize the JWT service with the Apollo client
     JWTAuthService.getInstance().setApolloClient(apolloClient);
-    console.log('[ApolloProvider] Apollo client created successfully');
+    logger.log('[ApolloProvider] Apollo client created successfully');
     return apolloClient;
   }, []);
 
   if (__DEV__) {
-    console.log('🔌 GRAPHQL_URL:', process.env.EXPO_PUBLIC_GRAPHQL_URL);
+    logger.log('🔌 GRAPHQL_URL:', process.env.EXPO_PUBLIC_GRAPHQL_URL);
   }
 
   return <Provider client={client}>{children}</Provider>;
 }
+
+// Export client getter function for direct access (if needed)
+export const getApolloClient = () => {
+  return makeApolloClient();
+};

@@ -158,7 +158,7 @@ export function MainScreenRenderer({
                 // Handle params update if needed
               },
             }}
-            route={{ params: stockDetailParams }}
+            route={{ params: { ...stockDetailParams, symbol: (stockDetailParams.symbol as string) || '' } }}
           />
         </Suspense>
       );
@@ -294,12 +294,13 @@ export function MainScreenRenderer({
           route={{
             params: {
               scan: {
-                id: '',
+                id: '' as any, // UUID type - empty string for placeholder
                 name: '',
                 description: '',
-                category: '',
-                icon: '',
-                tags: [],
+                category: 'momentum' as any, // ScanCategory type
+                riskLevel: 'medium' as any, // RiskLevel type
+                timeHorizon: 'short' as any, // TimeHorizon type
+                parameters: {} as any, // ScanParameters type
                 isActive: true,
               },
             },

@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/Feather';
 import { familySharingService, FamilyGroup, FamilyMember } from '../services/FamilySharingService';
+import logger from '../../../utils/logger';
 
 interface FamilyManagementModalProps {
   visible: boolean;
@@ -52,7 +53,7 @@ export const FamilyManagementModal: React.FC<FamilyManagementModalProps> = ({
         onFamilyCreated(group);
       }
     } catch (error: any) {
-      console.error('[FamilyManagement] Failed to load group:', error);
+      logger.error('[FamilyManagement] Failed to load group:', error);
       // Don't show alert for network timeouts or 404s (no group exists yet)
       // Only show alert for unexpected errors
       if (error?.message && 
@@ -80,7 +81,7 @@ export const FamilyManagementModal: React.FC<FamilyManagementModalProps> = ({
       }
       Alert.alert('Success', 'Family group created! Invite members to share your orb.');
     } catch (error: any) {
-      console.error('[FamilyManagement] Create family group error:', error);
+      logger.error('[FamilyManagement] Create family group error:', error);
       const errorMessage = (error?.message || 'Unknown error occurred').toLowerCase();
       
       // If user already has a family group, load it instead of showing error
@@ -88,7 +89,7 @@ export const FamilyManagementModal: React.FC<FamilyManagementModalProps> = ({
       if (errorMessage.includes('already has a family group') || 
           errorMessage.includes('user already has') ||
           errorMessage.includes('already has') && errorMessage.includes('family')) {
-        console.log('[FamilyManagement] User already has a family group, loading it...');
+        // User already has a family group, loading it...
         // Try to load the existing group
         try {
           const existingGroup = await familySharingService.getFamilyGroup();
@@ -105,7 +106,7 @@ export const FamilyManagementModal: React.FC<FamilyManagementModalProps> = ({
             return;
           }
         } catch (loadError) {
-          console.error('[FamilyManagement] Failed to load existing group:', loadError);
+          logger.error('[FamilyManagement] Failed to load existing group:', loadError);
           // Fall through to show error
         }
       }

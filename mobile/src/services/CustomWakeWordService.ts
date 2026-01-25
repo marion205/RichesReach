@@ -71,16 +71,16 @@ class CustomWakeWordService {
       await recording.prepareToRecordAsync({
         android: {
           extension: '.m4a',
-          outputFormat: Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_MPEG_4,
-          audioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC,
+          outputFormat: 2, // Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_MPEG_4
+          audioEncoder: 3, // Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC
           sampleRate: 16000,
           numberOfChannels: 1,
           bitRate: 128000,
         },
         ios: {
           extension: '.m4a',
-          outputFormat: Audio.RECORDING_OPTION_IOS_OUTPUT_FORMAT_MPEG4AAC,
-          audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_MEDIUM,
+          outputFormat: 0, // Audio.RECORDING_OPTION_IOS_OUTPUT_FORMAT_MPEG4AAC
+          audioQuality: 127, // Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_MEDIUM
           sampleRate: 16000,
           numberOfChannels: 1,
           bitRate: 128000,
@@ -240,16 +240,16 @@ class CustomWakeWordService {
       await recording.prepareToRecordAsync({
         android: {
           extension: '.m4a',
-          outputFormat: Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_MPEG_4,
-          audioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC,
+          outputFormat: 2, // Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_MPEG_4
+          audioEncoder: 3, // Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC
           sampleRate: 16000,
           numberOfChannels: 1,
           bitRate: 128000,
         },
         ios: {
           extension: '.m4a',
-          outputFormat: Audio.RECORDING_OPTION_IOS_OUTPUT_FORMAT_MPEG4AAC,
-          audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_MEDIUM,
+          outputFormat: 0, // Audio.RECORDING_OPTION_IOS_OUTPUT_FORMAT_MPEG4AAC
+          audioQuality: 127, // Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_MEDIUM
           sampleRate: 16000,
           numberOfChannels: 1,
           bitRate: 128000,
@@ -294,18 +294,18 @@ class CustomWakeWordService {
             const status = await this.recording.getStatusAsync();
             if (status.isRecording && typeof this.recording.stopAndUnloadAsync === 'function') {
               await this.recording.stopAndUnloadAsync();
-            } else if (typeof this.recording.unloadAsync === 'function') {
-              await this.recording.unloadAsync();
+            } else if (this.recording) {
+              await (this.recording as any).stopAndUnloadAsync?.();
             }
-          } else if (typeof this.recording.unloadAsync === 'function') {
-            // If getStatusAsync doesn't exist, try to unload directly
-            await this.recording.unloadAsync();
+          } else if (this.recording) {
+            // If getStatusAsync doesn't exist, try to stop and unload directly
+            await (this.recording as any).stopAndUnloadAsync?.();
           }
         } catch (e) {
-          // Try to unload even if stop failed
-          if (this.recording && typeof this.recording.unloadAsync === 'function') {
+          // Try to stop and unload even if stop failed
+          if (this.recording) {
             try {
-              await this.recording.unloadAsync();
+              await (this.recording as any).stopAndUnloadAsync?.();
             } catch (e2) {
               logger.warn('Could not unload recording:', e2);
             }

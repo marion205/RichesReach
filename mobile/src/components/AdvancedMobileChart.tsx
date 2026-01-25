@@ -10,13 +10,12 @@ import {
   StyleSheet,
   Dimensions,
   TouchableOpacity,
-  PanGestureHandler,
-  State,
   Animated,
   ScrollView,
 } from 'react-native';
-import { LineChart, BarChart, CandlestickChart } from 'react-native-chart-kit';
-import { useVoice } from '../contexts/VoiceContext';
+import { PanGestureHandler, State } from 'react-native-gesture-handler';
+import { LineChart, BarChart } from 'react-native-chart-kit';
+import * as Speech from 'expo-speech';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -52,8 +51,7 @@ export const AdvancedMobileChart: React.FC<AdvancedChartProps> = ({
   const [volume, setVolume] = useState(0);
   const [showIndicators, setShowIndicators] = useState(false);
   
-  const { speak } = useVoice();
-  const panRef = useRef();
+  const panRef = useRef<any>(null);
   const translateX = useRef(new Animated.Value(0)).current;
 
   const timeframes = ['1m', '5m', '15m', '1h', '4h', '1d'];
@@ -152,9 +150,7 @@ export const AdvancedMobileChart: React.FC<AdvancedChartProps> = ({
 
   const speakPrice = () => {
     const changeText = change >= 0 ? 'up' : 'down';
-    speak(`${symbol} is at $${price.toFixed(2)}, ${changeText} ${Math.abs(changePercent).toFixed(2)} percent`, {
-      voice: 'Nova'
-    });
+    Speech.speak(`${symbol} is at $${price.toFixed(2)}, ${changeText} ${Math.abs(changePercent).toFixed(2)} percent`);
   };
 
   const renderChart = () => {
@@ -197,22 +193,24 @@ export const AdvancedMobileChart: React.FC<AdvancedChartProps> = ({
         );
       case 'volume':
         return (
-          <BarChart
-            data={{
-              labels: chartData.labels,
-              datasets: [{
-                data: chartData.datasets[0].data.map(() => Math.random() * 1000000),
-              }],
-            }}
-            width={screenWidth - 40}
-            height={220}
-            chartConfig={{
-              ...chartConfig,
-              color: (opacity = 1) => `rgba(0, 123, 255, ${opacity})`,
-            }}
-            style={styles.chart}
-            showValuesOnTopOfBars={false}
-          />
+            <BarChart
+              data={{
+                labels: chartData.labels,
+                datasets: [{
+                  data: chartData.datasets[0].data.map(() => Math.random() * 1000000),
+                }],
+              }}
+              width={screenWidth - 40}
+              height={220}
+              chartConfig={{
+                ...chartConfig,
+                color: (opacity = 1) => `rgba(0, 123, 255, ${opacity})`,
+              }}
+              style={styles.chart}
+              showValuesOnTopOfBars={false}
+              yAxisLabel=""
+              yAxisSuffix=""
+            />
         );
       default:
         return (

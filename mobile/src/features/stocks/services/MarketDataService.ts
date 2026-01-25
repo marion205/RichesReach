@@ -38,6 +38,11 @@ nextOpen?: string;
 nextClose?: string;
 timezone: string;
 }
+export interface StockSearchResult {
+  symbol: string;
+  name: string;
+  [key: string]: unknown;
+}
 class MarketDataService {
 // Kill switch to disable client-side market data calls
 private MARKET_DATA_DISABLED = true; // Always disabled - use SecureMarketDataService instead
@@ -237,7 +242,7 @@ const cacheKey = 'market-news';
 const cached = this.cache.get(cacheKey);
 // Use cached news for 2 hours to respect rate limits
 if (cached && Date.now() - cached.timestamp < 2 * 60 * 60 * 1000) {
-return cached.data;
+return (cached.data || []) as MarketNews[];
 }
 try {
 const query = topics.join(' OR ');
@@ -248,7 +253,7 @@ if (data.status !== 'ok') {
 if (data.code === 'rateLimited') {
 logger.warn(' NewsAPI rate limit hit, using cached data if available');
 if (cached) {
-return cached.data;
+return (cached.data || []) as MarketNews[];
 }
 }
 throw new Error(data.message || 'Failed to fetch news');
@@ -265,7 +270,7 @@ interface NewsArticleResponse {
 const newsData = articles.map((article: NewsArticleResponse, index: number) => ({
 id: `news-${index}-${Date.now()}`,
 title: article.title,
-summary: article.description || article.content?.substring(0, 200) + '...',
+summary: article.description || (typeof article.content === 'string' ? article.content.substring(0, 200) + '...' : ''),
 source: article.source.name,
 publishedAt: article.publishedAt,
 url: article.url,
@@ -278,7 +283,7 @@ return newsData;
 } catch (error) {
 logger.error('Failed to get market news:', error);
 if (cached) {
-return cached.data;
+return (cached.data || []) as MarketNews[];
 }
 return this.getMockNews();
 }
@@ -289,7 +294,7 @@ const cacheKey = `stock-news-${symbol}`;
 const cached = this.cache.get(cacheKey);
 // Use cached news for 2 hours to respect rate limits
 if (cached && Date.now() - cached.timestamp < 2 * 60 * 60 * 1000) {
-return cached.data;
+return (cached.data || []) as MarketNews[];
 }
 try {
 const url = `${this.newsBaseUrl}/everything?q=${encodeURIComponent(symbol)}&apiKey=${this.newsApiKey}&sortBy=publishedAt&pageSize=10&language=en`;
@@ -299,7 +304,7 @@ if (data.status !== 'ok') {
 if (data.code === 'rateLimited') {
 logger.warn(` NewsAPI rate limit hit for ${symbol}, using cached data if available`);
 if (cached) {
-return cached.data;
+return (cached.data || []) as MarketNews[];
 }
 }
 throw new Error(data.message || 'Failed to fetch stock news');
@@ -316,7 +321,7 @@ interface NewsArticleResponse {
 const newsData = articles.map((article: NewsArticleResponse, index: number) => ({
 id: `stock-${symbol}-${index}-${Date.now()}`,
 title: article.title,
-summary: article.description || article.content?.substring(0, 200) + '...',
+summary: article.description || (typeof article.content === 'string' ? article.content.substring(0, 200) + '...' : ''),
 source: article.source.name,
 publishedAt: article.publishedAt,
 url: article.url,
@@ -329,7 +334,7 @@ return newsData;
 } catch (error) {
 logger.error(`Failed to get news for ${symbol}:`, error);
 if (cached) {
-return cached.data;
+return (cached.data || []) as MarketNews[];
 }
 return [];
 }
@@ -410,11 +415,6 @@ timezone: 'America/New_York'
 };
 }
 // Search for stocks
-interface StockSearchResult {
-  symbol: string;
-  name: string;
-  [key: string]: unknown;
-}
 public async searchStocks(query: string): Promise<StockSearchResult[]> {
 try {
 const data = await this.makeApiCall({
@@ -424,7 +424,7 @@ keywords: query
 if (data['Error Message']) {
 throw new Error(data['Error Message']);
 }
-const matches = data.bestMatches || [];
+const matches = (data as any).bestMatches || [];
 interface AlphaVantageMatch {
   '1. symbol': string;
   '2. name': string;

@@ -12,6 +12,7 @@ import {
 import * as WebBrowser from 'expo-web-browser';
 import Icon from 'react-native-vector-icons/Feather';
 import { SBLOCReferral } from '../../../types/sbloc';
+import logger from '../../../utils/logger';
 
 interface Props {
   navigation: any;
@@ -64,7 +65,7 @@ const SBLOCApplicationScreen: React.FC<Props> = ({ navigation, route }) => {
         );
       }
     } catch (error) {
-      console.error('Error opening SBLOC application:', error);
+      logger.error('Error opening SBLOC application:', error);
       Alert.alert(
         'Error',
         'Failed to open the application. Please try again.',

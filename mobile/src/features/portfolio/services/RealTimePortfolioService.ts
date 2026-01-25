@@ -1,5 +1,6 @@
 import { SecureMarketDataService } from '../../stocks/services/SecureMarketDataService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import logger from '../../../utils/logger';
 export interface PortfolioHolding {
 symbol: string;
 companyName: string;
@@ -22,6 +23,13 @@ dayChangePercent: number;
 holdings: PortfolioHolding[];
 lastUpdated: string;
 }
+export interface StockQuote {
+  symbol: string;
+  price: number;
+  change?: number;
+  changePercent?: number;
+}
+
 export interface PortfolioUpdate {
 type: 'price_update' | 'portfolio_refresh' | 'error';
 data: PortfolioMetrics | StockQuote | string;
@@ -86,14 +94,9 @@ lastUpdated: new Date().toISOString()
 // Store updated portfolio
 await this.savePortfolio(updatedPortfolio);
 this.lastPortfolioData = updatedPortfolio;
-console.log({
-  totalValue: (totalValue || 0).toFixed(2),
-  totalReturn: (totalReturn || 0).toFixed(2),
-  totalReturnPercent: (totalReturnPercent || 0).toFixed(2),
-});
 return updatedPortfolio;
 } catch (error) {
-console.error(' Error loading portfolio data:', error);
+logger.error('Error loading portfolio data:', error);
 return null;
 }
 }
@@ -114,7 +117,7 @@ this.updateCallbacks.forEach(callback => {
 try {
 callback(update);
 } catch (error) {
-console.error('Error in portfolio update callback:', error);
+logger.error('Error in portfolio update callback:', error);
 }
 });
 }
@@ -177,13 +180,8 @@ type: 'portfolio_refresh',
 data: updatedPortfolio,
 timestamp: Date.now()
 });
-console.log({
-  totalValue: (totalValue || 0).toFixed(2),
-  totalReturn: (totalReturn || 0).toFixed(2),
-  totalReturnPercent: (totalReturnPercent || 0).toFixed(2),
-});
 } catch (error) {
-console.error(' Error updating portfolio:', error);
+logger.error('Error updating portfolio:', error);
 this.notifySubscribers({
 type: 'error',
 data: (error as Error).message || 'Failed to update portfolio',
@@ -212,7 +210,7 @@ return JSON.parse(stored);
 // If no stored portfolio, create a sample portfolio for demonstration
 return this.createSamplePortfolio();
 } catch (error) {
-console.error('Error loading portfolio:', error);
+logger.error('Error loading portfolio:', error);
 return null;
 }
 }
@@ -221,7 +219,7 @@ private async savePortfolio(portfolio: PortfolioMetrics) {
 try {
 await AsyncStorage.setItem('real_time_portfolio', JSON.stringify(portfolio));
 } catch (error) {
-console.error('Error saving portfolio:', error);
+logger.error('Error saving portfolio:', error);
 }
 }
 // Create sample portfolio for demonstration
@@ -301,7 +299,7 @@ await this.savePortfolio(portfolio);
 // Trigger immediate update
 this.updatePortfolio();
 } catch (error) {
-console.error('Error adding holding:', error);
+logger.error('Error adding holding:', error);
 }
 }
 // Remove holding from portfolio
@@ -314,7 +312,7 @@ await this.savePortfolio(portfolio);
 // Trigger immediate update
 this.updatePortfolio();
 } catch (error) {
-console.error('Error removing holding:', error);
+logger.error('Error removing holding:', error);
 }
 }
 // Update holding quantity
@@ -333,7 +331,7 @@ await this.savePortfolio(portfolio);
 // Trigger immediate update
 this.updatePortfolio();
 } catch (error) {
-console.error('Error updating holding quantity:', error);
+logger.error('Error updating holding quantity:', error);
 }
 }
 // Get current portfolio metrics

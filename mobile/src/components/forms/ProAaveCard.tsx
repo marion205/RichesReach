@@ -439,7 +439,7 @@ const ProAaveCard: React.FC<ProAaveCardProps> = ({
         {riskError ? (
           <View style={styles.infoRow}>
             <Icon name="alert-triangle" size={16} color={theme.danger} />
-            <Text style={[styles.infoText, { color: theme.danger }]}>Failed to load: {riskError}</Text>
+            <Text style={[styles.infoTextSmall, { color: theme.danger }]}>Failed to load: {riskError}</Text>
           </View>
         ) : null}
 
@@ -622,7 +622,7 @@ const styles = StyleSheet.create({
   refreshBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
   refreshTxt: { fontSize: 12, fontWeight: '800' },
   infoRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
-  infoText: { fontSize: 13 },
+  infoTextSmall: { fontSize: 13 },
 
   metricGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 10 },
   metricTile: { flexBasis: '48%', borderRadius: 12, padding: 12 },

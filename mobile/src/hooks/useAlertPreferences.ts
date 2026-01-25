@@ -6,6 +6,7 @@ import {
   parseAlertPreferences,
   AlertPreferences 
 } from '../graphql/smartAlertsQueries';
+import logger from '../utils/logger';
 
 interface UseAlertPreferencesReturn {
   preferences: AlertPreferences | null;
@@ -31,7 +32,7 @@ export const useAlertPreferences = (): UseAlertPreferencesReturn => {
 
   const [updatePreferencesMutation] = useMutation(UPDATE_ALERT_PREFERENCES, {
     onError: (error) => {
-      console.error('Failed to update alert preferences:', error);
+      logger.error('Failed to update alert preferences:', error);
       // Revert optimistic update on error
       if (data?.alertPreferences) {
         const parsed = parseAlertPreferences(data.alertPreferences);
@@ -106,7 +107,7 @@ export const useAlertPreferences = (): UseAlertPreferencesReturn => {
       return result.data?.updateAlertPreferences?.success || false;
 
     } catch (error) {
-      console.error('Error updating preferences:', error);
+      logger.error('Error updating preferences:', error);
       return false;
     } finally {
       setIsUpdating(false);

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Appearance, useColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import logger from '../utils/logger';
 
 // Theme Types
 export interface Theme {
@@ -507,7 +508,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         }
       }
     } catch (error) {
-      console.error('Error loading saved theme:', error);
+      logger.error('Error loading saved theme:', error);
     }
   };
 
@@ -534,7 +535,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     try {
       await AsyncStorage.setItem('selectedTheme', theme.name);
     } catch (error) {
-      console.error('Error saving theme:', error);
+      logger.error('Error saving theme:', error);
     }
   };
 
@@ -565,7 +566,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       
       setCurrentTheme(updatedTheme);
     } catch (error) {
-      console.error('Error saving dark mode preference:', error);
+      logger.error('Error saving dark mode preference:', error);
     }
   };
 
@@ -576,7 +577,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     try {
       await AsyncStorage.setItem('accessibilitySettings', JSON.stringify(newSettings));
     } catch (error) {
-      console.error('Error saving accessibility settings:', error);
+      logger.error('Error saving accessibility settings:', error);
     }
   };
 

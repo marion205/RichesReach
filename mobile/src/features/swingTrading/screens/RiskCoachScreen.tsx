@@ -293,7 +293,20 @@ const RiskCoachScreen: React.FC<RiskCoachScreenProps> = ({ navigateTo }) => {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debounce = useCallback((fn: () => void) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(fn, 400);
+    debounceRef.current = setTimeout(() => {
+      fn();
+      debounceRef.current = null;
+    }, 400);
+  }, []);
+  
+  // Cleanup debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+    };
   }, []);
 
   // Auto-calc handlers per tab

@@ -436,11 +436,7 @@ function ResearchBody({ data }: { data: ResearchData }) {
     resistanceLevel: data.technical.resistanceLevel ?? mockTechnical.resistanceLevel,
   } : mockTechnical;
 
-  // Debug: Log technical data to help diagnose issues
-  if (__DEV__) {
-    console.log('[ResearchScreen] Technical data (real):', data.technical);
-    console.log('[ResearchScreen] Technical data (using):', technical);
-  }
+  // Technical data processed
 
   return (
     <ScrollView style={styles.researchBody} showsVerticalScrollIndicator={false}>

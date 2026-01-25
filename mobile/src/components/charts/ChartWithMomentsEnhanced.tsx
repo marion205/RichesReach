@@ -204,7 +204,7 @@ const ChartWithMoments: React.FC<ChartWithMomentsProps> = ({
         (a, b) =>
           new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
       );
-      console.log(`[ChartWithMoments] Rendering ${sorted.length} moments`);
+      // Rendering moments - no need to log
       return sorted;
     },
     [moments],
@@ -501,7 +501,6 @@ const ChartWithMoments: React.FC<ChartWithMomentsProps> = ({
       <View
         style={[styles.chartContainer, { height, backgroundColor: theme.background }]}
         accessible={true}
-        accessibilityRole="status"
         accessibilityLabel="No price data available"
       >
         <Text style={[styles.emptyText, { color: theme.textSecondary }]}>
@@ -615,7 +614,6 @@ const ChartWithMoments: React.FC<ChartWithMomentsProps> = ({
                       fontSize="11"
                       fill={theme.crosshairLabel}
                       fontWeight="600"
-                      backgroundColor={theme.background}
                     >
                       ${crosshairPrice.toFixed(2)}
                     </SvgText>

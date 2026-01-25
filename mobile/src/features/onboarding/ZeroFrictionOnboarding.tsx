@@ -16,6 +16,8 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
+import { TIMING, ANIMATION } from '../../config/constants';
+import logger from '../../utils/logger';
 
 const { width, height } = Dimensions.get('window');
 
@@ -36,6 +38,22 @@ export default function ZeroFrictionOnboarding({ onComplete, onSkip }: ZeroFrict
   const slideAnim = useRef(new Animated.Value(width)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const idProcessingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (processingTimeoutRef.current) {
+        clearTimeout(processingTimeoutRef.current);
+        processingTimeoutRef.current = null;
+      }
+      if (idProcessingTimeoutRef.current) {
+        clearTimeout(idProcessingTimeoutRef.current);
+        idProcessingTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const steps = [
     {
@@ -69,17 +87,17 @@ export default function ZeroFrictionOnboarding({ onComplete, onSkip }: ZeroFrict
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 800,
+        duration: TIMING.ANIMATION_DURATION_LONG,
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 800,
+        duration: TIMING.ANIMATION_DURATION_LONG,
         useNativeDriver: true,
       }),
       Animated.timing(scaleAnim, {
         toValue: 1,
-        duration: 800,
+        duration: TIMING.ANIMATION_DURATION_LONG,
         useNativeDriver: true,
       }),
     ]).start();
@@ -89,7 +107,7 @@ export default function ZeroFrictionOnboarding({ onComplete, onSkip }: ZeroFrict
     // Update progress animation
     Animated.timing(progressAnim, {
       toValue: (currentStep + 1) / steps.length,
-      duration: 300,
+      duration: TIMING.ANIMATION_DURATION_SHORT,
       useNativeDriver: false,
     }).start();
   }, [currentStep]);
@@ -112,11 +130,18 @@ export default function ZeroFrictionOnboarding({ onComplete, onSkip }: ZeroFrict
     setLoading(true);
     try {
       // Simulate AI processing
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      console.log('✅ ZeroFrictionOnboarding: Calling onComplete with profile:', wealthProfile);
+      await new Promise<void>(resolve => {
+        if (processingTimeoutRef.current) {
+          clearTimeout(processingTimeoutRef.current);
+        }
+        processingTimeoutRef.current = setTimeout(() => {
+          resolve();
+          processingTimeoutRef.current = null;
+        }, TIMING.TIMEOUT_SHORT / 2); // 1500ms for AI processing
+      });
       onComplete(wealthProfile);
     } catch (error: any) {
-      console.error('❌ Error completing onboarding:', error);
+      logger.error('❌ Error completing onboarding:', error);
       Alert.alert('Error', 'Failed to complete onboarding. Please try again.');
       setLoading(false);
     }
@@ -249,6 +274,7 @@ function WelcomeStep({ onNext }: any) {
 // KYC Step Component
 function KYCStep({ profile, updateProfile, hasPermission, setHasPermission, isScanning, setIsScanning }: any) {
   const [idImage, setIdImage] = useState<string | null>(null);
+  const idProcessingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const requestCameraPermission = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
@@ -275,7 +301,10 @@ function KYCStep({ profile, updateProfile, hasPermission, setHasPermission, isSc
       if (!result.canceled && result.assets[0]) {
         setIdImage(result.assets[0].uri);
         // Simulate AI processing
-        setTimeout(() => {
+        if (idProcessingTimeoutRef.current) {
+          clearTimeout(idProcessingTimeoutRef.current);
+        }
+        idProcessingTimeoutRef.current = setTimeout(() => {
           updateProfile({
             firstName: 'John',
             lastName: 'Doe',
@@ -286,10 +315,10 @@ function KYCStep({ profile, updateProfile, hasPermission, setHasPermission, isSc
             zip: '10001',
           });
           setIsScanning(false);
-        }, 2000);
+        }, TIMING.TIMEOUT_SHORT - 1000); // 2000ms for scanning timeout
       }
     } catch (error: any) {
-      console.error('Camera error:', error);
+      logger.error('Camera error:', error);
       Alert.alert(
         'Error', 
         error?.message || 'Failed to take picture. Please check camera permissions and try again.'

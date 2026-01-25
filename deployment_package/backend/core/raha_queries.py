@@ -4,6 +4,7 @@ Queries for strategy catalog, user settings, signals, and backtests
 """
 import graphene
 import logging
+import json
 from decimal import Decimal
 from django.db import models
 from .raha_types import (
@@ -218,12 +219,12 @@ class RAHAQueries(graphene.ObjectType):
         description="Get user's trained ML models (returns JSON strings)"
     )
     
-    # Strategy Blends (commented out - type not available)
-    # strategy_blends = graphene.List(
-    #     StrategyBlendType,
-    #     is_active=graphene.Boolean(required=False),
-    #     description="Get user's strategy blends"
-    # )
+    # Strategy Blends
+    strategy_blends = graphene.List(
+        graphene.JSONString,
+        is_active=graphene.Boolean(required=False),
+        description="Get user's strategy blends (returns JSON strings)"
+    )
     
     # Notification Preferences (commented out - type not available)
     # notification_preferences = graphene.Field(
@@ -723,9 +724,55 @@ class RAHAQueries(graphene.ObjectType):
             logger.error(f"Error resolving ML models: {e}", exc_info=True)
             return []
     
-    # Resolvers for commented-out fields (stubs to prevent errors)
-    # def resolve_strategy_blends(self, info, is_active=None):
-    #     return []
+    def resolve_strategy_blends(self, info, is_active=None):
+        """Get user's strategy blends"""
+        user = info.context.user
+        if not user.is_authenticated:
+            return []
+        
+        if StrategyBlend is None:
+            return []
+        
+        try:
+            query = StrategyBlend.objects.filter(user=user)
+            if is_active is not None:
+                query = query.filter(is_active=is_active)
+            
+            blends = query.order_by('-created_at')
+            
+            # Convert to JSON strings for frontend
+            result = []
+            for blend in blends:
+                # Get strategy names for components
+                components_with_names = []
+                for comp in blend.components:
+                    try:
+                        strategy_version = StrategyVersion.objects.get(id=comp.get('strategy_version_id'))
+                        strategy_name = strategy_version.strategy.name
+                    except StrategyVersion.DoesNotExist:
+                        strategy_name = 'Unknown'
+                    
+                    components_with_names.append({
+                        'strategyVersionId': comp.get('strategy_version_id'),
+                        'weight': comp.get('weight', 0),
+                        'strategyName': strategy_name
+                    })
+                
+                result.append(json.dumps({
+                    'id': str(blend.id),
+                    'name': blend.name,
+                    'description': blend.description,
+                    'components': components_with_names,
+                    'isActive': blend.is_active,
+                    'isDefault': blend.is_default,
+                    'createdAt': blend.created_at.isoformat() if blend.created_at else None,
+                    'updatedAt': blend.updated_at.isoformat() if blend.updated_at else None,
+                }))
+            
+            return result
+        except Exception as e:
+            logger.error(f"Error resolving strategy blends: {e}", exc_info=True)
+            return []
     # 
     # def resolve_notification_preferences(self, info):
     #     return None

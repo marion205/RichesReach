@@ -2,9 +2,10 @@
 import { ApolloClient, InMemoryCache, createHttpLink, ApolloLink } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 import { Observable } from '@apollo/client';
-import { persistCache, AsyncStorageWrapper } from 'apollo3-cache-persist';
+// import { persistCache, AsyncStorageWrapper } from 'apollo3-cache-persist'; // Package not installed
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import logger from '../utils/logger';
+import { retryLink } from '../graphql/links/timeoutLink';
 
 // Use the same configuration as the main API
 import { API_GRAPHQL } from '../config/api';
@@ -43,7 +44,7 @@ export function makeApolloClient() {
   }
 
   const logLink = new ApolloLink((operation, forward) => {
-    const operationType = operation.query.definitions?.[0]?.operation || 'unknown';
+    const operationType = (operation.query.definitions?.[0] as any)?.operation || 'unknown';
     const startTime = Date.now();
     const operationName = operation.operationName || 'UNNAMED';
     
@@ -176,7 +177,7 @@ export function makeApolloClient() {
     // Log ALL operations to see what's happening
     logger.log('🔍 [Apollo Link] Operation:', {
       operationName: operation.operationName,
-      operationType: operation.query.definitions?.[0]?.operation,
+      operationType: (operation.query.definitions?.[0] as any)?.operation,
       queryString: operation.query.loc?.source?.body?.substring(0, 200),
     });
     
@@ -257,7 +258,7 @@ export function makeApolloClient() {
           }
           
           if (graphQLErrors && graphQLErrors.length > 0) {
-            console.log('🔴 GraphQL Errors in', operation.operationName, ':', graphQLErrors);
+            logger.log('🔴 GraphQL Errors in', operation.operationName, ':', graphQLErrors);
             graphQLErrors.forEach((gqlError: any, idx: number) => {
               logger.error(`🔴 GraphQL Error ${idx + 1}:`, {
                 message: gqlError?.message,
@@ -269,7 +270,7 @@ export function makeApolloClient() {
           }
           
           if (networkError) {
-            console.log('🔴 Network Error in', operation.operationName, ':', networkError);
+            logger.log('🔴 Network Error in', operation.operationName, ':', networkError);
             logger.error('🔴 Network Error:', {
               name: networkError?.name,
               message: networkError?.message,
@@ -280,7 +281,7 @@ export function makeApolloClient() {
             // If it's a ServerError, try to dump the response body
             const anyNetErr = networkError as any;
             if (anyNetErr.result) {
-              console.log('🔴 networkError.result:', anyNetErr.result);
+              logger.log('🔴 networkError.result:', anyNetErr.result);
               logger.error('🔴 networkError.result:', JSON.stringify(anyNetErr.result, null, 2));
             }
           }
@@ -309,7 +310,7 @@ export function makeApolloClient() {
           
           // For GenerateAIRecommendations, log extra details
           if (operation.operationName === 'GenerateAIRecommendations') {
-            console.log('🔴 GenerateAIRecommendations Error Details:', {
+            logger.log('🔴 GenerateAIRecommendations Error Details:', {
               operationName: operation.operationName,
               variables: operation.variables,
               errorName: error?.name,
@@ -332,7 +333,9 @@ export function makeApolloClient() {
             });
           }
           
-          // Re-throw to let error handling components handle it
+          // IMPORTANT: Re-throw the error so Apollo can handle it with errorPolicy
+          // However, with errorPolicy: 'all', Apollo will still return partial data if available
+          // Network errors (500s) will still be thrown, but GraphQL errors will be included in response
           observer.error(error);
         },
         complete: () => {
@@ -470,7 +473,23 @@ export function makeApolloClient() {
   });
 
   return new ApolloClient({
-    link: logLink.concat(authLink).concat(errorLink).concat(httpLink),
+    // Link chain: log -> auth -> retry -> error -> http
+    // Retry link comes before error link so it can retry before errors are logged
+    link: logLink.concat(authLink).concat(retryLink).concat(errorLink).concat(httpLink),
+    // Set default error policy to allow partial data even with errors
+    defaultOptions: {
+      watchQuery: {
+        errorPolicy: 'all', // Return partial data even with errors
+        fetchPolicy: 'cache-and-network', // Use cache when available, fetch in background
+      },
+      query: {
+        errorPolicy: 'all',
+        fetchPolicy: 'cache-and-network',
+      },
+      mutate: {
+        errorPolicy: 'all',
+      },
+    },
     cache: new InMemoryCache({
       // Prevent Apollo from complaining about missing fields in partial results
       possibleTypes: {},
@@ -680,14 +699,14 @@ export function makeApolloClient() {
     defaultOptions: {
       watchQuery: {
         fetchPolicy: 'cache-first',
-        nextFetchPolicy: 'cache-first',
+        // nextFetchPolicy: 'cache-first', // Not available in this Apollo Client version
         notifyOnNetworkStatusChange: false,
         returnPartialData: false, // Don't return partial data to prevent cache write errors
         errorPolicy: 'all',
       },
       query: {
         fetchPolicy: 'cache-first',
-        nextFetchPolicy: 'cache-first',
+        // nextFetchPolicy: 'cache-first', // Not available in this Apollo Client version
         errorPolicy: 'all',
       },
       mutate: {

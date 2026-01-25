@@ -93,7 +93,7 @@ const generateDrivers = () => {
   ];
 };
 
-export default function ChartTestScreen({ navigation, route }: { navigation?: any; route?: any; onClose?: () => void }) {
+export default function ChartTestScreen({ navigation, route, onClose }: { navigation?: any; route?: any; onClose?: () => void }) {
   const [dataDays, setDataDays] = useState(30);
   const [chartReady, setChartReady] = useState(false);
   const [chartEnabled, setChartEnabled] = useState(false); // User must explicitly enable
@@ -415,6 +415,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#4B5563',
     paddingVertical: 4,
+  },
+  featureSubtext: {
+    fontSize: 12,
+    color: '#6B7280',
+    paddingVertical: 4,
+    paddingLeft: 16,
+    lineHeight: 18,
   },
   warningSection: {
     padding: 16,

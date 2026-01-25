@@ -3,14 +3,17 @@
  * Fetches and manages money snapshot data
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { moneySnapshotService, MoneySnapshot } from '../services/MoneySnapshotService';
+import { TIMING } from '../../../config/constants';
+import logger from '../../../utils/logger';
 
 export const useMoneySnapshot = () => {
   const [snapshot, setSnapshot] = useState<MoneySnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [hasBankLinked, setHasBankLinked] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchSnapshot = async () => {
     try {
@@ -18,14 +21,26 @@ export const useMoneySnapshot = () => {
       setError(null);
       
       // Add timeout to prevent hanging
-      const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('Snapshot request timeout')), 5000)
-      );
+      let timeoutId: NodeJS.Timeout | null = null;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error('Snapshot request timeout'));
+          timeoutId = null;
+        }, TIMING.TIMEOUT_MEDIUM);
+        timeoutRef.current = timeoutId;
+      });
       
       const data = await Promise.race([
         moneySnapshotService.getSnapshot(),
         timeoutPromise
       ]);
+      
+      // Clear timeout if request succeeded
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutRef.current = null;
+        timeoutId = null;
+      }
       
       // Validate data structure
       if (!data || typeof data.netWorth !== 'number') {
@@ -55,7 +70,7 @@ export const useMoneySnapshot = () => {
     } catch (err) {
       // Enhanced error handling
       const error = err instanceof Error ? err : new Error('Failed to fetch snapshot');
-      console.warn('[useMoneySnapshot] Error:', error.message);
+      logger.warn('[useMoneySnapshot] Error:', error.message);
       setError(error);
       
       // Use mock data as fallback (both dev and prod for graceful degradation)
@@ -88,10 +103,6 @@ export const useMoneySnapshot = () => {
       
       setSnapshot(mockSnapshot);
       setHasBankLinked(true);
-      
-      if (__DEV__) {
-        console.log('[useMoneySnapshot] Using mock data as fallback');
-      }
     } finally {
       setLoading(false);
     }

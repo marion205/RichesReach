@@ -1,4 +1,5 @@
 import { useQuery, useMutation } from '@apollo/client';
+import { useEffect } from 'react';
 import {
   GET_BACKTEST_RUN,
   GET_USER_BACKTESTS,
@@ -46,8 +47,19 @@ export const useBacktestRun = (id: string) => {
     variables: { id },
     skip: !id,
     fetchPolicy: 'cache-and-network',
-    pollInterval: (data?.backtestRun?.status === 'RUNNING') ? 5000 : 0, // Poll if running
+    pollInterval: 0, // Will be set dynamically if needed
   });
+  
+  // Update poll interval based on status
+  useEffect(() => {
+    if (data?.backtestRun?.status === 'RUNNING') {
+      // Refetch every 5 seconds if running
+      const interval = setInterval(() => {
+        refetch();
+      }, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [data?.backtestRun?.status, refetch]);
 
   return {
     backtest: data?.backtestRun as BacktestRun | undefined,

@@ -4,6 +4,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { Audio } from 'expo-av';
 import { isExpoGo } from '../../../utils/expoGoCheck';
 import { createPeer, isWebRTCAvailable } from '../../../webrtc/peer';
+import logger from '../../../utils/logger';
 
 // Conditionally import WebRTC (not available in Expo Go)
 let RTCPeerConnection: any = null;
@@ -24,15 +25,13 @@ try {
     MediaStream = webrtc.MediaStream;
   }
 } catch (e) {
-  console.warn('WebRTC not available in Expo Go');
+  logger.warn('WebRTC not available in Expo Go');
 }
 import { connectSignal } from '../../../realtime/signal';
 import { getJwt } from '../../../auth/token';
 import { useRoute } from '@react-navigation/native';
-import logger from '../../../utils/logger';
 
 export default function FiresideRoomScreen() {
-  console.log('[FiresideRoomScreen] Component mounted');
   logger.log('[FiresideRoomScreen] Component mounted');
   
   const [micEnabled, setMicEnabled] = useState(false);
@@ -47,6 +46,8 @@ export default function FiresideRoomScreen() {
   const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
   const socketRef = useRef<any>(null);
   const mySocketIdRef = useRef<string | null>(null);
+  const speakerTimeoutRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const connectionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const route = useRoute<any>();
   const circleId = route?.params?.circleId || 'demo';
 
@@ -81,7 +82,7 @@ export default function FiresideRoomScreen() {
   }, [localStream]);
 
   const handleMicToggle = () => {
-    console.log('[Fireside] Mic button pressed. available=', micAvailable);
+    logger.log('[Fireside] Mic button pressed. available=', micAvailable);
     
     const stateSnapshot = {
       socketConnected: connected,
@@ -94,11 +95,11 @@ export default function FiresideRoomScreen() {
       })) : null,
     };
     
-    console.log('[Fireside] State snapshot:', stateSnapshot);
+    logger.log('[Fireside] State snapshot:', stateSnapshot);
 
     if (!micAvailable) {
       // Optionally remove this once confident - but keep for debugging
-      console.warn('[Fireside] Mic unavailable – conditions failed:', {
+      logger.warn('[Fireside] Mic unavailable – conditions failed:', {
         connected,
         hasLocalStream: !!localStream,
         audioTracks: localStream?.getAudioTracks().length ?? 0,
@@ -111,7 +112,7 @@ export default function FiresideRoomScreen() {
     const nextEnabled = !audioTrack.enabled;
     audioTrack.enabled = nextEnabled;
     setMicEnabled(nextEnabled);
-    console.log('[Fireside] Mic toggled. enabled =', nextEnabled);
+    logger.log('[Fireside] Mic toggled. enabled =', nextEnabled);
     
     // Update status to reflect mic state
     setStatus(nextEnabled ? 'Listening...' : 'Muted');
@@ -122,11 +123,11 @@ export default function FiresideRoomScreen() {
     pc.ontrack = (event: any) => {
       const [stream] = event.streams;
       if (!stream) {
-        console.log('[Fireside] ontrack fired, but no streams');
+        logger.log('[Fireside] ontrack fired, but no streams');
         return;
       }
 
-      console.log(
+      logger.log(
         '[Fireside] Remote track received',
         peerId,
         stream.id,
@@ -138,13 +139,21 @@ export default function FiresideRoomScreen() {
       setCurrentSpeaker(peerId);
       
       // Clear speaker after 2 seconds of silence (simple approach)
-      setTimeout(() => {
+      // Clear existing timeout for this peer if any
+      const existingTimeout = speakerTimeoutRef.current.get(peerId);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+      
+      const timeoutId = setTimeout(() => {
         setCurrentSpeaker(prev => prev === peerId ? null : prev);
+        speakerTimeoutRef.current.delete(peerId);
       }, 2000);
+      speakerTimeoutRef.current.set(peerId, timeoutId);
     };
 
     pc.onconnectionstatechange = () => {
-      console.log('[Fireside] pc.connectionState for', peerId, pc.connectionState);
+      logger.log('[Fireside] pc.connectionState for', peerId, pc.connectionState);
       if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
         remoteStreamsRef.current.delete(peerId);
         setRemoteStreams(new Map(remoteStreamsRef.current));
@@ -159,7 +168,7 @@ export default function FiresideRoomScreen() {
   // Helper function to create a peer connection for a specific peer
   const createPeerConnection = async (peerId: string): Promise<RTCPeerConnection | null> => {
     if (peerConnectionsRef.current.has(peerId)) {
-      console.log('[Fireside] Peer connection already exists for', peerId);
+      logger.log('[Fireside] Peer connection already exists for', peerId);
       return peerConnectionsRef.current.get(peerId)!;
     }
 
@@ -186,26 +195,26 @@ export default function FiresideRoomScreen() {
       }
 
       peerConnectionsRef.current.set(peerId, pc);
-      console.log('[Fireside] Created peer connection for', peerId);
+      logger.log('[Fireside] Created peer connection for', peerId);
       return pc;
     } catch (e) {
-      console.warn('[Fireside] Failed to create peer connection for', peerId, e);
+      logger.warn('[Fireside] Failed to create peer connection for', peerId, e);
       return null;
     }
   };
 
   // Boot signaling + WebRTC
   useEffect(() => {
-    console.log('[FiresideRoomScreen] useEffect triggered');
     logger.log('[FiresideRoomScreen] useEffect triggered');
-    console.log('[FiresideRoomScreen] WebRTC available:', isWebRTCAvailable());
-    console.log('[FiresideRoomScreen] mediaDevices available:', !!mediaDevices);
+    logger.log('[FiresideRoomScreen] useEffect triggered');
+    logger.log('[FiresideRoomScreen] WebRTC available:', isWebRTCAvailable());
+    logger.log('[FiresideRoomScreen] mediaDevices available:', !!mediaDevices);
     
     // Check if WebRTC is available
     const webrtcAvailable = isWebRTCAvailable() && mediaDevices;
     
     if (!webrtcAvailable) {
-      console.warn('[FiresideRoomScreen] WebRTC not available - using text-only mode');
+      logger.warn('[FiresideRoomScreen] WebRTC not available - using text-only mode');
       logger.warn('[FiresideRoomScreen] WebRTC not available - using text-only mode');
       setStatus('Text-only mode (voice requires development build)');
       
@@ -214,7 +223,7 @@ export default function FiresideRoomScreen() {
       socketRef.current = socket;
       
       socket.on('connect', () => {
-        console.log('✅ [Fireside] Connected (text-only mode)', socket.id);
+        logger.log('✅ [Fireside] Connected (text-only mode)', socket.id);
         logger.log('✅ [Fireside] Connected (text-only mode)', socket.id);
         mySocketIdRef.current = socket.id;
         setConnected(true);
@@ -223,7 +232,7 @@ export default function FiresideRoomScreen() {
       });
       
       socket.on('room-joined', (data: any) => {
-        console.log('✅ [Fireside] Room joined (text-only):', data);
+        logger.log('✅ [Fireside] Room joined (text-only):', data);
         setStatus('Connected (text-only mode)');
       });
       
@@ -245,30 +254,30 @@ export default function FiresideRoomScreen() {
       });
       
       socket.on('connect_error', (error) => {
-        console.error('❌ [Fireside] Connection error:', error);
+        logger.error('❌ [Fireside] Connection error:', error);
         setStatus(`Connection error: ${error?.message || 'Unknown'}`);
       });
       
       return; // Exit early - no WebRTC setup
     }
     
-    console.log('[FiresideRoomScreen] Starting connection process...');
+    logger.log('[FiresideRoomScreen] Starting connection process...');
     logger.log('[FiresideRoomScreen] Starting connection process...');
 
     (async () => {
       // Local mic - create stream and store it in state
       try {
-        console.log('[Fireside] Requesting microphone access...');
+        logger.log('[Fireside] Requesting microphone access...');
         logger.log('[Fireside] Requesting microphone access...');
         const stream = await mediaDevices.getUserMedia({ audio: true, video: false });
-        console.log('[Fireside] ✅ Local audio stream created, tracks:', stream.getAudioTracks().length);
+        logger.log('[Fireside] ✅ Local audio stream created, tracks:', stream.getAudioTracks().length);
         logger.log('[Fireside] ✅ Local audio stream created');
         stream.getTracks().forEach(t => {
-          console.log('[Fireside] Track:', { kind: t.kind, enabled: t.enabled, id: t.id });
+          logger.log('[Fireside] Track:', { kind: t.kind, enabled: t.enabled, id: t.id });
         });
         setLocalStream(stream);
         localStreamRef.current = stream;
-        console.log('[Fireside] Local stream stored in state');
+        logger.log('[Fireside] Local stream stored in state');
         logger.log('[Fireside] Local stream stored in state');
         // Update status if socket is already connected
         if (connected) {
@@ -278,7 +287,7 @@ export default function FiresideRoomScreen() {
         }
       } catch (e: any) {
         const errorMsg = e?.message || String(e);
-        console.warn('[Fireside] ❌ Mic permission denied or getUserMedia failed:', errorMsg);
+        logger.warn('[Fireside] ❌ Mic permission denied or getUserMedia failed:', errorMsg);
         logger.warn('[Fireside] ❌ Mic permission denied or getUserMedia failed:', errorMsg);
         if (errorMsg.includes('permission') || errorMsg.includes('Permission')) {
           setStatus('Mic unavailable: permission denied. Please enable microphone access in settings.');
@@ -288,11 +297,11 @@ export default function FiresideRoomScreen() {
       }
 
       // Signaling
-      console.log('[FiresideRoomScreen] Calling connectSignal...');
+      logger.log('[FiresideRoomScreen] Calling connectSignal...');
       logger.log('[FiresideRoomScreen] Calling connectSignal...');
       const socket = connectSignal(getJwt);
       socketRef.current = socket;
-      console.log('[FiresideRoomScreen] Socket created, setting up listeners...');
+      logger.log('[FiresideRoomScreen] Socket created, setting up listeners...');
       logger.log('[FiresideRoomScreen] Socket created, setting up listeners...');
       
       // Update status to show we're attempting connection
@@ -300,19 +309,26 @@ export default function FiresideRoomScreen() {
       
       // Timeout handler - use a ref to track if we've connected
       let hasConnected = false;
-      const connectionTimeout = setTimeout(() => {
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
+      }
+      connectionTimeoutRef.current = setTimeout(() => {
         if (!hasConnected) {
-          console.warn('⏱️ [Fireside] Connection timeout after 10s');
+          logger.warn('⏱️ [Fireside] Connection timeout after 10s');
           setStatus('Connection timeout - check your network or server');
           setConnected(false);
         }
+        connectionTimeoutRef.current = null;
       }, 10000);
       
       // Connection handlers with better error feedback
       socket.on('connect', () => {
         hasConnected = true;
-        clearTimeout(connectionTimeout);
-        console.log('✅ [Fireside] WebSocket connected', socket.id);
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
+        logger.log('✅ [Fireside] WebSocket connected', socket.id);
         logger.log('✅ [Fireside] WebSocket connected', socket.id);
         mySocketIdRef.current = socket.id;
         setConnected(true);
@@ -331,7 +347,7 @@ export default function FiresideRoomScreen() {
       
       // Handle room join confirmation
       socket.on('room-joined', (data: any) => {
-        console.log('✅ [Fireside] Room joined:', data);
+        logger.log('✅ [Fireside] Room joined:', data);
         logger.log('✅ [Fireside] Room joined:', data);
         if (localStreamRef.current) {
           setStatus('Ready');
@@ -341,7 +357,7 @@ export default function FiresideRoomScreen() {
       });
       
       socket.on('user-joined', async (data: any) => {
-        console.log('[Fireside] User joined room:', data);
+        logger.log('[Fireside] User joined room:', data);
         const newUserId = data.userId || data.from;
         
         if (!newUserId || newUserId === mySocketIdRef.current) {
@@ -360,7 +376,7 @@ export default function FiresideRoomScreen() {
         const pc = await createPeerConnection(newUserId);
         if (pc && localStreamRef.current) {
           try {
-            console.log('[Fireside] Creating offer for new user:', newUserId);
+            logger.log('[Fireside] Creating offer for new user:', newUserId);
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
             socket.emit('offer', {
@@ -371,9 +387,9 @@ export default function FiresideRoomScreen() {
                 sdp: offer.sdp,
               },
             });
-            console.log('[Fireside] Offer sent to:', newUserId);
+            logger.log('[Fireside] Offer sent to:', newUserId);
           } catch (e) {
-            console.warn('[Fireside] Failed to create offer:', e);
+            logger.warn('[Fireside] Failed to create offer:', e);
           }
         }
         
@@ -384,7 +400,7 @@ export default function FiresideRoomScreen() {
       });
       
       socket.on('user-left', (data: any) => {
-        console.log('[Fireside] User left room:', data);
+        logger.log('[Fireside] User left room:', data);
         const leftUserId = data.userId || data.from;
         setUsersInRoom(prev => prev.filter(id => id !== leftUserId));
         
@@ -405,15 +421,18 @@ export default function FiresideRoomScreen() {
       
       socket.on('disconnect', (reason) => {
         hasConnected = false;
-        console.log('❌ [Fireside] WebSocket disconnected:', reason);
+        logger.log('❌ [Fireside] WebSocket disconnected:', reason);
         setConnected(false);
         setStatus('Disconnected');
       });
       
       socket.on('connect_error', (error) => {
         hasConnected = false;
-        clearTimeout(connectionTimeout);
-        console.error('❌ [Fireside] WebSocket connection error:', error);
+        if (connectionTimeoutRef.current) {
+          clearTimeout(connectionTimeoutRef.current);
+          connectionTimeoutRef.current = null;
+        }
+        logger.error('❌ [Fireside] WebSocket connection error:', error);
         setConnected(false);
         const errorMsg = error?.message || String(error);
         if (errorMsg.includes('ECONNREFUSED') || errorMsg.includes('Network')) {
@@ -430,7 +449,7 @@ export default function FiresideRoomScreen() {
         const fromId = data.from;
         if (!fromId || fromId === mySocketIdRef.current) return;
         
-        console.log('[Fireside] Received offer from:', fromId);
+        logger.log('[Fireside] Received offer from:', fromId);
         
         // Create or get peer connection for this user
         let pc = peerConnectionsRef.current.get(fromId);
@@ -439,7 +458,7 @@ export default function FiresideRoomScreen() {
         }
         
         if (!pc) {
-          console.warn('[Fireside] Failed to create peer connection for offer from', fromId);
+          logger.warn('[Fireside] Failed to create peer connection for offer from', fromId);
           return;
         }
         
@@ -455,9 +474,9 @@ export default function FiresideRoomScreen() {
               sdp: answer.sdp,
             },
           });
-          console.log('[Fireside] Answer sent to:', fromId);
+          logger.log('[Fireside] Answer sent to:', fromId);
         } catch (e) {
-          console.warn('[Fireside] Failed to handle offer:', e);
+          logger.warn('[Fireside] Failed to handle offer:', e);
         }
       });
       
@@ -465,17 +484,17 @@ export default function FiresideRoomScreen() {
         const fromId = data.from;
         if (!fromId || fromId === mySocketIdRef.current) return;
         
-        console.log('[Fireside] Received answer from:', fromId);
+        logger.log('[Fireside] Received answer from:', fromId);
         const pc = peerConnectionsRef.current.get(fromId);
         if (!pc) {
-          console.warn('[Fireside] No peer connection for answer from', fromId);
+          logger.warn('[Fireside] No peer connection for answer from', fromId);
           return;
         }
         
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
         } catch (e) {
-          console.warn('[Fireside] Failed to set remote description from answer:', e);
+          logger.warn('[Fireside] Failed to set remote description from answer:', e);
         }
       });
       
@@ -485,14 +504,14 @@ export default function FiresideRoomScreen() {
         
         const pc = peerConnectionsRef.current.get(fromId);
         if (!pc) {
-          console.warn('[Fireside] No peer connection for ICE candidate from', fromId);
+          logger.warn('[Fireside] No peer connection for ICE candidate from', fromId);
           return;
         }
         
         try {
           await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
         } catch (e) {
-          console.warn('[Fireside] Failed to add ICE candidate:', e);
+          logger.warn('[Fireside] Failed to add ICE candidate:', e);
         }
       });
 
@@ -500,6 +519,16 @@ export default function FiresideRoomScreen() {
     })();
 
     return () => {
+      // Cleanup timeouts
+      if (connectionTimeoutRef.current) {
+        clearTimeout(connectionTimeoutRef.current);
+        connectionTimeoutRef.current = null;
+      }
+      speakerTimeoutRef.current.forEach((timeout) => {
+        clearTimeout(timeout);
+      });
+      speakerTimeoutRef.current.clear();
+      
       try { socketRef.current?.emit?.('leave-room', { room: `circle-${circleId}` }); } catch {}
       try { socketRef.current?.disconnect?.(); } catch {}
       try { 
@@ -511,7 +540,7 @@ export default function FiresideRoomScreen() {
         try {
           pc.close();
         } catch (e) {
-          console.warn('[Fireside] Error closing peer connection for', peerId, e);
+          logger.warn('[Fireside] Error closing peer connection for', peerId, e);
         }
       });
       peerConnectionsRef.current.clear();
@@ -554,7 +583,7 @@ export default function FiresideRoomScreen() {
       {RTCView && Array.from(remoteStreams.entries()).map(([peerId, stream]) => (
         <RTCView
           key={peerId}
-          streamURL={stream.toURL()}
+          streamURL={(stream as any).toURL()}
           // Tiny & transparent; just to drive audio
           style={{ width: 1, height: 1, opacity: 0, position: 'absolute' }}
           objectFit="cover"

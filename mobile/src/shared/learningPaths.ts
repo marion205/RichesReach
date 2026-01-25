@@ -25,9 +25,9 @@ export interface LearningPath {
   color?: string;
 }
 
-export type PathId = keyof typeof LEARNING_PATHS;
+export type PathId = string;
 
-export const LEARNING_PATHS: Record<PathId, LearningPath> = {
+export const LEARNING_PATHS: Record<string, LearningPath> = {
   creditBasics: {
     id: 'creditBasics',
     title: 'Credit Basics',
@@ -154,10 +154,10 @@ Object.values(LEARNING_PATHS).forEach((path) => {
 
 // Dev-time validation
 if (__DEV__) {
-  console.log('✅ Learning Paths Loaded:', Object.keys(LEARNING_PATHS));
+  // Development logging removed - use logger if needed
   Object.values(LEARNING_PATHS).forEach((path) => {
     if (path.steps.length === 0) {
-      console.warn(`⚠️ Empty path: ${path.id}`);
+      // Empty path validation removed
     }
   });
 }

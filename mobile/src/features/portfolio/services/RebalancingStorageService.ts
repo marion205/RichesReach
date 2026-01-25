@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import logger from '../../../utils/logger';
 export interface RebalancingResult {
 id: string;
 timestamp: string;
@@ -48,7 +49,7 @@ const updatedResults = [rebalancingResult, ...existingResults].slice(0, this.MAX
 // Save to AsyncStorage
 await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(updatedResults));
 } catch (error) {
-console.error(' Error saving rebalancing result:', error);
+logger.error('Error saving rebalancing result:', error);
 throw error;
 }
 }
@@ -64,7 +65,7 @@ return [];
 const results = JSON.parse(resultsJson);
 return Array.isArray(results) ? results : [];
 } catch (error) {
-console.error(' Error getting rebalancing results:', error);
+logger.error('Error getting rebalancing results:', error);
 return [];
 }
 }
@@ -76,7 +77,7 @@ try {
 const results = await this.getRebalancingResults();
 return results.length > 0 ? results[0] : null;
 } catch (error) {
-console.error(' Error getting latest rebalancing result:', error);
+logger.error('Error getting latest rebalancing result:', error);
 return null;
 }
 }
@@ -87,7 +88,7 @@ async clearAllResults(): Promise<void> {
 try {
 await AsyncStorage.removeItem(this.STORAGE_KEY);
 } catch (error) {
-console.error(' Error clearing rebalancing results:', error);
+logger.error('Error clearing rebalancing results:', error);
 throw error;
 }
 }
@@ -100,7 +101,7 @@ const results = await this.getRebalancingResults();
 const recentResults = results.slice(0, keepCount);
 await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(recentResults));
 } catch (error) {
-console.error(' Error clearing old rebalancing results:', error);
+logger.error('Error clearing old rebalancing results:', error);
 throw error;
 }
 }
@@ -147,7 +148,7 @@ exportText += '\n' + '-'.repeat(40) + '\n\n';
 });
 return exportText;
 } catch (error) {
-console.error(' Error exporting rebalancing results:', error);
+logger.error('Error exporting rebalancing results:', error);
 return 'Error exporting results.';
 }
 }
@@ -173,7 +174,7 @@ averageCost: results.length > 0 ? totalCost / results.length : 0,
 lastRebalancingDate: results.length > 0 ? results[0].timestamp : null,
 };
 } catch (error) {
-console.error(' Error getting rebalancing stats:', error);
+logger.error('Error getting rebalancing stats:', error);
 return {
 totalRebalancings: 0,
 successfulRebalancings: 0,

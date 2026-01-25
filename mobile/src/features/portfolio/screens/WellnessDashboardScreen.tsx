@@ -4,6 +4,7 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { useQuery } from '@apollo/client';
 import { GET_MY_PORTFOLIOS } from '../../../portfolioQueries';
 import WellnessScoreDashboard from '../../../components/WellnessScoreDashboard';
+import logger from '../../../utils/logger';
 
 export default function WellnessDashboardScreen() {
   const navigation = useNavigation<any>();
@@ -37,7 +38,6 @@ export default function WellnessDashboardScreen() {
   };
 
   const handleActionPress = (action: string) => {
-    console.log(`Wellness Action: ${action}`, portfolio);
     
     switch (action) {
       case 'Auto-Rebalance':
@@ -95,7 +95,6 @@ export default function WellnessDashboardScreen() {
       default:
         // Fallback - show alert
         Alert.alert('Action', `The ${action} feature is coming soon!`);
-        console.log('Unhandled action:', action);
         break;
     }
   };

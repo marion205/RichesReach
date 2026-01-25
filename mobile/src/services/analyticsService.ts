@@ -4,6 +4,7 @@
  */
 
 import type { MomentAnalyticsEvent } from "../components/charts/MomentStoryPlayer";
+import logger from '../utils/logger';
 
 // Analytics backend configuration
 const ANALYTICS_ENABLED = true; // Feature flag
@@ -40,7 +41,7 @@ export async function trackMomentEvent(
 
   // Try to send immediately (fire and forget)
   sendEvent(enrichedEvent).catch((error) => {
-    console.warn("[Analytics] Failed to send event, will retry later:", error);
+    logger.warn("[Analytics] Failed to send event, will retry later:", error);
     // Event is already in queue, will be retried on flush
   });
 }
@@ -50,8 +51,7 @@ export async function trackMomentEvent(
  */
 async function sendEvent(event: MomentAnalyticsEvent & { timestamp: string; metadata: Record<string, any> }): Promise<void> {
   if (!ANALYTICS_API_URL) {
-    // No backend configured, just log
-    console.log("[Analytics] Event:", event);
+    // No backend configured - skip logging (not important)
     return;
   }
 
@@ -98,9 +98,9 @@ export async function flushAnalyticsQueue(): Promise<void> {
       throw new Error(`Analytics batch API returned ${response.status}`);
     }
 
-    console.log(`[Analytics] Flushed ${eventsToSend.length} events`);
+    // Flush successful - no need to log
   } catch (error) {
-    console.warn("[Analytics] Failed to flush queue:", error);
+    logger.warn("[Analytics] Failed to flush queue:", error);
     // Re-queue failed events
     eventQueue.unshift(...eventsToSend);
   }
@@ -131,7 +131,7 @@ export async function getMomentMetrics(symbol: string): Promise<MomentMetrics | 
     }
     return await response.json();
   } catch (error) {
-    console.warn("[Analytics] Failed to fetch metrics:", error);
+    logger.warn("[Analytics] Failed to fetch metrics:", error);
     return null;
   }
 }

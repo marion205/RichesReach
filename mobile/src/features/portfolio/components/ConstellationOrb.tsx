@@ -98,7 +98,7 @@ export const ConstellationOrb: React.FC<ConstellationOrbProps> = ({
   const satellite3Angle = useSharedValue(240);
   
   // Position satellite animations - Initialize all 6 upfront (max positions)
-  const positionAngles = useRef<Animated.SharedValue<number>[]>([
+  const positionAngles = useRef<ReturnType<typeof useSharedValue<number>>[]>([
     useSharedValue(60),
     useSharedValue(120),
     useSharedValue(180),
@@ -106,7 +106,7 @@ export const ConstellationOrb: React.FC<ConstellationOrbProps> = ({
     useSharedValue(300),
     useSharedValue(360),
   ]);
-  const positionScales = useRef<Animated.SharedValue<number>[]>([
+  const positionScales = useRef<ReturnType<typeof useSharedValue<number>>[]>([
     useSharedValue(1),
     useSharedValue(1),
     useSharedValue(1),
@@ -281,7 +281,7 @@ export const ConstellationOrb: React.FC<ConstellationOrbProps> = ({
       transform: [
         { scale: orbScale.value * feedbackScale.value },
         { rotate: `${orbRotation.value}deg` },
-      ],
+      ] as any,
       opacity: orbOpacity.value * feedbackOpacity.value,
     };
   });
@@ -312,7 +312,7 @@ export const ConstellationOrb: React.FC<ConstellationOrbProps> = ({
   });
 
   // Calculate satellite positions (cash flow indicators)
-  const getSatellitePosition = (angle: Animated.SharedValue<number>, radius: number) => {
+  const getSatellitePosition = (angle: ReturnType<typeof useSharedValue<number>>, radius: number) => {
     return useAnimatedStyle(() => {
       const rad = (angle.value * Math.PI) / 180;
       const x = ORB_CENTER + radius * Math.cos(rad) - 8; // -8 for center of satellite
@@ -535,7 +535,7 @@ export const ConstellationOrb: React.FC<ConstellationOrbProps> = ({
             {/* Core Orb - Net Worth with Gradient */}
             <Animated.View style={[styles.coreOrb, orbStyle, glowStyle]}>
             <LinearGradient
-              colors={orbGradientColors}
+              colors={orbGradientColors as [string, string, ...string[]]}
               style={StyleSheet.absoluteFill}
               start={{ x: 0.5, y: 0.5 }}
               end={{ x: 1, y: 1 }}

@@ -32,7 +32,7 @@ export default function RiskMonitorCard({ onPositionClick }: RiskMonitorCardProp
         shouldShowAlert: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
-      }),
+      } as any),
     });
 
     // Register for alerts

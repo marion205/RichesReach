@@ -9,6 +9,7 @@
  */
 
 import { ethers } from 'ethers';
+import logger from '../utils/logger';
 
 export interface SmartWalletConfig {
   bundlerUrl: string;
@@ -106,7 +107,7 @@ class AccountAbstractionService {
       
       return walletAddress;
     } catch (error) {
-      console.error('Failed to create smart wallet:', error);
+      logger.error('Failed to create smart wallet:', error);
       throw new Error('Failed to create smart wallet');
     }
   }
@@ -149,7 +150,7 @@ class AccountAbstractionService {
       
       return txHash;
     } catch (error) {
-      console.error('Failed to send user operation:', error);
+      logger.error('Failed to send user operation:', error);
       throw new Error('Failed to send user operation');
     }
   }
@@ -226,7 +227,7 @@ class AccountAbstractionService {
         signature,
       };
     } catch (error) {
-      console.error('Failed to create session key:', error);
+      logger.error('Failed to create session key:', error);
       throw new Error('Failed to create session key');
     }
   }
@@ -258,7 +259,7 @@ class AccountAbstractionService {
 
       return recoveredAddress.toLowerCase() === ownerAddress.toLowerCase();
     } catch (error) {
-      console.error('Failed to validate session key:', error);
+      logger.error('Failed to validate session key:', error);
       return false;
     }
   }
@@ -290,7 +291,7 @@ class AccountAbstractionService {
 
       return result.result;
     } catch (error) {
-      console.error('Failed to send to bundler:', error);
+      logger.error('Failed to send to bundler:', error);
       throw error;
     }
   }
@@ -337,13 +338,13 @@ class AccountAbstractionService {
       const result = await response.json();
       
       if (result.error) {
-        console.warn('Pimlico paymaster failed, trying Biconomy:', result.error);
+        logger.warn('Pimlico paymaster failed, trying Biconomy:', result.error);
         return await this.getBiconomyPaymasterData(sender, gasEstimates);
       }
 
       return result.result?.paymasterAndData || '0x';
     } catch (error) {
-      console.error('Failed to get Pimlico paymaster data:', error);
+      logger.error('Failed to get Pimlico paymaster data:', error);
       // Fallback to Biconomy
       return await this.getBiconomyPaymasterData(sender, gasEstimates);
     }
@@ -379,7 +380,7 @@ class AccountAbstractionService {
       const result = await response.json();
       return result.paymasterAndData || '0x';
     } catch (error) {
-      console.error('Failed to get Biconomy paymaster data:', error);
+      logger.error('Failed to get Biconomy paymaster data:', error);
       return '0x';
     }
   }
@@ -482,7 +483,7 @@ class AccountAbstractionService {
       const balance = await this.provider.getBalance(address);
       return ethers.utils.formatEther(balance);
     } catch (error) {
-      console.error('Failed to get wallet balance:', error);
+      logger.error('Failed to get wallet balance:', error);
       throw error;
     }
   }

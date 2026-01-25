@@ -21,6 +21,7 @@ const C = {
 
 interface AccountSummaryCardProps {
   account: {
+    id?: string;
     portfolioValue?: number;
     equity?: number;
     buyingPower?: number;

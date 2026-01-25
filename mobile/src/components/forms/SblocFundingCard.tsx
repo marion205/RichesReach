@@ -2,6 +2,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import logger from '../../utils/logger';
 
 type Props = {
   onPress: () => void;
@@ -14,19 +15,12 @@ const fmt = (n:number) => `$${Math.max(0, Math.round(n)).toLocaleString()}`;
 
 const SblocFundingCard: React.FC<Props> = ({ onPress, maxBorrow, aprPct, portfolioValue }) => {
   const handlePress = () => {
-    console.log('🔵 SblocFundingCard: Button pressed, calling onPress');
-    console.log('🔵 SblocFundingCard: onPress type:', typeof onPress);
-    console.log('🔵 SblocFundingCard: onPress value:', onPress);
     if (onPress) {
-      console.log('🔵 SblocFundingCard: Calling onPress now...');
       try {
         onPress();
-        console.log('✅ SblocFundingCard: onPress called successfully');
       } catch (error) {
-        console.error('❌ SblocFundingCard: Error calling onPress:', error);
+        logger.error('❌ SblocFundingCard: Error calling onPress:', error);
       }
-    } else {
-      console.error('❌ SblocFundingCard: onPress is not defined!');
     }
   };
 
@@ -40,12 +34,8 @@ const SblocFundingCard: React.FC<Props> = ({ onPress, maxBorrow, aprPct, portfol
       <TouchableOpacity 
         style={styles.cta} 
         onPress={handlePress}
-        onPressIn={() => {
-          console.log('🔵 SblocFundingCard: onPressIn triggered');
-        }}
-        onPressOut={() => {
-          console.log('🔵 SblocFundingCard: onPressOut triggered');
-        }}
+        onPressIn={() => {}}
+        onPressOut={() => {}}
         activeOpacity={0.7}
         accessibilityRole="button"
         accessibilityLabel="Estimate and draw from portfolio"

@@ -1,5 +1,6 @@
-import { Speech } from 'expo-speech';
+import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
+import logger from '../utils/logger';
 
 export interface VoiceCommand {
   id: string;
@@ -87,7 +88,7 @@ export class VoiceCommandService {
       // Haptic feedback
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
-      console.error('Error executing command:', error);
+      logger.error('Error executing command:', error);
       await this.speakResponse('Sorry, I had trouble executing that command.');
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
@@ -104,7 +105,7 @@ export class VoiceCommandService {
         pitch: 1.0,
       });
     } catch (error) {
-      console.error('Error speaking response:', error);
+      logger.error('Error speaking response:', error);
     }
   }
 
@@ -467,7 +468,7 @@ export class VoiceCommandService {
         await this.speakResponse(`Failed to launch meme: ${result.error}`);
       }
     } catch (error) {
-      console.error('Error launching meme:', error);
+      logger.error('Error launching meme:', error);
       await this.speakResponse('Sorry, I had trouble launching the meme.');
     }
   }
@@ -493,7 +494,7 @@ export class VoiceCommandService {
         await this.speakResponse(`Failed to join raid: ${result.error}`);
       }
     } catch (error) {
-      console.error('Error joining raid:', error);
+      logger.error('Error joining raid:', error);
       await this.speakResponse('Sorry, I had trouble joining the raid.');
     }
   }
@@ -519,7 +520,7 @@ export class VoiceCommandService {
         await this.speakResponse(`Failed to stake: ${result.error}`);
       }
     } catch (error) {
-      console.error('Error staking:', error);
+      logger.error('Error staking:', error);
       await this.speakResponse('Sorry, I had trouble staking.');
     }
   }

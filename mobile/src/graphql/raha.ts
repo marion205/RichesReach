@@ -277,3 +277,191 @@ export const GENERATE_RAHA_SIGNALS = gql`
   }
 `;
 
+export const CREATE_CUSTOM_STRATEGY = gql`
+  mutation CreateCustomStrategy(
+    $name: String!
+    $description: String!
+    $category: String!
+    $marketType: String!
+    $timeframeSupported: [String!]!
+    $customLogic: JSONString!
+    $configSchema: JSONString
+  ) {
+    createCustomStrategy(
+      name: $name
+      description: $description
+      category: $category
+      marketType: $marketType
+      timeframeSupported: $timeframeSupported
+      customLogic: $customLogic
+      configSchema: $configSchema
+    ) {
+      success
+      message
+      strategy {
+        id
+        name
+        slug
+        category
+        description
+      }
+    }
+  }
+`;
+
+// ============================================================================
+// ML Model Training
+// ============================================================================
+
+export const GET_ML_MODELS = gql`
+  query GetMLModels {
+    mlModels {
+      id
+      strategyVersionId
+      strategyName
+      symbol
+      modelType
+      lookbackDays
+      trainingSamples
+      metrics
+      isActive
+      createdAt
+      trainedAt
+    }
+  }
+`;
+
+export const TRAIN_ML_MODEL = gql`
+  mutation TrainMLModel(
+    $strategyVersionId: ID
+    $symbol: String
+    $lookbackDays: Int!
+    $modelType: String!
+  ) {
+    trainMlModel(
+      strategyVersionId: $strategyVersionId
+      symbol: $symbol
+      lookbackDays: $lookbackDays
+      modelType: $modelType
+    ) {
+      success
+      message
+      trainingSamples
+      metrics {
+        accuracy
+        precision
+        recall
+        f1Score
+        rocAuc
+        mse
+        mae
+        rmse
+      }
+      modelType
+      trainedAt
+    }
+  }
+`;
+
+// ============================================================================
+// Strategy Blend Queries and Mutations
+// ============================================================================
+
+export const GET_STRATEGY_BLENDS = gql`
+  query GetStrategyBlends {
+    strategyBlends {
+      id
+      name
+      description
+      components {
+        strategyVersionId
+        weight
+        strategyName
+      }
+      isActive
+      isDefault
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const CREATE_STRATEGY_BLEND = gql`
+  mutation CreateStrategyBlend(
+    $name: String!
+    $description: String
+    $components: [StrategyBlendComponentInput!]!
+    $isDefault: Boolean
+  ) {
+    createStrategyBlend(
+      name: $name
+      description: $description
+      components: $components
+      isDefault: $isDefault
+    ) {
+      success
+      message
+      strategyBlend {
+        id
+        name
+        description
+        components {
+          strategyVersionId
+          weight
+          strategyName
+        }
+        isActive
+        isDefault
+        createdAt
+        updatedAt
+      }
+    }
+  }
+`;
+
+export const UPDATE_STRATEGY_BLEND = gql`
+  mutation UpdateStrategyBlend(
+    $id: ID!
+    $name: String
+    $description: String
+    $components: [StrategyBlendComponentInput!]
+    $isActive: Boolean
+    $isDefault: Boolean
+  ) {
+    updateStrategyBlend(
+      id: $id
+      name: $name
+      description: $description
+      components: $components
+      isActive: $isActive
+      isDefault: $isDefault
+    ) {
+      success
+      message
+      strategyBlend {
+        id
+        name
+        description
+        components {
+          strategyVersionId
+          weight
+          strategyName
+        }
+        isActive
+        isDefault
+        createdAt
+        updatedAt
+      }
+    }
+  }
+`;
+
+export const DELETE_STRATEGY_BLEND = gql`
+  mutation DeleteStrategyBlend($id: ID!) {
+    deleteStrategyBlend(id: $id) {
+      success
+      message
+    }
+  }
+`;
+

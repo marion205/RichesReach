@@ -7,12 +7,8 @@
 import { gql } from '@apollo/client';
 import { API_HTTP } from '../../../config/api';
 import type {
-  ExtendedQueryOptionsChainQuery,
-  ExtendedQueryOptionsChainQueryVariables,
-  ExtendedQueryOptionsAnalysisQuery,
-  ExtendedQueryOptionsAnalysisQueryVariables,
-  ExtendedQueryScanOptionsQuery,
-  ExtendedQueryScanOptionsQueryVariables,
+  ExtendedQueryOptionsAnalysisArgs,
+  ExtendedQueryScanOptionsArgs,
   OptionsChainType,
   OptionsAnalysisType,
   OptionsContractType,
@@ -210,7 +206,7 @@ export function getBestStrategy(
   // ✅ TypeScript knows recommendedStrategies structure
   return [...analysis.recommendedStrategies]
     .filter(strategy => strategy != null)
-    .sort((a, b) => (b?.confidence ?? 0) - (a?.confidence ?? 0))[0] || null;
+    .sort((a, b) => (b?.probabilityOfProfit ?? 0) - (a?.probabilityOfProfit ?? 0))[0] || null;
 }
 
 // Keep the service class for backward compatibility, but use typed interfaces

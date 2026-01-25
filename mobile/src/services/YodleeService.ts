@@ -4,6 +4,7 @@
  */
 
 import { API_HTTP } from '../config/api';
+import logger from '../utils/logger';
 
 export interface FastLinkSession {
   accessToken: string;
@@ -88,7 +89,7 @@ class YodleeService {
                 await AsyncStorage.getItem('jwt_token');
       }
       
-      console.log('🔵 [YodleeService] Token retrieved:', token ? `${token.substring(0, 30)}...` : 'NOT FOUND');
+      logger.log('🔵 [YodleeService] Token retrieved:', token ? `${token.substring(0, 30)}...` : 'NOT FOUND');
       
       // Build headers - ALWAYS include Authorization if token exists
       const headers: Record<string, string> = {
@@ -98,16 +99,16 @@ class YodleeService {
       
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
-        console.log('🔵 [YodleeService] Authorization header set:', `Bearer ${token.substring(0, 30)}...`);
+        logger.log('🔵 [YodleeService] Authorization header set:', `Bearer ${token.substring(0, 30)}...`);
       } else {
-        console.error('❌ [YodleeService] No token found in AsyncStorage!');
-        console.error('❌ [YodleeService] Tried keys: token, authToken, access_token, jwt_token');
+        logger.error('❌ [YodleeService] No token found in AsyncStorage!');
+        logger.error('❌ [YodleeService] Tried keys: token, authToken, access_token, jwt_token');
         throw new Error('Authentication token not found. Please log in again.');
       }
       
-      console.log('🔵 [YodleeService] Request URL:', `${this.baseUrl}/fastlink/start`);
-      console.log('🔵 [YodleeService] Request method: GET');
-      console.log('🔵 [YodleeService] Request headers:', Object.keys(headers).map(k => `${k}: ${k === 'Authorization' ? headers[k].substring(0, 30) + '...' : headers[k]}`));
+      logger.log('🔵 [YodleeService] Request URL:', `${this.baseUrl}/fastlink/start`);
+      logger.log('🔵 [YodleeService] Request method: GET');
+      logger.log('🔵 [YodleeService] Request headers:', Object.keys(headers).map(k => `${k}: ${k === 'Authorization' ? headers[k].substring(0, 30) + '...' : headers[k]}`));
       
       const response = await fetch(`${this.baseUrl}/fastlink/start`, {
         method: 'GET',
@@ -121,7 +122,7 @@ class YodleeService {
       const sessionData = await response.json();
       return sessionData;
     } catch (error) {
-      console.error('Failed to create FastLink session:', error);
+      logger.error('Failed to create FastLink session:', error);
       throw error;
     }
   }
@@ -153,7 +154,7 @@ class YodleeService {
       const result = await response.json();
       return result;
     } catch (error) {
-      console.error('Failed to process FastLink callback:', error);
+      logger.error('Failed to process FastLink callback:', error);
       throw error;
     }
   }
@@ -183,7 +184,7 @@ class YodleeService {
       const result = await response.json();
       return result;
     } catch (error) {
-      console.error('Failed to fetch accounts:', error);
+      logger.error('Failed to fetch accounts:', error);
       throw error;
     }
   }
@@ -213,7 +214,7 @@ class YodleeService {
       const result = await response.json();
       return result;
     } catch (error) {
-      console.error('Failed to refresh account:', error);
+      logger.error('Failed to refresh account:', error);
       throw error;
     }
   }
@@ -243,7 +244,7 @@ class YodleeService {
       const result = await response.json();
       return result;
     } catch (error) {
-      console.error('Failed to get transactions:', error);
+      logger.error('Failed to get transactions:', error);
       throw error;
     }
   }
@@ -272,7 +273,7 @@ class YodleeService {
       const result = await response.json();
       return result;
     } catch (error) {
-      console.error('Failed to delete bank link:', error);
+      logger.error('Failed to delete bank link:', error);
       throw error;
     }
   }
@@ -307,27 +308,27 @@ class YodleeService {
 
       // If we get a 503, Yodlee is disabled
       if (response.status === 503) {
-        console.log('Yodlee is disabled (503 response)');
+        logger.log('Yodlee is disabled (503 response)');
         return false;
       }
       
       // If we get 401, Yodlee is enabled but auth is required (which is expected)
       if (response.status === 401) {
-        console.log('Yodlee is available (401 = auth required, which is expected)');
+        logger.log('Yodlee is available (401 = auth required, which is expected)');
         return true;
       }
 
       // If we get 200, Yodlee is available and working
       if (response.ok) {
-        console.log('Yodlee is available (200 response)');
+        logger.log('Yodlee is available (200 response)');
         return true;
       }
 
       // Other status codes mean Yodlee might be available but there's an issue
-      console.log(`Yodlee availability check returned status ${response.status}`);
+      logger.log(`Yodlee availability check returned status ${response.status}`);
       return false;
     } catch (error) {
-      console.error('Failed to check Yodlee availability:', error);
+      logger.error('Failed to check Yodlee availability:', error);
       return false;
     }
   }

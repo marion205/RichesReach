@@ -4,6 +4,7 @@
  */
 
 import { ethers } from 'ethers';
+import logger from '../utils/logger';
 
 export interface SwapIntent {
   sellToken: string;
@@ -66,7 +67,7 @@ class IntentService {
           throw new Error('Invalid intent source');
       }
     } catch (error) {
-      console.error('Failed to create swap intent:', error);
+      logger.error('Failed to create swap intent:', error);
       throw error;
     }
   }
@@ -82,7 +83,7 @@ class IntentService {
       const cowQuote = await this.getCoWSwapQuote(intent);
       if (cowQuote) quotes.push(cowQuote);
     } catch (error) {
-      console.warn('CoW Swap quote failed:', error);
+      logger.warn('CoW Swap quote failed:', error);
     }
 
     try {
@@ -90,7 +91,7 @@ class IntentService {
       const oneinchQuote = await this.get1inchFusionQuote(intent);
       if (oneinchQuote) quotes.push(oneinchQuote);
     } catch (error) {
-      console.warn('1inch Fusion quote failed:', error);
+      logger.warn('1inch Fusion quote failed:', error);
     }
 
     try {
@@ -98,7 +99,7 @@ class IntentService {
       const uniswapxQuote = await this.getUniswapXQuote(intent);
       if (uniswapxQuote) quotes.push(uniswapxQuote);
     } catch (error) {
-      console.warn('UniswapX quote failed:', error);
+      logger.warn('UniswapX quote failed:', error);
     }
 
     return quotes;
@@ -174,7 +175,7 @@ class IntentService {
         status: 'pending',
       };
     } catch (error) {
-      console.error('CoW Swap intent creation failed:', error);
+      logger.error('CoW Swap intent creation failed:', error);
       throw error;
     }
   }
@@ -199,7 +200,7 @@ class IntentService {
         validUntil: Date.now() + (intent.validFor * 1000),
       };
     } catch (error) {
-      console.error('CoW Swap quote failed:', error);
+      logger.error('CoW Swap quote failed:', error);
       return null;
     }
   }
@@ -230,7 +231,7 @@ class IntentService {
         status: 'pending',
       };
     } catch (error) {
-      console.error('1inch Fusion intent creation failed:', error);
+      logger.error('1inch Fusion intent creation failed:', error);
       throw error;
     }
   }
@@ -256,7 +257,7 @@ class IntentService {
         validUntil: Date.now() + (intent.validFor * 1000),
       };
     } catch (error) {
-      console.error('1inch Fusion quote failed:', error);
+      logger.error('1inch Fusion quote failed:', error);
       return null;
     }
   }
@@ -287,7 +288,7 @@ class IntentService {
         status: 'pending',
       };
     } catch (error) {
-      console.error('UniswapX intent creation failed:', error);
+      logger.error('UniswapX intent creation failed:', error);
       throw error;
     }
   }
@@ -320,7 +321,7 @@ class IntentService {
         validUntil: Date.now() + (intent.validFor * 1000),
       };
     } catch (error) {
-      console.error('UniswapX quote failed:', error);
+      logger.error('UniswapX quote failed:', error);
       return null;
     }
   }
@@ -352,7 +353,7 @@ class IntentService {
         fillPrice: result.fillPrice,
       };
     } catch (error) {
-      console.error('Failed to get intent status:', error);
+      logger.error('Failed to get intent status:', error);
       throw error;
     }
   }
@@ -401,7 +402,7 @@ class IntentService {
         throw new Error('Failed to cancel intent');
       }
     } catch (error) {
-      console.error('Failed to cancel intent:', error);
+      logger.error('Failed to cancel intent:', error);
       throw error;
     }
   }

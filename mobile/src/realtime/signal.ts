@@ -43,7 +43,6 @@ export function connectSignal(getJwt: () => Promise<string> | string): Socket {
   // Connection event handlers with detailed logging
   socket.on('connect', () => {
     logger.log(`✅ [Fireside] Socket connected! ID: ${socket.id}`);
-    console.log(`✅ [Fireside] Socket connected! ID: ${socket.id}`);
   });
 
   socket.on('connect_error', (err: any) => {
@@ -55,7 +54,6 @@ export function connectSignal(getJwt: () => Promise<string> | string): Socket {
       code: err?.code,
     };
     logger.warn('❌ [Fireside] connect_error', errorDetails);
-    console.error('❌ [Fireside] Connection error:', err?.message || String(err));
     
     // Handle 401 auth errors
     const errorMessage = err?.message || String(err);
@@ -64,10 +62,10 @@ export function connectSignal(getJwt: () => Promise<string> | string): Socket {
         try {
           await refreshJwt();
           const token = await getJwt();
-          // @ts-expect-error: socket.auth is a custom property for socket.io authentication
-          socket.auth = { token };
-          // @ts-expect-error: socket.io.opts.extraHeaders is a valid socket.io option but not in types
-          socket.io.opts.extraHeaders = { Authorization: `Bearer ${token}` };
+          // socket.auth is a custom property for socket.io authentication
+          (socket as any).auth = { token };
+          // socket.io.opts.extraHeaders is a valid socket.io option but not in types
+          (socket.io.opts as any).extraHeaders = { Authorization: `Bearer ${token}` };
           socket.disconnect();
           socket.connect();
         } catch (e) {
@@ -84,13 +82,11 @@ export function connectSignal(getJwt: () => Promise<string> | string): Socket {
 
   socket.on('disconnect', (reason: string) => {
     logger.log(`👋 [Fireside] Socket disconnected: ${reason}`);
-    console.log(`👋 [Fireside] Disconnected: ${reason}`);
   });
 
   // Additional debugging events
   socket.on('reconnect', (attemptNumber: number) => {
     logger.log(`🔄 [Fireside] Reconnected after ${attemptNumber} attempts`);
-    console.log(`🔄 [Fireside] Reconnected after ${attemptNumber} attempts`);
   });
 
   socket.on('reconnect_attempt', (attemptNumber: number) => {
@@ -99,22 +95,20 @@ export function connectSignal(getJwt: () => Promise<string> | string): Socket {
 
   socket.on('reconnect_error', (error: any) => {
     logger.warn(`❌ [Fireside] Reconnection error:`, error);
-    console.error(`❌ [Fireside] Reconnection error:`, error?.message || String(error));
   });
 
   socket.on('reconnect_failed', () => {
     logger.error(`❌ [Fireside] Reconnection failed after all attempts`);
-    console.error(`❌ [Fireside] Reconnection failed after all attempts`);
   });
 
   // Connect with auth token
   (async () => {
     try {
       const token = await getJwt();
-      // @ts-expect-error: socket.auth is a custom property for socket.io authentication
-      socket.auth = { token };
-      // @ts-expect-error: socket.io.opts.extraHeaders is a valid socket.io option but not in types
-      socket.io.opts.extraHeaders = { Authorization: `Bearer ${token}` };
+          // socket.auth is a custom property for socket.io authentication
+          (socket as any).auth = { token };
+          // socket.io.opts.extraHeaders is a valid socket.io option but not in types
+          (socket.io.opts as any).extraHeaders = { Authorization: `Bearer ${token}` };
       socket.connect();
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e);

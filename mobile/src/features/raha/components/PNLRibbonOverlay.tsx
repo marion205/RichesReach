@@ -362,8 +362,8 @@ export default function PNLRibbonOverlay({
         {/* Final P&L number marker */}
         {showFinalNumber && (
           <G
-            opacity={finalNumberOpacity._value}
-            transform={`translate(${finalPNLPoint.x}, ${finalPNLY}) scale(${finalNumberScale._value})`}
+            opacity={finalNumberOpacity as any}
+            transform={`translate(${finalPNLPoint.x}, ${finalPNLY}) scale(${(finalNumberScale as any).__getValue?.() || 0.8})`}
           >
             {/* Glow circle */}
             <Circle
@@ -513,6 +513,12 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0, 0, 0, 0.2)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
+  },
+  finalPNLSubtext: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6B7280',
+    marginTop: 4,
   },
   summaryCard: {
     position: 'absolute',

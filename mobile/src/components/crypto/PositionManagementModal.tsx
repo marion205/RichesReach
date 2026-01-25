@@ -11,7 +11,7 @@ import Icon from 'react-native-vector-icons/Feather';
 
 type Tier = 'SAFE' | 'WARN' | 'AT_RISK' | 'LIQUIDATE';
 
-type AAVEPosition = {
+export type AAVEPosition = {
   id: string;                        // can be reserve address or composed id
   reserveSymbol: string;             // e.g., 'ETH'
   debtUsd: number;                   // total debt in USD for this reserve

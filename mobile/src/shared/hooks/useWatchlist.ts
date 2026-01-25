@@ -1,5 +1,6 @@
 import { gql, useMutation, useQuery } from '@apollo/client';
 import { Alert } from 'react-native';
+import logger from '../../utils/logger';
 
 export const GET_MY_WATCHLIST = gql`
   query GetMyWatchlist {
@@ -47,7 +48,6 @@ export function useWatchlist(skip = false) {
     onCompleted: (res) => {
       if (res?.addToWatchlist?.success) {
         // Don't show alert here - let the calling component handle it
-        console.log('✅ Watchlist item added successfully');
       }
     },
     update: (cache, { data }, { variables }) => {
@@ -75,14 +75,13 @@ export function useWatchlist(skip = false) {
             query: GET_MY_WATCHLIST,
             data: {
               myWatchlist: [
-                ...(existing?.myWatchlist || []),
+                ...((existing as any)?.myWatchlist || []),
                 newItem,
               ],
             },
           });
         } catch (e) {
           // If optimistic update fails, evict and refetch
-          console.log('Optimistic update failed, evicting cache');
           cache.evict({ fieldName: 'myWatchlist' });
           cache.gc();
         }

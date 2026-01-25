@@ -84,6 +84,7 @@ private token: string | null = null;
 private baseUrl: string = '';
 private reconnectTimeout: NodeJS.Timeout | null = null;
 private realMarketDataInterval: NodeJS.Timeout | null = null;
+private authCheckInterval: NodeJS.Timeout | null = null;
 private heartbeat?: any;
 private subscribed = false;
 private backoffBase = 500; // ms
@@ -157,10 +158,13 @@ private setupAuthListeners() {
 // This would typically integrate with your auth service
 // For now, we'll use a simple token validation approach
 // Check token validity periodically
-setInterval(() => {
-if (this.token && this.isConnected) {
-this.validateToken();
+if (this.authCheckInterval) {
+  clearInterval(this.authCheckInterval);
 }
+this.authCheckInterval = setInterval(() => {
+  if (this.token && this.isConnected) {
+    this.validateToken();
+  }
 }, 300000); // Check every 5 minutes
 }
 private handleAppBackground() {
@@ -467,14 +471,18 @@ return;
 }
 const delay = Math.min(8000, this.backoffBase * 2 ** this.reconnectAttempts);
 this.reconnectAttempts++;
-setTimeout(() => {
-if (type === 'stock-prices') {
-this.connectStockPrices(WS_STOCK_PRICES);
-} else if (type === 'discussions') {
-this.connectDiscussions(WS_DISCUSSIONS);
-} else if (type === 'portfolio') {
-this.connectPortfolio(WS_PORTFOLIO);
+if (this.reconnectTimeout) {
+  clearTimeout(this.reconnectTimeout);
 }
+this.reconnectTimeout = setTimeout(() => {
+  if (type === 'stock-prices') {
+    this.connectStockPrices(WS_STOCK_PRICES);
+  } else if (type === 'discussions') {
+    this.connectDiscussions(WS_DISCUSSIONS);
+  } else if (type === 'portfolio') {
+    this.connectPortfolio(WS_PORTFOLIO);
+  }
+  this.reconnectTimeout = null;
 }, delay);
 }
 
@@ -754,6 +762,10 @@ this.realMarketDataInterval = null;
 if (this.reconnectTimeout) {
 clearTimeout(this.reconnectTimeout);
 this.reconnectTimeout = null;
+}
+if (this.authCheckInterval) {
+clearInterval(this.authCheckInterval);
+this.authCheckInterval = null;
 }
 this.onConnectionStatusChange?.(false);
 }

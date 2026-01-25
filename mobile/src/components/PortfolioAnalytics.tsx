@@ -166,11 +166,13 @@ export const PortfolioAnalytics: React.FC<PortfolioAnalyticsProps> = ({
   const formatAllocationData = (positions: Position[]) => {
     const colors = ['#00ff88', '#ff4444', '#ffbb00', '#007bff', '#ff8800', '#8800ff'];
     
-    return {
-      labels: positions.map(p => p.symbol),
-      data: positions.map(p => p.allocation),
-      colors: colors.slice(0, positions.length),
-    };
+    return positions.map((p, index) => ({
+      name: p.symbol,
+      population: p.allocation,
+      color: colors[index % colors.length],
+      legendFontColor: '#FFFFFF',
+      legendFontSize: 12,
+    }));
   };
 
   const formatPerformanceData = (performance: PerformanceMetrics) => {
@@ -200,13 +202,15 @@ export const PortfolioAnalytics: React.FC<PortfolioAnalyticsProps> = ({
   const formatRiskData = (risk: RiskMetrics) => {
     return {
       labels: ['VaR 95%', 'VaR 99%', 'Expected Shortfall', 'Max Drawdown'],
-      data: [
-        Math.abs(risk.var95),
-        Math.abs(risk.var99),
-        Math.abs(risk.expectedShortfall),
-        Math.abs(risk.maxDrawdown),
-      ],
-    };
+      datasets: [{
+        data: [
+          Math.abs(risk.var95),
+          Math.abs(risk.var99),
+          Math.abs(risk.expectedShortfall),
+          Math.abs(risk.maxDrawdown),
+        ],
+      }],
+    } as any;
   };
 
   const chartConfig = {
@@ -269,7 +273,7 @@ export const PortfolioAnalytics: React.FC<PortfolioAnalyticsProps> = ({
             width={screenWidth - 40}
             height={220}
             chartConfig={chartConfig}
-            accessor="data"
+            accessor="population"
             backgroundColor="transparent"
             paddingLeft="15"
             center={[10, 0]}
@@ -445,12 +449,13 @@ export const PortfolioAnalytics: React.FC<PortfolioAnalyticsProps> = ({
         <View style={styles.chartCard}>
           <Text style={styles.chartTitle}>Risk Exposure</Text>
           <BarChart
-            data={riskChartData}
+            data={riskChartData as any}
             width={screenWidth - 40}
             height={220}
             chartConfig={chartConfig}
-            style={styles.chart}
             showValuesOnTopOfBars={true}
+            yAxisLabel=""
+            yAxisSuffix=""
           />
         </View>
 
@@ -502,7 +507,7 @@ export const PortfolioAnalytics: React.FC<PortfolioAnalyticsProps> = ({
             width={screenWidth - 40}
             height={220}
             chartConfig={chartConfig}
-            accessor="data"
+            accessor="population"
             backgroundColor="transparent"
             paddingLeft="15"
             center={[10, 0]}

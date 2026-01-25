@@ -535,7 +535,7 @@ export class SecureMarketDataService {
         headers: {
           'Content-Type': 'application/json',
         },
-        timeout: 15000, // 15 second timeout for options
+        // Note: fetch doesn't support timeout directly - use AbortController if needed
       });
 
       if (!response.ok) {
@@ -602,9 +602,9 @@ export class SecureMarketDataService {
   }
 
   /**
-   * Clear all caches
+   * Clear all caches (including options cache)
    */
-  clearCache(): void {
+  clearAllCaches(): void {
     cache.clear();
     optionsCache.clear();
     inflight.clear();

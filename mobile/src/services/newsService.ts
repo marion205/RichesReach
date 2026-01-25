@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NewsPreferences } from '../graphql/newsPreferences';
+import logger from '../utils/logger';
 // News API Configuration
 const NEWS_API_KEY = '94a335c7316145f79840edd62f77e11e';
 const NEWS_API_BASE_URL = 'https://newsapi.org/v2';
@@ -65,7 +66,7 @@ if (saved) {
 this.savedArticles = JSON.parse(saved);
 }
 } catch (error) {
-console.error('Error loading saved articles:', error);
+logger.error('Error loading saved articles:', error);
 }
 }
 // Load user preferences from storage
@@ -76,7 +77,7 @@ if (prefs) {
 this.userPreferences = JSON.parse(prefs);
 }
 } catch (error) {
-console.error('Error loading news preferences:', error);
+logger.error('Error loading news preferences:', error);
 }
 }
 
@@ -88,7 +89,7 @@ if (prefs) {
 this.newsPreferences = JSON.parse(prefs);
 }
 } catch (error) {
-console.error('Error loading news preferences:', error);
+logger.error('Error loading news preferences:', error);
 }
 }
 
@@ -98,7 +99,7 @@ this.newsPreferences = preferences;
 try {
 await AsyncStorage.setItem('newsPreferences', JSON.stringify(preferences));
 } catch (error) {
-console.error('Error saving news preferences:', error);
+logger.error('Error saving news preferences:', error);
 }
 }
 // Save articles to storage
@@ -106,7 +107,7 @@ private async saveArticlesToStorage() {
 try {
 await AsyncStorage.setItem('savedArticles', JSON.stringify(this.savedArticles));
 } catch (error) {
-console.error('Error saving articles:', error);
+logger.error('Error saving articles:', error);
 }
 }
 // Save preferences to storage
@@ -114,7 +115,7 @@ private async savePreferencesToStorage() {
 try {
 await AsyncStorage.setItem('newsPreferences', JSON.stringify(this.userPreferences));
 } catch (error) {
-console.error('Error saving preferences:', error);
+logger.error('Error saving preferences:', error);
 }
 }
 // Check if cache is valid for a category
@@ -270,7 +271,7 @@ throw new Error('Request timed out');
 throw fetchError;
 }
 } catch (error) {
-console.error('Error fetching real news:', error);
+logger.error('Error fetching real news:', error);
 // Try to return any cached data, even if expired
 const expiredCache = this.newsCache[category];
 if (expiredCache && expiredCache.articles.length > 0) {
@@ -364,7 +365,7 @@ personalized = this.filterNewsByPreferences(personalized);
 
 return personalized;
 } catch (error) {
-console.error('Error fetching personalized news:', error);
+logger.error('Error fetching personalized news:', error);
 return this.getFallbackNews();
 }
 }
@@ -381,7 +382,7 @@ const realTimeNews = await this.getRealTimeNews(category);
 return this.filterNewsByPreferences(realTimeNews);
 }
 } catch (error) {
-console.error('Error fetching news:', error);
+logger.error('Error fetching news:', error);
 // Only use fallback if API completely fails
 return this.getFallbackNews();
 }
@@ -552,7 +553,7 @@ try {
 const news = await this.getRealTimeNews(category);
 return { category, count: news.length, label };
 } catch (error) {
-console.warn(`Failed to get count for category ${category}, using cached data`);
+logger.warn(`Failed to get count for category ${category}, using cached data`);
 // Check if we have cached data for this category
 const cachedData = this.newsCache[category];
 if (cachedData && cachedData.articles.length > 0) {

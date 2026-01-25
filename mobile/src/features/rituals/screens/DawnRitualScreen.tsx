@@ -3,7 +3,7 @@
  * Full-screen experience for the daily dawn ritual
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Modal, StyleSheet } from 'react-native';
 import { DawnRitual } from '../components/DawnRitual';
 
@@ -19,11 +19,25 @@ export const DawnRitualScreen: React.FC<DawnRitualScreenProps> = ({
   onClose,
 }) => {
   const [isComplete, setIsComplete] = useState(false);
+  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+        closeTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   const handleComplete = (transactionsSynced: number) => {
     setIsComplete(true);
     // Auto-close after 2 seconds
-    setTimeout(() => {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+    }
+    closeTimeoutRef.current = setTimeout(() => {
       if (onComplete) {
         onComplete(transactionsSynced);
       }
@@ -31,6 +45,7 @@ export const DawnRitualScreen: React.FC<DawnRitualScreenProps> = ({
         onClose();
       }
       setIsComplete(false);
+      closeTimeoutRef.current = null;
     }, 2000);
   };
 

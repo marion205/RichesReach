@@ -93,7 +93,6 @@ const WhatIfSlider: React.FC<WhatIfSliderProps> = ({
           onValueChange={setShock}
           minimumTrackTintColor={getTierColor(stress.tier)}
           maximumTrackTintColor="#E5E7EB"
-          thumbStyle={styles.thumb}
         />
         <View style={styles.rangeLabels}>
           <Text style={styles.rangeLabel}>-50%</Text>

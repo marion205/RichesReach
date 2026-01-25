@@ -7,10 +7,6 @@
 import { useQuery, useMutation } from '@apollo/client';
 import { gql } from '@apollo/client';
 import type {
-  ExtendedQueryRahaSignalsQuery,
-  ExtendedQueryRahaSignalsQueryVariables,
-  ExtendedMutationGenerateRahaSignalsMutation,
-  ExtendedMutationGenerateRahaSignalsMutationVariables,
   RahaSignalType,
 } from '../../../generated/graphql';
 
@@ -68,10 +64,7 @@ const GENERATE_RAHA_SIGNALS = gql`
  * @returns Typed signals array with loading/error states
  */
 export const useRAHASignals = (symbol: string, timeframe: string = '5m', limit?: number) => {
-  const { data, loading, error, refetch } = useQuery<
-    ExtendedQueryRahaSignalsQuery,
-    ExtendedQueryRahaSignalsQueryVariables
-  >(GET_RAHA_SIGNALS, {
+  const { data, loading, error, refetch } = useQuery(GET_RAHA_SIGNALS, {
     variables: { symbol, timeframe, limit },
     skip: !symbol,
     fetchPolicy: 'cache-and-network',
@@ -93,10 +86,7 @@ export const useRAHASignals = (symbol: string, timeframe: string = '5m', limit?:
  * @returns Mutation function to generate signals
  */
 export const useGenerateRAHASignals = () => {
-  const [generateSignals, { loading, error }] = useMutation<
-    ExtendedMutationGenerateRahaSignalsMutation,
-    ExtendedMutationGenerateRahaSignalsMutationVariables
-  >(GENERATE_RAHA_SIGNALS);
+  const [generateSignals, { loading, error }] = useMutation(GENERATE_RAHA_SIGNALS);
 
   return {
     generateSignals: async (symbol: string, timeframe: string) => {

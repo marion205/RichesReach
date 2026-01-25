@@ -2,6 +2,7 @@
  * Single-file financial Q&A service with deterministic helpers.
  * No external imports required.
  */
+import logger from '../utils/logger';
 
 export interface StockRecommendation {
   symbol: string;
@@ -145,13 +146,12 @@ export class AlphaVantageRecommendationProvider implements RecommendationProvide
       const prev = parseFloat(String(q['08. previous close'] ?? 'NaN'));
       
       if (!isFinite(price)) {
-        console.log(`AlphaVantage response for ${symbol}:`, json);
         throw new Error(`Invalid price data for ${symbol}: ${q['05. price']}`);
       }
       
       return { price, previousClose: isFinite(prev) ? prev : undefined };
     } catch (error) {
-      console.error(`AlphaVantage fetch error for ${symbol}:`, error);
+      logger.error(`AlphaVantage fetch error for ${symbol}:`, error);
       throw error;
     }
   }

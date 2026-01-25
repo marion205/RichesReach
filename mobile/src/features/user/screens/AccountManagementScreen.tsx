@@ -15,6 +15,7 @@ import { useQuery, useMutation } from '@apollo/client';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import { useVoice, voiceOptions } from '../../../contexts/VoiceContext';
+import logger from '../../../utils/logger';
 
 // GraphQL Queries and Mutations
 const GET_USER_PROFILE = gql`
@@ -171,7 +172,7 @@ const AccountManagementScreen = ({ navigateTo }) => {
         }
       },
       onError: (error) => {
-        console.error('User profile query error:', error);
+        logger.error('User profile query error:', error);
       }
     }
   );

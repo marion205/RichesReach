@@ -15,6 +15,7 @@ import {
 import { useQuery, gql } from '@apollo/client';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import logger from '../../../utils/logger';
 
 const GET_SIGNAL_UPDATES = gql`
   query GetSignalUpdates($symbol: String!, $lookbackHours: Int) {
@@ -247,21 +248,7 @@ export default function SignalUpdatesScreen() {
   // Gracefully handle null/undefined signalUpdates
   const signal = signalData?.signalUpdates ?? null;
 
-  // Log for debugging
-  if (__DEV__) {
-    console.log('[SignalUpdates] Data state:', {
-      hasData: !!signalData,
-      hasSignalUpdates: !!signalData?.signalUpdates,
-      signal: signal ? {
-        symbol: signal.symbol,
-        fusionScore: signal.fusionScore,
-        recommendation: signal.recommendation,
-        hasAlerts: !!signal.alerts?.length,
-      } : null,
-      error: signalError?.message,
-      loading: signalLoading,
-    });
-  }
+  // Debug logging removed - use logger if needed
 
   // Show error state if there's an error and no data
   if (signalError && !signal) {
@@ -348,7 +335,7 @@ export default function SignalUpdatesScreen() {
             signalsData = signal.signals;
           }
         } catch (e) {
-          console.warn('Error parsing signals:', e);
+          logger.warn('Error parsing signals:', e);
           signalsData = {};
         }
         
@@ -433,6 +420,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#DC2626',
   },
+  errorDetailText: {
+    marginTop: 8,
+    marginLeft: 36,
+    fontSize: 12,
+    color: '#991B1B',
+  },
   fallbackText: {
     marginTop: 12,
     fontSize: 12,
@@ -448,6 +441,14 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     color: '#9CA3AF',
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginTop: 8,
   },
   summaryCard: {
     backgroundColor: '#FFFFFF',

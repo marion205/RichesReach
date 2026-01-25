@@ -117,6 +117,17 @@ export default function RichesLiveStreaming({
   const slideAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const errorAnim = useRef(new Animated.Value(0)).current;
+  const startStreamTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (startStreamTimeoutRef.current) {
+        clearTimeout(startStreamTimeoutRef.current);
+        startStreamTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Retry delay with exponential backoff
   const getRetryDelay = (attempt: number) => Math.min(1000 * Math.pow(2, attempt), 30000);
@@ -209,8 +220,12 @@ export default function RichesLiveStreaming({
         setIsStreaming(true);
         setStreamStartTime(new Date());
         // Call startLiveStream with a small delay to ensure state is set
-        setTimeout(() => {
+        if (startStreamTimeoutRef.current) {
+          clearTimeout(startStreamTimeoutRef.current);
+        }
+        startStreamTimeoutRef.current = setTimeout(() => {
           startLiveStream();
+          startStreamTimeoutRef.current = null;
         }, 100);
       } else {
         joinLiveStream();
@@ -237,6 +252,10 @@ export default function RichesLiveStreaming({
 
       return () => {
         clearTimeout(timer);
+        if (startStreamTimeoutRef.current) {
+          clearTimeout(startStreamTimeoutRef.current);
+          startStreamTimeoutRef.current = null;
+        }
         pulseAnim.stopAnimation();
         // Cleanup stream when component unmounts or modal closes
         if (localStreamRef.current) {
@@ -1425,64 +1444,6 @@ const styles = StyleSheet.create({
   streamInfoRight: {
     alignItems: 'flex-end',
   },
-  liveIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FF3B30',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginRight: 12,
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#ffffff',
-    marginRight: 4,
-  },
-  liveText: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  streamDuration: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: '600',
-    marginRight: 12,
-  },
-  streamCategory: {
-    color: '#ffffff',
-    fontSize: 12,
-    opacity: 0.8,
-  },
-  viewerCount: {
-    color: '#ffffff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  // Reaction Buttons Styles
-  reactionButtons: {
-    position: 'absolute',
-    bottom: 120,
-    right: 16,
-    flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    borderRadius: 25,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    zIndex: 10,
-  },
-  reactionButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginHorizontal: 4,
-  },
   reactionEmoji: {
     fontSize: 20,
   },
@@ -1496,5 +1457,27 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
+  },
+  streamDuration: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginRight: 12,
+  },
+  streamCategory: {
+    color: '#ffffff',
+    fontSize: 12,
+    opacity: 0.8,
+  },
+  reactionButtons: {
+    position: 'absolute',
+    bottom: 120,
+    right: 16,
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 25,
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    zIndex: 10,
   },
 });

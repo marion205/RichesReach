@@ -20,6 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Video } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
+import logger from '../utils/logger';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
@@ -169,7 +170,7 @@ export default function RichesLiveStreaming({
 
   // Error handling function
   const handleError = (error: Error, context: string, fallbackAction?: () => void, canRetry = true) => {
-    console.error(`[${context}] Error:`, error);
+    logger.error(`[${context}] Error:`, error);
     const errorMsg = `${context}: ${error.message || 'An unexpected error occurred'}`;
     setError(errorMsg);
     
@@ -196,7 +197,7 @@ export default function RichesLiveStreaming({
         setIsReconnecting(false);
         if (fallbackAction) fallbackAction();
         // Simulate reconnection
-        console.log('🔄 Attempting reconnection...');
+        logger.log('🔄 Attempting reconnection...');
       }, delay);
     }
   };
@@ -206,12 +207,12 @@ export default function RichesLiveStreaming({
     setError(null);
     setRetryCount(prev => prev + 1);
     if (fallbackAction) fallbackAction();
-    console.log('🔄 Retrying connection...');
+    logger.log('🔄 Retrying connection...');
   };
 
   const startLiveStream = () => {
     try {
-      console.log('🎥 Starting live stream for circle:', circleName);
+      logger.log('🎥 Starting live stream for circle:', circleName);
       // Simulate potential error
       if (Math.random() < 0.1) { // 10% chance of error for demo
         throw new Error('Camera access denied');
@@ -223,7 +224,7 @@ export default function RichesLiveStreaming({
 
   const joinLiveStream = () => {
     try {
-      console.log('📺 Joining live stream for circle:', circleName);
+      logger.log('📺 Joining live stream for circle:', circleName);
       // Simulate potential error
       if (Math.random() < 0.1) { // 10% chance of error for demo
         throw new Error('Stream not found');
@@ -238,9 +239,9 @@ export default function RichesLiveStreaming({
       setIsStreaming(false);
       setError(null);
       onClose();
-      console.log('🔴 Live stream ended');
+      logger.log('🔴 Live stream ended');
     } catch (error) {
-      console.error('End stream error:', error);
+      logger.error('End stream error:', error);
     }
   };
 
@@ -298,7 +299,7 @@ export default function RichesLiveStreaming({
   const toggleMute = () => {
     try {
       setIsMuted(!isMuted);
-      console.log('🔇 Mute toggled:', !isMuted);
+      logger.log('🔇 Mute toggled:', !isMuted);
     } catch (error) {
       handleError(error as Error, 'Mute Toggle Failed');
     }
@@ -307,7 +308,7 @@ export default function RichesLiveStreaming({
   const toggleCamera = () => {
     try {
       setIsCameraOn(!isCameraOn);
-      console.log('📹 Camera toggled:', !isCameraOn);
+      logger.log('📹 Camera toggled:', !isCameraOn);
     } catch (error) {
       handleError(error as Error, 'Camera Toggle Failed');
     }

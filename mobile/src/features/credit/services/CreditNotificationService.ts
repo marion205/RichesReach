@@ -6,6 +6,7 @@
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import logger from '../../../utils/logger';
 
 const CREDIT_NOTIFICATION_STORAGE_KEY = 'credit_notification_preferences';
 
@@ -26,7 +27,7 @@ class CreditNotificationService {
         shouldShowAlert: true,
         shouldPlaySound: true,
         shouldSetBadge: true,
-      }),
+      } as any),
     });
   }
 
@@ -44,7 +45,7 @@ class CreditNotificationService {
         return JSON.parse(stored);
       }
     } catch (error) {
-      console.error('Error loading credit notification preferences:', error);
+      logger.error('Error loading credit notification preferences:', error);
     }
     // Default preferences
     return {
@@ -59,7 +60,7 @@ class CreditNotificationService {
     try {
       await AsyncStorage.setItem(CREDIT_NOTIFICATION_STORAGE_KEY, JSON.stringify(preferences));
     } catch (error) {
-      console.error('Error saving credit notification preferences:', error);
+      logger.error('Error saving credit notification preferences:', error);
     }
   }
 
@@ -78,7 +79,7 @@ class CreditNotificationService {
       if (status !== 'granted') {
         const { status: newStatus } = await Notifications.requestPermissionsAsync();
         if (newStatus !== 'granted') {
-          console.warn('Permission to send notifications not granted for payment reminders.');
+          logger.warn('Permission to send notifications not granted for payment reminders.');
           return null;
         }
       }
@@ -92,6 +93,7 @@ class CreditNotificationService {
       }
 
       const trigger: Notifications.DateTriggerInput = {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
         date: reminderDate,
       };
 
@@ -107,7 +109,7 @@ class CreditNotificationService {
 
       return notificationId;
     } catch (error) {
-      console.error('Error scheduling payment reminder:', error);
+      logger.error('Error scheduling payment reminder:', error);
       return null;
     }
   }
@@ -128,6 +130,7 @@ class CreditNotificationService {
       }
 
       const trigger: Notifications.TimeIntervalTriggerInput = {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
         seconds: 60, // Show immediately
       };
 
@@ -143,7 +146,7 @@ class CreditNotificationService {
 
       return notificationId;
     } catch (error) {
-      console.error('Error scheduling utilization alert:', error);
+      logger.error('Error scheduling utilization alert:', error);
       return null;
     }
   }
@@ -168,6 +171,7 @@ class CreditNotificationService {
       const emoji = change > 0 ? '📈' : change < 0 ? '📉' : '➡️';
 
       const trigger: Notifications.TimeIntervalTriggerInput = {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
         seconds: 60,
       };
 
@@ -183,7 +187,7 @@ class CreditNotificationService {
 
       return notificationId;
     } catch (error) {
-      console.error('Error scheduling score change alert:', error);
+      logger.error('Error scheduling score change alert:', error);
       return null;
     }
   }
@@ -192,14 +196,14 @@ class CreditNotificationService {
     try {
       const allNotifications = await Notifications.getAllScheduledNotificationsAsync();
       const creditNotifications = allNotifications.filter(
-        notif => notif.content.data?.type?.startsWith('credit_')
+        notif => (notif.content.data?.type as string)?.startsWith('credit_')
       );
       
       for (const notif of creditNotifications) {
         await Notifications.cancelScheduledNotificationAsync(notif.identifier);
       }
     } catch (error) {
-      console.error('Error canceling credit notifications:', error);
+      logger.error('Error canceling credit notifications:', error);
     }
   }
 }

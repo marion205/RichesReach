@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useQuery, gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
+import logger from '../../../utils/logger';
 
 const GET_BUDGET_DATA = gql`
   query GetBudgetData {
@@ -61,8 +62,8 @@ export default function BudgetingScreen() {
     fetchPolicy: 'cache-and-network',
     errorPolicy: 'all',
     onError: (err) => {
-      console.error('Budget query error:', err);
-      console.error('Error details:', JSON.stringify(err, null, 2));
+      logger.error('Budget query error:', err);
+      logger.error('Error details:', JSON.stringify(err, null, 2));
     },
   });
 

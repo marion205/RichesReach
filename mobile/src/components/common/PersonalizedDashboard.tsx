@@ -9,6 +9,7 @@ Dimensions,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import UserProfileService, { ExtendedUserProfile } from '../../features/user/services/UserProfileService';
+import logger from '../../utils/logger';
 const { width } = Dimensions.get('window');
 interface PersonalizedDashboardProps {
 onNavigate: (screen: string, params?: any) => void;
@@ -30,7 +31,7 @@ const personalizedRecs = userProfileService.getPersonalizedRecommendations(userP
 setRecommendations(personalizedRecs);
 }
 } catch (error) {
-console.error('Error loading user profile:', error);
+  logger.error('Error loading user profile:', error);
 } finally {
 setLoading(false);
 }

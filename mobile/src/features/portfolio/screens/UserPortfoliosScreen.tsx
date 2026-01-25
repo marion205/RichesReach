@@ -12,6 +12,7 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import { User } from '../../../types/social';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import logger from '../../../utils/logger';
 
 interface UserPortfoliosScreenProps {
   userId: string;
@@ -48,22 +49,29 @@ const UserPortfoliosScreen: React.FC<UserPortfoliosScreenProps> = ({ userId, onN
         id: userData.id || userId,
         name: userData.name || 'Unknown User',
         email: userData.email || '',
-        avatar: userData.avatar || 'https://via.placeholder.com/100',
-        bio: userData.bio || '',
+        profilePic: userData.avatar || userData.profilePic || 'https://via.placeholder.com/100',
         followersCount: userData.followersCount || 0,
         followingCount: userData.followingCount || 0,
-        isFollowing: userData.isFollowing || false,
-        isFollowedBy: userData.isFollowedBy || false,
-        hasPremiumAccess: userData.hasPremiumAccess || false,
-        subscriptionTier: userData.subscriptionTier || 'BASIC',
+        isFollowingUser: userData.isFollowing || userData.isFollowingUser || false,
+        isFollowedByUser: userData.isFollowedBy || userData.isFollowedByUser || false,
+        experienceLevel: userData.experienceLevel || 'beginner',
+        riskTolerance: userData.riskTolerance || 'moderate',
+        investmentGoals: userData.investmentGoals || [],
+        monthlyInvestment: userData.monthlyInvestment || 0,
+        portfolios: userData.portfolios || [],
+        stats: userData.stats || {
+          totalLearningTime: 0,
+          modulesCompleted: 0,
+          achievements: [],
+          streakDays: 0,
+        },
         createdAt: userData.createdAt || new Date().toISOString(),
-        updatedAt: userData.updatedAt || new Date().toISOString(),
       };
       
       setUser(userProfile);
     } catch (err) {
       setError('Failed to load user profile');
-      console.error('Error loading user profile:', err);
+      logger.error('Error loading user profile:', err);
     } finally {
       setLoading(false);
     }
@@ -74,7 +82,7 @@ const UserPortfoliosScreen: React.FC<UserPortfoliosScreenProps> = ({ userId, onN
     try {
       loadUserProfile();
     } catch (error) {
-      console.error('Error refreshing profile:', error);
+      logger.error('Error refreshing profile:', error);
     } finally {
       setRefreshing(false);
     }
@@ -207,7 +215,7 @@ const UserPortfoliosScreen: React.FC<UserPortfoliosScreenProps> = ({ userId, onN
                       <Text style={styles.statLabel}>Total Return</Text>
                     </View>
                     <View style={styles.statItem}>
-                      <Text style={styles.statValue}>{portfolio.holdings?.length || 0}</Text>
+                      <Text style={styles.statValue}>{portfolio.positions?.length || 0}</Text>
                       <Text style={styles.statLabel}>Holdings</Text>
                     </View>
                   </View>
@@ -222,7 +230,7 @@ const UserPortfoliosScreen: React.FC<UserPortfoliosScreenProps> = ({ userId, onN
                     <View style={styles.portfolioMeta}>
                       <Icon name="calendar" size={14} color="#8E8E93" />
                       <Text style={styles.portfolioDate}>
-                        Updated {new Date(portfolio.lastUpdated).toLocaleDateString()}
+                        Created {new Date(user.createdAt).toLocaleDateString()}
                       </Text>
                     </View>
                     <Icon name="chevron-right" size={16} color="#8E8E93" />

@@ -137,7 +137,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
       socketRef.current = io(SFU_SERVER_URL, {
         auth: { token, userName },
         transports: ['websocket', 'polling']
-      });
+      }) as any;
       
       setupSocketHandlers();
       
@@ -211,7 +211,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
       logger.log('🎥 Requesting front camera stream...');
 
       // Get user media with front camera
-      const stream = await mediaDevices.getUserMedia({
+      const stream = await (mediaDevices as any).getUserMedia({
         video: {
           width: { ideal: 1280 },
           height: { ideal: 720 },
@@ -360,7 +360,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
   const handleTransportCreated = async (id: string, iceParameters: IceParameters, iceCandidates: IceCandidate[], dtlsParameters: DtlsParameters, direction: string) => {
     try {
       // Create RTCPeerConnection for transport
-      const pc = new RTCPeerConnection({
+      const pc = new (RTCPeerConnection as any)({
         iceServers: [
           { urls: 'stun:stun.l.google.com:19302' },
           { urls: 'stun:stun1.l.google.com:19302' }
@@ -411,12 +411,12 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
 
       // Add tracks to peer connection
       localStreamRef.current.getTracks().forEach(track => {
-        transport.transport.addTrack(track, localStreamRef.current!);
+        (transport.transport as any).addTrack(track, localStreamRef.current!);
       });
 
       // Create offer for production
-      const offer = await transport.transport.createOffer();
-      await transport.transport.setLocalDescription(offer);
+      const offer = await (transport.transport as any).createOffer();
+      await (transport.transport as any).setLocalDescription(offer);
 
       // Get RTP parameters (simplified - in real implementation, you'd extract from SDP)
       const rtpParameters = {
@@ -587,14 +587,14 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
 
     // Close transports
     transportsRef.current.forEach(transport => {
-      transport.transport.close();
+      (transport.transport as any)?.close?.();
     });
     transportsRef.current.clear();
 
     // Close producers
     producersRef.current.forEach(producer => {
       if (producer.producer) {
-        producer.producer.close();
+        (producer.producer as any)?.close?.();
       }
     });
     producersRef.current.clear();
@@ -602,7 +602,7 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
     // Close consumers
     consumersRef.current.forEach(consumer => {
       if (consumer.consumer) {
-        consumer.consumer.close();
+        (consumer.consumer as any)?.close?.();
       }
     });
     consumersRef.current.clear();
@@ -646,21 +646,21 @@ const MediasoupLiveStreaming: React.FC<MediasoupLiveStreamingProps> = ({
       <View style={styles.container}>
         {/* Video Stream */}
         <View style={styles.videoContainer}>
-          {isHost && localStream && (
-            <RTCView
-              streamURL={localStream.toURL()}
-              style={styles.localVideo}
-              objectFit="cover"
-              mirror={true}
-            />
+          {isHost && localStream && RTCView && (
+            React.createElement(RTCView as any, {
+              streamURL: (localStream as any).toURL(),
+              style: styles.localVideo,
+              objectFit: "cover",
+              mirror: true,
+            })
           )}
           
-          {!isHost && remoteStreams.size > 0 && (
-            <RTCView
-              streamURL={Array.from(remoteStreams.values())[0].toURL()}
-              style={styles.remoteVideo}
-              objectFit="cover"
-            />
+          {!isHost && remoteStreams.size > 0 && RTCView && (
+            React.createElement(RTCView as any, {
+              streamURL: (Array.from(remoteStreams.values())[0] as any).toURL(),
+              style: styles.remoteVideo,
+              objectFit: "cover",
+            })
           )}
 
           {/* Stream Info Overlay */}

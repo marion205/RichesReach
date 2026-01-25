@@ -343,7 +343,7 @@ export default function MarketingRocket({ onNavigate, onCampaignPress, onTesterP
           <View style={styles.overviewContent}>
             {/* Marketing Dashboard */}
             <View style={styles.marketingDashboardCard}>
-              <View intensity={20} style={styles.marketingDashboardBlur}>
+              <View style={styles.marketingDashboardBlur}>
                 <View style={styles.marketingDashboardHeader}>
                   <Text style={styles.marketingDashboardTitle}>Marketing Dashboard</Text>
                   <Animated.View
@@ -522,7 +522,7 @@ export default function MarketingRocket({ onNavigate, onCampaignPress, onTesterP
 function ContentCampaignCard({ campaign, onPress, getStatusColor, getStatusIcon, getPlatformIcon }: any) {
   return (
     <TouchableOpacity style={styles.campaignCard} onPress={onPress}>
-      <View intensity={20} style={styles.campaignBlur}>
+      <View style={styles.campaignBlur}>
         <View style={styles.campaignHeader}>
           <View style={styles.campaignInfo}>
             <Text style={styles.campaignPlatform}>{getPlatformIcon(campaign.type)}</Text>
@@ -561,7 +561,7 @@ function ContentCampaignCard({ campaign, onPress, getStatusColor, getStatusIcon,
 function BetaTesterCard({ tester, onPress, getStatusColor, getStatusIcon }: any) {
   return (
     <TouchableOpacity style={styles.testerCard} onPress={onPress}>
-      <View intensity={20} style={styles.testerBlur}>
+      <View style={styles.testerBlur}>
         <View style={styles.testerHeader}>
           <View style={styles.testerInfo}>
             <Text style={styles.testerName}>{tester.name}</Text>
@@ -592,7 +592,7 @@ function ViralMetricCard({ metric, getTrendIcon }: any) {
   
   return (
     <View style={styles.viralMetricCard}>
-      <View intensity={20} style={styles.viralMetricBlur}>
+      <View style={styles.viralMetricBlur}>
         <View style={styles.viralMetricHeader}>
           <Text style={styles.viralMetricName}>{metric.metric}</Text>
           <Text style={styles.viralMetricTrend}>{getTrendIcon(metric.trend)}</Text>

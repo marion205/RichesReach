@@ -12,6 +12,7 @@ import { Feather as Icon } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { useNavigation } from '@react-navigation/native';
+import logger from '../../../utils/logger';
 
 interface SwingTradingDashboardProps {
   navigateTo?: (screen: string) => void;
@@ -30,7 +31,7 @@ const SwingTradingDashboard: React.FC<SwingTradingDashboardProps> = ({ navigateT
       try {
         navigation.navigate('Invest' as never, { screen } as never);
       } catch (nestedError) {
-        console.warn('Navigation error for screen:', screen, nestedError);
+        logger.warn('Navigation error for screen:', screen, nestedError);
       }
     }
   });

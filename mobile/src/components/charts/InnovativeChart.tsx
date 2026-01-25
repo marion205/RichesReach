@@ -54,8 +54,7 @@ export default function InnovativeChart(props: Props) {
     });
 
     return () => {
-      // @ts-expect-error: cancel() method exists on InteractionManager task but may not be in all RN versions
-      if (task && typeof task.cancel === 'function') {
+      if (task && typeof (task as any).cancel === 'function') {
         task.cancel();
       }
     };

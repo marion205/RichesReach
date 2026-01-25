@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import logger from '../../../utils/logger';
 
 interface HeaderButtonsProps {
   onRiskPress: () => void;
@@ -8,10 +9,6 @@ interface HeaderButtonsProps {
 }
 
 const HeaderButtonsInner: React.FC<HeaderButtonsProps> = ({ onRiskPress, onMLPress }) => {
-  if (__DEV__) {
-    console.log('🎯 HeaderButtons RENDER');
-  }
-
   return (
     <View style={styles.headerRight}>
       <TouchableOpacity 

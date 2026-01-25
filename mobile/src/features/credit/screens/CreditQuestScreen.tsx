@@ -30,6 +30,7 @@ import { creditScoreService } from '../services/CreditScoreService';
 import { creditUtilizationService } from '../services/CreditUtilizationService';
 import { creditNotificationService } from '../services/CreditNotificationService';
 import { scoreSimulatorService } from '../services/ScoreSimulatorService';
+import logger from '../../../utils/logger';
 import { 
   CreditSnapshot, 
   CreditAction, 
@@ -167,6 +168,7 @@ export const CreditQuestScreen: React.FC<CreditQuestScreenProps> = ({
             timeHorizon: 'Q4 2025',
             source: 'crowdsourced',
             recommendation: 'Plan ahead: reduce utilization before November',
+            affectedFactors: [],
           },
         ],
         localTrends: [],
@@ -311,7 +313,7 @@ export const CreditQuestScreen: React.FC<CreditQuestScreenProps> = ({
           setScoreHistory(history);
         }
       } catch (error) {
-        console.warn('[CreditQuest] Failed to load score history:', error);
+        logger.warn('[CreditQuest] Failed to load score history:', error);
         // Set empty history on error
         setScoreHistory([]);
       }
@@ -338,7 +340,7 @@ export const CreditQuestScreen: React.FC<CreditQuestScreenProps> = ({
         }
       }
     } catch (error) {
-      console.error('[CreditQuest] Failed to load snapshot:', error);
+      logger.error('[CreditQuest] Failed to load snapshot:', error);
       // Don't show error alert - the service now provides fallback data
       // The snapshot will be set with fallback data from the service
       // Only show alert if snapshot is still null after fallback

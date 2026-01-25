@@ -13,6 +13,7 @@ import { useQuery } from '@apollo/client';
 import { gql } from '@apollo/client';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
+import logger from '../../../utils/logger';
 
 /* ----------------------------- GraphQL ----------------------------- */
 const GET_LEADERBOARD = gql`
@@ -185,7 +186,7 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ navigateTo: navig
     try {
       navigation.navigate(screen as never);
     } catch (error) {
-      console.warn('Navigation error:', error);
+      logger.warn('Navigation error:', error);
     }
   });
 

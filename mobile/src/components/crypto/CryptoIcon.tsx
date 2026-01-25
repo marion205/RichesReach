@@ -1,4 +1,5 @@
 import React from 'react';
+import logger from '../../utils/logger';
 import { Image, Text, View, StyleSheet, ImageStyle, TextStyle } from 'react-native';
 
 interface CryptoIconProps {
@@ -145,7 +146,7 @@ const CryptoIcon: React.FC<CryptoIconProps> = ({
       resizeMode="contain"
       onError={() => {
         // If the image fails to load, we could implement a fallback here
-        console.warn(`Failed to load icon for ${upperSymbol}`);
+        logger.warn(`Failed to load icon for ${upperSymbol}`);
       }}
     />
   );

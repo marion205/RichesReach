@@ -81,7 +81,11 @@ export function useHoldingInsight(ticker: string, enabled: boolean = true) {
   }
 
   // Use react-query if available
-  return useQuery<HoldingInsight, Error>({
+  if (!useQuery) {
+    // Fallback if react-query not available
+    return { data: null, isLoading: false, error: null };
+  }
+  return useQuery({
     queryKey: ['holding-insight', ticker],
     queryFn: () => fetchHoldingInsight(ticker),
     enabled: enabled && !!ticker,

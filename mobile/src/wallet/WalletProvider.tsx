@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ethers } from 'ethers';
+import logger from '../utils/logger';
 
 // Optional WalletConnect - only import if available
 let WalletConnectProvider: any = null;
@@ -11,7 +12,7 @@ try {
   WalletConnectProvider = walletConnect.default || walletConnect.WalletConnectProvider;
   useWalletConnect = walletConnect.useWalletConnect;
 } catch (e) {
-  console.warn('WalletConnect not available - blockchain features will be limited');
+  logger.warn('WalletConnect not available - blockchain features will be limited');
 }
 
 const Ctx = createContext<any>(null);
@@ -57,7 +58,7 @@ function Inner({ children }: {children: React.ReactNode}) {
         chainId: connector.chainId
       };
     } catch (error) {
-      console.warn('Failed to create EVM provider:', error);
+      logger.warn('Failed to create EVM provider:', error);
       return null;
     }
   }, [connector.connected, connector.accounts, connector.chainId]);
@@ -69,7 +70,7 @@ function Inner({ children }: {children: React.ReactNode}) {
     try {
       await connector.connect();
     } catch (error) {
-      console.error('Wallet connection failed:', error);
+      logger.error('Wallet connection failed:', error);
       throw error;
     }
   };
@@ -79,7 +80,7 @@ function Inner({ children }: {children: React.ReactNode}) {
     try {
       await connector.killSession();
     } catch (error) {
-      console.error('Wallet disconnection failed:', error);
+      logger.error('Wallet disconnection failed:', error);
     }
   };
 
@@ -93,7 +94,7 @@ function Inner({ children }: {children: React.ReactNode}) {
         accounts: connector.accounts,
       });
     } catch (error) {
-      console.error('Chain switch failed:', error);
+      logger.error('Chain switch failed:', error);
       throw error;
     }
   };

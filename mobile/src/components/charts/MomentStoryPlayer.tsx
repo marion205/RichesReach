@@ -16,6 +16,7 @@ import * as Speech from "expo-speech";
 import * as Haptics from "expo-haptics";
 import type { StockMoment, MomentCategory } from "./ChartWithMoments";
 import { LinearGradient } from "expo-linear-gradient"; // For gradient backgrounds
+import logger from "../../utils/logger";
 
 export type MomentAnalyticsEvent = {
   type:
@@ -207,7 +208,7 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
           viewPosition: 0.5,
         });
       } catch (error) {
-        console.warn('[MomentStoryPlayer] scrollToIndex error:', error);
+        logger.warn('[MomentStoryPlayer] scrollToIndex error:', error);
         listRef.current?.scrollToOffset({ 
           offset: safeIndex * ITEM_LAYOUT_LENGTH, 
           animated: true 
@@ -228,7 +229,7 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
       onMomentChange(null);
     }
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(console.warn);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch((e) => logger.warn('Haptic error:', e));
   }, [
     visible,
     currentIndex,
@@ -452,7 +453,7 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
       totalMoments: total,
     });
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(console.warn);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch((e) => logger.warn('Haptic error:', e));
   }, [storyMoments.length, currentIndex, stopSpeech, fireAnalytics, symbol, total, introMoment]);
 
   const handlePrevious = useCallback(() => {
@@ -472,7 +473,7 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
       totalMoments: total,
     });
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(console.warn);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch((e) => logger.warn('Haptic error:', e));
   }, [storyMoments.length, currentIndex, stopSpeech, fireAnalytics, symbol, total, introMoment]);
 
   const renderItem = useCallback(
@@ -489,7 +490,7 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
             item.isIntro && styles.cardIntro,
           ]}
           accessible={true}
-          accessibilityRole="article"
+          accessibilityRole="text"
           accessibilityLabel={`${item.category} moment: ${item.title}. ${item.deepSummary.substring(0, 100)}...`}
         >
           <View style={styles.cardHeaderRow}>

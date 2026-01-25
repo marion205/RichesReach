@@ -7,6 +7,7 @@
 
 import { useState, useCallback, useMemo } from 'react';
 import { ApolloError } from '@apollo/client';
+import logger from '../utils/logger';
 
 export interface PaginationInfo {
   hasNextPage: boolean;
@@ -77,7 +78,7 @@ export function usePagination<T>(
       }
     } catch (err) {
       setError(err as Error);
-      console.error('Error loading more items:', err);
+      logger.error('Error loading more items:', err);
     } finally {
       setLoadingMore(false);
     }
@@ -103,7 +104,7 @@ export function usePagination<T>(
       }
     } catch (err) {
       setError(err as Error);
-      console.error('Error refreshing items:', err);
+      logger.error('Error refreshing items:', err);
     } finally {
       setLoading(false);
     }

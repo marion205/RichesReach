@@ -12,6 +12,7 @@ import PortfolioEducationModal from './PortfolioEducationModal';
 import EducationalTooltip from '../../../components/common/EducationalTooltip';
 import { getTermExplanation } from '../../../shared/financialTerms';
 import webSocketService, { PortfolioUpdate } from '../../../services/WebSocketService';
+import logger from '../../../utils/logger';
 const { width } = Dimensions.get('window');
 interface PortfolioGraphProps {
 totalValue: number;
@@ -75,7 +76,7 @@ data.push(Math.max(value, baseValue * 0.85)); // Don't go below 85% of current v
 data[data.length - 1] = totalValue;
 setPortfolioHistory(data);
 } catch (error) {
-console.error('Error fetching portfolio data:', error);
+logger.error('Error fetching portfolio data:', error);
 // Fallback to generated data
 const fallbackData = generateFallbackData();
 setPortfolioHistory(fallbackData);
@@ -127,7 +128,7 @@ setTimeout(() => {
 wsService.current?.subscribeToPortfolio();
 }, 1000);
 } catch (error) {
-console.error('Error setting up portfolio WebSocket:', error);
+logger.error('Error setting up portfolio WebSocket:', error);
 }
 };
 setupWebSocket();

@@ -4,6 +4,7 @@
 */
 import { API_HTTP } from '../../../config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import logger from '../../../utils/logger';
 export interface OptionsRecommendation {
 strategy_name: string;
 strategy_type: 'income' | 'hedge' | 'speculation' | 'arbitrage';
@@ -107,7 +108,7 @@ export class AIOptionsService {
       }
       return null;
     } catch (error) {
-      console.error('Error getting CSRF token:', error);
+      logger.error('Error getting CSRF token:', error);
       return null;
     }
   }
@@ -128,7 +129,7 @@ export class AIOptionsService {
       
       return headers;
     } catch (error) {
-      console.error('Error getting auth headers:', error);
+      logger.error('Error getting auth headers:', error);
       return {
         'Content-Type': 'application/json',
       };
@@ -164,7 +165,7 @@ timeHorizon: number = 30,
 maxRecommendations: number = 5
 ): Promise<AIOptionsResponse> {
     try {
-      console.log({
+      logger.log({
         symbol: (symbol || 'UNKNOWN').toUpperCase(),
         user_risk_tolerance: userRiskTolerance,
         portfolio_value: portfolioValue,
@@ -188,25 +189,25 @@ maxRecommendations: number = 5
         }, 12000);
       });
       
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
+      logger.log('Response status:', response.status);
+      logger.log('Response headers:', response.headers);
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('HTTP Error Response:', errorText);
+        logger.error('HTTP Error Response:', errorText);
         throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
       }
       
       // Check if response is actually JSON
       const contentType = response.headers.get('content-type');
-      console.log('Content-Type:', contentType);
+      logger.log('Content-Type:', contentType);
       
       // Get the response text first to debug
       const responseText = await response.text();
-      console.log('Raw response text (first 200 chars):', responseText.substring(0, 200));
+      logger.log('Raw response text (first 200 chars):', responseText.substring(0, 200));
       
       if (!contentType || !contentType.includes('application/json')) {
-        console.error('Non-JSON response:', responseText);
+        logger.error('Non-JSON response:', responseText);
         throw new Error(`Expected JSON response but got: ${contentType}`);
       }
       
@@ -215,11 +216,11 @@ maxRecommendations: number = 5
       try {
         data = JSON.parse(responseText);
       } catch (parseError) {
-        console.error('JSON Parse Error:', parseError);
-        console.error('Response text that failed to parse:', responseText);
+        logger.error('JSON Parse Error:', parseError);
+        logger.error('Response text that failed to parse:', responseText);
         throw new Error(`JSON Parse error: ${parseError.message}`);
       }
-console.log({
+logger.log({
   symbol: data.symbol,
   total_recommendations: data.total_recommendations,
   recommendations_count: data.recommendations?.length || 0,
@@ -231,11 +232,11 @@ const err = error as Error;
 if (err?.message?.includes('Network request failed') || 
     err?.message?.includes('Failed to fetch') ||
     err?.name === 'TypeError') {
-  console.warn('⚠️ Network error, using mock data for demo');
+  logger.warn('⚠️ Network error, using mock data for demo');
   return this.getMockRecommendations(symbol, userRiskTolerance, portfolioValue, timeHorizon, maxRecommendations);
 }
-console.error('❌ Error getting AI options recommendations:', error);
-console.error('Error details:', {
+logger.error('❌ Error getting AI options recommendations:', error);
+logger.error('Error details:', {
 name: err?.name,
 message: err?.message,
 stack: err?.stack,
@@ -367,7 +368,7 @@ throw new Error(`HTTP error! status: ${response.status}`);
 const data = await response.json();
 return data;
 } catch (error) {
-console.error('Error optimizing strategy:', error);
+logger.error('Error optimizing strategy:', error);
 throw new Error('Failed to optimize strategy');
 }
 }
@@ -394,7 +395,7 @@ throw new Error(`HTTP error! status: ${response.status}`);
 const data = await response.json();
 return data;
 } catch (error) {
-console.error('Error getting market analysis:', error);
+logger.error('Error getting market analysis:', error);
 throw new Error('Failed to get market analysis');
 }
 }
@@ -415,7 +416,7 @@ throw new Error(`HTTP error! status: ${response.status}`);
 const data = await response.json();
 return data;
 } catch (error) {
-console.error('Error training models:', error);
+logger.error('Error training models:', error);
 throw new Error('Failed to train models');
 }
 }
@@ -431,7 +432,7 @@ throw new Error(`HTTP error! status: ${response.status}`);
 const data = await response.json();
 return data;
 } catch (error) {
-console.error('Error getting model status:', error);
+logger.error('Error getting model status:', error);
 throw new Error('Failed to get model status');
 }
 }
@@ -447,7 +448,7 @@ throw new Error(`HTTP error! status: ${response.status}`);
 const data = await response.json();
 return data;
 } catch (error) {
-console.error('Error checking AI options health:', error);
+logger.error('Error checking AI options health:', error);
 throw new Error('Failed to check AI options health');
 }
 }

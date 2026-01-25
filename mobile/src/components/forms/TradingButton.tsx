@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useMutation } from '@apollo/client';
+import logger from '../../utils/logger';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 
@@ -135,7 +136,7 @@ const TradingButton: React.FC<TradingButtonProps> = ({
         }
       }
     } catch (error) {
-      console.error('Error placing order:', error);
+      logger.error('Error placing order:', error);
       Alert.alert('Error', 'Failed to place order. Please try again.');
     } finally {
       setIsPlacingOrder(false);

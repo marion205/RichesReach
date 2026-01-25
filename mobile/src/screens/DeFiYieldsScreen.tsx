@@ -265,8 +265,11 @@ const AISkeleton = () => {
         duration: 1500, 
         useNativeDriver: false 
       })
-    ).start();
-    return () => anim.stop();
+    );
+    anim.start();
+    return () => {
+      anim.stop();
+    };
   }, [shimmer]);
 
   const shimmerAnim = shimmer.interpolate({
@@ -623,7 +626,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#007AFF',
     paddingVertical: 12,
     borderRadius: 12,
-    alignItems: 'center',
   },
   stakeButtonText: {
     color: '#fff',

@@ -16,6 +16,7 @@ import {
 import { useQuery, useMutation, gql } from '@apollo/client';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation } from '@react-navigation/native';
+import logger from '../../../utils/logger';
 
 const GET_RESEARCH_REPORT = gql`
   query GetResearchReport($symbol: String!, $reportType: String) {
@@ -78,28 +79,10 @@ export default function ResearchReportScreen() {
         report = rawReport;
       }
       
-      console.log('✅ Parsed report:', {
-        hasReport: !!report,
-        symbol: report?.symbol,
-        companyName: report?.company_name,
-        hasExecutiveSummary: !!report?.executive_summary,
-        executiveSummaryLength: report?.executive_summary?.length || 0,
-        hasSections: !!report?.sections,
-      });
+      // Report parsed successfully
     } catch (parseError) {
-      console.error('❌ Error parsing report:', parseError);
-      console.error('Raw report data type:', typeof data.researchReport);
-      console.error('Raw report data preview:', 
-        typeof data.researchReport === 'string' 
-          ? data.researchReport.substring(0, 200) 
-          : String(data.researchReport).substring(0, 200)
-      );
+      logger.error('❌ Error parsing report:', parseError);
     }
-  } else {
-    console.log('⚠️ No researchReport in data:', {
-      hasData: !!data,
-      dataKeys: data ? Object.keys(data) : [],
-    });
   }
 
   const handleGenerateReport = async () => {
@@ -115,9 +98,9 @@ export default function ResearchReportScreen() {
             const parsedReport = typeof result.data.generateResearchReport.report === 'string' 
               ? JSON.parse(result.data.generateResearchReport.report) 
               : result.data.generateResearchReport.report;
-            console.log('✅ Generated report:', parsedReport);
+            // Report generated successfully
           } catch (parseError) {
-            console.warn('⚠️ Could not parse report:', parseError);
+            logger.warn('⚠️ Could not parse report:', parseError);
           }
         }
         // Refetch to update the UI with the new report
@@ -138,7 +121,7 @@ export default function ResearchReportScreen() {
         title: `Research Report: ${symbol}`,
       });
     } catch (err) {
-      console.error('Error sharing:', err);
+      logger.error('Error sharing:', err);
     }
   };
 
@@ -157,7 +140,7 @@ export default function ResearchReportScreen() {
 
   if (error) {
     // Log detailed error information
-    console.error('Research Report Error:', {
+    logger.error('Research Report Error:', {
       message: error.message,
       graphQLErrors: error.graphQLErrors,
       networkError: error.networkError,
@@ -189,19 +172,7 @@ export default function ResearchReportScreen() {
   }
 
   if (!report) {
-    // Log what we received for debugging
-    console.log('⚠️ No report parsed. Data state:', {
-      hasData: !!data,
-      hasResearchReport: !!data?.researchReport,
-      researchReportType: typeof data?.researchReport,
-      researchReportPreview: data?.researchReport 
-        ? (typeof data.researchReport === 'string' 
-          ? data.researchReport.substring(0, 200) 
-          : JSON.stringify(data.researchReport).substring(0, 200))
-        : 'null',
-      loading,
-      error: error?.message,
-    });
+    // No report parsed
     
     return (
       <View style={styles.emptyContainer}>
@@ -214,7 +185,6 @@ export default function ResearchReportScreen() {
         </Text>
         {data?.researchReport && (
           <TouchableOpacity style={styles.retryButton} onPress={() => {
-            console.log('Raw report data:', data.researchReport);
             Alert.alert('Debug Info', `Report type: ${typeof data.researchReport}\nLength: ${typeof data.researchReport === 'string' ? data.researchReport.length : 'N/A'}`);
           }}>
             <Text style={styles.retryButtonText}>Show Debug Info</Text>
@@ -227,16 +197,7 @@ export default function ResearchReportScreen() {
     );
   }
 
-  // Debug: Log report structure
-  if (__DEV__) {
-    console.log('📊 Report structure:', {
-      hasReport: !!report,
-      hasExecutiveSummary: !!report?.executive_summary,
-      hasSections: !!report?.sections,
-      hasKeyMetrics: !!report?.key_metrics,
-      reportKeys: report ? Object.keys(report) : [],
-    });
-  }
+  // Report structure validated
 
   return (
     <ScrollView style={styles.container}>

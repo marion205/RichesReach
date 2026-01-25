@@ -15,6 +15,7 @@ except (ImportError, SyntaxError):
 # Import all types to ensure they're registered
 from .types import *
 from .benchmark_types import BenchmarkSeriesType, BenchmarkDataPointType
+from .portfolio_history_types import PortfolioHistoryDataPointType
 from .broker_types import BrokerAccountType, BrokerOrderType, BrokerPositionType
 
 # Import premium queries and mutations
@@ -139,6 +140,12 @@ try:
     from .raha_mutations import RAHAMutations
 except (ImportError, SyntaxError):
     class RAHAMutations(graphene.ObjectType):
+        pass
+
+try:
+    from .raha_advanced_mutations import RAHAAdvancedMutations
+except (ImportError, SyntaxError):
+    class RAHAAdvancedMutations(graphene.ObjectType):
         pass
 
 class ExtendedQuery(PremiumQueries, BrokerQueries, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, RiskManagementQueries, OptionsAlertQueries, BlockchainQueries, RAHAQueries, Query, graphene.ObjectType):
@@ -692,7 +699,7 @@ except (ImportError, SyntaxError):
     class OptionsAlertMutations(graphene.ObjectType):
         pass
 
-class ExtendedMutation(PremiumMutations, BrokerMutations, BankingMutations, SBLOCMutations, PaperTradingMutations, SocialMutations, PrivacyMutations, AIInsightsMutations, OptionsAlertMutations, RAHAMutations, Mutation, graphene.ObjectType):
+class ExtendedMutation(PremiumMutations, BrokerMutations, BankingMutations, SBLOCMutations, PaperTradingMutations, SocialMutations, PrivacyMutations, AIInsightsMutations, OptionsAlertMutations, RAHAMutations, RAHAAdvancedMutations, Mutation, graphene.ObjectType):
     """
     Final Mutation type exposed by the schema.
 
@@ -725,7 +732,7 @@ except ImportError:
     SentimentAnalysisType = None
     CorrelationAnalysisType = None
 
-schema_types = [BenchmarkSeriesType, BenchmarkDataPointType]
+schema_types = [BenchmarkSeriesType, BenchmarkDataPointType, PortfolioHistoryDataPointType]
 if ProfileInput:
     # InputObjectType doesn't need to be in types, but ensure it's imported
     pass

@@ -20,6 +20,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { LinearGradient } from 'expo-linear-gradient';
 import { API_HTTP } from '../../../config/api';
 import { useAuth } from '../../../contexts/AuthContext';
+import logger from '../../../utils/logger';
 
 interface Lesson {
   id: string;
@@ -105,7 +106,7 @@ export default function LessonLibraryScreen({ navigateTo }: { navigateTo?: (scre
       const data = await response.json();
       setLessons(data);
     } catch (error: any) {
-      console.error('Error loading lessons:', error);
+      logger.error('Error loading lessons:', error);
       setError(error.message || 'Failed to load lessons');
     } finally {
       setLoading(false);
@@ -119,62 +120,62 @@ export default function LessonLibraryScreen({ navigateTo }: { navigateTo?: (scre
   }, [lessons]);
 
   const handleLessonPress = (lesson: Lesson) => {
-    console.log('[LessonLibrary] 🔵 Lesson pressed:', lesson.id, lesson.title);
+    logger.log('[LessonLibrary] 🔵 Lesson pressed:', lesson.id, lesson.title);
     
     // First, try globalNavigate which handles nested navigation properly
     try {
-      console.log('[LessonLibrary] Attempting navigation via globalNavigate (nested)...');
+      logger.log('[LessonLibrary] Attempting navigation via globalNavigate (nested)...');
       const { globalNavigate } = require('../../../navigation/NavigationService');
       globalNavigate('Learn', {
         screen: 'lesson-detail',
         params: { lessonId: lesson.id },
       });
-      console.log('[LessonLibrary] ✅ globalNavigate called successfully');
+      logger.log('[LessonLibrary] ✅ globalNavigate called successfully');
       return;
     } catch (error: any) {
-      console.error('[LessonLibrary] ❌ globalNavigate error:', error);
+      logger.error('[LessonLibrary] ❌ globalNavigate error:', error);
     }
     
     // Try using CommonActions with the current navigator
     try {
-      console.log('[LessonLibrary] Attempting CommonActions navigation...');
+      logger.log('[LessonLibrary] Attempting CommonActions navigation...');
       const action = CommonActions.navigate({
         name: 'lesson-detail',
         params: { lessonId: lesson.id },
       });
       navigation.dispatch(action);
-      console.log('[LessonLibrary] ✅ CommonActions navigation dispatched');
+      logger.log('[LessonLibrary] ✅ CommonActions navigation dispatched');
       return;
     } catch (error: any) {
-      console.error('[LessonLibrary] ❌ CommonActions error:', error);
+      logger.error('[LessonLibrary] ❌ CommonActions error:', error);
     }
     
     // Try direct navigation (should work since we're in the same stack)
     if (navigation && typeof (navigation as any).navigate === 'function') {
       try {
-        console.log('[LessonLibrary] Attempting direct navigation...');
+        logger.log('[LessonLibrary] Attempting direct navigation...');
         (navigation as any).navigate('lesson-detail', { lessonId: lesson.id });
-        console.log('[LessonLibrary] ✅ Direct navigation called (may still fail)');
+        logger.log('[LessonLibrary] ✅ Direct navigation called (may still fail)');
         // Don't return here - let it try other methods if this fails
       } catch (error: any) {
-        console.error('[LessonLibrary] ❌ Direct navigation error:', error.message);
+        logger.error('[LessonLibrary] ❌ Direct navigation error:', error.message);
       }
     }
     
     // Last resort: use navigateTo if available
     if (navigateTo) {
-      console.log('[LessonLibrary] Trying navigateTo function...');
+      logger.log('[LessonLibrary] Trying navigateTo function...');
       try {
         navigateTo('lesson-detail', { lessonId: lesson.id });
-        console.log('[LessonLibrary] ✅ navigateTo called successfully');
+        logger.log('[LessonLibrary] ✅ navigateTo called successfully');
         return;
       } catch (navError) {
-        console.error('[LessonLibrary] ❌ navigateTo error:', navError);
+        logger.error('[LessonLibrary] ❌ navigateTo error:', navError);
       }
     }
     
     // Final fallback: show error
-    console.error('[LessonLibrary] ❌ All navigation methods failed');
+    logger.error('[LessonLibrary] ❌ All navigation methods failed');
     Alert.alert('Navigation Error', `Unable to open lesson "${lesson.title}". The screen may not be registered in the navigator.`);
   };
 
@@ -217,7 +218,7 @@ export default function LessonLibraryScreen({ navigateTo }: { navigateTo?: (scre
       <TouchableOpacity
         style={styles.lessonCard}
         onPress={() => {
-          console.log('[LessonLibrary] 🔵 TouchableOpacity onPress triggered for:', item.id);
+          logger.log('[LessonLibrary] 🔵 TouchableOpacity onPress triggered for:', item.id);
           handleLessonPress(item);
         }}
         activeOpacity={0.7}

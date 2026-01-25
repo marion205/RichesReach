@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme/PersonalizedThemes';
 import { useQuery, gql } from '@apollo/client';
 import { API_GRAPHQL } from '../config/api';
+import logger from '../utils/logger';
 
 const { width } = Dimensions.get('window');
 
@@ -218,12 +219,11 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
           const filtered = prev.filter(i => !i.id.startsWith('oracle-'));
           return [transformedInsight, ...filtered];
         });
-        console.log('✅ Updated insights with GraphQL Oracle data');
       }
     },
     onError: (error) => {
       // Silently fail - we already have mock data showing
-      console.log('ℹ️ Oracle insights GraphQL not available, using mock data');
+      logger.log('ℹ️ Oracle insights GraphQL not available, using mock data');
     },
   });
 
@@ -233,7 +233,7 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
       await refetchOracle();
     } catch (error: any) {
       // Silently fail - we already have mock data showing
-      console.log('ℹ️ Error loading insights, using existing mock data');
+      logger.log('ℹ️ Error loading insights, using existing mock data');
     }
   };
 
@@ -248,8 +248,6 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
     
     setGenerating(true);
     try {
-      console.log('🔮 Generating new insight...');
-      
       // Call the callback if provided
       if (onGenerateInsight) {
         onGenerateInsight();
@@ -262,30 +260,17 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
         // Make query unique with timestamp to ensure different responses
         const uniqueQuery = `Generate a new market insight based on current portfolio and market conditions. Focus on actionable recommendations. (${Date.now()})`;
         
-        console.log('🤖 Calling GraphQL Oracle API with query:', uniqueQuery.substring(0, 80) + '...');
-        
         // Set flag to prevent onCompleted from adding this insight (we'll handle it manually)
         isManualGeneration.current = true;
         
-        const result = await refetchOracle({
-          variables: {
-            query: uniqueQuery,
-          },
-        });
+        const result = await refetchOracle({ query: uniqueQuery } as any);
         
         if (result?.data?.oracleInsights) {
           generatedInsight = result.data.oracleInsights;
           usingRealAI = true;
-          console.log('✅ Received AI-generated insight from backend:', {
-            id: generatedInsight.id,
-            question: generatedInsight.question?.substring(0, 50),
-            answerLength: generatedInsight.answer?.length,
-            confidence: generatedInsight.confidence,
-            sources: generatedInsight.sources,
-          });
         }
       } catch (error: any) {
-        console.warn('⚠️ Insight generation GraphQL failed, using mock insight:', error.message);
+        logger.warn('⚠️ Insight generation GraphQL failed, using mock insight:', error.message);
         // Fall through to generate mock insight
         generatedInsight = null;
         usingRealAI = false;
@@ -393,7 +378,7 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
         );
         
         if (existsByContent) {
-          console.warn('⚠️ Duplicate insight detected by content, skipping:', newInsight.title);
+          logger.warn('⚠️ Duplicate insight detected by content, skipping:', newInsight.title);
           return prev; // Don't add duplicate
         }
         
@@ -401,10 +386,8 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
         return [newInsight, ...prev];
       });
       
-      const sourceType = usingRealAI ? '🤖 Real AI' : '📝 Mock';
-      console.log(`✅ Insight generated successfully (${sourceType}):`, newInsight.title);
     } catch (error: any) {
-      console.error('Error generating insight:', error);
+      logger.error('Error generating insight:', error);
       Alert.alert('Generation Error', 'Failed to generate insight. Please try again.');
     } finally {
       setGenerating(false);
@@ -426,7 +409,7 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
       // await acknowledgeOracleEvent(insightId);
       
     } catch (error) {
-      console.error('Error acknowledging insight:', error);
+      logger.error('Error acknowledging insight:', error);
     }
   };
 
@@ -624,7 +607,7 @@ function InsightCard({
   
   return (
     <TouchableOpacity style={styles.insightCard} onPress={onPress}>
-      <View intensity={20} style={styles.insightBlur}>
+      <View style={styles.insightBlur}>
         <View style={styles.insightHeader}>
           <View style={styles.insightIconContainer}>
             <Text style={styles.insightIcon}>

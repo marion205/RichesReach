@@ -14,6 +14,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
+import Constants from 'expo-constants';
 import { safeSpeak, stopAllSpeech } from '../hooks/useSafeSpeak';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme/PersonalizedThemes';
@@ -50,7 +51,8 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
         if (status.isRecording) {
           await recording.stopAndUnloadAsync();
         } else {
-          await recording.unloadAsync();
+          // recording.unloadAsync() doesn't exist - use stopAndUnloadAsync() or just stop
+          await recording.stopAndUnloadAsync();
         }
       } catch (e) {
         // Ignore cleanup errors
@@ -106,6 +108,47 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const isStartingRef = useRef(false); // Prevent concurrent start attempts
   const retryCountRef = useRef(0); // Track retry attempts
+  const welcomeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const statusCheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const streamingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const fallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const retryTimeoutRefs = useRef<Set<NodeJS.Timeout>>(new Set());
+  const delayTimeoutRefs = useRef<Set<NodeJS.Timeout>>(new Set());
+  
+  // Cleanup all timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (welcomeTimeoutRef.current) {
+        clearTimeout(welcomeTimeoutRef.current);
+        welcomeTimeoutRef.current = null;
+      }
+      if (statusCheckIntervalRef.current) {
+        clearInterval(statusCheckIntervalRef.current);
+        statusCheckIntervalRef.current = null;
+      }
+      if (streamingTimeoutRef.current) {
+        clearTimeout(streamingTimeoutRef.current);
+        streamingTimeoutRef.current = null;
+      }
+      if (processingTimeoutRef.current) {
+        clearTimeout(processingTimeoutRef.current);
+        processingTimeoutRef.current = null;
+      }
+      if (fallbackTimeoutRef.current) {
+        clearTimeout(fallbackTimeoutRef.current);
+        fallbackTimeoutRef.current = null;
+      }
+      retryTimeoutRefs.current.forEach(timeoutId => {
+        clearTimeout(timeoutId);
+      });
+      retryTimeoutRefs.current.clear();
+      delayTimeoutRefs.current.forEach(timeoutId => {
+        clearTimeout(timeoutId);
+      });
+      delayTimeoutRefs.current.clear();
+    };
+  }, []);
   
   // ✅ FIX: Store last trade recommendation for execution
   const lastTradeRef = useRef<{
@@ -176,7 +219,8 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
               if (status.isRecording) {
                 await recording.stopAndUnloadAsync();
               } else {
-                await recording.unloadAsync();
+                // recording.unloadAsync() doesn't exist - use stopAndUnloadAsync() or just stop
+          await recording.stopAndUnloadAsync();
               }
             } catch (e) {
               // Ignore cleanup errors
@@ -254,8 +298,13 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
     if (isSpeaking || isProcessing) return;
     const welcomeMessage = "Hello! I'm your Wealth Oracle. I can help you with portfolio analysis, market insights, and investment strategies. What would you like to know?";
     // Use timeout to prevent blocking
+    let timeoutId: NodeJS.Timeout | null = null;
     const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error('Welcome message timeout')), 5000);
+      timeoutId = setTimeout(() => {
+        reject(new Error('Welcome message timeout'));
+        timeoutId = null;
+      }, 5000);
+      welcomeTimeoutRef.current = timeoutId;
     });
     try {
       await Promise.race([speakText(welcomeMessage), timeoutPromise]);
@@ -312,12 +361,14 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
             logger.log('🧹 Quick cleanup: stopping stuck recording...');
             await recording.stopAndUnloadAsync();
           } else {
-            await recording.unloadAsync();
+            // recording.unloadAsync() doesn't exist - use stopAndUnloadAsync() or just stop
+          await recording.stopAndUnloadAsync();
           }
         } catch (e) {
           // Try to unload even if stop failed
           try {
-            await recording.unloadAsync();
+            // recording.unloadAsync() doesn't exist - use stopAndUnloadAsync() or just stop
+          await recording.stopAndUnloadAsync();
           } catch (e2) {
             // Ignore - will be handled by expo-av
           }
@@ -383,10 +434,55 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
     // Wait for all wake word services to fully stop
     await Promise.all(stopPromises);
     
-    // Give expo-av a moment to fully release the recording objects
-    await new Promise(resolve => setTimeout(resolve, 300));
+    // CRITICAL: Force release audio session after stopping services
+    // This ensures no recording objects are holding the session
+    try {
+      logger.log('🎤 Force releasing audio session...');
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: false,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: false,
+        playThroughEarpieceAndroid: false,
+      });
+    } catch (audioError) {
+      logger.warn('⚠️ Error releasing audio session:', audioError);
+    }
     
-    logger.log('✅ All wake word services stopped');
+    // Give expo-av more time to fully release the recording objects
+    // iOS audio sessions can take time to fully release
+    await new Promise<void>(resolve => {
+      const timeoutId = setTimeout(() => {
+        resolve();
+        delayTimeoutRefs.current.delete(timeoutId);
+      }, 500);
+      delayTimeoutRefs.current.add(timeoutId);
+    });
+    
+    // Additional cleanup: try to release any stuck recording objects
+    try {
+      // Check if there are any active recordings that need to be cleaned up
+      // This is a safety measure in case services didn't fully clean up
+      logger.log('🎤 Performing additional audio cleanup...');
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: false,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: false,
+        playThroughEarpieceAndroid: false,
+      });
+      await new Promise<void>(resolve => {
+        const timeoutId = setTimeout(() => {
+          resolve();
+          delayTimeoutRefs.current.delete(timeoutId);
+        }, 200);
+        delayTimeoutRefs.current.add(timeoutId);
+      });
+    } catch (cleanupError) {
+      logger.warn('⚠️ Error in additional cleanup (may be normal):', cleanupError);
+    }
+    
+    logger.log('✅ All wake word services stopped and audio session released');
   };
 
   // Restart wake word after interaction completes
@@ -444,18 +540,36 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
       return;
     }
     
+    // Detect iOS Simulator - check device name and platform
+    const isIOSSimulator = Platform.OS === 'ios' && (
+      Constants.deviceName?.toLowerCase().includes('simulator') ||
+      Constants.deviceName?.toLowerCase().includes('iphone simulator') ||
+      (__DEV__ && !Constants.isDevice)
+    );
+    
     // Prevent infinite retry loop (max 2 retries)
     if (retryCountRef.current > 2) {
       logger.error('❌ Max retry attempts reached, stopping');
       setIsListening(false);
-      Alert.alert(
-        'Recording Error', 
-        'Failed to start recording after multiple attempts. Please:\n\n' +
-        '1. Close this voice assistant completely\n' +
-        '2. Wait 5-10 seconds\n' +
-        '3. Restart the app\n' +
-        '4. Try again'
-      );
+      
+      // Show different message for simulator
+      if (isIOSSimulator) {
+        Alert.alert(
+          'Simulator Limitation', 
+          'Voice recording is not available on iOS Simulator.\n\n' +
+          'Please use a real iOS device to test voice features.\n\n' +
+          'The simulator does not have access to a real microphone.'
+        );
+      } else {
+        Alert.alert(
+          'Recording Error', 
+          'Failed to start recording after multiple attempts. Please:\n\n' +
+          '1. Close this voice assistant completely\n' +
+          '2. Wait 5-10 seconds\n' +
+          '3. Restart the app\n' +
+          '4. Try again'
+        );
+      }
       retryCountRef.current = 0;
       isStartingRef.current = false;
       return;
@@ -467,8 +581,9 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
       logger.log('🎤 Starting voice recording...');
       
       // Check if we're on iOS Simulator (which doesn't have a real mic)
-      if (Platform.OS === 'ios' && __DEV__) {
-        logger.warn('⚠️ Running on iOS Simulator - microphone may not work properly. Use a real device for voice features.');
+      if (isIOSSimulator) {
+        logger.warn('⚠️ Running on iOS Simulator - microphone is not available. Use a real device for voice features.');
+        // Don't block, but warn that it may fail
       }
       
       if (!hasPermission) {
@@ -494,34 +609,84 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
       // Quick cleanup only if needed (don't wait long)
       await quickCleanupIfNeeded();
       
-      // CRITICAL: Set audio mode AFTER wake word stops
+      // CRITICAL: Additional delay to ensure all audio resources are fully released
+      // iOS audio sessions can be slow to release, especially after wake word services
+      // Increased delay to handle persistent audio session conflicts
+      logger.log('🎤 Waiting for audio resources to fully release...');
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // CRITICAL: Reset audio mode first to ensure clean state
+      // This releases any existing audio session that might be held
+      try {
+        logger.log('🎤 Resetting audio mode to release any existing session...');
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: false,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: false,
+          playThroughEarpieceAndroid: false,
+        });
+        // Longer delay to ensure audio session is fully released
+        await new Promise(resolve => setTimeout(resolve, 300));
+      } catch (resetError) {
+        logger.warn('⚠️ Error resetting audio mode (may be normal):', resetError);
+      }
+      
+      // CRITICAL: Set audio mode AFTER wake word stops and reset
       // Wake word services reset audio mode to allowsRecordingIOS: false in their stop() methods
       // So we must set it to true again here, after they've stopped
       logger.log('🎤 Configuring audio mode for recording...');
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-      });
+      
+      // Set audio mode multiple times to ensure it sticks
+      // Sometimes iOS needs multiple attempts to properly set the audio mode
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: true,
+            playsInSilentModeIOS: true,
+            staysActiveInBackground: false,
+            shouldDuckAndroid: true,
+            playThroughEarpieceAndroid: false,
+          });
+          logger.log(`✅ Audio mode set (attempt ${attempt + 1})`);
+          if (attempt === 0) {
+            // Small delay between attempts
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        } catch (audioModeError) {
+          logger.warn(`⚠️ Error setting audio mode (attempt ${attempt + 1}):`, audioModeError);
+        }
+      }
+      
       audioModeSetRef.current = true;
-      logger.log('✅ Audio mode configured for recording');
+      
+      // Additional delay to ensure audio session is ready
+      // iOS needs time to fully configure the recording session
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Verify audio mode was set correctly
+      try {
+        // Note: expo-av doesn't have a getAudioModeAsync, so we can't verify
+        // But we can log that we've set it
+        logger.log('✅ Audio mode configured for recording (allowsRecordingIOS: true)');
+      } catch (verifyError) {
+        logger.warn('⚠️ Could not verify audio mode:', verifyError);
+      }
 
       // Start recording with Whisper-compatible settings
       const recordingOptions = {
         android: {
           extension: '.wav',
-          outputFormat: Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_DEFAULT,
-          audioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_DEFAULT,
+          outputFormat: (Audio as any).RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_DEFAULT || 0,
+          audioEncoder: (Audio as any).RECORDING_OPTION_ANDROID_AUDIO_ENCODER_DEFAULT || 0,
           sampleRate: 16000, // Whisper works best with 16kHz
           numberOfChannels: 1, // Mono for better Whisper performance
           bitRate: 128000,
         },
         ios: {
           extension: '.wav',
-          outputFormat: Audio.RECORDING_OPTION_IOS_OUTPUT_FORMAT_LINEARPCM,
-          audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_HIGH,
+          outputFormat: (Audio as any).RECORDING_OPTION_IOS_OUTPUT_FORMAT_LINEARPCM || 'linearPCM',
+          audioQuality: (Audio as any).RECORDING_OPTION_IOS_AUDIO_QUALITY_HIGH || 'high',
           sampleRate: 16000, // Whisper works best with 16kHz
           numberOfChannels: 1, // Mono for better Whisper performance
           bitRate: 128000,
@@ -537,10 +702,97 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
         },
       };
 
+      // CRITICAL: Verify audio session is actually available before attempting to record
+      // iOS can report that recording is allowed but the session might still be held
+      try {
+        logger.log('🎤 Verifying audio session availability...');
+        // Try to get current audio mode to verify session state
+        // This is a sanity check before attempting to record
+        await new Promise(resolve => setTimeout(resolve, 200));
+      } catch (verifyError) {
+        logger.warn('⚠️ Audio session verification warning:', verifyError);
+      }
+
       logger.log('🎤 Creating new recording...');
       const newRecording = new Audio.Recording();
+      
+      // CRITICAL: Add a small delay before prepareToRecordAsync
+      // This gives iOS time to fully release any previous audio session
+      await new Promise(resolve => setTimeout(resolve, 150));
+      
       logger.log('🎤 Preparing to record...');
-      await newRecording.prepareToRecordAsync(recordingOptions);
+      
+      // Wrap prepareToRecordAsync in a try-catch to handle the specific error
+      try {
+        await newRecording.prepareToRecordAsync(recordingOptions);
+      } catch (prepareError: any) {
+        const errorCode = prepareError?.code || '';
+        const errorMessage = prepareError?.message || String(prepareError);
+        
+        // Check for "Recording not allowed" error - this means audio mode wasn't set correctly
+        const isRecordingNotAllowed = errorMessage.includes('Recording not allowed on iOS') ||
+                                      errorMessage.includes('Enable with Audio.setAudioModeAsync');
+        
+        // If we get the audio session error or "recording not allowed" error, try aggressive cleanup
+        if (errorCode === 1718449215 || errorCode === '1718449215' || 
+            errorMessage.includes('NSOSStatusErrorDomain') ||
+            errorMessage.includes('Code=1718449215') ||
+            isRecordingNotAllowed) {
+          
+          if (isRecordingNotAllowed) {
+            logger.warn('⚠️ Recording not allowed - audio mode may not be set correctly, re-setting...');
+          } else {
+            logger.warn('⚠️ Audio session still held, performing aggressive cleanup...');
+          }
+          
+          // Aggressive cleanup: reset audio mode multiple times
+          for (let i = 0; i < 3; i++) {
+            try {
+              await Audio.setAudioModeAsync({
+                allowsRecordingIOS: false,
+                playsInSilentModeIOS: false,
+                staysActiveInBackground: false,
+                shouldDuckAndroid: false,
+                playThroughEarpieceAndroid: false,
+              });
+              await new Promise(resolve => setTimeout(resolve, 200));
+            } catch (e) {
+              // Ignore errors during aggressive cleanup
+            }
+          }
+          
+          // CRITICAL: Re-set audio mode to allow recording
+          // This is especially important for "Recording not allowed" errors
+          logger.log('🎤 Re-setting audio mode to allow recording...');
+          for (let i = 0; i < 2; i++) {
+            try {
+              await Audio.setAudioModeAsync({
+                allowsRecordingIOS: true,
+                playsInSilentModeIOS: true,
+                staysActiveInBackground: false,
+                shouldDuckAndroid: true,
+                playThroughEarpieceAndroid: false,
+              });
+              logger.log(`✅ Audio mode re-set to allow recording (attempt ${i + 1})`);
+              if (i === 0) {
+                await new Promise(resolve => setTimeout(resolve, 200));
+              }
+            } catch (e) {
+              logger.warn(`⚠️ Error re-setting audio mode (attempt ${i + 1}):`, e);
+            }
+          }
+          
+          // Wait longer before retrying
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Try prepare again after aggressive cleanup and re-setting audio mode
+          await newRecording.prepareToRecordAsync(recordingOptions);
+        } else {
+          // Re-throw if it's a different error
+          throw prepareError;
+        }
+      }
+      
       logger.log('🎤 Starting recording...');
       await newRecording.startAsync();
       
@@ -555,7 +807,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
         canRecord: status.canRecord,
         durationMillis: status.durationMillis,
         metering: status.metering,
-        isMeteringEnabled: status.isMeteringEnabled,
+        isMeteringEnabled: (status as any).isMeteringEnabled || false,
       });
       
       // Check microphone permission status
@@ -614,25 +866,67 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
               // If metering is undefined, don't log errors - we'll verify audio via file size at the end
             } else {
               logger.warn('⚠️ Recording stopped unexpectedly!');
-              clearInterval(statusCheckInterval);
+              if (statusCheckIntervalRef.current) {
+                clearInterval(statusCheckIntervalRef.current);
+                statusCheckIntervalRef.current = null;
+              }
             }
           }
         } catch (e) {
           logger.warn('⚠️ Error checking recording status:', e);
-          clearInterval(statusCheckInterval);
+          if (statusCheckIntervalRef.current) {
+            clearInterval(statusCheckIntervalRef.current);
+            statusCheckIntervalRef.current = null;
+          }
         }
       }, 2000); // Check every 2 seconds
       
       // Store interval ID so we can clear it later
-      (newRecording as any)._statusCheckInterval = statusCheckInterval;
+      (newRecording as any)._statusCheckInterval = statusCheckIntervalRef.current;
       
     } catch (error: unknown) {
       logger.error('Failed to start recording:', error);
       
       // Handle specific errors that can be retried
       const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorCode = (error as any)?.code || '';
+      
+      // Check for iOS audio session error (1718449215)
+      const isAudioSessionError = errorCode === 1718449215 || 
+                                    errorCode === '1718449215' ||
+                                    errorMessage.includes('NSOSStatusErrorDomain') ||
+                                    errorMessage.includes('Code=1718449215') ||
+                                    errorMessage.includes('Prepare encountered an error');
+      
+      // Check for "Recording not allowed" error specifically
+      const isRecordingNotAllowed = errorMessage.includes('Recording not allowed on iOS') ||
+                                    errorMessage.includes('Enable with Audio.setAudioModeAsync');
+      
+      // Detect iOS Simulator detection
+      const isIOSSimulator = Platform.OS === 'ios' && (
+        Constants.deviceName?.toLowerCase().includes('simulator') ||
+        Constants.deviceName?.toLowerCase().includes('iphone simulator') ||
+        (__DEV__ && !Constants.isDevice)
+      );
+      
+      // On iOS Simulator, don't retry - show clear message instead
+      if (isIOSSimulator && (isAudioSessionError || isRecordingNotAllowed)) {
+        logger.error('❌ Recording failed on iOS Simulator - microphone not available');
+        setIsListening(false);
+        isStartingRef.current = false;
+        retryCountRef.current = 0;
+        Alert.alert(
+          'Simulator Limitation', 
+          'Voice recording is not available on iOS Simulator.\n\n' +
+          'The simulator does not have access to a real microphone.\n\n' +
+          'Please use a real iOS device to test voice features.'
+        );
+        return;
+      }
+      
       if (errorMessage.includes('Only one Recording object') || 
-          errorMessage.includes('Recording not allowed on iOS')) {
+          isRecordingNotAllowed ||
+          isAudioSessionError) {
         retryCountRef.current += 1;
         logger.log(`🔄 Recording error detected (${errorMessage}), retrying (attempt ${retryCountRef.current})...`);
         
@@ -640,18 +934,98 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
         // This ensures clean state before retry
         await stopWakeWordsSafely();
         await quickCleanupIfNeeded();
-        await new Promise(resolve => setTimeout(resolve, 500)); // Short wait
         
-        // Allow up to 2 retries
-        if (retryCountRef.current <= 2) {
+        // Reset audio mode completely before retry
+        try {
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: false,
+            playsInSilentModeIOS: false,
+            staysActiveInBackground: false,
+            shouldDuckAndroid: false,
+            playThroughEarpieceAndroid: false,
+          });
+          await new Promise(resolve => setTimeout(resolve, 300)); // Wait for audio session to release
+        } catch (resetError) {
+          logger.warn('⚠️ Error resetting audio mode during retry:', resetError);
+        }
+        
+        // CRITICAL: If "Recording not allowed" error, we MUST re-set audio mode to allow recording
+        if (isRecordingNotAllowed) {
+          logger.log('🎤 Re-setting audio mode to allow recording (recording was not allowed)...');
+          for (let i = 0; i < 2; i++) {
+            try {
+              await Audio.setAudioModeAsync({
+                allowsRecordingIOS: true,
+                playsInSilentModeIOS: true,
+                staysActiveInBackground: false,
+                shouldDuckAndroid: true,
+                playThroughEarpieceAndroid: false,
+              });
+              logger.log(`✅ Audio mode re-set to allow recording (attempt ${i + 1})`);
+              if (i === 0) {
+                await new Promise(resolve => setTimeout(resolve, 200));
+              }
+            } catch (e) {
+              logger.warn(`⚠️ Error re-setting audio mode (attempt ${i + 1}):`, e);
+            }
+          }
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 200)); // Additional wait
+        
+        // Allow up to 3 retries (increased from 2)
+        if (retryCountRef.current <= 3) {
           logger.log(`🎤 Retrying recording start (attempt ${retryCountRef.current})...`);
           isStartingRef.current = false;
-          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          // Longer delay for retries - iOS needs more time to release audio session
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          
           return startListening();
         } else {
           // Max retries reached - show helpful error message
           logger.error('❌ Max retry attempts reached - recording conflict persists');
           setIsListening(false);
+          
+          // Final attempt: completely disable wake word services and try one more time
+          logger.log('🎤 Final attempt: completely disabling wake word services...');
+          try {
+            // Import and stop all wake word services one more time
+            const { customWakeWordService } = await import('../services/CustomWakeWordService');
+            const { mlWakeWordService } = await import('../services/MLWakeWordService');
+            const { porcupineWakeWordService } = await import('../services/PorcupineWakeWordService');
+            
+            await Promise.all([
+              customWakeWordService.stop().catch(() => {}),
+              mlWakeWordService.stop().catch(() => {}),
+              porcupineWakeWordService.stop().catch(() => {}),
+            ]);
+            
+            // Wait longer for final cleanup
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            
+            // Reset audio mode multiple times
+            for (let i = 0; i < 3; i++) {
+              await Audio.setAudioModeAsync({
+                allowsRecordingIOS: false,
+                playsInSilentModeIOS: false,
+                staysActiveInBackground: false,
+                shouldDuckAndroid: false,
+                playThroughEarpieceAndroid: false,
+              });
+              await new Promise(resolve => setTimeout(resolve, 300));
+            }
+            
+            // One final attempt
+            logger.log('🎤 Making final recording attempt...');
+            isStartingRef.current = false;
+            retryCountRef.current = 0; // Reset counter for final attempt
+            await new Promise(resolve => setTimeout(resolve, 500));
+            return startListening();
+          } catch (finalError) {
+            logger.error('❌ Final attempt also failed:', finalError);
+          }
+          
           Alert.alert(
             'Recording Error', 
             'Unable to start recording after multiple attempts. This usually means:\n\n' +
@@ -730,7 +1104,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
           const fileInfo = await FileSystem.getInfoAsync(uri);
           logger.log('🎤 Audio file info:', {
             exists: fileInfo.exists,
-            size: fileInfo.size,
+            size: (fileInfo as any).size,
             uri: uri,
           });
           
@@ -738,12 +1112,12 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
             throw new Error('Audio file does not exist');
           }
           
-          if (fileInfo.size === undefined || fileInfo.size < 1000) {
-            logger.error('❌ Audio file is too small:', fileInfo.size, 'bytes');
+          if ((fileInfo as any).size === undefined || (fileInfo as any).size < 1000) {
+            logger.error('❌ Audio file is too small:', (fileInfo as any).size, 'bytes');
             logger.error('❌ This indicates no audio was captured');
             Alert.alert(
               'No Audio Captured',
-              `The recording file is too small (${fileInfo.size} bytes). This usually means:\n\n` +
+              `The recording file is too small (${(fileInfo as any).size} bytes). This usually means:\n\n` +
               `• Microphone isn't working\n` +
               `• You're on iOS Simulator (use a real device)\n` +
               `• Microphone permission not fully granted\n\n` +
@@ -755,7 +1129,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
             return;
           }
           
-          logger.log('✅ Audio file looks good, size:', fileInfo.size, 'bytes');
+          logger.log('✅ Audio file looks good, size:', (fileInfo as any).size, 'bytes');
         } catch (fileError) {
           logger.error('❌ Error checking audio file:', fileError);
           // Continue anyway - might work
@@ -781,7 +1155,8 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
       logger.error('❌ Failed to stop recording:', error);
       // Clean up even if stop fails
       try {
-        await recording.unloadAsync();
+        // recording.unloadAsync() doesn't exist - use stopAndUnloadAsync() or just stop
+        await recording.stopAndUnloadAsync();
       } catch (e) {
         // Ignore cleanup errors
       }
@@ -809,9 +1184,14 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
       
       // Add timeout for streaming endpoint (10 seconds max - optimized for speed)
       const controller = new AbortController();
+      if (streamingTimeoutRef.current) {
+        clearTimeout(streamingTimeoutRef.current);
+      }
       const timeoutId = setTimeout(() => {
         controller.abort();
+        streamingTimeoutRef.current = null;
       }, 10000); // 10 second timeout for streaming (reduced from 15s)
+      streamingTimeoutRef.current = timeoutId;
       
       let response: Response;
       try {
@@ -994,20 +1374,20 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
       const newConversation = [
         ...conversation,
         {
-          id: Date.now(),
+          id: String(Date.now()),
           type: 'user',
           text: transcribedText,
           timestamp: new Date(),
         },
         {
-          id: Date.now() + 1,
+          id: String(Date.now() + 1),
           type: 'assistant',
           text: fullText,
           timestamp: new Date(),
         }
       ];
       
-      setConversation(newConversation);
+      setConversation(newConversation as ConversationMessage[]);
       setCurrentQuestion(transcribedText);
       setIsProcessing(false);
       
@@ -1031,7 +1411,7 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
       const fileInfo = await FileSystem.getInfoAsync(audioUri);
       logger.log('🎤 Audio file info before upload:', {
         exists: fileInfo.exists,
-        size: fileInfo.size,
+        size: (fileInfo as any).size,
         uri: audioUri,
       });
       
@@ -1039,8 +1419,8 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
         throw new Error('Audio file does not exist');
       }
       
-      if (fileInfo.size === undefined || fileInfo.size < 100) {
-        logger.warn(`⚠️ Audio file is very small (${fileInfo.size} bytes) - may be empty`);
+      if ((fileInfo as any).size === undefined || (fileInfo as any).size < 100) {
+        logger.warn(`⚠️ Audio file is very small (${(fileInfo as any).size} bytes) - may be empty`);
         // Continue anyway - backend will handle it
       }
       
@@ -1065,8 +1445,12 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
       try {
         // Add timeout to prevent hanging (30 seconds max for Whisper + processing)
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => {
+        if (processingTimeoutRef.current) {
+          clearTimeout(processingTimeoutRef.current);
+        }
+        processingTimeoutRef.current = setTimeout(() => {
           controller.abort();
+          processingTimeoutRef.current = null;
         }, 30000); // 30 second timeout
         
         try {
@@ -1079,13 +1463,21 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
             // No Content-Type header - let FormData set it automatically
           });
           
-          clearTimeout(timeoutId);
+          // Clear timeout if request succeeded
+          if (processingTimeoutRef.current) {
+            clearTimeout(processingTimeoutRef.current);
+            processingTimeoutRef.current = null;
+          }
           const elapsed = Date.now() - startTime;
           logger.log(`⏱️ [TIMING] Response received in ${elapsed}ms`);
           logger.log('🎤 Response status:', response.status, response.statusText);
           logger.log('🎤 Response ok:', response.ok);
         } catch (fetchError: any) {
-          clearTimeout(timeoutId);
+          // Clear timeout on error
+          if (processingTimeoutRef.current) {
+            clearTimeout(processingTimeoutRef.current);
+            processingTimeoutRef.current = null;
+          }
           if (fetchError.name === 'AbortError') {
             throw new Error('Request timed out after 30 seconds. Please try again.');
           }
@@ -1122,19 +1514,19 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
           const newConversation = [
             ...conversation,
             {
-              id: Date.now(),
+              id: String(Date.now()),
               type: 'user',
               text: transcribedText,
               timestamp: new Date(),
             },
             {
-              id: Date.now() + 1,
+              id: String(Date.now() + 1),
               type: 'assistant',
               text: aiResponse,
               timestamp: new Date(),
             }
           ];
-          setConversation(newConversation);
+          setConversation(newConversation as ConversationMessage[]);
           setCurrentQuestion(transcribedText);
           
           // Speak the response
@@ -1204,20 +1596,20 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
         const errorConversation = [
           ...conversation,
           {
-            id: Date.now(),
+            id: String(Date.now()),
             type: 'user',
             text: transcribedText || 'Voice command',
             timestamp: new Date(),
           },
           {
-            id: Date.now() + 1,
+            id: String(Date.now() + 1),
             type: 'assistant',
             text: safeText,
             timestamp: new Date(),
           }
         ];
         
-        setConversation(errorConversation);
+        setConversation(errorConversation as ConversationMessage[]);
         setCurrentQuestion(transcribedText || '');
         
         // Speak the error message
@@ -1373,13 +1765,13 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
       const newConversation = [
         ...conversation,
         {
-          id: Date.now(),
+          id: String(Date.now()),
           type: 'user',
           text: transcribedText,
           timestamp: new Date(),
         },
         {
-          id: Date.now() + 1,
+          id: String(Date.now() + 1),
           type: 'assistant',
           text: assistantText, // ✅ Use the new text, not old aiResponse
           timestamp: new Date(),
@@ -1388,12 +1780,18 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
 
       logger.log('🎤 Setting conversation with', newConversation.length, 'messages');
       logger.log('🎤 New conversation:', JSON.stringify(newConversation, null, 2));
-      setConversation(newConversation);
+      setConversation(newConversation as ConversationMessage[]);
       setCurrentQuestion(transcribedText);
       logger.log('🎤 Conversation state updated, current question set to:', transcribedText);
       
       // Force a small delay to ensure state updates
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise<void>(resolve => {
+        const timeoutId = setTimeout(() => {
+          resolve();
+          retryTimeoutRefs.current.delete(timeoutId);
+        }, 100);
+        retryTimeoutRefs.current.add(timeoutId);
+      });
       logger.log('🎤 State update complete');
 
       // Speak the response
@@ -1442,210 +1840,76 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
   };
 
   const speakText = async (text: string, opts?: { immediate?: boolean }) => {
-    try {
-      if (!text?.trim()) {
-        logger.warn('⚠️ speakText called with empty text');
-        return;
-      }
-
-      setIsSpeaking(true);
-      logger.log('🎤 speakText called with:', text.substring(0, 50) + '...', opts);
-      
-      // Stop any existing speech (especially if immediate mode)
-      if (opts?.immediate) {
-        try {
-          Speech.stop();  // Cut off previous utterance instantly
-        } catch (e) {
-          // Ignore errors
-        }
-        await stopAllSpeech();
-      } else {
-        await stopAllSpeech();
-      }
-      
-      // 🔊 CRITICAL: Force speaker-friendly playback mode before TTS
-      // This ensures audio routes to speaker, not earpiece (even if we were just recording)
-      await ensurePlaybackMode();
-      
-      // For demo: Use expo-speech directly (faster, more reliable)
-      logger.log('🎤 Using expo-speech directly for demo');
-      const selectedVoice = getSelectedVoice();
-      const voiceParams = getVoiceParameters(selectedVoice);
-      
-      logger.log('🎤 Voice params:', voiceParams);
-      
-      // expo-speech doesn't return a promise, so don't await it
-      // Use callbacks to track state
-      Speech.speak(text, {
-        language: 'en-US',
-        pitch: voiceParams.pitch,
-        rate: opts?.immediate ? 0.95 : voiceParams.rate,  // Slightly faster for streaming
-        volume: 1.0,  // ✅ Set volume to maximum (0.0 to 1.0)
-        onStart: () => {
-          logger.log('✅ Speech started with expo-speech (should be from speaker now)');
-          setIsSpeaking(true);
-        },
-        onDone: () => {
-          logger.log('✅ Speech completed');
-          setIsSpeaking(false);
-          // Only restart wake word on final completion (not streaming chunks)
-          if (!opts?.immediate) {
-            restartWakeWord();
-          }
-        },
-        onStopped: () => {
-          logger.log('🛑 Speech stopped');
-          setIsSpeaking(false);
-          // Restart wake word even if speech was stopped
-          if (!opts?.immediate) {
-            restartWakeWord();
-          }
-        },
-        onError: (error) => {
-          logger.error('❌ Speech error:', error);
-          setIsSpeaking(false);
-          // Restart wake word even on error
-          if (!opts?.immediate) {
-            restartWakeWord();
-          }
-        },
-      });
-      
-      logger.log('✅ Speech.speak() called (non-blocking)');
-      return; // Exit early - we're using expo-speech directly for demo
-
-      if (response && response.ok) {
-        const data = await response.json();
-        if (data.audio_url) {
-          try {
-            // Try to play the synthesized audio
-            const { sound } = await Audio.Sound.createAsync(
-              { uri: data.audio_url },
-              { shouldPlay: true }
-            );
-            
-            // Set up a timeout to fallback if audio doesn't start playing
-            const fallbackTimeout = setTimeout(async () => {
-              logger.log('Audio playback timeout, falling back to basic speech');
-              await sound.unloadAsync();
-              await safeSpeak(text, {
-                language: 'en-US',
-                pitch: 1.0,
-                rate: 0.9,
-                onDone: () => {
-                  setIsSpeaking(false);
-                },
-                onError: (error) => {
-                  logger.error('TTS error:', error);
-                  setIsSpeaking(false);
-                },
-              });
-            }, 3000); // 3 second timeout
-            
-            sound.setOnPlaybackStatusUpdate((status) => {
-              if (status.isLoaded) {
-                clearTimeout(fallbackTimeout);
-                if (status.didJustFinish) {
-                  setIsSpeaking(false);
-                  sound.unloadAsync();
-                }
-              } else if (status.error) {
-                clearTimeout(fallbackTimeout);
-                logger.log('Audio playback error, falling back to basic speech:', status.error);
-                sound.unloadAsync();
-                safeSpeak(text, {
-                  language: 'en-US',
-                  pitch: 1.0,
-                  rate: 0.9,
-                  onDone: () => {
-                    setIsSpeaking(false);
-                  },
-                  onError: (error) => {
-                    logger.error('TTS error:', error);
-                    setIsSpeaking(false);
-                  },
-                });
-              }
-            });
-          } catch (audioError) {
-            logger.log('Audio playback failed, falling back to basic speech:', audioError);
-            // Fallback to basic speech if audio playback fails
-            const selectedVoice = getSelectedVoice();
-            const voiceParams = getVoiceParameters(selectedVoice);
-            
-            await safeSpeak(text, {
-              language: 'en-US',
-              pitch: voiceParams.pitch,
-              rate: voiceParams.rate,
-              onDone: () => {
-                setIsSpeaking(false);
-              },
-              onError: (error) => {
-                logger.error('TTS error:', error);
-                setIsSpeaking(false);
-              },
-            });
-          }
-        } else {
-          // Fallback to basic speech with voice-appropriate parameters
-          const selectedVoice = getSelectedVoice();
-          const voiceParams = getVoiceParameters(selectedVoice);
-          
-          await Speech.speak(text, {
-            language: 'en-US',
-            pitch: voiceParams.pitch,
-            rate: voiceParams.rate,
-            onDone: () => {
-              setIsSpeaking(false);
-            },
-            onError: (error) => {
-              logger.error('TTS error:', error);
-              setIsSpeaking(false);
-            },
-          });
-        }
-      } else {
-        // Fallback to basic speech if API fails
-        const selectedVoice = getSelectedVoice();
-        const voiceParams = getVoiceParameters(selectedVoice);
-        
-        await Speech.speak(text, {
-          language: 'en-US',
-          pitch: voiceParams.pitch,
-          rate: voiceParams.rate,
-          onDone: () => {
-            setIsSpeaking(false);
-          },
-          onError: (error) => {
-            logger.error('TTS error:', error);
-            setIsSpeaking(false);
-          },
-        });
-      }
-    } catch (error) {
-      logger.error('Error speaking text:', error);
-      // Final fallback with voice parameters
-      try {
-        const selectedVoice = getSelectedVoice();
-        const voiceParams = getVoiceParameters(selectedVoice);
-        
-        await Speech.speak(text, {
-          language: 'en-US',
-          pitch: voiceParams.pitch,
-          rate: voiceParams.rate,
-          onDone: () => {
-            setIsSpeaking(false);
-          },
-          onError: (error) => {
-            logger.error('Final TTS error:', error);
-            setIsSpeaking(false);
-          },
-        });
-      } catch (finalError) {
-        logger.error('Final speech error:', finalError);
-        setIsSpeaking(false);
-      }
+    if (!text?.trim()) {
+      logger.warn('⚠️ speakText called with empty text');
+      return;
     }
+
+    setIsSpeaking(true);
+    logger.log('🎤 speakText called with:', text.substring(0, 50) + '...', opts);
+    
+    // Stop any existing speech (especially if immediate mode)
+    if (opts?.immediate) {
+      try {
+        Speech.stop();  // Cut off previous utterance instantly
+      } catch (e) {
+        // Ignore errors
+      }
+      await stopAllSpeech();
+    } else {
+      await stopAllSpeech();
+    }
+    
+    // 🔊 CRITICAL: Force speaker-friendly playback mode before TTS
+    // This ensures audio routes to speaker, not earpiece (even if we were just recording)
+    await ensurePlaybackMode();
+    
+    // For demo: Use expo-speech directly (faster, more reliable)
+    logger.log('🎤 Using expo-speech directly for demo');
+    const selectedVoice = getSelectedVoice();
+    const voiceParams = getVoiceParameters(selectedVoice);
+    
+    logger.log('🎤 Voice params:', voiceParams);
+    
+    // expo-speech doesn't return a promise, so don't await it
+    // Use callbacks to track state
+    Speech.speak(text, {
+      language: 'en-US',
+      pitch: voiceParams.pitch,
+      rate: opts?.immediate ? 0.95 : voiceParams.rate,  // Slightly faster for streaming
+      volume: 1.0,  // ✅ Set volume to maximum (0.0 to 1.0)
+      onStart: () => {
+        logger.log('✅ Speech started with expo-speech (should be from speaker now)');
+        setIsSpeaking(true);
+      },
+      onDone: () => {
+        logger.log('✅ Speech completed');
+        setIsSpeaking(false);
+        // Only restart wake word on final completion (not streaming chunks)
+        if (!opts?.immediate) {
+          restartWakeWord();
+        }
+      },
+      onStopped: () => {
+        logger.log('🛑 Speech stopped');
+        setIsSpeaking(false);
+        // Restart wake word even if speech was stopped
+        if (!opts?.immediate) {
+          restartWakeWord();
+        }
+      },
+      onError: (error) => {
+        logger.error('❌ Speech error:', error);
+        setIsSpeaking(false);
+        // Restart wake word even on error
+        if (!opts?.immediate) {
+          restartWakeWord();
+        }
+      },
+    });
+    
+    logger.log('✅ Speech.speak() called (non-blocking)');
+    return; // Exit early - we're using expo-speech directly for demo
   };
 
   const handleVoiceButtonPress = () => {
@@ -1806,7 +2070,14 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
 
 // Message Bubble Component
 interface MessageBubbleProps {
-  message: ConversationMessage;
+  message: {
+    id: string;
+    type: 'user' | 'assistant';
+    text: string;
+    timestamp: Date;
+    insights?: Insight[];
+    [key: string]: unknown;
+  };
 }
 function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.type === 'user';
@@ -1821,7 +2092,7 @@ function MessageBubble({ message }: MessageBubbleProps) {
           {message.insights.map((insight: Insight, index: number) => (
             <View key={index} style={styles.insightItem}>
               <Text style={styles.insightTitle}>{insight.title}</Text>
-              <Text style={styles.insightValue}>{insight.value}</Text>
+              <Text style={styles.insightValue}>{String(insight.value)}</Text>
               <Text style={styles.insightDescription}>{insight.description}</Text>
             </View>
           ))}

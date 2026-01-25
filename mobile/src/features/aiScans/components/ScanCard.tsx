@@ -69,7 +69,7 @@ const ScanCard: React.FC<ScanCardProps> = React.memo(({ scan, onPress, onRun }) 
 
   const sparkData = (scan.results?.slice(0, 5)
     .map((r) => r.score)
-    .filter((score): score is number => 
+    .filter((score: any): score is number => 
       typeof score === 'number' && 
       !isNaN(score) && 
       isFinite(score)

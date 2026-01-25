@@ -7,6 +7,7 @@
 
 import { ApolloLink, Operation, FetchResult, Observable } from '@apollo/client';
 import { print } from 'graphql';
+import logger from '../utils/logger';
 
 interface BatchRequest {
   operations: Operation[];
@@ -152,7 +153,7 @@ export class BatchHttpLink extends ApolloLink {
         // If batch request fails, fall back to individual requests
         if (response.status === 400 || response.status === 415) {
           // Server doesn't support batching - disable it and retry individually
-          console.warn('[BatchLink] Server doesn\'t support batching, falling back to individual requests');
+          logger.warn('[BatchLink] Server doesn\'t support batching, falling back to individual requests');
           this.batchEnabled = false;
           this.consecutiveFailures = 0;
           
@@ -215,7 +216,7 @@ export class BatchHttpLink extends ApolloLink {
       
       // If too many failures, disable batching and fall back to individual requests
       if (this.consecutiveFailures >= this.maxFailures) {
-        console.warn(`[BatchLink] Too many batch failures (${this.consecutiveFailures}), disabling batching`);
+        logger.warn(`[BatchLink] Too many batch failures (${this.consecutiveFailures}), disabling batching`);
         this.batchEnabled = false;
         this.consecutiveFailures = 0;
         

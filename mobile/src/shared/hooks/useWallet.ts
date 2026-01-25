@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Web3Service, { WalletInfo, AAVEReserve, AAVEUserAccount } from '../../services/Web3Service';
+import logger from '../../utils/logger';
 
 export interface UseWalletReturn {
   // Wallet state
@@ -53,7 +54,7 @@ export const useWallet = (): UseWalletReturn => {
           await refreshAAVEData();
         }
       } catch (err) {
-        console.log('Wallet not connected on init');
+        // Wallet not connected on init - this is expected
       }
     };
 
@@ -98,7 +99,7 @@ export const useWallet = (): UseWalletReturn => {
         await refreshAAVEData();
       }
     } catch (err) {
-      console.error('Failed to refresh wallet info:', err);
+      logger.error('Failed to refresh wallet info:', err);
     }
   }, []);
 
@@ -115,7 +116,7 @@ export const useWallet = (): UseWalletReturn => {
       setAAVEReserves(reserves);
       setUserAccountData(accountData);
     } catch (err) {
-      console.error('Failed to refresh AAVE data:', err);
+      logger.error('Failed to refresh AAVE data:', err);
       setError('Failed to load AAVE data');
     } finally {
       setIsLoadingAAVEData(false);
@@ -236,7 +237,7 @@ export const useWallet = (): UseWalletReturn => {
       const accountData = await Web3Service.getUserAccountData();
       setUserAccountData(accountData);
     } catch (err) {
-      console.error('Failed to refresh account data:', err);
+      logger.error('Failed to refresh account data:', err);
       setError('Failed to refresh account data');
     }
   }, []);
@@ -246,7 +247,7 @@ export const useWallet = (): UseWalletReturn => {
       const reserves = await Web3Service.getAAVEReserves();
       setAAVEReserves(reserves);
     } catch (err) {
-      console.error('Failed to refresh reserves:', err);
+      logger.error('Failed to refresh reserves:', err);
       setError('Failed to refresh reserves');
     }
   }, []);

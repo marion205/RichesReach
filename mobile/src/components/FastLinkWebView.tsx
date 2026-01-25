@@ -26,7 +26,7 @@ const FastLinkWebView: React.FC<FastLinkWebViewProps> = ({
   // Prepare POST data for FastLink
   const postData = `accessToken=Bearer ${session.accessToken}&extraParams=${encodeURIComponent(
     JSON.stringify({
-      configName: session.fastlink?.config?.params?.configName || 'default',
+      configName: (session.fastlink?.config?.params as any)?.configName || 'default',
       ...session.fastlink?.config?.params,
     })
   )}`;

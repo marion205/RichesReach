@@ -1,9 +1,10 @@
 // Main App
 export { default as App } from './App';
-export { default as AppProduction } from './App.production';
+// export { default as AppProduction } from './App.production'; // File doesn't exist
 
 // Apollo Provider
-export { client } from './ApolloProvider';
+// Note: client is not exported from ApolloProvider, use useApolloClient hook instead
+// export { client } from './ApolloProvider';
 
 // Components
 export * from './components';

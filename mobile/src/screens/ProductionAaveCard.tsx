@@ -4,7 +4,7 @@ import {
   StyleSheet, Alert, ScrollView, Linking 
 } from 'react-native';
 import { connectWallet } from '../blockchain/wallet/walletConnect';
-import { HybridTransactionService } from '../services/hybridTransactionService';
+import { HybridTransactionService } from '../services/HybridTransactionService';
 import { CHAIN } from '../blockchain/web3Service';
 import { SEPOLIA_CONFIG } from '../config/testnetConfig';
 import { getAAVEPoolAddressWithCache } from '../blockchain/aaveResolver';
@@ -44,7 +44,7 @@ export default function ProductionAAVECard() {
         setAAVEPoolAddress(poolAddr);
       } catch (error) {
         console.error('Failed to resolve AAVE Pool address:', error);
-        setAAVEPoolAddress(SEPOLIA_CONFIG.poolAddress);
+        setAAVEPoolAddress((SEPOLIA_CONFIG as any).poolAddress);
       }
     };
     resolvePoolAddress();
@@ -58,7 +58,7 @@ export default function ProductionAAVECard() {
       chainIdWC: CHAIN.sepolia.chainIdWC,
       userAddress: address,
       aavePool: aavePoolAddress,
-      assetMap: SEPOLIA_CONFIG.assets,
+      assetMap: (SEPOLIA_CONFIG as any).assets,
       backendBaseUrl: BACKEND_BASE
     };
   }, [address, wc, aavePoolAddress]);

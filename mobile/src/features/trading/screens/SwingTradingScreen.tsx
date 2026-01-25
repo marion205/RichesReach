@@ -11,7 +11,7 @@ import {
 import { useQuery } from '@apollo/client';
 import { GET_SWING_TRADING_PICKS } from '../../../graphql/swingTrading';
 import Icon from 'react-native-vector-icons/Feather';
-import ExecutionSuggestionCard from '../components/ExecutionSuggestionCard';
+import { ExecutionSuggestionCard } from '../components/ExecutionSuggestionCard';
 import * as Haptics from 'expo-haptics';
 import logger from '../../../utils/logger';
 
@@ -195,8 +195,8 @@ export default function SwingTradingScreen() {
 
         {/* Execution Suggestion */}
         <ExecutionSuggestionCard 
-          signal={pick} 
-          signalType="swing_trading" 
+          suggestion={null}
+          isRefreshing={false}
         />
       </View>
     );

@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
+import logger from '../../../utils/logger';
 
 interface Room { id: string; title: string; startsAt: string; }
 
@@ -12,7 +13,6 @@ const demoRooms: Room[] = [
 
 export default function FiresideRoomsScreen() {
   const navigation = useNavigation<any>();
-  console.log('[FiresideRoomsScreen] Component mounted');
   
   return (
     <View style={styles.container}>
@@ -26,12 +26,10 @@ export default function FiresideRoomsScreen() {
         contentContainerStyle={{ padding: 16, gap: 12 }}
         renderItem={({ item }) => (
           <TouchableOpacity style={styles.room} onPress={() => {
-            console.log('[FiresideRoomsScreen] Room pressed:', item.id);
             try {
               navigation.navigate('fireside-room');
-              console.log('[FiresideRoomsScreen] Navigation successful');
             } catch (error) {
-              console.error('[FiresideRoomsScreen] Navigation error:', error);
+              logger.error('[FiresideRoomsScreen] Navigation error:', error);
             }
           }}>
             <Icon name="mic" size={18} color="#8E8E93" />

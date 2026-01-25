@@ -63,7 +63,7 @@ export const useSignupReturnDetection = ({
         // User returned from signup - track detection
         alpacaAnalytics.track('alpaca_signup_return_detected', {
           timeSinceSignup: Math.floor(timeSinceSignup / 60000), // minutes
-        });
+        } as any);
 
         // Show welcoming prompt
         alpacaAnalytics.track('alpaca_connect_prompt_shown', {
@@ -83,7 +83,7 @@ export const useSignupReturnDetection = ({
                 alpacaAnalytics.track('alpaca_signup_abandoned', {
                   timeSinceSignup: minutesAgo,
                   reason: 'not_yet',
-                });
+                } as any);
                 // Mark as prompted but don't remove signup marker (they might come back)
                 await AsyncStorage.setItem(SIGNUP_PROMPTED_KEY, 'true');
                 setHasChecked(true);
@@ -96,7 +96,7 @@ export const useSignupReturnDetection = ({
                 alpacaAnalytics.track('alpaca_connect_completed', {
                   from: 'signup_return',
                   timeSinceSignup: minutesAgo,
-                });
+                } as any);
                 // Clear signup markers
                 await AsyncStorage.removeItem(SIGNUP_STARTED_KEY);
                 await AsyncStorage.removeItem(SIGNUP_PROMPTED_KEY);

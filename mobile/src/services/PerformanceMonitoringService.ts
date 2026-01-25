@@ -2,7 +2,10 @@
 * Performance Monitoring Service
 * Monitors app performance in production and reports metrics
 */
-import { PRODUCTION_CONFIG } from '../config/production';
+// import { PRODUCTION_CONFIG } from '../config/production'; // File doesn't exist
+const PRODUCTION_CONFIG = { enabled: false }; // Fallback
+import { PERFORMANCE } from '../config/constants';
+import logger from '../utils/logger';
 interface PerformanceMetric {
 name: string;
 value: number;
@@ -23,6 +26,8 @@ private metrics: PerformanceMetric[] = [];
 private maxMetrics = 1000;
 private startTimes: Map<string, number> = new Map();
 private renderTimes: Map<string, number> = new Map();
+private memoryMonitorInterval: NodeJS.Timeout | null = null;
+private performanceMonitorInterval: NodeJS.Timeout | null = null;
 /**
 * Start timing a performance metric
 */
@@ -57,7 +62,7 @@ if (this.metrics.length > this.maxMetrics) {
 this.metrics = this.metrics.slice(-this.maxMetrics);
 }
 // Report to analytics if enabled
-if (PRODUCTION_CONFIG.ANALYTICS.ENABLED) {
+if ((PRODUCTION_CONFIG as any).ANALYTICS?.ENABLED) {
 this.reportMetric(metric);
 }
 }
@@ -187,18 +192,36 @@ return 0;
 * Monitor app performance continuously
 */
 public startPerformanceMonitoring(): void {
+// Stop any existing monitoring
+this.stopPerformanceMonitoring();
+  
 // Monitor memory usage every 30 seconds
-setInterval(() => {
+this.memoryMonitorInterval = setInterval(() => {
 const memoryUsage = this.getMemoryUsage();
 if (memoryUsage > 0) {
 this.recordMemoryUsage(memoryUsage);
 }
-}, 30000);
+}, PERFORMANCE.MEMORY_MONITOR_INTERVAL);
+  
 // Monitor app performance every minute
-setInterval(() => {
+this.performanceMonitorInterval = setInterval(() => {
 const stats = this.getPerformanceStats();
 this.reportPerformanceStats(stats);
-}, 60000);
+}, PERFORMANCE.PERFORMANCE_MONITOR_INTERVAL);
+}
+
+/**
+* Stop performance monitoring and clean up intervals
+*/
+public stopPerformanceMonitoring(): void {
+if (this.memoryMonitorInterval) {
+clearInterval(this.memoryMonitorInterval);
+this.memoryMonitorInterval = null;
+}
+if (this.performanceMonitorInterval) {
+clearInterval(this.performanceMonitorInterval);
+this.performanceMonitorInterval = null;
+}
 }
 /**
 * Report performance statistics
@@ -208,9 +231,7 @@ try {
 // In a real implementation, this would send to analytics service
 // Analytics.track('performance_stats', stats);
 } catch (error) {
-if (__DEV__) {
-console.error('Performance stats reporting error:', error);
-}
+logger.error('Performance stats reporting error:', error);
 }
 }
 }

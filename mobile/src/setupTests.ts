@@ -15,7 +15,7 @@ if (typeof global !== 'undefined') {
 
 // Force React internals to initialize by accessing them
 // This ensures ReactCurrentOwner is set up before test libraries try to use it
-if (React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED) {
+if ((React as any).__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED) {
   // React internals are available - good
 }
 
@@ -233,7 +233,7 @@ global.fetch = jest.fn();
 // Mock FormData
 global.FormData = jest.fn(() => ({
   append: jest.fn(),
-}));
+})) as any;
 
 // Mock console methods to reduce noise in tests
 global.console = {

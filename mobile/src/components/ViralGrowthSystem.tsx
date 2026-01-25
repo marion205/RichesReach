@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import logger from '../utils/logger';
 import {
   View,
   Text,
@@ -53,11 +54,12 @@ interface ChallengeParticipant {
 }
 
 interface ViralGrowthSystemProps {
-  onRewardClaimed: (reward: ReferralReward) => void;
-  onChallengeJoined: (challenge: CommunityChallenge) => void;
+  onRewardClaimed?: (reward: ReferralReward) => void;
+  onChallengeJoined?: (challenge: CommunityChallenge) => void;
+  onNavigate?: (screen: string, params?: any) => void;
 }
 
-export default function ViralGrowthSystem({ onRewardClaimed, onChallengeJoined }: ViralGrowthSystemProps) {
+export default function ViralGrowthSystem({ onRewardClaimed, onChallengeJoined, onNavigate }: ViralGrowthSystemProps = {}) {
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState<'referrals' | 'challenges' | 'rewards'>('referrals');
   const [referralCode, setReferralCode] = useState('RICHES2024');
@@ -215,7 +217,7 @@ export default function ViralGrowthSystem({ onRewardClaimed, onChallengeJoined }
       setRewards(mockRewards);
       setChallenges(mockChallenges);
     } catch (error) {
-      console.error('Error loading data:', error);
+      logger.error('Error loading data:', error);
       Alert.alert('Error', 'Failed to load viral growth data');
     } finally {
       setLoading(false);
@@ -232,7 +234,7 @@ export default function ViralGrowthSystem({ onRewardClaimed, onChallengeJoined }
         url: `https://richesreach.net/invite/${referralCode}`,
       });
     } catch (error) {
-      console.error('Error sharing referral code:', error);
+      logger.error('Error sharing referral code:', error);
     }
   };
 
@@ -265,7 +267,7 @@ export default function ViralGrowthSystem({ onRewardClaimed, onChallengeJoined }
         ]
       );
     } catch (error) {
-      console.error('Error claiming reward:', error);
+      logger.error('Error claiming reward:', error);
     }
   };
 
@@ -286,7 +288,7 @@ export default function ViralGrowthSystem({ onRewardClaimed, onChallengeJoined }
         ]
       );
     } catch (error) {
-      console.error('Error joining challenge:', error);
+      logger.error('Error joining challenge:', error);
     }
   };
 
@@ -387,7 +389,7 @@ export default function ViralGrowthSystem({ onRewardClaimed, onChallengeJoined }
 
             {/* Referral Code */}
             <View style={styles.referralCodeCard}>
-              <View intensity={20} style={styles.referralCodeBlur}>
+              <View style={styles.referralCodeBlur}>
                 <Text style={styles.referralCodeTitle}>Your Referral Code</Text>
                 <Animated.View
                   style={[
@@ -477,7 +479,7 @@ function ChallengeCard({ challenge, onJoin, getChallengeIcon }: any) {
   
   return (
     <View style={styles.challengeCard}>
-      <View intensity={20} style={styles.challengeBlur}>
+      <View style={styles.challengeBlur}>
         {/* Header */}
         <View style={styles.challengeHeader}>
           <View style={styles.challengeInfo}>
@@ -554,7 +556,7 @@ function ChallengeCard({ challenge, onJoin, getChallengeIcon }: any) {
 function RewardCard({ reward, onClaim, getRewardIcon }: any) {
   return (
     <View style={styles.rewardCard}>
-      <View intensity={20} style={styles.rewardBlur}>
+      <View style={styles.rewardBlur}>
         <View style={styles.rewardHeader}>
           <View style={[styles.rewardIcon, { backgroundColor: reward.color }]}>
             <Text style={styles.rewardIconText}>{getRewardIcon(reward.type)}</Text>

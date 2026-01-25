@@ -61,6 +61,8 @@ export const PreExecutionRiskCheckModal: React.FC<PreExecutionRiskCheckModalProp
 
   const calculatedTarget = targetPrice || (stopPrice ? entryPrice + Math.abs(entryPrice - stopPrice) * 2 : entryPrice * 1.05);
   const calculatedStop = stopPrice || entryPrice * 0.95;
+  const riskAmount = Math.abs(entryPrice - calculatedStop) * quantity;
+  const rewardAmount = Math.abs(calculatedTarget - entryPrice) * quantity;
 
   return (
     <Modal
@@ -140,9 +142,8 @@ export const PreExecutionRiskCheckModal: React.FC<PreExecutionRiskCheckModalProp
               entryPrice={entryPrice}
               stopPrice={calculatedStop}
               targetPrice={calculatedTarget}
-              side={side}
-              showLabels={true}
-              height={180}
+              riskAmount={riskAmount}
+              rewardAmount={rewardAmount}
             />
           </View>
 

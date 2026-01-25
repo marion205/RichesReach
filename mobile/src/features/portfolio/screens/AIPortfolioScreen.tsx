@@ -1021,8 +1021,8 @@ const StockCard = React.memo(({ item, showPersonalized, optResult }: { item: Buy
                   {/* Why this size */}
                   {item.whyThisSize && (
                     <Text style={[styles.reasoning, {marginTop:6, fontStyle:'italic'}]}>
-                      {item.whyThisSize}
-        </Text>
+                      {String(item.whyThisSize || '')}
+                    </Text>
       )}
     
     {!!item.reasoning && <Text style={styles.reasoning}>{item.reasoning}</Text>}
@@ -1057,15 +1057,15 @@ const StockCard = React.memo(({ item, showPersonalized, optResult }: { item: Buy
     })()}
     
     {/* Enhanced SHAP Feature Importance Chart */}
-    {item.shapExplanation?.topFeatures && item.shapExplanation.topFeatures.length > 0 && (
+    {(item.shapExplanation as any)?.topFeatures && (item.shapExplanation as any).topFeatures.length > 0 && (
       <View style={{ marginTop: 12, marginBottom: 8 }}>
         <SHAPFeatureImportanceChart
-          features={item.shapExplanation.topFeatures.map((f: any) => ({
+          features={(item.shapExplanation as any).topFeatures.map((f: any) => ({
             name: f.name,
             value: f.value,
             absValue: f.absValue,
           }))}
-          prediction={item.shapExplanation.prediction}
+          prediction={(item.shapExplanation as any).prediction}
           title="Why This Prediction?"
         />
       </View>
@@ -1078,15 +1078,15 @@ const StockCard = React.memo(({ item, showPersonalized, optResult }: { item: Buy
         marginBottom: 8,
         padding: 14,
         borderRadius: 12,
-        backgroundColor: item.consumerStrengthScore > 70 ? '#ECFDF5' : item.consumerStrengthScore > 50 ? '#FFFBEB' : '#FEF2F2',
+        backgroundColor: (item.consumerStrengthScore as number) > 70 ? '#ECFDF5' : (item.consumerStrengthScore as number) > 50 ? '#FFFBEB' : '#FEF2F2',
         borderWidth: 2,
-        borderColor: item.consumerStrengthScore > 70 ? '#10B981' : item.consumerStrengthScore > 50 ? '#F59E0B' : '#EF4444',
+        borderColor: (item.consumerStrengthScore as number) > 70 ? '#10B981' : (item.consumerStrengthScore as number) > 50 ? '#F59E0B' : '#EF4444',
       }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text style={{
             fontSize: 13,
             fontWeight: '700',
-            color: item.consumerStrengthScore > 70 ? '#065F46' : item.consumerStrengthScore > 50 ? '#92400E' : '#991B1B',
+            color: (item.consumerStrengthScore as number) > 70 ? '#065F46' : (item.consumerStrengthScore as number) > 50 ? '#92400E' : '#991B1B',
             textTransform: 'uppercase',
             letterSpacing: 0.5,
           }}>
@@ -1095,7 +1095,7 @@ const StockCard = React.memo(({ item, showPersonalized, optResult }: { item: Buy
           <View style={{
             flexDirection: 'row',
             alignItems: 'center',
-            backgroundColor: item.consumerStrengthScore > 70 ? '#10B981' : item.consumerStrengthScore > 50 ? '#F59E0B' : '#EF4444',
+            backgroundColor: (item.consumerStrengthScore as number) > 70 ? '#10B981' : (item.consumerStrengthScore as number) > 50 ? '#F59E0B' : '#EF4444',
             paddingHorizontal: 12,
             paddingVertical: 6,
             borderRadius: 20,
@@ -1105,7 +1105,7 @@ const StockCard = React.memo(({ item, showPersonalized, optResult }: { item: Buy
               fontWeight: '800',
               color: '#FFFFFF',
             }}>
-              {Math.round(item.consumerStrengthScore)}/100
+              {Math.round((item.consumerStrengthScore as number) || 0)}/100
             </Text>
           </View>
         </View>
@@ -1119,8 +1119,8 @@ const StockCard = React.memo(({ item, showPersonalized, optResult }: { item: Buy
         }}>
           <View style={{
             height: '100%',
-            width: `${item.consumerStrengthScore}%`,
-            backgroundColor: item.consumerStrengthScore > 70 ? '#10B981' : item.consumerStrengthScore > 50 ? '#F59E0B' : '#EF4444',
+            width: `${(item.consumerStrengthScore as number) || 0}%`,
+            backgroundColor: (item.consumerStrengthScore as number) > 70 ? '#10B981' : (item.consumerStrengthScore as number) > 50 ? '#F59E0B' : '#EF4444',
             borderRadius: 3,
           }} />
         </View>
@@ -1350,10 +1350,10 @@ const ListHeader = React.memo((props: ListHeaderProps) => {
                   try {
                     setOptimizing(true);
                     const result = await optimizeWeights(personalizedRecs, {
-                      volTarget: policy.volTarget,        // from profile
-                      nameCap: policy.nameCap,            // e.g. 0.06
-                      sectorCap: policy.sectorCap,        // e.g. 0.30
-                      turnoverBudget: policy.turnoverBudget, // optional
+                      volTarget: (policy as any).volTarget,        // from profile
+                      nameCap: (policy as any).nameCap,            // e.g. 0.06
+                      sectorCap: (policy as any).sectorCap,        // e.g. 0.30
+                      turnoverBudget: (policy as any).turnoverBudget, // optional
                     }, zBySymbol);
                     const wmap = Object.fromEntries(result.weights.map((w: OptimizerWeight)=>[w.symbol, w.weight]));
                     setOptResult({weights: wmap, vol: result.portfolioVol});
@@ -1569,6 +1569,32 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
   // Pre-populate form fields when profile form is shown (only once, never reset on errors)
   // Use a ref to track if we've already initialized to prevent re-initialization after refetches
   const hasInitializedRef = useRef(false);
+  const mutationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const refetchTimeoutRefs = useRef<Set<NodeJS.Timeout>>(new Set());
+  
+  // Helper to create and track timeouts
+  const createTrackedTimeout = useCallback((callback: () => void, delay: number): NodeJS.Timeout => {
+    const timeoutId = setTimeout(() => {
+      callback();
+      refetchTimeoutRefs.current.delete(timeoutId);
+    }, delay);
+    refetchTimeoutRefs.current.add(timeoutId);
+    return timeoutId;
+  }, []);
+  
+  // Cleanup all tracked timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (mutationTimeoutRef.current) {
+        clearTimeout(mutationTimeoutRef.current);
+        mutationTimeoutRef.current = null;
+      }
+      refetchTimeoutRefs.current.forEach(timeoutId => {
+        clearTimeout(timeoutId);
+      });
+      refetchTimeoutRefs.current.clear();
+    };
+  }, []);
   
   useEffect(() => {
     logger.log('🔍 Form initialization useEffect called, showProfileForm:', showProfileForm, 'didInitFromServer:', didInitFromServer, 'hasInitializedRef:', hasInitializedRef.current);
@@ -1889,16 +1915,35 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         },
       });
       
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Mutation timeout')), 2000) // 2 second max wait
-      );
+      let timeoutId: NodeJS.Timeout | null = null;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error('Mutation timeout'));
+          timeoutId = null;
+        }, 2000); // 2 second max wait
+        mutationTimeoutRef.current = timeoutId;
+      });
       
       let data, errors;
       try {
-        const result = await Promise.race([mutationPromise, timeoutPromise]) as MutationResult;
+        const result = await Promise.race([mutationPromise, timeoutPromise]) as unknown as MutationResult;
+        
+        // Clear timeout if mutation succeeded
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          mutationTimeoutRef.current = null;
+          timeoutId = null;
+        }
+        
         data = result.data;
         errors = result.errors;
       } catch (timeoutError: unknown) {
+        // Clear timeout on error
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          mutationTimeoutRef.current = null;
+          timeoutId = null;
+        }
         // If timeout, optimistically update UI anyway
         const errorMessage = timeoutError instanceof Error ? timeoutError.message : String(timeoutError);
         logger.warn('[AIPortfolio] Mutation timeout, using optimistic update:', errorMessage);
@@ -1915,7 +1960,10 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         // Refetch and generate in background
         Promise.all([
           refetchUser({ fetchPolicy: 'network-only' }).catch((err) => logger.warn('Failed to refetch user:', err)),
-          new Promise(resolve => setTimeout(resolve, 100)).then(() => 
+          new Promise<void>(resolve => {
+            const timeoutId = createTrackedTimeout(() => resolve(), 100);
+            return timeoutId;
+          }).then(() => 
             handleGenerateRecommendations().catch((err) => logger.warn('Failed to generate recommendations:', err))
           )
         ]).catch((err) => logger.warn('Failed to handle profile update:', err));
@@ -1937,8 +1985,8 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         }
         
         // Refetch in background - use cache-and-network to preserve optimistic update
-        setTimeout(() => {
-          refetchUser({ fetchPolicy: 'cache-and-network' }).catch((err) => logger.warn('Failed to refetch user:', err));
+        createTrackedTimeout(() => {
+          refetchUser().catch((err) => logger.warn('Failed to refetch user:', err));
         }, 500);
         return;
       }
@@ -1999,29 +2047,27 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         // Refetch user profile to ensure we have the latest data
         // Use cache-first to preserve the optimistic update, then check network after a delay
         // This prevents the refetch from overwriting the saved profile with stale data
-        setTimeout(() => {
-          refetchUser({ fetchPolicy: 'cache-and-network' })
+        createTrackedTimeout(() => {
+          refetchUser()
             .then(() => {
               logger.log('✅ User profile refetched, now refetching recommendations...');
               // Clear recommendations cache to force fresh fetch
               client.cache.evict({ fieldName: 'aiRecommendations' });
               client.cache.gc();
               // Refetch recommendations with updated profile
-              return refetchRecommendations({ 
-                fetchPolicy: 'cache-and-network',
-              });
+              return refetchRecommendations();
             })
             .then(() => {
               logger.log('✅ Recommendations refetched with new profile');
               // Clear the flag after a delay to let the real hasProfile take over
-              setTimeout(() => {
+              createTrackedTimeout(() => {
                 setProfileJustCreated(false);
               }, 2000);
             })
             .catch((err) => {
               logger.warn('Failed to refetch after profile creation:', err);
               // Clear the flag even on error
-              setTimeout(() => {
+              createTrackedTimeout(() => {
                 setProfileJustCreated(false);
               }, 2000);
             });
@@ -2063,8 +2109,8 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
           
           // Trigger refetch to update the component with new cache data
           // Use cache-first to preserve optimistic update, delay to avoid race condition
-          setTimeout(() => {
-            refetchUser({ fetchPolicy: 'cache-first' }).then(() => {
+          createTrackedTimeout(() => {
+            refetchUser().then(() => {
               logger.log('[AIPortfolio] ✅ User profile refetched after optimistic update (API error case)');
             }).catch(e => {
               logger.warn('[AIPortfolio] Could not refetch user after optimistic update:', e);
@@ -2078,7 +2124,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         setShowProfileForm(false);
         
         // Try to generate recommendations anyway
-        setTimeout(() => {
+        createTrackedTimeout(() => {
           handleGenerateRecommendations().catch(e => {
             logger.warn('[AIPortfolio] Could not generate recommendations:', e);
           });
@@ -2126,8 +2172,8 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
           
           // Trigger refetch to update the component with new cache data
           // Use cache-first to preserve optimistic update, delay to avoid race condition
-          setTimeout(() => {
-            refetchUser({ fetchPolicy: 'cache-first' }).then(() => {
+          createTrackedTimeout(() => {
+            refetchUser().then(() => {
               logger.log('[AIPortfolio] ✅ User profile refetched after optimistic update');
             }).catch(e => {
               logger.warn('[AIPortfolio] Could not refetch user after optimistic update:', e);
@@ -2142,7 +2188,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
         logger.log('[AIPortfolio] Profile saved optimistically for demo');
         
         // Try to generate recommendations with the local profile data
-        setTimeout(() => {
+        createTrackedTimeout(() => {
           handleGenerateRecommendations().catch(e => {
             logger.warn('[AIPortfolio] Could not generate recommendations after optimistic save:', e);
           });
@@ -2155,7 +2201,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       // Only show alert for non-network errors
       Alert.alert('Error', `Failed to create profile: ${errorMessage}`);
     }
-  }, [age, incomeBracket, investmentHorizon, riskTolerance, selectedGoals, createIncomeProfile, refetchUser, handleGenerateRecommendations, client, effectiveUserEarly, user]);
+  }, [age, incomeBracket, investmentHorizon, riskTolerance, selectedGoals, createIncomeProfile, refetchUser, client, effectiveUserEarly, user]);
 
 
   const handleGenerateRecommendations = useCallback(async () => {
@@ -2213,10 +2259,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       client.cache.gc();
       
       // Force refresh with cache bypass
-      await refetchRecommendations({ 
-        fetchPolicy: 'network-only',
-        notifyOnNetworkStatusChange: true 
-      });
+      await refetchRecommendations();
       
       logger.log('🔄 Data refresh completed');
     } catch (err) {
@@ -2245,7 +2288,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       // Clear cache to ensure fresh data
       client.cache.evict({ fieldName: 'aiRecommendations' });
       client.cache.gc();
-      refetchRecommendations({ fetchPolicy: 'network-only' })
+      refetchRecommendations()
         .then(() => logger.log('✅ Recommendations refetched after profile change'))
         .catch((err) => logger.warn('Failed to refetch recommendations:', err));
     } else if (!hasProfile && !userLoading) {
@@ -2275,7 +2318,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
 
     handleGenerateRecommendations()
       .then(async () => {
-        await refetchRecommendations({ fetchPolicy: 'network-only' });
+        await refetchRecommendations();
         logger.log('✅ Auto-generation complete; list refetched.');
       })
       .catch((e: unknown) => {
@@ -2294,8 +2337,8 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
       client.cache.gc();
       
       await Promise.all([
-        refetchUser({ fetchPolicy: 'network-only' }),
-        refetchRecommendations({ fetchPolicy: 'network-only' }),
+        refetchUser(),
+        refetchRecommendations(),
       ]);
     } finally {
       setIsRefreshing(false);
@@ -2305,7 +2348,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
   useEffect(() => {
     if (!showProfileForm && effectiveUserEarly?.incomeProfile) {
       const t = setTimeout(() => {
-        refetchRecommendations({ fetchPolicy: 'network-only' });
+        refetchRecommendations();
       }, 300);
       return () => clearTimeout(t);
     }
@@ -2708,7 +2751,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
               const pct = sectorData[sector] ?? 0;
               return (
                 <View key={sector} style={styles.sectorItem}>
-                  <Text style={styles.sectorLabel} numberOfLines={1} adjustsFontSizeToFit minimumScaleFactor={0.8}>
+                  <Text style={styles.sectorLabel} numberOfLines={1} {...({ adjustsFontSizeToFit: true, minimumScaleFactor: 0.8 } as any)}>
                     {sector}
                   </Text>
                   <Text style={styles.sectorValue}>
@@ -2773,10 +2816,10 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
                   try {
                     setOptimizing(true);
                     const result = await optimizeWeights(personalizedRecs, {
-                      volTarget: policy.volTarget,        // from profile
-                      nameCap: policy.nameCap,            // e.g. 0.06
-                      sectorCap: policy.sectorCap,        // e.g. 0.30
-                      turnoverBudget: policy.turnoverBudget, // optional
+                      volTarget: (policy as any).volTarget,        // from profile
+                      nameCap: (policy as any).nameCap,            // e.g. 0.06
+                      sectorCap: (policy as any).sectorCap,        // e.g. 0.30
+                      turnoverBudget: (policy as any).turnoverBudget, // optional
                     }, zBySymbol);
                     const wmap = Object.fromEntries(result.weights.map((w: OptimizerWeight)=>[w.symbol, w.weight]));
                     setOptResult({weights: wmap, vol: result.portfolioVol});
@@ -3044,7 +3087,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
               Form={Form}
               recommendationsLoading={effectiveRecommendationsLoading}
               ai={ai}
-              recommendationsError={recommendationsError}
+              recommendationsError={recommendationsError as unknown as GraphQLError | undefined}
               refetchRecommendations={refetchRecommendations}
               Recommendations={Recommendations}
               SummaryCards={SummaryCards}
@@ -3098,7 +3141,7 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
                     Form={Form}
                     recommendationsLoading={effectiveRecommendationsLoading}
                     ai={ai}
-                    recommendationsError={recommendationsError}
+                    recommendationsError={recommendationsError as unknown as GraphQLError | undefined}
                     refetchRecommendations={refetchRecommendations}
                     Recommendations={Recommendations}
                     SummaryCards={SummaryCards}
@@ -3162,7 +3205,6 @@ export default function AIPortfolioScreen({ navigateTo }: AIPortfolioScreenProps
             maxToRenderPerBatch={10}
             updateCellsBatchingPeriod={50}
             windowSize={5}
-            removeClippedSubviews
           />
             )
           })()

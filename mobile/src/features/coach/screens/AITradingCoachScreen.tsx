@@ -62,6 +62,7 @@ import {
   ApiError,
 } from '../../../services/aiTradingCoachClient';
 import { Ionicons } from '@expo/vector-icons';
+import { TIMING, ANIMATION } from '../../../config/constants';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useSharedValue,
@@ -140,7 +141,28 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
 
   // Refs
   const scrollRef = useRef<ScrollView>(null);
-  const panGestureRef = useRef<PanGestureHandler>(null);
+  const panGestureRef = useRef<PanGestureHandler | null>(null);
+  const voiceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const confettiTimeoutRefs = useRef<Set<NodeJS.Timeout>>(new Set());
+  const tabScaleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (voiceTimeoutRef.current) {
+        clearTimeout(voiceTimeoutRef.current);
+        voiceTimeoutRef.current = null;
+      }
+      if (tabScaleTimeoutRef.current) {
+        clearTimeout(tabScaleTimeoutRef.current);
+        tabScaleTimeoutRef.current = null;
+      }
+      confettiTimeoutRefs.current.forEach(timeoutId => {
+        clearTimeout(timeoutId);
+      });
+      confettiTimeoutRefs.current.clear();
+    };
+  }, []);
 
   // Strategy tab state
   const [strategy, setStrategy] = useState<StrategyRecommendation | null>(null);
@@ -200,7 +222,7 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
   useEffect(() => {
     const interval = setInterval(() => {
       setMarketTicker(prev => prev + (Math.random() - 0.5) * 2);
-    }, 2000);
+    }, TIMING.POLLING_INTERVAL_MEDIUM / 2.5); // 2000ms for market ticker
     return () => clearInterval(interval);
   }, []);
 
@@ -209,19 +231,18 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
     if (!voiceActive) {
       // Speech.speak('Tap to speak your goal', { language: 'en' });
       setVoiceActive(true);
-      setTimeout(() => setVoiceActive(false), 3000);
+      if (voiceTimeoutRef.current) {
+        clearTimeout(voiceTimeoutRef.current);
+      }
+      voiceTimeoutRef.current = setTimeout(() => {
+        setVoiceActive(false);
+        voiceTimeoutRef.current = null;
+      }, TIMING.TIMEOUT_SHORT);
     }
   };
 
   // Simple scroll handler (no parallax for now)
-  interface ScrollEvent {
-    nativeEvent: {
-      contentOffset: { x: number; y: number };
-      [key: string]: unknown;
-    };
-    [key: string]: unknown;
-  }
-  const scrollHandler = (event: ScrollEvent) => {
+  const scrollHandler = (event: any) => {
     // Basic scroll handling - can be extended later
   };
 
@@ -247,7 +268,11 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
         setShowConfetti(true);
         Vibration.vibrate(200);
         setAchievements(prev => [...prev, 'High-Confidence Strategy!']);
-        setTimeout(() => setShowConfetti(false), 3000);
+        const timeoutId = setTimeout(() => {
+          setShowConfetti(false);
+          confettiTimeoutRefs.current.delete(timeoutId);
+        }, 3000);
+        confettiTimeoutRefs.current.add(timeoutId);
       }
     } catch (e: unknown) {
       const errorMessage = e instanceof Error ? e.message : String(e);
@@ -284,7 +309,11 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
         setShowConfetti(true);
         Vibration.vibrate(200);
         setAchievements(prev => [...prev, 'High-Confidence Demo Strategy!']);
-        setTimeout(() => setShowConfetti(false), 3000);
+        const timeoutId = setTimeout(() => {
+          setShowConfetti(false);
+          confettiTimeoutRefs.current.delete(timeoutId);
+        }, 3000);
+        confettiTimeoutRefs.current.add(timeoutId);
       }
       // Don't show error for demo fallback - it's still a valid strategy
       // setError('Using demo strategy - API not available');
@@ -301,7 +330,7 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
     };
     [key: string]: unknown;
   }
-  const handleRiskDrag = (event: GestureEvent) => {
+  const handleRiskDrag = (event: any) => {
     const { translationX } = event.nativeEvent;
     riskTranslateX.value = translationX;
     const newPos = Math.max(0, Math.min(1, 0.5 + translationX / 200));
@@ -311,7 +340,7 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
     if (Math.abs(translationX) > 10) Vibration.vibrate(10);
   };
 
-  const handleRiskEnd = (event: GestureEvent) => {
+  const handleRiskEnd = (event: any) => {
     if (event.nativeEvent.state === GestureState.END) {
       riskTranslateX.value = withSpring(0);
       Vibration.vibrate(50);
@@ -605,7 +634,13 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
         style={[styles.tabButton, isActive && styles.tabButtonActive]}
         onPress={() => {
           tabScale.value = withSpring(0.95);
-          setTimeout(() => tabScale.value = withSpring(1), 150);
+          if (tabScaleTimeoutRef.current) {
+            clearTimeout(tabScaleTimeoutRef.current);
+          }
+          tabScaleTimeoutRef.current = setTimeout(() => {
+            tabScale.value = withSpring(1);
+            tabScaleTimeoutRef.current = null;
+          }, TIMING.ANIMATION_DURATION_SHORT / 2); // 150ms for tab animation
           setActiveTab(tab);
           Vibration.vibrate(20);
         }}

@@ -3,6 +3,7 @@
  * Error tracking and performance monitoring
  */
 import Constants from 'expo-constants';
+import logger from '../utils/logger';
 
 // Lazy import Sentry to avoid HostFunction errors in Expo Go
 let Sentry: any = null;
@@ -17,7 +18,7 @@ try {
 // Note: In Expo Go, Constants.expoConfig might not be available
 const SENTRY_DSN = 
   (Constants.expoConfig?.extra?.sentryDsn as string | undefined) ||
-  (Constants.manifest?.extra?.sentryDsn as string | undefined) ||
+  ((Constants.manifest as any)?.extra?.sentryDsn as string | undefined) ||
   process.env.SENTRY_DSN || 
   process.env.EXPO_PUBLIC_SENTRY_DSN || 
   '';
@@ -70,21 +71,20 @@ if (SENTRY_DSN && !isExpoGo && Sentry) {
           },
         });
         
-        console.log('✅ Sentry initialized for error tracking');
+        logger.log('✅ Sentry initialized for error tracking');
       } catch (initError) {
         // Silently fail - Sentry initialization errors shouldn't break the app
-        console.warn('Sentry initialization failed:', initError);
+        logger.warn('Sentry initialization failed:', initError);
       }
     });
   } catch (error) {
     // Silently fail - Sentry initialization errors shouldn't break the app
-    console.warn('Sentry setup failed:', error);
+    logger.warn('Sentry setup failed:', error);
   }
 } else if (isExpoGo) {
   // Silent in Expo Go - Sentry doesn't work there anyway
-  // console.log('ℹ️ Sentry not available in Expo Go - use development build for error tracking');
 } else {
-  console.log('⚠️ Sentry DSN not configured - error tracking disabled');
+  logger.warn('⚠️ Sentry DSN not configured - error tracking disabled');
 }
 
 export default Sentry;

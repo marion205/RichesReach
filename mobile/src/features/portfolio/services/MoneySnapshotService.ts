@@ -5,6 +5,7 @@
 
 import { API_HTTP } from '../../../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import logger from '../../../utils/logger';
 
 export interface MoneySnapshot {
   netWorth: number;
@@ -82,7 +83,7 @@ class MoneySnapshotService {
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error('Failed to fetch money snapshot:', error);
+      logger.error('Failed to fetch money snapshot:', error);
       throw error;
     }
   }
@@ -95,7 +96,7 @@ class MoneySnapshotService {
       const snapshot = await this.getSnapshot();
       return snapshot.breakdown.bankAccountsCount > 0;
     } catch (error) {
-      console.error('Failed to check bank link status:', error);
+      logger.error('Failed to check bank link status:', error);
       return false;
     }
   }

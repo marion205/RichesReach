@@ -1,5 +1,6 @@
 // Stream.io and Agora Configuration
 // Replace these with your actual API keys and tokens
+import logger from '../utils/logger';
 
 export const STREAM_CONFIG = {
   // Get your API key from https://getstream.io/dashboard/
@@ -57,7 +58,7 @@ export const getAgoraConfig = () => {
 export const generateStreamUserToken = async (userId: string): Promise<string> => {
   // This should be implemented on your backend
   // For now, return a placeholder
-  console.warn('generateStreamUserToken should be implemented server-side');
+  logger.warn('generateStreamUserToken should be implemented server-side');
   return 'placeholder_token';
 };
 
@@ -65,6 +66,6 @@ export const generateStreamUserToken = async (userId: string): Promise<string> =
 export const generateAgoraToken = async (channelName: string, userId: string): Promise<string> => {
   // This should be implemented on your backend
   // For now, return null (Agora allows null tokens for testing)
-  console.warn('generateAgoraToken should be implemented server-side');
+  logger.warn('generateAgoraToken should be implemented server-side');
   return null;
 };

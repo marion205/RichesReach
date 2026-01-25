@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { View, Dimensions, Modal, Text, Pressable, TouchableOpacity, InteractionManager, Platform } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSharedValue, useDerivedValue, withSpring, interpolate, withTiming, runOnJS } from 'react-native-reanimated';
+import logger from '../../utils/logger';
 
 // Conditionally import Skia - only available in development builds, not Expo Go
 let SkiaComponents: any = null;
@@ -9,7 +10,7 @@ try {
   SkiaComponents = require('@shopify/react-native-skia');
 } catch (e) {
   // Skia not available - component will return null
-  console.warn('Skia chart library not available');
+  logger.warn('Skia chart library not available');
 }
 
 const { Canvas, Path, Skia, Rect, Circle, Line, vec } = SkiaComponents || {};
@@ -43,6 +44,7 @@ type Palette = {
   whyFlow: string;
   whyOptions: string;
   whyEarnings: string;
+  bench?: string;
 };
 
 type Props = {
@@ -104,7 +106,7 @@ function InnovativeChart({
 }: Props) {
   // Early return if Skia is not available (e.g., in Expo Go)
   if (!SkiaComponents || !Canvas || !Path || !Skia) {
-    console.warn('InnovativeChartSkia: Skia library not available, returning null');
+    logger.warn('InnovativeChartSkia: Skia library not available, returning null');
     return null;
   }
   
@@ -159,7 +161,7 @@ function InnovativeChart({
         isOptionPressed.value = true;
         optionKeyPressed.current = true;
         if (__DEV__) {
-          console.log('🔑 Option/Alt key pressed');
+          logger.log('🔑 Option/Alt key pressed');
         }
       }
     };
@@ -169,7 +171,7 @@ function InnovativeChart({
         isOptionPressed.value = false;
         optionKeyPressed.current = false;
         if (__DEV__) {
-          console.log('🔑 Option/Alt key released');
+          logger.log('🔑 Option/Alt key released');
         }
       }
     };
@@ -180,7 +182,7 @@ function InnovativeChart({
         isOptionPressed.value = true;
         optionKeyPressed.current = true;
         if (__DEV__) {
-          console.log('🖱️ Mouse down with Option/Alt');
+          logger.log('🖱️ Mouse down with Option/Alt');
         }
       }
     };
@@ -210,8 +212,8 @@ function InnovativeChart({
     // The gesture handler should detect this, but we can also try to detect it
     // via touch events with a modifier check
     if (Platform.OS === 'ios' && __DEV__) {
-      console.log('📱 iOS detected - Option+drag may work differently');
-      console.log('💡 Try: Hold Option key, then drag on the chart');
+      logger.log('📱 iOS detected - Option+drag may work differently');
+      logger.log('💡 Try: Hold Option key, then drag on the chart');
     }
   }, []);
 
@@ -262,14 +264,14 @@ function InnovativeChart({
     .onStart((e) => {
       'worklet';
       runOnJS(() => {
-        console.log('👆 Pan START', { x: e.x, y: e.y, platform: Platform.OS });
+        logger.log('👆 Pan START', { x: e.x, y: e.y, platform: Platform.OS });
       })();
     })
     .onBegin((e) => {
       'worklet';
       // Track gesture start time for velocity calculation
       runOnJS(() => {
-        console.log('👆 Pan BEGAN', { x: e.x, y: e.y, platform: Platform.OS, state: 'BEGAN' });
+        logger.log('👆 Pan BEGAN', { x: e.x, y: e.y, platform: Platform.OS, state: 'BEGAN' });
       })();
     })
     .onUpdate((e) => {
@@ -301,7 +303,7 @@ function InnovativeChart({
       // Debug logging - log updates (limit frequency to avoid spam)
       if (Math.abs(e.translationX) % 10 < 1 || sensitivity > 1.0) {
         runOnJS(() => {
-          console.log('🎯 Pan UPDATE', { 
+          logger.log('🎯 Pan UPDATE', { 
             sensitivity: sensitivity.toFixed(2), 
             translationX: e.translationX.toFixed(2),
             deltaX: deltaX.toFixed(2),
@@ -389,7 +391,7 @@ function InnovativeChart({
       
       return scaled;
     } catch (e) {
-      console.warn('Chart scaledData error:', e);
+      logger.warn('Chart scaledData error:', e);
       return [];
     }
   });
@@ -437,7 +439,7 @@ function InnovativeChart({
       }
       return path;
     } catch (e) {
-      console.warn('Chart pricePath error:', e);
+      logger.warn('Chart pricePath error:', e);
       return Skia.Path.Make();
     }
   }, [sorted, minT, maxT, minP, maxP, margin, w, h, height, width]);
@@ -462,7 +464,7 @@ function InnovativeChart({
       path.lineTo(xLast, height - margin);
       path.close();
     } catch (e) {
-      console.warn('Chart moneyPath error:', e);
+      logger.warn('Chart moneyPath error:', e);
     }
     return path;
   }, [sorted, costBasis, moneyViewVisible, minT, maxT, minP, maxP, height, margin, w, h]);
@@ -523,7 +525,7 @@ function InnovativeChart({
         }
       }
     } catch (e) {
-      console.warn('Chart benchmarkPath error:', e);
+      logger.warn('Chart benchmarkPath error:', e);
     }
     return path;
   }, [showBenchmark, alignedBenchmark, sorted, minT, maxT, minP, maxP, margin, w, yOf]);
@@ -606,7 +608,7 @@ function InnovativeChart({
         }
         const path = Skia.Path.Make();
         if (upper.length === 0) {
-          console.log(`Chart glass ${z === z80 ? 'p80' : 'p50'}: No upper bounds`);
+          logger.log(`Chart glass ${z === z80 ? 'p80' : 'p50'}: No upper bounds`);
           return path;
         }
         
@@ -647,15 +649,15 @@ function InnovativeChart({
           }
           
           path.close();
-          console.log(`Chart glass ${z === z80 ? 'p80' : 'p50'}: Created band from (${lastX}, ${lastY}) with ${upper.length} points`);
+          logger.log(`Chart glass ${z === z80 ? 'p80' : 'p50'}: Created band from (${lastX}, ${lastY}) with ${upper.length} points`);
         } else {
-          console.log(`Chart glass ${z === z80 ? 'p80' : 'p50'}: Invalid start`, { lastX, lastY });
+          logger.log(`Chart glass ${z === z80 ? 'p80' : 'p50'}: Invalid start`, { lastX, lastY });
         }
         return path;
       };
       return { p80: makeBand(z80, 'p80'), p50: makeBand(z50, 'p50') };
     } catch (e) {
-      console.warn('Chart glass error:', e);
+      logger.warn('Chart glass error:', e);
       return { p80: Skia.Path.Make(), p50: Skia.Path.Make() };
     }
   }, [prices, times, dtMedian, minT, maxT, minP, maxP, xOf, yOf]);
@@ -853,7 +855,7 @@ function InnovativeChart({
           {showBenchmark && benchmarkData.length > 0 && (
             <Path
               path={benchmarkPath}
-              color={P.bench || P.text}
+              color={P.bench ?? P.text}
               style="stroke"
               strokeWidth={1}
               opacity={0.5}

@@ -420,6 +420,11 @@ const styles = StyleSheet.create({
   backButton: {
     padding: 8,
   },
+  backButtonText: {
+    fontSize: 16,
+    color: '#3B82F6',
+    fontWeight: '600',
+  },
   strategyCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,

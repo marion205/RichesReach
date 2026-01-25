@@ -13,6 +13,7 @@ SafeAreaView,
 import Icon from 'react-native-vector-icons/Feather';
 import UserProfileCard from '../../social/components/UserProfileCard';
 import { User } from '../../../types/social';
+import logger from '../../../utils/logger';
 interface UserProfileScreenProps {
 userId: string;
 onNavigate: (screen: string, params?: any) => void;
@@ -40,7 +41,7 @@ setError('User not found');
 }
 } catch (err) {
 setError('Failed to load user profile');
-console.error('Error loading user profile:', err);
+logger.error('Error loading user profile:', err);
 } finally {
 setLoading(false);
 }
@@ -50,15 +51,16 @@ setRefreshing(true);
 try {
 loadUserProfile();
 } catch (error) {
-console.error('Error refreshing profile:', error);
+  logger.error('Error refreshing profile:', error);
 } finally {
 setRefreshing(false);
 }
 };
-const handleFollowToggle = async (isFollowing: boolean) => {
+const handleFollowToggle = async () => {
 if (!user) return;
 try {
-const result = mockUserService.toggleFollow(userId);
+// TODO: Replace with real API call
+const result = { success: false, message: 'Follow feature not yet implemented' };
 if (result.success) {
 // Reload user profile to reflect the change
 loadUserProfile();
@@ -68,8 +70,8 @@ setRenderKey(prev => prev + 1);
 Alert.alert('Error', result.message);
 }
 } catch (error) {
-console.error('Error toggling follow:', error);
-Alert.alert('Error', 'Failed to update follow status. Please try again.');
+  logger.error('Error toggling follow:', error);
+  Alert.alert('Error', 'Failed to update follow status. Please try again.');
 }
 };
 // Load user profile when component mounts
@@ -118,7 +120,7 @@ onPress={() => onNavigate('social')}
 <Text style={styles.headerTitle}>Profile</Text>
 <TouchableOpacity
 style={styles.followButton}
-onPress={handleFollowToggle}
+onPress={() => handleFollowToggle()}
 >
 <Icon
 name={user.isFollowingUser ? 'user-check' : 'user-plus'}

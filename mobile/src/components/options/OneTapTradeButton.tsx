@@ -10,6 +10,7 @@ import { useQuery, useMutation } from '@apollo/client';
 import { GET_ONE_TAP_TRADES } from '../../graphql/optionsQueries';
 import { PLACE_MULTI_LEG_OPTIONS_ORDER } from '../../graphql/optionsMutations';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import logger from '../../utils/logger';
 
 interface OneTapLeg {
   action: string;
@@ -74,7 +75,7 @@ export const OneTapTradeButton: React.FC<OneTapTradeButtonProps> = ({
         }
       },
       onError: (error) => {
-        console.error('Error placing one-tap trade:', error);
+        logger.error('Error placing one-tap trade:', error);
       },
     }
   );
@@ -103,7 +104,7 @@ export const OneTapTradeButton: React.FC<OneTapTradeButtonProps> = ({
         }
         await refetch();
       } catch (err) {
-        console.error('Error retrying one-tap trades:', err);
+        logger.error('Error retrying one-tap trades:', err);
       }
     };
 
@@ -161,7 +162,7 @@ export const OneTapTradeButton: React.FC<OneTapTradeButtonProps> = ({
         },
       });
     } catch (error) {
-      console.error('Error executing one-tap trade:', error);
+      logger.error('Error executing one-tap trade:', error);
     }
   };
 

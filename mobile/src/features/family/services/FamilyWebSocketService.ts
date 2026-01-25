@@ -5,6 +5,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { WS_URL } from '../../../config/api';
+import logger from '../../../utils/logger';
 
 // Build WebSocket URL for family orb sync
 const getFamilyWSUrl = (): string => {
@@ -64,7 +65,7 @@ export class FamilyWebSocketService {
                    await AsyncStorage.getItem('authToken');
       
       if (!this.token) {
-        console.warn('[FamilyWS] No auth token found');
+        logger.warn('[FamilyWS] No auth token found');
         return;
       }
 
@@ -77,7 +78,7 @@ export class FamilyWebSocketService {
       this.setupEventHandlers();
       
     } catch (error) {
-      console.error('[FamilyWS] Connection error:', error);
+      logger.error('[FamilyWS] Connection error:', error);
       this.isConnecting = false;
       this.scheduleReconnect(familyGroupId);
     }
@@ -90,7 +91,7 @@ export class FamilyWebSocketService {
     if (!this.ws) return;
 
     this.ws.onopen = () => {
-      console.log('[FamilyWS] Connected');
+      logger.log('[FamilyWS] Connected');
       this.isConnected = true;
       this.isConnecting = false;
       this.reconnectAttempts = 0;
@@ -104,14 +105,14 @@ export class FamilyWebSocketService {
         const data: OrbSyncEvent = JSON.parse(event.data);
         this.handleMessage(data);
       } catch (error) {
-        console.error('[FamilyWS] Failed to parse message:', error);
+        logger.error('[FamilyWS] Failed to parse message:', error);
       }
     };
 
     this.ws.onerror = (error) => {
       // Only log errors in dev, and make them warnings (404s are expected if backend isn't deployed)
       if (__DEV__) {
-        console.warn('[FamilyWS] WebSocket error (expected if backend not deployed):', error);
+        logger.warn('[FamilyWS] WebSocket error (expected if backend not deployed):', error);
       }
       this.isConnected = false;
     };
@@ -121,9 +122,9 @@ export class FamilyWebSocketService {
       // Only log in dev, and make it a warning
       if (__DEV__) {
         if (event.code === 1006) {
-          console.warn('[FamilyWS] Disconnected: Backend WebSocket endpoint not available (404). This is expected if the backend is not running.');
+          logger.warn('[FamilyWS] Disconnected: Backend WebSocket endpoint not available (404). This is expected if the backend is not running.');
         } else {
-          console.log('[FamilyWS] Disconnected:', event.code, event.reason);
+          logger.log('[FamilyWS] Disconnected:', event.code, event.reason);
         }
       }
       this.isConnected = false;
@@ -145,7 +146,7 @@ export class FamilyWebSocketService {
       try {
         callback(event);
       } catch (error) {
-        console.error('[FamilyWS] Callback error:', error);
+        logger.error('[FamilyWS] Callback error:', error);
       }
     });
   }
@@ -155,14 +156,14 @@ export class FamilyWebSocketService {
    */
   send(message: OrbSyncMessage): void {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      console.warn('[FamilyWS] Cannot send, not connected');
+      logger.warn('[FamilyWS] Cannot send, not connected');
       return;
     }
 
     try {
       this.ws.send(JSON.stringify(message));
     } catch (error) {
-      console.error('[FamilyWS] Send error:', error);
+      logger.error('[FamilyWS] Send error:', error);
     }
   }
 
@@ -225,7 +226,7 @@ export class FamilyWebSocketService {
    */
   private scheduleReconnect(familyGroupId: string): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.warn('[FamilyWS] Max reconnection attempts reached');
+      logger.warn('[FamilyWS] Max reconnection attempts reached');
       return;
     }
 

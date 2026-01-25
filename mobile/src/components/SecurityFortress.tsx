@@ -28,6 +28,8 @@ import { connectSignal } from '../realtime/signal';
 import { useAuth } from '../contexts/AuthContext';
 import { SecurityInsights } from './SecurityInsights';
 import { SecurityGamification } from './SecurityGamification';
+import { SECURITY, TIMING } from '../config/constants';
+import logger from '../utils/logger';
 
 const { width } = Dimensions.get('window');
 
@@ -149,7 +151,6 @@ export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecur
     
     // Schedule a single refetch after 500ms
     refetchTimeoutRef.current = setTimeout(() => {
-      console.log('[SecurityFortress] Debounced refetch triggered');
       refetchEvents();
       refetchScore();
       refetchTimeoutRef.current = null;
@@ -159,6 +160,9 @@ export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecur
   // Real-time security event monitoring via WebSocket with resilience
   useEffect(() => {
     if (!user?.id) return;
+    
+    let pollIntervalRef: NodeJS.Timeout | null = null;
+    let reconnectTimeoutRef: NodeJS.Timeout | null = null;
     
     const setupWebSocket = async () => {
       try {
@@ -181,49 +185,56 @@ export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecur
               });
               isSubscribed = true;
             } catch (error) {
-              console.error('[SecurityFortress] Failed to get token for subscription:', error);
+              logger.error('[SecurityFortress] Failed to get token for subscription:', error);
             }
           }
         };
         
         ws.on('connect', () => {
           const correlationId = Math.random().toString(36).substring(7);
-          console.log(`[SecurityFortress] [${correlationId}] WebSocket connected`);
+          logger.log(`[SecurityFortress] [${correlationId}] WebSocket connected`);
           reconnectAttemptsRef.current = 0;
           subscribe();
         });
         
         ws.on('disconnect', () => {
-          console.log('[SecurityFortress] WebSocket disconnected');
+          logger.log('[SecurityFortress] WebSocket disconnected');
           isSubscribed = false;
           
           // Auto-reconnect with exponential backoff
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000);
-          reconnectAttemptsRef.current++;
-          console.log(`[SecurityFortress] Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current})`);
+          // Clear any existing reconnect timeout
+          if (reconnectTimeoutRef) {
+            clearTimeout(reconnectTimeoutRef);
+            reconnectTimeoutRef = null;
+          }
           
-          setTimeout(() => {
+          const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), TIMING.TIMEOUT_VERY_LONG);
+          reconnectAttemptsRef.current++;
+          logger.log(`[SecurityFortress] Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current})`);
+          
+          reconnectTimeoutRef = setTimeout(() => {
             if (!ws.connected) {
               ws.connect();
             }
+            reconnectTimeoutRef = null;
           }, delay);
         });
         
         ws.on('connect_error', (error: any) => {
-          console.error('[SecurityFortress] WebSocket connection error:', error);
+          logger.error('[SecurityFortress] WebSocket connection error:', error);
         });
         
         ws.on('security-events-subscribed', (data: any) => {
-          console.log(`[SecurityFortress] [${data.correlationId || 'unknown'}] Subscribed to security events:`, data);
+          logger.log(`[SecurityFortress] [${data.correlationId || 'unknown'}] Subscribed to security events:`, data);
         });
         
         ws.on('security-events-error', (data: any) => {
-          console.error(`[SecurityFortress] [${data.correlationId || 'unknown'}] Security events error:`, data);
+          logger.error(`[SecurityFortress] [${data.correlationId || 'unknown'}] Security events error:`, data);
         });
         
         ws.on('security-event-created', (data: any) => {
           const correlationId = data.correlationId || 'unknown';
-          console.log(`[SecurityFortress] [${correlationId}] New security event received:`, {
+          logger.log(`[SecurityFortress] [${correlationId}] New security event received:`, {
             eventId: data.event?.id,
             userId: data.userId,
             timestamp: new Date().toISOString(),
@@ -234,7 +245,7 @@ export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecur
         
         ws.on('security-event-resolved', (data: any) => {
           const correlationId = data.correlationId || 'unknown';
-          console.log(`[SecurityFortress] [${correlationId}] Security event resolved:`, {
+          logger.log(`[SecurityFortress] [${correlationId}] Security event resolved:`, {
             eventId: data.event?.id,
             userId: data.userId,
             timestamp: new Date().toISOString(),
@@ -247,16 +258,23 @@ export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecur
         setSocket(ws);
         
         // Fallback polling if WebSocket fails (every 30 seconds)
-        const pollInterval = setInterval(() => {
+        pollIntervalRef = setInterval(() => {
           if (!ws.connected) {
-            console.log('[SecurityFortress] WebSocket not connected, using fallback polling');
+            logger.log('[SecurityFortress] WebSocket not connected, using fallback polling');
             refetchEvents();
             refetchScore();
           }
-        }, 30000);
+        }, SECURITY.SECURITY_EVENTS_POLL_INTERVAL);
         
         return () => {
-          clearInterval(pollInterval);
+          if (pollIntervalRef) {
+            clearInterval(pollIntervalRef);
+            pollIntervalRef = null;
+          }
+          if (reconnectTimeoutRef) {
+            clearTimeout(reconnectTimeoutRef);
+            reconnectTimeoutRef = null;
+          }
           if (refetchTimeoutRef.current) {
             clearTimeout(refetchTimeoutRef.current);
           }
@@ -266,14 +284,19 @@ export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecur
           }
         };
       } catch (error) {
-        console.error('[SecurityFortress] WebSocket setup error:', error);
+        logger.error('[SecurityFortress] WebSocket setup error:', error);
         // Fallback to polling only
-        const pollInterval = setInterval(() => {
+        pollIntervalRef = setInterval(() => {
           refetchEvents();
           refetchScore();
-        }, 30000);
+        }, SECURITY.SECURITY_EVENTS_POLL_INTERVAL);
         
-        return () => clearInterval(pollInterval);
+        return () => {
+          if (pollIntervalRef) {
+            clearInterval(pollIntervalRef);
+            pollIntervalRef = null;
+          }
+        };
       }
     };
     
@@ -282,6 +305,12 @@ export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecur
     return () => {
       if (cleanup) {
         cleanup.then(fn => fn && fn());
+      }
+      if (pollIntervalRef) {
+        clearInterval(pollIntervalRef);
+      }
+      if (reconnectTimeoutRef) {
+        clearTimeout(reconnectTimeoutRef);
       }
       if (socket) {
         socket.emit('unsubscribe-security-events', { userId: user?.id });
@@ -325,16 +354,16 @@ export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecur
   // Data is loaded via GraphQL queries, no need for separate loadData function
 
   const getSecurityScoreColor = (score: number) => {
-    if (score >= 90) return '#34C759';
-    if (score >= 70) return '#FF9500';
-    if (score >= 50) return '#FF3B30';
+    if (score >= SECURITY.SCORE_EXCELLENT) return '#34C759';
+    if (score >= SECURITY.SCORE_GOOD) return '#FF9500';
+    if (score >= SECURITY.SCORE_FAIR) return '#FF3B30';
     return '#8E8E93';
   };
 
   const getSecurityScoreLabel = (score: number) => {
-    if (score >= 90) return 'Excellent';
-    if (score >= 70) return 'Good';
-    if (score >= 50) return 'Fair';
+    if (score >= SECURITY.SCORE_EXCELLENT) return 'Excellent';
+    if (score >= SECURITY.SCORE_GOOD) return 'Good';
+    if (score >= SECURITY.SCORE_FAIR) return 'Fair';
     return 'Poor';
   };
 
@@ -374,7 +403,7 @@ export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecur
       await refetchBiometric();
       await refetchScore();
     } catch (error) {
-      console.error('Error updating biometric setting:', error);
+      logger.error('Error updating biometric setting:', error);
       Alert.alert('Error', 'Failed to update biometric setting');
     }
   };
@@ -386,7 +415,7 @@ export default function SecurityFortress({ onNavigate, onBiometricSetup, onSecur
       await refetchScore();
       Alert.alert('Success', 'Security event resolved');
     } catch (error) {
-      console.error('Error resolving security event:', error);
+      logger.error('Error resolving security event:', error);
       Alert.alert('Error', 'Failed to resolve security event');
     }
   };

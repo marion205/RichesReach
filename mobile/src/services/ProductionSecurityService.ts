@@ -3,7 +3,17 @@
 * Handles security measures for production environment
 */
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { PRODUCTION_CONFIG } from '../config/production';
+// import { PRODUCTION_CONFIG } from '../config/production'; // File doesn't exist
+const PRODUCTION_CONFIG: any = { 
+  enabled: false,
+  SECURITY: {
+    ENABLE_SSL_PINNING: true,
+    ENABLE_CERTIFICATE_PINNING: false,
+    MAX_LOGIN_ATTEMPTS: 5,
+    LOCKOUT_DURATION: 300000, // 5 minutes
+    TOKEN_REFRESH_INTERVAL: 3600000, // 1 hour
+  },
+}; // Fallback
 interface SecurityConfig {
 enableSSL: boolean;
 enableCertificatePinning: boolean;

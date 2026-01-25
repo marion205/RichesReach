@@ -13,6 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useQuery } from '@apollo/client';
 import { generateDailyDigest, createRegimeAlert, VoiceDigestResponse } from '../../../services/aiClient';
 import { gql } from '@apollo/client';
+import logger from '../../../utils/logger';
 
 const ME_QUERY = gql`
   query Me {
@@ -54,15 +55,7 @@ export default function DailyVoiceDigestScreen() {
   const hasPremium = userData?.me?.hasPremiumAccess || false;
   const subscriptionTier = userData?.me?.subscriptionTier || 'free';
 
-  // Debug Speech module availability
-  useEffect(() => {
-    console.log('🎙️ Speech module check:', {
-      Speech: !!Speech,
-      speak: typeof Speech?.speak,
-      stop: typeof Speech?.stop,
-      SpeechKeys: Speech ? Object.keys(Speech) : 'undefined'
-    });
-  }, []);
+  // Speech module availability check - no need to log
 
   const generateDigest = async () => {
     setLoading(true);
@@ -84,7 +77,7 @@ export default function DailyVoiceDigestScreen() {
     } catch (error: any) {
       // Suppress timeout errors for demo - show user-friendly message instead
       if (error?.message?.includes('timeout') || error?.message?.includes('Request timeout')) {
-        console.warn('⚠️ Digest generation timed out, using mock data for demo');
+        logger.warn('⚠️ Digest generation timed out, using mock data for demo');
         // Set mock digest for demo purposes with regime_context
         setDigest({
           digest_id: `demo-digest-${Date.now()}`,
@@ -119,7 +112,7 @@ export default function DailyVoiceDigestScreen() {
           scheduled_for: new Date().toISOString()
         });
       } else {
-        console.error('Error generating digest:', error);
+        logger.error('Error generating digest:', error);
         Alert.alert('Error', 'Failed to generate daily digest. Please try again.');
       }
     } finally {
@@ -135,7 +128,7 @@ export default function DailyVoiceDigestScreen() {
       
       // Check if Speech is available
       if (!Speech || typeof Speech.speak !== 'function') {
-        console.error('Speech module not available');
+        logger.error('Speech module not available');
         Alert.alert('Voice Playback Unavailable', 'Text-to-speech is not available on this device. Please read the digest manually.');
         setIsPlaying(false);
         return;
@@ -143,7 +136,7 @@ export default function DailyVoiceDigestScreen() {
       
       // Parse haptic cues from voice script
       const script = digest.voice_script;
-      const hapticCues = script.match(/\[HAPTIC: (gentle|strong)\]/g) || [];
+      const hapticCues: string[] = script.match(/\[HAPTIC: (gentle|strong)\]/g) || [];
       
       // Play voice with haptic feedback
       await Speech.speak(script.replace(/\[HAPTIC: (gentle|strong)\]/g, ''), {
@@ -153,7 +146,7 @@ export default function DailyVoiceDigestScreen() {
         onDone: () => setIsPlaying(false),
         onStopped: () => setIsPlaying(false),
         onError: (error) => {
-          console.error('Speech error:', error);
+          logger.error('Speech error:', error);
           setIsPlaying(false);
         },
       });
@@ -170,7 +163,7 @@ export default function DailyVoiceDigestScreen() {
       });
 
     } catch (error) {
-      console.error('Error playing voice:', error);
+      logger.error('Error playing voice:', error);
       Alert.alert('Playback Error', 'Unable to play voice digest. Please try again or read the text manually.');
       setIsPlaying(false);
     }
@@ -182,7 +175,7 @@ export default function DailyVoiceDigestScreen() {
         Speech.stop();
       }
     } catch (error) {
-      console.error('Error stopping speech:', error);
+      logger.error('Error stopping speech:', error);
     } finally {
       setIsPlaying(false);
     }
@@ -190,7 +183,6 @@ export default function DailyVoiceDigestScreen() {
 
   const testRegimeAlert = async () => {
     try {
-      console.log('🚨 Testing regime alert...');
       const alert = await createRegimeAlert({
         user_id: userId,
         regime_change: {
@@ -200,15 +192,13 @@ export default function DailyVoiceDigestScreen() {
         },
         urgency: 'medium'
       });
-      
-      console.log('✅ Regime alert created:', alert);
       Alert.alert(
         alert.title || 'Regime Alert',
         alert.body || 'Market regime has changed. Consider reviewing your portfolio strategy.',
         [{ text: 'OK' }]
       );
     } catch (error: any) {
-      console.error('❌ Error creating regime alert:', error);
+      logger.error('❌ Error creating regime alert:', error);
       Alert.alert(
         'Regime Alert Test',
         error?.message || 'Failed to create regime alert. Please try again.',
@@ -228,7 +218,7 @@ export default function DailyVoiceDigestScreen() {
       try {
         navigation.navigate('subscription');
       } catch (error) {
-        console.error('Navigation error:', error);
+        logger.error('Navigation error:', error);
         Alert.alert(
           'Navigation Error',
           'Could not open subscription screen. Please try from the Profile menu.',

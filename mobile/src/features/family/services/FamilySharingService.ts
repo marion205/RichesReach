@@ -5,6 +5,7 @@
 
 import { API_HTTP } from '../../../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import logger from '../../../utils/logger';
 
 export interface FamilyMember {
   id: string;
@@ -96,7 +97,7 @@ class FamilySharingService {
           // For 500 errors, log but don't throw - allow app to continue
           if (response.status === 500) {
             const errorText = await response.text().catch(() => 'Unknown error');
-            console.warn('[FamilySharing] Server error fetching family group (500):', errorText);
+            logger.warn('[FamilySharing] Server error fetching family group (500):', errorText);
             // Return null to allow app to continue - user just doesn't have a family group
             return null;
           }
@@ -107,16 +108,16 @@ class FamilySharingService {
       } catch (fetchError: any) {
         clearTimeout(timeoutId);
         if (fetchError.name === 'AbortError') {
-          console.warn('[FamilySharing] Request timed out, returning null');
+          logger.warn('[FamilySharing] Request timed out, returning null');
           return null; // Return null instead of throwing for timeout
         }
         // For other fetch errors, log but return null to allow app to continue
-        console.warn('[FamilySharing] Fetch error (non-critical):', fetchError.message || fetchError);
+        logger.warn('[FamilySharing] Fetch error (non-critical):', fetchError.message || fetchError);
         return null;
       }
     } catch (error: any) {
       // Log but don't throw - return null to allow app to continue
-      console.warn('[FamilySharing] Error fetching family group (non-critical):', error.message || error);
+      logger.warn('[FamilySharing] Error fetching family group (non-critical):', error.message || error);
       return null;
     }
   }
@@ -163,7 +164,7 @@ class FamilySharingService {
         throw fetchError;
       }
     } catch (error) {
-      console.error('[FamilySharing] Failed to create family group:', error);
+      logger.error('[FamilySharing] Failed to create family group:', error);
       throw error;
     }
   }
@@ -186,7 +187,7 @@ class FamilySharingService {
 
       return await response.json();
     } catch (error) {
-      console.error('[FamilySharing] Failed to invite member:', error);
+      logger.error('[FamilySharing] Failed to invite member:', error);
       throw error;
     }
   }
@@ -209,7 +210,7 @@ class FamilySharingService {
 
       return await response.json();
     } catch (error) {
-      console.error('[FamilySharing] Failed to accept invite:', error);
+      logger.error('[FamilySharing] Failed to accept invite:', error);
       throw error;
     }
   }
@@ -235,7 +236,7 @@ class FamilySharingService {
 
       return await response.json();
     } catch (error) {
-      console.error('[FamilySharing] Failed to update permissions:', error);
+      logger.error('[FamilySharing] Failed to update permissions:', error);
       throw error;
     }
   }
@@ -256,7 +257,7 @@ class FamilySharingService {
         body: JSON.stringify(state),
       });
     } catch (error) {
-      console.warn('[FamilySharing] Failed to sync orb state:', error);
+      logger.warn('[FamilySharing] Failed to sync orb state:', error);
       // Don't throw - sync failures shouldn't break the app
     }
   }
@@ -279,7 +280,7 @@ class FamilySharingService {
 
       return await response.json();
     } catch (error) {
-      console.error('[FamilySharing] Failed to fetch sync events:', error);
+      logger.error('[FamilySharing] Failed to fetch sync events:', error);
       return [];
     }
   }
@@ -299,7 +300,7 @@ class FamilySharingService {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
     } catch (error) {
-      console.error('[FamilySharing] Failed to remove member:', error);
+      logger.error('[FamilySharing] Failed to remove member:', error);
       throw error;
     }
   }
@@ -319,7 +320,7 @@ class FamilySharingService {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
     } catch (error) {
-      console.error('[FamilySharing] Failed to leave family group:', error);
+      logger.error('[FamilySharing] Failed to leave family group:', error);
       throw error;
     }
   }

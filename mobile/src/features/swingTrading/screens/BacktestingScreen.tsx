@@ -15,7 +15,8 @@ import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/Feather';
 import { useQuery } from '@apollo/client';
-import { GET_SWING_SIGNALS } from '../../../graphql/swingTrading';
+import { GET_SWING_SIGNALS } from '../../../graphql/swingTradingQueries';
+import logger from '../../../utils/logger';
 
 const { width } = Dimensions.get('window');
 
@@ -46,23 +47,39 @@ const BacktestingScreen: React.FC<BacktestingScreenProps> = ({ navigateTo: navig
     try {
       navigation.navigate(screen as never);
     } catch (error) {
-      console.warn('Navigation error:', error);
+      logger.warn('Navigation error:', error);
       // Fallback to globalNavigate if available
       try {
         if (typeof window !== 'undefined' && (window as any).__navigateToGlobal) {
           (window as any).__navigateToGlobal(screen);
         }
       } catch (fallbackError) {
-        console.error('All navigation methods failed:', fallbackError);
+        logger.error('All navigation methods failed:', fallbackError);
       }
     }
   });
   
   // Ensure navigateTo is always a function
   if (typeof navigateTo !== 'function') {
-    console.error('navigateTo is not a function:', typeof navigateTo, navigateTo);
+    logger.error('navigateTo is not a function:', typeof navigateTo, navigateTo);
   }
   const [refreshing, setRefreshing] = useState(false);
+  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const backtestTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+        refreshTimeoutRef.current = null;
+      }
+      if (backtestTimeoutRef.current) {
+        clearTimeout(backtestTimeoutRef.current);
+        backtestTimeoutRef.current = null;
+      }
+    };
+  }, []);
   const [selectedStrategy, setSelectedStrategy] = useState('momentum');
   const [selectedTimeframe, setSelectedTimeframe] = useState('1Y');
 
@@ -130,8 +147,12 @@ const BacktestingScreen: React.FC<BacktestingScreenProps> = ({ navigateTo: navig
   const onRefresh = async () => {
     setRefreshing(true);
     // Simulate API call
-    setTimeout(() => {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+    }
+    refreshTimeoutRef.current = setTimeout(() => {
       setRefreshing(false);
+      refreshTimeoutRef.current = null;
     }, 1000);
   };
 
@@ -162,12 +183,16 @@ const BacktestingScreen: React.FC<BacktestingScreenProps> = ({ navigateTo: navig
             setBacktestResults(prev => [newBacktest, ...prev]);
             
             // Simulate completion after 3 seconds
-            setTimeout(() => {
+            if (backtestTimeoutRef.current) {
+              clearTimeout(backtestTimeoutRef.current);
+            }
+            backtestTimeoutRef.current = setTimeout(() => {
               setBacktestResults(prev => prev.map(bt => 
                 bt.id === newBacktest.id 
                   ? { ...bt, status: 'completed' as const, totalTrades: 42, winRate: 65.5, totalReturn: 19.8, maxDrawdown: -7.2, sharpeRatio: 1.72, profitFactor: 1.95, avgHoldingPeriod: 11.3 }
                   : bt
               ));
+              backtestTimeoutRef.current = null;
             }, 3000);
           }
         }

@@ -4,6 +4,7 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNetworkOptimization } from './useNetworkOptimization';
+import logger from '../utils/logger';
 
 interface PollingConfig {
   enabled: boolean;
@@ -79,7 +80,7 @@ export const useOptimizedPolling = (
   // Execute polling with error handling
   const executePoll = useCallback(async () => {
     if (!networkOptimization.shouldMakeRequest()) {
-      console.log('Skipping poll due to network optimization');
+      // Skipping poll due to network optimization
       return;
     }
     
@@ -104,7 +105,7 @@ export const useOptimizedPolling = (
       
       return result;
     } catch (error) {
-      console.error('Polling error:', error);
+      logger.error('Polling error:', error);
       
       setState(prev => ({
         ...prev,
@@ -145,6 +146,18 @@ export const useOptimizedPolling = (
     };
     
     scheduleNext();
+    
+    // Cleanup on unmount or when disabled
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
   }, [finalConfig.enabled, executePoll, calculateSmartInterval]);
   
   // Stop polling

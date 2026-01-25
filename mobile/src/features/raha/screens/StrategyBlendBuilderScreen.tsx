@@ -10,7 +10,7 @@ import {
   Alert,
   TextInput,
 } from 'react-native';
-import { Slider } from '@react-native-community/slider';
+import Slider from '@react-native-community/slider';
 import Icon from 'react-native-vector-icons/Feather';
 import { useQuery, useMutation } from '@apollo/client';
 import {
@@ -21,14 +21,6 @@ import {
 } from '../../../graphql/raha';
 import type {
   StrategyBlendType,
-  ExtendedQueryStrategyBlendsQuery,
-  ExtendedQueryStrategyBlendsQueryVariables,
-  ExtendedMutationCreateStrategyBlendMutation,
-  ExtendedMutationCreateStrategyBlendMutationVariables,
-  ExtendedMutationUpdateStrategyBlendMutation,
-  ExtendedMutationUpdateStrategyBlendMutationVariables,
-  ExtendedMutationDeleteStrategyBlendMutation,
-  ExtendedMutationDeleteStrategyBlendMutationVariables,
 } from '../../../generated/graphql';
 import { useStrategies, Strategy } from '../hooks/useStrategies';
 import logger from '../../../utils/logger';
@@ -67,26 +59,10 @@ export default function StrategyBlendBuilderScreen({
 
   const { strategies, loading: strategiesLoading } = useStrategies();
   
-  // ✅ Now using typed queries and mutations
-  const { data, loading, error, refetch } = useQuery<
-    ExtendedQueryStrategyBlendsQuery,
-    ExtendedQueryStrategyBlendsQueryVariables
-  >(GET_STRATEGY_BLENDS);
-  
-  const [createBlend] = useMutation<
-    ExtendedMutationCreateStrategyBlendMutation,
-    ExtendedMutationCreateStrategyBlendMutationVariables
-  >(CREATE_STRATEGY_BLEND);
-  
-  const [updateBlend] = useMutation<
-    ExtendedMutationUpdateStrategyBlendMutation,
-    ExtendedMutationUpdateStrategyBlendMutationVariables
-  >(UPDATE_STRATEGY_BLEND);
-  
-  const [deleteBlend] = useMutation<
-    ExtendedMutationDeleteStrategyBlendMutation,
-    ExtendedMutationDeleteStrategyBlendMutationVariables
-  >(DELETE_STRATEGY_BLEND);
+  const { data, loading, error, refetch } = useQuery<any>(GET_STRATEGY_BLENDS);
+  const [createBlend] = useMutation<any>(CREATE_STRATEGY_BLEND);
+  const [updateBlend] = useMutation<any>(UPDATE_STRATEGY_BLEND);
+  const [deleteBlend] = useMutation<any>(DELETE_STRATEGY_BLEND);
 
   // ✅ Now using generated StrategyBlendType
   const blends: StrategyBlend[] = useMemo(() => {

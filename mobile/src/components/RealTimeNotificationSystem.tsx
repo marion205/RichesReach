@@ -16,6 +16,7 @@ import {
   Vibration,
 } from 'react-native';
 import { useVoice } from '../contexts/VoiceContext';
+import * as Speech from 'expo-speech';
 import { useMutation, useSubscription } from '@apollo/client';
 import { gql } from '@apollo/client';
 
@@ -69,7 +70,17 @@ export const RealTimeNotificationSystem: React.FC<NotificationSystemProps> = ({
   const [showNotifications, setShowNotifications] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
   
-  const { speak } = useVoice();
+  const { getSelectedVoice, getVoiceParameters } = useVoice();
+  
+  const speak = (text: string) => {
+    const voiceId = getSelectedVoice();
+    const params = getVoiceParameters(voiceId);
+    Speech.speak(text, {
+      voice: voiceId,
+      pitch: params.pitch,
+      rate: params.rate,
+    });
+  };
   const slideAnim = useRef(new Animated.Value(-screenWidth)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -185,10 +196,7 @@ export const RealTimeNotificationSystem: React.FC<NotificationSystemProps> = ({
     Vibration.vibrate([0, 200, 100, 200]);
     
     // Speak the notification
-    speak(`Trade executed: ${notification.message}`, {
-      voice: 'Nova',
-      rate: 0.9,
-    });
+    speak(`Trade executed: ${notification.message}`);
 
     // Show priority-based styling
     if (notification.priority === 'urgent') {
@@ -200,25 +208,16 @@ export const RealTimeNotificationSystem: React.FC<NotificationSystemProps> = ({
     // Gentle vibration for price alerts
     Vibration.vibrate([0, 100]);
     
-    speak(`Price alert: ${notification.message}`, {
-      voice: 'Shimmer',
-      rate: 1.0,
-    });
+    speak(`Price alert: ${notification.message}`);
   };
 
   const handleEducationNotification = (notification: Notification) => {
     // Encouraging voice for education
-    speak(`Great job! ${notification.message}`, {
-      voice: 'Shimmer',
-      rate: 1.1,
-    });
+    speak(`Great job! ${notification.message}`);
   };
 
   const handleSocialNotification = (notification: Notification) => {
-    speak(`Social update: ${notification.message}`, {
-      voice: 'Nova',
-      rate: 1.0,
-    });
+    speak(`Social update: ${notification.message}`);
   };
 
   const handleSystemNotification = (notification: Notification) => {

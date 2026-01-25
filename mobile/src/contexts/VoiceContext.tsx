@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import logger from '../utils/logger';
 
 interface VoiceSettings {
   selectedVoice: string;
@@ -42,7 +43,7 @@ export function VoiceProvider({ children }: VoiceProviderProps) {
         setVoiceSettings({ ...defaultVoiceSettings, ...settings });
       }
     } catch (error) {
-      console.error('Failed to load voice settings:', error);
+      logger.error('Failed to load voice settings:', error);
     }
   };
 
@@ -52,7 +53,7 @@ export function VoiceProvider({ children }: VoiceProviderProps) {
       await AsyncStorage.setItem('voice_settings', JSON.stringify(updatedSettings));
       setVoiceSettings(updatedSettings);
     } catch (error) {
-      console.error('Failed to save voice settings:', error);
+      logger.error('Failed to save voice settings:', error);
     }
   };
 

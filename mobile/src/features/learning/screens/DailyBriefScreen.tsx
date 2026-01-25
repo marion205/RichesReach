@@ -4,7 +4,7 @@
  * Takes < 2 minutes, builds confidence, creates daily habit
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -26,7 +26,11 @@ import { useAuth } from '../../../contexts/AuthContext';
 import * as Haptics from 'expo-haptics';
 import DailyBriefOnboardingScreen, { isDailyBriefOnboardingCompleted } from './DailyBriefOnboardingScreen';
 import { dailyBriefNotificationScheduler } from '../services/DailyBriefNotificationScheduler';
+import logger from '../../../utils/logger';
+import { safeNavigate, safeGoBack } from '../../../utils/navigation';
+import { TIMING, API } from '../../../config/constants';
 
+// Extended DailyBrief interface for this screen's specific needs
 interface DailyBrief {
   id: string;
   date: string;
@@ -45,20 +49,21 @@ interface DailyBrief {
     lessons_completed: number;
   };
   confidence_score: number;
+  achievements_unlocked?: string[];
 }
 
 interface DailyBriefScreenProps {
-  navigateTo?: (screen: string, params?: any) => void;
+  navigateTo?: (screen: string, params?: Record<string, unknown>) => void;
 }
 
 interface SectionItem {
   id: string;
   type: 'header' | 'market_summary' | 'action' | 'lesson' | 'progress' | 'complete';
-  data?: any;
+  data?: DailyBrief | Record<string, unknown>;
 }
 
 const CACHE_KEY = '@daily_brief_cache';
-const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_EXPIRY_MS = API.CACHE_TTL_LONG; // 24 hours
 
 export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) {
   const { token, user } = useAuth();
@@ -81,6 +86,29 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
   const isRetryingRef = useRef<boolean>(false);
   const completionInProgressRef = useRef<boolean>(false);
   const flatListRef = useRef<FlatList>(null);
+  const timeoutIdRef = useRef<NodeJS.Timeout | null>(null);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollFallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const onboardingCheckTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current);
+        scrollTimeoutRef.current = null;
+      }
+      if (scrollFallbackTimeoutRef.current) {
+        clearTimeout(scrollFallbackTimeoutRef.current);
+        scrollFallbackTimeoutRef.current = null;
+      }
+      if (onboardingCheckTimeoutRef.current) {
+        clearTimeout(onboardingCheckTimeoutRef.current);
+        onboardingCheckTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Get time-based greeting
   const getGreeting = () => {
@@ -102,7 +130,7 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
         }
       }
     } catch (error) {
-      console.log('Error loading cache:', error);
+      logger.log('Error loading cache:', error);
     }
     return null;
   };
@@ -115,7 +143,7 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
         timestamp: Date.now(),
       }));
     } catch (error) {
-      console.log('Error saving cache:', error);
+      logger.log('Error saving cache:', error);
     }
   };
 
@@ -132,23 +160,27 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
         const onboardingCheck = Promise.race([
           isDailyBriefOnboardingCompleted(),
           new Promise<boolean>((resolve) => {
-            setTimeout(() => {
-              console.log('[DailyBrief] Onboarding check timed out, skipping onboarding');
+            if (onboardingCheckTimeoutRef.current) {
+              clearTimeout(onboardingCheckTimeoutRef.current);
+            }
+            onboardingCheckTimeoutRef.current = setTimeout(() => {
+              logger.log('[DailyBrief] Onboarding check timed out, skipping onboarding');
               resolve(true); // Default to completed after timeout
-            }, 300);
+              onboardingCheckTimeoutRef.current = null;
+            }, TIMING.DEBOUNCE_SHORT);
           }),
         ]);
         
         const completed = await onboardingCheck;
         if (!completed) {
-          console.log('[DailyBrief] Onboarding not completed, showing onboarding screen');
+          logger.log('[DailyBrief] Onboarding not completed, showing onboarding screen');
           setShowOnboarding(true);
         } else {
-          console.log('[DailyBrief] Onboarding completed, loading brief');
+          logger.log('[DailyBrief] Onboarding completed, loading brief');
           loadBrief();
         }
       } catch (error) {
-        console.error('[DailyBrief] Error checking onboarding status:', error);
+        logger.error('[DailyBrief] Error checking onboarding status:', error);
         // On error, skip onboarding and load brief directly
         loadBrief();
       }
@@ -164,49 +196,90 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
           await dailyBriefNotificationScheduler.scheduleDailyReminder(preferences);
         }
       } catch (error) {
-        console.error('[DailyBrief] Error initializing notifications:', error);
+        logger.error('[DailyBrief] Error initializing notifications:', error);
       }
     };
     initializeNotifications();
+
+    // Cleanup timeouts on unmount
+    return () => {
+      if (timeoutIdRef.current) {
+        clearTimeout(timeoutIdRef.current);
+        timeoutIdRef.current = null;
+      }
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+    };
   }, [token]);
 
+  // Build sections for FlatList - must be defined before any conditional returns
+  const buildSections = useCallback((): SectionItem[] => {
+    if (!brief) return [];
+    
+    const sections: SectionItem[] = [
+      { id: 'header', type: 'header' },
+      { id: 'market_summary', type: 'market_summary' },
+      { id: 'action', type: 'action' },
+    ];
+
+    if (brief.lesson_title && brief.lesson_content) {
+      sections.push({ id: 'lesson', type: 'lesson' });
+    }
+
+    sections.push(
+      { id: 'progress', type: 'progress' },
+      { id: 'complete', type: 'complete' }
+    );
+
+    return sections;
+  }, [brief]);
+
+  // Memoize sections to prevent unnecessary re-renders - must be before conditional returns
+  const sections = useMemo(() => buildSections(), [buildSections]);
+
   const loadBrief = async (isRetry = false) => {
-    console.log('[DailyBrief] 🔄 loadBrief called, isRetry:', isRetry, 'hasToken:', !!token);
+    logger.log('[DailyBrief] 🔄 loadBrief called, isRetry:', isRetry, 'hasToken:', !!token);
     try {
       if (!isRetry) {
-        console.log('[DailyBrief] Setting loading state to true...');
+        logger.log('[DailyBrief] Setting loading state to true...');
         setLoading(true);
         isRetryingRef.current = false;
         retryCountRef.current = 0;
         
         // Try to load cached brief first
-        console.log('[DailyBrief] Checking for cached brief...');
+        logger.log('[DailyBrief] Checking for cached brief...');
         const cached = await loadCachedBrief();
         if (cached) {
-          console.log('[DailyBrief] ✅ Found cached brief, using it');
+          logger.log('[DailyBrief] ✅ Found cached brief, using it');
           setBrief(cached);
           setLoading(false);
           return; // Return early if we have cached data
         }
-        console.log('[DailyBrief] No cached brief found, fetching from API...');
+        logger.log('[DailyBrief] No cached brief found, fetching from API...');
       }
       
       if (!token) {
-        console.error('[DailyBrief] ❌ No token available!');
+        logger.error('[DailyBrief] ❌ No token available!');
         setLoading(false);
         throw new Error('Authentication required. Please log in.');
       }
       
-      console.log('[DailyBrief] Token available, making API request...');
+      logger.log('[DailyBrief] Token available, making API request...');
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // Reduced to 5 seconds
+      // Clear any existing timeout
+      if (timeoutIdRef.current) {
+        clearTimeout(timeoutIdRef.current);
+      }
+      timeoutIdRef.current = setTimeout(() => controller.abort(), TIMING.TIMEOUT_MEDIUM);
 
       // Fetch today's brief (backend will auto-detect and regenerate old mock data)
       const url = `${API_HTTP}/api/daily-brief/today`;
-      console.log(`[DailyBrief] 🔍 Fetching from: ${url}`);
-      console.log(`[DailyBrief] 🔍 API_HTTP: ${API_HTTP}`);
-      console.log(`[DailyBrief] 🔍 Token exists: ${!!token}`);
+      logger.log(`[DailyBrief] 🔍 Fetching from: ${url}`);
+      logger.log(`[DailyBrief] 🔍 API_HTTP: ${API_HTTP}`);
+      logger.log(`[DailyBrief] 🔍 Token exists: ${!!token}`);
       
       const response = await fetch(url, {
         method: 'GET',
@@ -217,13 +290,16 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
         signal: controller.signal,
       });
       
-      console.log(`[DailyBrief] ✅ Response status: ${response.status}`);
+      logger.log(`[DailyBrief] ✅ Response status: ${response.status}`);
       
-      clearTimeout(timeoutId);
+      if (timeoutIdRef.current) {
+        clearTimeout(timeoutIdRef.current);
+        timeoutIdRef.current = null;
+      }
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => 'No error details');
-        console.error(`[DailyBrief] ❌ Response not OK: ${response.status} - ${errorText}`);
+        logger.error(`[DailyBrief] ❌ Response not OK: ${response.status} - ${errorText}`);
         if (response.status === 503) {
           throw new Error('Daily brief service is starting up. Please wait a moment and try again.');
         }
@@ -233,17 +309,17 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
-      console.log('[DailyBrief] ✅ Received brief data, setting state...');
+      const data: DailyBrief = await response.json();
+      logger.log('[DailyBrief] ✅ Received brief data, setting state...');
       setBrief(data);
       startTimeRef.current = Date.now(); // Reset timer on successful load
       await saveBriefToCache(data);
       retryCountRef.current = 0;
       isRetryingRef.current = false;
       setLoading(false);
-      console.log('[DailyBrief] ✅ Brief loaded and state updated!');
+      logger.log('[DailyBrief] ✅ Brief loaded and state updated!');
     } catch (error: any) {
-      console.error('Error loading daily brief:', error);
+      logger.error('Error loading daily brief:', error);
       
       // Auto-retry for network errors (up to 1 retry, faster)
       if (
@@ -254,12 +330,17 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
       ) {
         isRetryingRef.current = true;
         retryCountRef.current += 1;
-        const delay = 1000; // 1 second retry
+        const delay = API.RETRY_DELAY; // 1 second retry
         
-        console.log(`[DailyBrief] Retrying... (attempt ${retryCountRef.current + 1}/2) in ${delay}ms`);
+        logger.log(`[DailyBrief] Retrying... (attempt ${retryCountRef.current + 1}/2) in ${delay}ms`);
         
-        setTimeout(() => {
+        // Clear any existing retry timeout
+        if (retryTimeoutRef.current) {
+          clearTimeout(retryTimeoutRef.current);
+        }
+        retryTimeoutRef.current = setTimeout(() => {
           loadBrief(true);
+          retryTimeoutRef.current = null;
         }, delay);
         return; // Don't set loading=false or show alert yet
       }
@@ -295,11 +376,7 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
             loadBrief();
           }},
           { text: 'Go Back', style: 'cancel', onPress: () => {
-            if (navigateTo) {
-              navigateTo('home');
-            } else {
-              navigation.navigate('HomeMain' as never);
-            }
+            safeNavigate('home', navigateTo, navigation);
           }}
         ]);
       }
@@ -350,13 +427,13 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
       if (!response.ok) {
         // If already completed (409), still navigate
         if (response.status === 409) {
-          console.log('Brief already completed');
+          logger.log('Brief already completed');
         } else {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
       }
 
-      const data = await response.json();
+      const data: DailyBrief = await response.json();
 
       // Update brief state to mark as completed
       setBrief(prev => prev ? { ...prev, is_completed: true } : null);
@@ -388,29 +465,15 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
           }),
         ]).start(() => {
           setShowAchievement(null);
-          // Use goBack() instead of navigate to prevent loop
-          // This ensures we go back to previous screen, not trigger home screen's auto-navigate
-          if (navigation.canGoBack()) {
-            navigation.goBack();
-          } else if (navigateTo) {
-            navigateTo('home');
-          } else {
-            navigation.navigate('HomeMain' as never);
-          }
+          // Use safeGoBack to prevent loop
+          safeGoBack(navigateTo, navigation, 'home');
         });
       } else {
-        // Use goBack() instead of navigate to prevent loop
-        // This ensures we go back to previous screen, not trigger home screen's auto-navigate
-        if (navigation.canGoBack()) {
-          navigation.goBack();
-        } else if (navigateTo) {
-          navigateTo('home');
-        } else {
-          navigation.navigate('HomeMain' as never);
-        }
+        // Use safeGoBack to prevent loop
+        safeGoBack(navigateTo, navigation, 'home');
       }
     } catch (error: any) {
-      console.error('Error completing brief:', error);
+      logger.error('Error completing brief:', error);
       let errorMessage = 'Failed to complete daily brief.';
       if (error.message?.includes('Network') || error.message?.includes('Failed to fetch')) {
         errorMessage = 'Connection error. Your progress may not have been saved. Please check your connection and try again.';
@@ -433,26 +496,22 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
         markSectionViewed('lesson');
         markSectionViewed('action'); // Also mark action as viewed
         // Scroll to lesson section - it's always index 3 if lesson exists (header=0, market=1, action=2, lesson=3)
-        setTimeout(() => {
+        if (scrollTimeoutRef.current) {
+          clearTimeout(scrollTimeoutRef.current);
+        }
+        scrollTimeoutRef.current = setTimeout(() => {
           if (brief?.lesson_title && brief?.lesson_content) {
             flatListRef.current?.scrollToIndex({ index: 3, animated: true });
           }
-        }, 200);
+          scrollTimeoutRef.current = null;
+        }, TIMING.ANIMATION_DURATION_SHORT - 100); // 200ms for scroll delay
         break;
       case 'review_portfolio':
-        if (navigateTo) {
-          navigateTo('portfolio');
-        } else {
-          navigation.navigate('portfolio' as never);
-        }
+        safeNavigate('portfolio', navigateTo, navigation);
         markSectionViewed('action');
         break;
       case 'set_goal':
-        if (navigateTo) {
-          navigateTo('goals');
-        } else {
-          navigation.navigate('goals' as never);
-        }
+        safeNavigate('goals', navigateTo, navigation);
         markSectionViewed('action');
         break;
       default:
@@ -532,13 +591,9 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
       );
 
       // Navigate back to home
-      if (navigateTo) {
-        navigateTo('home');
-      } else {
-        navigation.navigate('HomeMain' as never);
-      }
+      safeNavigate('home', navigateTo, navigation);
     } catch (error) {
-      console.error('Error scheduling snooze:', error);
+      logger.error('Error scheduling snooze:', error);
       Alert.alert('Error', 'Failed to schedule reminder. Please try again.');
     }
   };
@@ -566,27 +621,7 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
     return Math.min(100, Math.max(0, (current / goal) * 100));
   };
 
-  // Build sections for FlatList
-  const buildSections = (): SectionItem[] => {
-    if (!brief) return [];
-    
-    const sections: SectionItem[] = [
-      { id: 'header', type: 'header' },
-      { id: 'market_summary', type: 'market_summary' },
-      { id: 'action', type: 'action' },
-    ];
-
-    if (brief.lesson_title && brief.lesson_content) {
-      sections.push({ id: 'lesson', type: 'lesson' });
-    }
-
-    sections.push(
-      { id: 'progress', type: 'progress' },
-      { id: 'complete', type: 'complete' }
-    );
-
-    return sections;
-  };
+  // buildSections moved to top of component (before conditional returns)
 
   const renderSection = ({ item }: { item: SectionItem }) => {
     if (!brief) return null;
@@ -668,10 +703,23 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
             <TouchableOpacity
               style={styles.viewLibraryButton}
               onPress={() => {
-                if (navigateTo) {
-                  navigateTo('lesson-library');
-                } else {
-                  navigation.navigate('lesson-library' as never);
+                // Navigate to lesson-library nested under Learn stack
+                try {
+                  // Try using globalNavigate for nested navigation
+                  const { globalNavigate } = require('../../../navigation/NavigationService');
+                  globalNavigate('Learn', {
+                    screen: 'lesson-library',
+                  });
+                } catch (error) {
+                  // Fallback to navigateTo or direct navigation
+                  if (navigateTo) {
+                    navigateTo('Learn', { screen: 'lesson-library' } as any);
+                  } else if (navigation?.navigate) {
+                    (navigation as any).navigate('Learn', { screen: 'lesson-library' });
+                  } else {
+                    // Last resort: direct navigation
+                    safeNavigate('lesson-library', navigateTo, navigation);
+                  }
                 }
               }}
             >
@@ -708,11 +756,7 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
               <TouchableOpacity
                 style={styles.viewFullProgressButton}
                 onPress={() => {
-                  if (navigateTo) {
-                    navigateTo('streak-progress');
-                  } else {
-                    navigation.navigate('streak-progress' as never);
-                  }
+                  safeNavigate('streak-progress', navigateTo, navigation);
                 }}
               >
                 <Text style={styles.viewFullProgressText} numberOfLines={1}>View Full Progress</Text>
@@ -834,8 +878,6 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
     );
   }
 
-  const sections = buildSections();
-
   return (
     <SafeAreaView style={styles.container}>
       <FlatList
@@ -849,9 +891,13 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
         contentContainerStyle={styles.listContent}
         onScrollToIndexFailed={(info) => {
           // Fallback if scroll fails
-          setTimeout(() => {
+          if (scrollFallbackTimeoutRef.current) {
+            clearTimeout(scrollFallbackTimeoutRef.current);
+          }
+          scrollFallbackTimeoutRef.current = setTimeout(() => {
             flatListRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: true });
-          }, 100);
+            scrollFallbackTimeoutRef.current = null;
+          }, TIMING.NAVIGATION_DELAY * 2); // 100ms for scroll fallback
         }}
       />
       

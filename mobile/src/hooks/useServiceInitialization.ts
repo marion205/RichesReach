@@ -58,8 +58,8 @@ export function useServiceInitialization(): UseServiceInitializationResult {
         // }
         
         // Cancel any existing Dawn Ritual notifications
-        const { Notifications } = await import('expo-notifications');
-        await Notifications.cancelScheduledNotificationAsync('dawn_ritual_daily');
+        const Notifications = await import('expo-notifications');
+        await Notifications.default.cancelScheduledNotificationAsync('dawn_ritual_daily');
       } catch (error) {
         logger.error('Error initializing services:', error);
       } finally {

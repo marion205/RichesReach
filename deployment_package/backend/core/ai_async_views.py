@@ -28,9 +28,12 @@ from .async_decorators import async_csrf_exempt, async_require_http_methods
 
 logger = logging.getLogger(__name__)
 
+# Lazy import to avoid circular dependencies
+AIOrchestrator = None
 
-# Singleton instance (reused across requests)
+# Singleton instances (reused across requests)
 _ai_service: AIServiceAsync = None
+_ai_orchestrator = None
 
 
 async def get_ai_service() -> AIServiceAsync:
@@ -39,6 +42,16 @@ async def get_ai_service() -> AIServiceAsync:
     if _ai_service is None:
         _ai_service = await AIServiceAsync.get_instance()
     return _ai_service
+
+
+async def get_ai_orchestrator():
+    """Get singleton AI orchestrator instance"""
+    global _ai_orchestrator, AIOrchestrator
+    if AIOrchestrator is None:
+        from .ai_orchestrator import AIOrchestrator
+    if _ai_orchestrator is None:
+        _ai_orchestrator = await AIOrchestrator.get_instance()
+    return _ai_orchestrator
 
 
 def _rate_limit_user(user_id: str, limit: Optional[int] = None, window_s: Optional[int] = None) -> bool:
@@ -143,12 +156,31 @@ async def chat_view(request):
             return JsonResponse({"error": "messages array required"}, status=400)
         
         user_context = data.get("user_context")
+        has_attachments = data.get("has_attachments", False)
+        attachment_type = data.get("attachment_type")
+        force_model = data.get("force_model")  # Optional: force specific model
         
-        ai_service = await get_ai_service()
-        resp = await ai_service.get_chat_response_async(messages, user_context=user_context)
+        # Use orchestrator for hybrid routing (if enabled)
+        from django.conf import settings
+        use_orchestrator = getattr(settings, "ENABLE_HYBRID_AI_ROUTING", True)
         
-        # Transform to Oracle-style format (matches Rust UnifiedSignal)
-        oracle_resp = await ai_service._format_oracle_response(resp, messages)
+        if use_orchestrator:
+            orchestrator = await get_ai_orchestrator()
+            resp = await orchestrator.route_request(
+                messages,
+                user_context=user_context,
+                has_attachments=has_attachments,
+                attachment_type=attachment_type,
+                force_model=force_model
+            )
+            # Format response (orchestrator returns similar format)
+            ai_service = await get_ai_service()
+            oracle_resp = await ai_service._format_oracle_response(resp, messages)
+        else:
+            # Fallback to direct AI service (no routing)
+            ai_service = await get_ai_service()
+            resp = await ai_service.get_chat_response_async(messages, user_context=user_context)
+            oracle_resp = await ai_service._format_oracle_response(resp, messages)
         
         return JsonResponse(oracle_resp)
     
@@ -221,19 +253,33 @@ async def stream_chat_view(request):
             )
         
         user_context = data.get("user_context")
+        has_attachments = data.get("has_attachments", False)
+        attachment_type = data.get("attachment_type")
+        force_model = data.get("force_model")
         
-        ai_service = await get_ai_service()
+        # Use orchestrator for hybrid routing (if enabled)
+        from django.conf import settings
+        use_orchestrator = getattr(settings, "ENABLE_HYBRID_AI_ROUTING", True)
         
         async def event_stream():
             try:
-                async for chunk in ai_service.stream_chat_response_async(messages, user_context=user_context):
-                    # Format as SSE
-                    yield f"data: {json.dumps(chunk)}\n\n"
-                    
-                    # Yield control to event loop
-                    await asyncio.sleep(0)
+                if use_orchestrator:
+                    orchestrator = await get_ai_orchestrator()
+                    async for chunk in orchestrator.stream_request(
+                        messages,
+                        user_context=user_context,
+                        has_attachments=has_attachments,
+                        attachment_type=attachment_type,
+                        force_model=force_model
+                    ):
+                        yield f"data: {json.dumps(chunk)}\n\n"
+                        await asyncio.sleep(0)
+                else:
+                    ai_service = await get_ai_service()
+                    async for chunk in ai_service.stream_chat_response_async(messages, user_context=user_context):
+                        yield f"data: {json.dumps(chunk)}\n\n"
+                        await asyncio.sleep(0)
             except asyncio.CancelledError:
-                # Client disconnected
                 logger.info("Stream cancelled by client")
             except Exception as e:
                 logger.exception("stream_chat_view error")
@@ -278,16 +324,24 @@ async def health_view(request):
     }
     """
     try:
+        # Check orchestrator health (includes both Gemini and ChatGPT)
+        orchestrator = await get_ai_orchestrator()
+        orchestrator_status = await orchestrator.get_health_status()
+        
+        # Also get individual service status for backward compatibility
         ai_service = await get_ai_service()
-        status = await ai_service.ping()
+        chatgpt_status = await ai_service.ping()
         
         # Enhanced health response
         enhanced_status = {
-            "status": "healthy" if status.get("openai_ping", {}).get("ok") else "degraded",
+            "status": "healthy" if (
+                orchestrator_status.get("chatgpt", {}).get("openai_ping", {}).get("ok") or
+                orchestrator_status.get("gemini", {}).get("gemini_ping", {}).get("ok")
+            ) else "degraded",
             "streaming_supported": True,
-            "model": ai_service.cfg.model,
             "asgi": True,  # Indicates ASGI is being used
-            **status
+            "orchestrator": orchestrator_status,
+            "chatgpt": chatgpt_status,
         }
         
         return JsonResponse(enhanced_status)

@@ -739,14 +739,30 @@ const MemoizedCameraView = memo<{
   cameraFacing: 'front' | 'back';
   onCameraReady: () => void;
 }>(({ cameraRef, cameraFacing, onCameraReady }) => {
+  const cameraReadyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (cameraReadyTimeoutRef.current) {
+        clearTimeout(cameraReadyTimeoutRef.current);
+        cameraReadyTimeoutRef.current = null;
+      }
+    };
+  }, []);
+  
   const handleRef = useCallback(
     (ref: any) => {
       cameraRef.current = ref;
       logger.log('🎥 [DEBUG] Camera ref set:', !!ref);
       if (ref) {
-        setTimeout(() => {
+        if (cameraReadyTimeoutRef.current) {
+          clearTimeout(cameraReadyTimeoutRef.current);
+        }
+        cameraReadyTimeoutRef.current = setTimeout(() => {
           onCameraReady();
           logger.log('✅ [DEBUG] Camera marked as ready after ref set');
+          cameraReadyTimeoutRef.current = null;
         }, 100);
       }
     },

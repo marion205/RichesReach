@@ -14,6 +14,7 @@ import { useQuery } from '@apollo/client';
 import { LinearGradient } from 'expo-linear-gradient';
 import { GET_MY_PORTFOLIOS } from '../../portfolioQueries';
 import Icon from 'react-native-vector-icons/Feather';
+import logger from '../../utils/logger';
 
 const { width, height } = Dimensions.get('window');
 
@@ -98,7 +99,6 @@ export default function ARNextMovePreview() {
   };
 
   const handleTrade = (action: string) => {
-    console.log(`AR Trade action: ${action}`, portfolio);
     navigation.navigate('Stocks', { action, portfolio });
   };
 

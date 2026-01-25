@@ -23,6 +23,7 @@ import { GET_SBLOC_BANKS } from '../../../graphql/sblocQueries';
 import { useYodlee } from '../../../hooks/useYodlee';
 import FastLinkWebView from '../../../components/FastLinkWebView';
 import { useNavigation } from '@react-navigation/native';
+import logger from '../../../utils/logger';
 // Note: This app uses custom navigateTo, not React Navigation
 
 const { width } = Dimensions.get('window');
@@ -146,85 +147,85 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
   
   // Debug: Log navigateTo prop on mount and changes
   React.useEffect(() => {
-    console.log('🔵 BankAccountScreen mounted, navigateTo:', typeof navigateTo, !!navigateTo);
+    logger.log('🔵 BankAccountScreen mounted, navigateTo:', typeof navigateTo, !!navigateTo);
     if (!navigateTo) {
-      console.warn('⚠️ WARNING: navigateTo prop is undefined! Navigation will not work.');
+      logger.warn('⚠️ WARNING: navigateTo prop is undefined! Navigation will not work.');
     }
   }, [navigateTo]);
   
   // Store navigateTo in a ref to ensure it's always available in callbacks
   const navigateToRef = React.useRef(navigateTo);
   React.useEffect(() => {
-    console.log('🔵 Updating navigateToRef:', typeof navigateTo, !!navigateTo);
+    logger.log('🔵 Updating navigateToRef:', typeof navigateTo, !!navigateTo);
     navigateToRef.current = navigateTo;
   }, [navigateTo]);
   
   // Create a stable handler for SBLOC navigation that always has access to navigateTo
   const handleSBLOCNavigation = React.useCallback((amount: number) => {
-    console.log('🔵 handleSBLOCNavigation called with amount:', amount);
-    console.log('🔵 navigateToRef.current:', navigateToRef.current);
-    console.log('🔵 navigateTo prop:', navigateTo);
-    console.log('🔵 window.__navigateToGlobal:', typeof (window as any)?.__navigateToGlobal);
+    logger.log('🔵 handleSBLOCNavigation called with amount:', amount);
+    logger.log('🔵 navigateToRef.current:', navigateToRef.current);
+    logger.log('🔵 navigateTo prop:', navigateTo);
+    logger.log('🔵 window.__navigateToGlobal:', typeof (window as any)?.__navigateToGlobal);
     
     // Store params in window (required for App.tsx)
     if (typeof window !== 'undefined') {
       (window as any).__sblocParams = { amountUsd: amount };
-      console.log('🔵 Stored params in window.__sblocParams');
+      logger.log('🔵 Stored params in window.__sblocParams');
     }
     
     // Try to navigate using ref or prop
     const navTo = navigateToRef.current || navigateTo;
     if (navTo && typeof navTo === 'function') {
-      console.log('🔵 Calling navigateTo function');
+      logger.log('🔵 Calling navigateTo function');
       try {
         navTo('SBLOCBankSelection', { amountUsd: amount });
-        console.log('✅ navigateTo called successfully');
+        logger.log('✅ navigateTo called successfully');
         return;
       } catch (error) {
-        console.error('❌ Error calling navigateTo:', error);
+        logger.error('❌ Error calling navigateTo:', error);
       }
     }
     
     // Fallback: use window-based navigation with global function
-    console.log('⚠️ navigateTo not available, trying global function...');
+    logger.log('⚠️ navigateTo not available, trying global function...');
     if (typeof window !== 'undefined') {
       // Try global function (most reliable fallback)
       const globalNav = (window as any).__navigateToGlobal;
       if (globalNav && typeof globalNav === 'function') {
-        console.log('🔵 Using global navigateTo function');
+        logger.log('🔵 Using global navigateTo function');
         try {
           globalNav('SBLOCBankSelection', { amountUsd: amount });
-          console.log('✅ Global navigateTo called successfully');
+          logger.log('✅ Global navigateTo called successfully');
           return;
         } catch (error) {
-          console.error('❌ Error calling global navigateTo:', error);
+          logger.error('❌ Error calling global navigateTo:', error);
         }
       } else {
-        console.log('⚠️ Global navigateTo not available either');
+        logger.log('⚠️ Global navigateTo not available either');
       }
       
       // Last resort: set flag and try setCurrentScreen directly
       (window as any).__forceNavigateTo = 'SBLOCBankSelection';
       (window as any).__forceNavigateTimestamp = Date.now();
-      console.log('⚠️ Set __forceNavigateTo flag, timestamp:', (window as any).__forceNavigateTimestamp);
-      console.log('🔵 Checking window.__setCurrentScreen:', typeof (window as any).__setCurrentScreen);
+      logger.log('⚠️ Set __forceNavigateTo flag, timestamp:', (window as any).__forceNavigateTimestamp);
+      logger.log('🔵 Checking window.__setCurrentScreen:', typeof (window as any).__setCurrentScreen);
       
       // Try to trigger navigation immediately by calling setCurrentScreen if available
       if ((window as any).__setCurrentScreen && typeof (window as any).__setCurrentScreen === 'function') {
-        console.log('🔵 Using window.__setCurrentScreen directly');
+        logger.log('🔵 Using window.__setCurrentScreen directly');
         try {
           (window as any).__setCurrentScreen('SBLOCBankSelection');
-          console.log('✅ setCurrentScreen called directly');
+          logger.log('✅ setCurrentScreen called directly');
           return;
         } catch (error) {
-          console.error('❌ Error calling setCurrentScreen:', error);
+          logger.error('❌ Error calling setCurrentScreen:', error);
         }
       } else {
-        console.log('⚠️ window.__setCurrentScreen not available or not a function');
+        logger.log('⚠️ window.__setCurrentScreen not available or not a function');
       }
       
       // If direct call didn't work, polling will catch it
-      console.log('⚠️ Navigation will be handled by polling mechanism...');
+      logger.log('⚠️ Navigation will be handled by polling mechanism...');
     } else {
       Alert.alert('Navigation Error', 'Navigation service is not available.');
     }
@@ -278,7 +279,7 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
   useEffect(() => {
     if (bankLoading) {
       const timer = setTimeout(() => {
-        console.log('⚠️ Bank loading timeout - using empty data');
+        logger.log('⚠️ Bank loading timeout - using empty data');
         setBankLoadingTimeout(true);
       }, 3000);
       return () => clearTimeout(timer);
@@ -290,7 +291,7 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
   useEffect(() => {
     if (fundingLoading) {
       const timer = setTimeout(() => {
-        console.log('⚠️ Funding loading timeout - using empty data');
+        logger.log('⚠️ Funding loading timeout - using empty data');
         setFundingLoadingTimeout(true);
       }, 3000);
       return () => clearTimeout(timer);
@@ -332,7 +333,7 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
       }
     },
     onError: (error) => {
-      console.error('LinkBankAccount error:', error);
+      logger.error('LinkBankAccount error:', error);
       const errorMessage = error?.message || 'Failed to link bank account';
       
       // Provide more helpful error messages
@@ -398,7 +399,7 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
         return;
       }
       
-      console.log('🔗 Linking bank account manually:', {
+      logger.log('🔗 Linking bank account manually:', {
         bankName,
         accountNumberLength: accountNumber.length,
         routingNumberLength: routingNumber.length
@@ -413,14 +414,14 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
           }
         });
       } catch (error: any) {
-        console.error('Error calling linkBankAccount mutation:', error);
+        logger.error('Error calling linkBankAccount mutation:', error);
         // Error is already handled by onError callback
       }
     }
   };
 
   const handleFastLinkSuccess = async (result: any) => {
-    console.log('FastLink success:', result);
+    logger.log('FastLink success:', result);
     setShowFastLinkWebView(false);
     setShowLinkModal(false);
     clearSession();
@@ -433,7 +434,7 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
   };
 
   const handleFastLinkError = (error: string) => {
-    console.error('FastLink error:', error);
+    logger.error('FastLink error:', error);
     setShowFastLinkWebView(false);
     clearSession();
     Alert.alert('Error', error || 'Failed to link bank account');
@@ -581,7 +582,7 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
               <TouchableOpacity 
                 style={[styles.ghostBtn, { flex: 1, marginRight: 8 }]} 
                 onPress={() => {
-                  console.log('🔵 Budget button pressed');
+                  logger.log('🔵 Budget button pressed');
                   try {
                     if (navigateTo) {
                       navigateTo('budgeting');
@@ -590,11 +591,11 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
                     } else if (typeof window !== 'undefined' && (window as any).__navigateToGlobal) {
                       (window as any).__navigateToGlobal('budgeting');
                     } else {
-                      console.error('❌ No navigation method available');
+                      logger.error('❌ No navigation method available');
                       Alert.alert('Navigation Error', 'Unable to navigate to Budget screen');
                     }
                   } catch (error) {
-                    console.error('❌ Navigation error:', error);
+                    logger.error('❌ Navigation error:', error);
                     Alert.alert('Error', 'Failed to open Budget screen');
                   }
                 }}
@@ -605,7 +606,7 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
               <TouchableOpacity 
                 style={[styles.ghostBtn, { flex: 1 }]} 
                 onPress={() => {
-                  console.log('🔵 Spending button pressed');
+                  logger.log('🔵 Spending button pressed');
                   try {
                     if (navigateTo) {
                       navigateTo('spending-analysis');
@@ -614,11 +615,11 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
                     } else if (typeof window !== 'undefined' && (window as any).__navigateToGlobal) {
                       (window as any).__navigateToGlobal('spending-analysis');
                     } else {
-                      console.error('❌ No navigation method available');
+                      logger.error('❌ No navigation method available');
                       Alert.alert('Navigation Error', 'Unable to navigate to Spending Analysis screen');
                     }
                   } catch (error) {
-                    console.error('❌ Navigation error:', error);
+                    logger.error('❌ Navigation error:', error);
                     Alert.alert('Error', 'Failed to open Spending Analysis screen');
                   }
                 }}
@@ -710,7 +711,7 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
                 portfolioValue={eligibleEquity}
                 onPress={() => {
                   const amount = Math.floor(maxBorrow * 0.5);
-                  console.log('🔵🔵🔵 Estimate & Draw button pressed! Amount:', amount);
+                  logger.log('🔵🔵🔵 Estimate & Draw button pressed! Amount:', amount);
                   handleSBLOCNavigation(amount);
                 }}
               />

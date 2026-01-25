@@ -142,7 +142,6 @@ function StockCard(props: StockCardProps) {
       <TouchableOpacity
         style={styles.analysisBtn}
         onPress={() => {
-          console.log('🔍 StockCard Analysis button pressed for:', props.symbol);
           props.onPressAnalysis();
         }}
         activeOpacity={0.85}

@@ -27,7 +27,7 @@ export default function MilestonesTimeline({ milestones, onCelebrate }: Mileston
     let mounted = true;
     (async () => {
       try {
-        const mod = await import('lottie-react-native');
+        const mod = await import('lottie-react-native' as any);
         if (mounted) setLottieView(() => mod.default || (mod as any));
       } catch (e) {
         // Lottie not installed; gracefully fall back to vector animation

@@ -18,6 +18,7 @@ StatusBar,
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import AIOptionsService, { OptionsRecommendation, MarketAnalysis } from '../services/AIOptionsService';
+import logger from '../../../utils/logger';
 interface AIOptionsScreenProps {
   navigation?: any;
 }
@@ -48,7 +49,6 @@ loadRecommendations();
 // Note: Symbol changes only trigger reload when search button is pressed
 const loadRecommendations = async () => {
 setLoading(true);
-console.log({ symbol, riskTolerance, portfolioValue, timeHorizon });
 
 // Defensive parsing for numeric inputs
 const pv = Number.parseFloat(portfolioValue || '0');
@@ -66,27 +66,17 @@ riskTolerance,
 pv,
 th
 );
-console.log({
-recommendationsCount: response.recommendations?.length || 0,
-hasMarketAnalysis: !!response.market_analysis,
-symbol: response.symbol,
-riskTolerance: response.risk_tolerance,
-});
+// Recommendations loaded successfully
 setRecommendations(response.recommendations);
 setMarketAnalysis(response.market_analysis);
     } catch (error: any) {
       // Suppress network errors - they're handled with mock data fallback
       if (!error?.message?.includes('Network request failed') && !error?.message?.includes('Failed to fetch')) {
-        console.error(' AI Options Screen: Error loading recommendations:', error);
-        console.error('Error details:', {
-          name: error?.name,
-          message: error?.message,
-          stack: error?.stack,
-        });
+        logger.error('AI Options Screen: Error loading recommendations:', error);
         // Only show alert for non-network errors
         Alert.alert('Error', `Failed to load AI options recommendations: ${error?.message || 'Unknown error'}`);
       } else {
-        console.warn('⚠️ Network error, using mock data for demo');
+        logger.warn('⚠️ Network error, using mock data for demo');
       }
     } finally {
       setLoading(false);
@@ -113,8 +103,8 @@ Alert.alert(
 `Optimization Score: ${response.optimization_score.toFixed(1)}%\n\nOptimal Parameters:\n${JSON.stringify(response.optimal_parameters, null, 2)}`
 );
 } catch (error) {
-console.error('Error optimizing strategy:', error);
-Alert.alert('Error', 'Failed to optimize strategy');
+  logger.error('Error optimizing strategy:', error);
+  Alert.alert('Error', 'Failed to optimize strategy');
 } finally {
 setLoading(false);
 }
@@ -321,7 +311,7 @@ onPress={() => navigation.goBack()}
                 }
               } catch (error: any) {
                 // Suppress navigation errors for demo
-                console.warn('⚠️ Navigation to Copilot not available:', error?.message);
+                logger.warn('⚠️ Navigation to Copilot not available:', error?.message);
               }
             }}
           >

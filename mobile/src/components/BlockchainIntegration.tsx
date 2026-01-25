@@ -9,11 +9,11 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  SafeAreaView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
-// import { BlurView } from 'expo-blur'; // Removed for Expo Go compatibility
-// import LottieView from 'lottie-react-native'; // Removed for Expo Go compatibility
+import Icon from 'react-native-vector-icons/Feather';
 import { useTheme } from '../theme/PersonalizedThemes';
 import UI from '../shared/constants';
 import SmartWalletCard from './blockchain/SmartWalletCard';
@@ -22,6 +22,7 @@ import ReferralProgramCard from './blockchain/ReferralProgramCard';
 import IntentSwapCard from './blockchain/IntentSwapCard';
 import ERC4626VaultCard from './blockchain/ERC4626VaultCard';
 import NFTGallery from '../features/blockchain/components/NFTGallery';
+import logger from '../utils/logger';
 
 const { width } = Dimensions.get('window');
 
@@ -216,7 +217,7 @@ export default function BlockchainIntegration({
       setDefiPositions(mockDeFiPositions);
       setGovernanceProposals(mockGovernanceProposals);
     } catch (error) {
-      console.error('Error loading blockchain data:', error);
+      logger.error('Error loading blockchain data:', error);
       Alert.alert('Error', 'Failed to load blockchain integration data');
     } finally {
       setLoading(false);
@@ -242,7 +243,7 @@ export default function BlockchainIntegration({
         ],
       );
     } catch (error) {
-      console.error('Error tokenizing portfolio:', error);
+      logger.error('Error tokenizing portfolio:', error);
     }
   };
 
@@ -275,7 +276,7 @@ export default function BlockchainIntegration({
         ],
       );
     } catch (error) {
-      console.error('Error creating DeFi position:', error);
+      logger.error('Error creating DeFi position:', error);
     }
   };
 
@@ -298,7 +299,7 @@ export default function BlockchainIntegration({
         ],
       );
     } catch (error) {
-      console.error('Error voting on proposal:', error);
+      logger.error('Error voting on proposal:', error);
     }
   };
 
@@ -336,308 +337,388 @@ export default function BlockchainIntegration({
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={UI.colors.primary} style={styles.loadingAnimation} />
-        <Text style={styles.loadingText}>Loading blockchain features...</Text>
-      </View>
+      <SafeAreaView style={styles.loadingContainer}>
+        <View style={styles.loadingContent}>
+          <ActivityIndicator size="large" color={UI.colors.primary} style={styles.loadingAnimation} />
+          <Text style={styles.loadingText}>Loading blockchain features...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
-    <Animated.View
-      style={[
-        styles.container,
-        {
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }],
-        },
-      ]}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Blockchain Integration</Text>
-        <Text style={styles.headerSubtitle}>DeFi meets traditional finance</Text>
-      </View>
-
-      {/* Tab Navigation */}
-      <View style={styles.tabNavigationWrapper}>
-        <View style={styles.tabNavigation}>
-          {[
-            { id: 'tokenized', name: 'Tokenized', icon: '🪙' },
-            { id: 'defi', name: 'DeFi', icon: '🌊' },
-            { id: 'governance', name: 'Governance', icon: '🗳️' },
-            { id: 'bridge', name: 'Bridge', icon: '🌉' },
-            { id: 'nfts', name: 'NFTs', icon: '🖼️' },
-          ].map((tab) => {
-            const isActive = activeTab === tab.id;
-            return (
-              <TouchableOpacity
-                key={tab.id}
-                style={[styles.tabButton, isActive && styles.tabButtonActive]}
-                onPress={() => setActiveTab(tab.id as any)}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.tabIcon, isActive && styles.tabIconActive]}>{tab.icon}</Text>
-                <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{tab.name}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-
-      {/* Content */}
-      <ScrollView
-        style={styles.content}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.contentContainer}
+    <SafeAreaView style={styles.safeArea}>
+      <Animated.View
+        style={[
+          styles.container,
+          {
+            opacity: fadeAnim,
+            transform: [{ translateY: slideAnim }],
+          },
+        ]}
       >
-        {/* Tokenized Tab */}
-        {activeTab === 'tokenized' && (
-          <>
-            <SmartWalletCard />
-            <RiskMonitorCard />
-
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Tokenized Portfolios</Text>
-              <Text style={styles.sectionSubtitle}>
-                Convert your portfolio into tradeable tokens
-              </Text>
+        {/* Hero Header with Gradient */}
+        <LinearGradient
+          colors={['rgba(37, 99, 235, 0.2)', 'rgba(147, 51, 234, 0.2)', 'rgba(219, 39, 119, 0.2)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroHeader}
+        >
+          <View style={styles.heroContent}>
+            <View style={styles.heroTitleRow}>
+              <View style={styles.heroIconContainer}>
+                <Icon name="zap" size={24} color="#60A5FA" />
+              </View>
+              <View style={styles.heroTextContainer}>
+                <Text style={styles.heroTitle}>Blockchain Integration</Text>
+                <Text style={styles.heroSubtitle}>DeFi meets traditional finance</Text>
+              </View>
             </View>
 
-            <View style={styles.tokenizedContent}>
-              {tokenizedPortfolios.map((portfolio) => (
-                <TokenizedPortfolioCard
-                  key={portfolio.id}
-                  portfolio={portfolio}
-                  onTokenize={() => tokenizePortfolio(portfolio)}
-                  getNetworkColor={getNetworkColor}
+            {/* Stats Row */}
+            <View style={styles.statsRow}>
+              <View style={styles.statCard}>
+                <Text style={styles.heroStatLabel}>Total Value</Text>
+                <Text style={styles.heroStatValue}>$2.5M</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.heroStatLabel}>Networks</Text>
+                <Text style={styles.heroStatValue}>5</Text>
+              </View>
+              <View style={styles.statCard}>
+                <Text style={styles.heroStatLabel}>APY</Text>
+                <Text style={[styles.heroStatValue, styles.heroStatValueGreen]}>4.2%</Text>
+              </View>
+            </View>
+          </View>
+        </LinearGradient>
+
+        {/* Modern Tab Navigation */}
+        <View style={styles.tabNavigationWrapper}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tabNavigationContent}
+          >
+            {[
+              { id: 'tokenized', name: 'Tokenized', icon: '🪙' },
+              { id: 'defi', name: 'DeFi', icon: '🌊' },
+              { id: 'governance', name: 'Governance', icon: '🗳️' },
+              { id: 'bridge', name: 'Bridge', icon: '🌉' },
+              { id: 'nfts', name: 'NFTs', icon: '🖼️' },
+            ].map((tab) => {
+              const isActive = activeTab === tab.id;
+              return (
+                <TouchableOpacity
+                  key={tab.id}
+                  style={[styles.tabButton, isActive && styles.tabButtonActive]}
+                  onPress={() => setActiveTab(tab.id as any)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.tabIcon, isActive && styles.tabIconActive]}>{tab.icon}</Text>
+                  <Text style={[styles.tabText, isActive && styles.tabTextActive]}>{tab.name}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Content */}
+        <ScrollView
+          style={styles.content}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.contentContainer}
+        >
+          {/* Tokenized Tab */}
+          {activeTab === 'tokenized' && (
+            <>
+              {/* Feature Cards Grid */}
+              <View style={styles.featureCardsGrid}>
+                <FeatureCard
+                  icon="shield"
+                  title="Smart Wallet"
+                  subtitle="Secure & gas-free"
+                  gradient={['#3B82F6', '#06B6D4']}
                 />
-              ))}
-            </View>
-          </>
-        )}
+                <FeatureCard
+                  icon="zap"
+                  title="Risk Monitor"
+                  subtitle="Real-time alerts"
+                  gradient={['#A855F7', '#EC4899']}
+                />
+              </View>
 
-        {/* DeFi Tab */}
-        {activeTab === 'defi' && (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>DeFi Tools</Text>
-              <Text style={styles.sectionSubtitle}>
-                Vaults, swaps, and on-chain yield
-              </Text>
-            </View>
-
-            <View style={styles.defiContent}>
-              <ERC4626VaultCard />
-              <IntentSwapCard />
-
-              <View style={styles.sectionHeaderInline}>
-                <Text style={styles.sectionTitleInline}>DeFi Positions</Text>
-                <Text style={styles.sectionSubtitleInline}>
-                  Lend, borrow, and stake across protocols
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Tokenized Portfolios</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Convert your portfolio into tradeable tokens
                 </Text>
               </View>
 
-              {defiPositions.map((position) => (
-                <DeFiPositionCard
-                  key={position.id}
-                  position={position}
-                  getProtocolIcon={getProtocolIcon}
-                  getNetworkColor={getNetworkColor}
-                />
-              ))}
-
-              <View style={styles.defiOpportunities}>
-                <Text style={styles.opportunitiesTitle}>Yield Opportunities</Text>
-                {[
-                  { protocol: 'Aave', asset: 'USDC', apy: 3.5, type: 'lending' },
-                  { protocol: 'Compound', asset: 'ETH', apy: 2.1, type: 'lending' },
-                  { protocol: 'Lido', asset: 'ETH', apy: 4.2, type: 'staking' },
-                ].map((opportunity, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.opportunityCard}
-                    activeOpacity={0.9}
-                    onPress={() =>
-                      createDeFiPosition(opportunity.protocol, opportunity.type, opportunity.asset)
-                    }
-                  >
-                    <Text style={styles.opportunityIcon}>
-                      {getProtocolIcon(opportunity.protocol)}
-                    </Text>
-                    <View style={styles.opportunityInfo}>
-                      <Text style={styles.opportunityTitle}>
-                        {opportunity.protocol} - {opportunity.asset}
-                      </Text>
-                      <Text style={styles.opportunityType}>{opportunity.type}</Text>
-                    </View>
-                    <Text style={styles.opportunityApy}>{opportunity.apy}% APY</Text>
-                  </TouchableOpacity>
+              <View style={styles.tokenizedContent}>
+                {tokenizedPortfolios.map((portfolio) => (
+                  <TokenizedPortfolioCard
+                    key={portfolio.id}
+                    portfolio={portfolio}
+                    onTokenize={() => tokenizePortfolio(portfolio)}
+                    getNetworkColor={getNetworkColor}
+                  />
                 ))}
               </View>
-            </View>
-          </>
-        )}
+            </>
+          )}
 
-        {/* Governance Tab */}
-        {activeTab === 'governance' && (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Governance</Text>
-              <Text style={styles.sectionSubtitle}>
-                Earn & vote with your RichesReach community
-              </Text>
-            </View>
+          {/* DeFi Tab */}
+          {activeTab === 'defi' && (
+            <>
+              {/* Feature Cards Grid */}
+              <View style={styles.featureCardsGrid}>
+                <FeatureCard
+                  icon="dollar-sign"
+                  title="ERC4626 Vault"
+                  subtitle="Tokenized yield"
+                  gradient={['#10B981', '#059669']}
+                />
+                <FeatureCard
+                  icon="trending-up"
+                  title="Intent Swap"
+                  subtitle="Best execution"
+                  gradient={['#F97316', '#EF4444']}
+                />
+              </View>
 
-            <View style={styles.governanceContent}>
-              <ReferralProgramCard />
-
-              <View style={styles.sectionHeaderInline}>
-                <Text style={styles.sectionTitleInline}>Governance Proposals</Text>
-                <Text style={styles.sectionSubtitleInline}>
-                  Vote on platform decisions with $REACH tokens
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>DeFi Tools</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Vaults, swaps, and on-chain yield
                 </Text>
               </View>
 
-              {governanceProposals.map((proposal) => (
-                <GovernanceProposalCard
-                  key={proposal.id}
-                  proposal={proposal}
-                  onVote={(vote) => voteOnProposal(proposal.id, vote)}
-                />
-              ))}
-            </View>
-          </>
-        )}
+              <View style={styles.defiContent}>
+                <ERC4626VaultCard />
+                <IntentSwapCard />
 
-        {/* NFTs Tab */}
-        {activeTab === 'nfts' && (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>NFT Gallery</Text>
-              <Text style={styles.sectionSubtitle}>
-                View and manage your NFT collection
-              </Text>
-            </View>
-
-            <View style={styles.nftContent}>
-              <NFTGallery
-                walletAddress={undefined} // Would get from connected wallet
-                chain="ethereum"
-                onNFTSelect={(nft) => {
-                  Alert.alert('NFT Selected', `Selected: ${nft.name || `#${nft.tokenId}`}`);
-                }}
-              />
-            </View>
-          </>
-        )}
-
-        {/* Bridge Tab */}
-        {activeTab === 'bridge' && (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Cross-Chain Bridge</Text>
-              <Text style={styles.sectionSubtitle}>
-                Move assets between blockchain networks
-              </Text>
-            </View>
-
-            <View style={styles.bridgeContent}>
-              <View style={styles.bridgeCard}>
-                <View style={styles.bridgeInner}>
-                  <Text style={styles.bridgeTitle}>Bridge Assets</Text>
-                  <Text style={styles.bridgeDescription}>
-                    Transfer your assets between different blockchain networks
-                    with low fees and fast settlement.
+                <View style={styles.sectionHeaderInline}>
+                  <Text style={styles.sectionTitleInline}>DeFi Positions</Text>
+                  <Text style={styles.sectionSubtitleInline}>
+                    Lend, borrow, and stake across protocols
                   </Text>
+                </View>
 
-                  <View style={styles.bridgeNetworks}>
-                    {['Ethereum', 'Polygon', 'Arbitrum', 'Optimism', 'Base'].map((network) => (
-                      <View key={network} style={styles.networkItem}>
-                        <View
-                          style={[
-                            styles.networkDot,
-                            { backgroundColor: getNetworkColor(network) },
-                          ]}
-                        />
-                        <Text style={styles.networkName}>{network}</Text>
-                      </View>
-                    ))}
-                  </View>
+                {defiPositions.map((position) => (
+                  <DeFiPositionCard
+                    key={position.id}
+                    position={position}
+                    getProtocolIcon={getProtocolIcon}
+                    getNetworkColor={getNetworkColor}
+                  />
+                ))}
 
-                  <TouchableOpacity
-                    style={styles.bridgeButton}
-                    activeOpacity={0.9}
-                    onPress={() => {
-                      console.log('Start Bridge pressed');
-
-                      const parentNav = navigation.getParent?.();
-
-                      if (parentNav) {
-                        console.log('Found parent navigator, navigating via tab');
-                        try {
-                          parentNav.navigate('Home' as never, {
-                            screen: 'bridge-screen',
-                          } as never);
-                          console.log('✅ Navigated via Home tab -> bridge-screen');
-                          return;
-                        } catch (homeError) {
-                          console.log('Home tab navigation failed, trying Invest:', homeError);
-                          try {
-                            parentNav.navigate('Invest' as never, {
-                              screen: 'bridge-screen',
-                            } as never);
-                            console.log('✅ Navigated via Invest tab -> bridge-screen');
-                            return;
-                          } catch (investError) {
-                            console.error('Both tab navigations failed:', { homeError, investError });
-                          }
-                        }
-                      } else {
-                        console.log('No parent navigator found, trying direct navigation');
-                        try {
-                          navigation.navigate('bridge-screen' as never);
-                          console.log('✅ Direct navigation succeeded');
-                          return;
-                        } catch (directError) {
-                          console.log('Direct navigation also failed:', directError);
-                        }
+                <View style={styles.defiOpportunities}>
+                  <Text style={styles.opportunitiesTitle}>Yield Opportunities</Text>
+                  {[
+                    { protocol: 'Aave', asset: 'USDC', apy: 3.5, type: 'lending' },
+                    { protocol: 'Compound', asset: 'ETH', apy: 2.1, type: 'lending' },
+                    { protocol: 'Lido', asset: 'ETH', apy: 4.2, type: 'staking' },
+                  ].map((opportunity, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.opportunityCard}
+                      activeOpacity={0.9}
+                      onPress={() =>
+                        createDeFiPosition(opportunity.protocol, opportunity.type, opportunity.asset)
                       }
-
-                      try {
-                        const { globalNavigate } = require('../navigation/NavigationService');
-                        console.log('Using globalNavigate fallback');
-                        globalNavigate('Home', { screen: 'bridge-screen' });
-                      } catch (globalError) {
-                        console.error('All navigation methods failed:', globalError);
-                        Alert.alert(
-                          'Navigation Error',
-                          'Unable to open bridge screen. Please try again.',
-                        );
-                      }
-                    }}
-                  >
-                    <LinearGradient
-                      colors={[UI.colors.primary, '#0051D5']}
-                      style={styles.bridgeButtonGradient}
                     >
-                      <Text style={styles.bridgeButtonText}>Start Bridge</Text>
-                    </LinearGradient>
-                  </TouchableOpacity>
+                      <Text style={styles.opportunityIcon}>
+                        {getProtocolIcon(opportunity.protocol)}
+                      </Text>
+                      <View style={styles.opportunityInfo}>
+                        <Text style={styles.opportunityTitle}>
+                          {opportunity.protocol} - {opportunity.asset}
+                        </Text>
+                        <Text style={styles.opportunityType}>{opportunity.type}</Text>
+                      </View>
+                      <Text style={styles.opportunityApy}>{opportunity.apy}% APY</Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
               </View>
-            </View>
-          </>
-        )}
-      </ScrollView>
-    </Animated.View>
+            </>
+          )}
+
+          {/* Governance Tab */}
+          {activeTab === 'governance' && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Governance</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Earn & vote with your RichesReach community
+                </Text>
+              </View>
+
+              <View style={styles.governanceContent}>
+                <ReferralProgramCard />
+
+                <View style={styles.sectionHeaderInline}>
+                  <Text style={styles.sectionTitleInline}>Governance Proposals</Text>
+                  <Text style={styles.sectionSubtitleInline}>
+                    Vote on platform decisions with $REACH tokens
+                  </Text>
+                </View>
+
+                {governanceProposals.map((proposal) => (
+                  <GovernanceProposalCard
+                    key={proposal.id}
+                    proposal={proposal}
+                    onVote={(vote) => voteOnProposal(proposal.id, vote)}
+                  />
+                ))}
+              </View>
+            </>
+          )}
+
+          {/* NFTs Tab */}
+          {activeTab === 'nfts' && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>NFT Gallery</Text>
+                <Text style={styles.sectionSubtitle}>
+                  View and manage your NFT collection
+                </Text>
+              </View>
+
+              <View style={styles.nftContent}>
+                <NFTGallery
+                  walletAddress={undefined} // Would get from connected wallet
+                  chain="ethereum"
+                  onNFTSelect={(nft) => {
+                    Alert.alert('NFT Selected', `Selected: ${nft.name || `#${nft.tokenId}`}`);
+                  }}
+                />
+              </View>
+            </>
+          )}
+
+          {/* Bridge Tab */}
+          {activeTab === 'bridge' && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Cross-Chain Bridge</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Move assets between blockchain networks
+                </Text>
+              </View>
+
+              <View style={styles.bridgeContent}>
+                <View style={styles.bridgeCard}>
+                  <View style={styles.bridgeInner}>
+                    <Text style={styles.bridgeTitle}>Bridge Assets</Text>
+                    <Text style={styles.bridgeDescription}>
+                      Transfer your assets between different blockchain networks
+                      with low fees and fast settlement.
+                    </Text>
+
+                    <View style={styles.bridgeNetworks}>
+                      {['Ethereum', 'Polygon', 'Arbitrum', 'Optimism', 'Base'].map((network) => (
+                        <View key={network} style={styles.networkItem}>
+                          <View
+                            style={[
+                              styles.networkDot,
+                              { backgroundColor: getNetworkColor(network) },
+                            ]}
+                          />
+                          <Text style={styles.networkName}>{network}</Text>
+                        </View>
+                      ))}
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.bridgeButton}
+                      activeOpacity={0.9}
+                      onPress={() => {
+                        const parentNav = navigation.getParent?.();
+
+                        if (parentNav) {
+                          try {
+                            parentNav.navigate('Home' as never, {
+                              screen: 'bridge-screen',
+                            } as never);
+                            return;
+                          } catch (homeError) {
+                            try {
+                              parentNav.navigate('Invest' as never, {
+                                screen: 'bridge-screen',
+                              } as never);
+                              return;
+                            } catch (investError) {
+                              logger.error('Both tab navigations failed:', { homeError, investError });
+                            }
+                          }
+                        } else {
+                          try {
+                            navigation.navigate('bridge-screen' as never);
+                            return;
+                          } catch (directError) {
+                            // Navigation failed, continue to fallback
+                          }
+                        }
+
+                        try {
+                          const { globalNavigate } = require('../navigation/NavigationService');
+                          globalNavigate('Home', { screen: 'bridge-screen' });
+                        } catch (globalError) {
+                          logger.error('All navigation methods failed:', globalError);
+                          Alert.alert(
+                            'Navigation Error',
+                            'Unable to open bridge screen. Please try again.',
+                          );
+                        }
+                      }}
+                    >
+                      <LinearGradient
+                        colors={[UI.colors.primary, '#8B5CF6']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.bridgeButtonGradient}
+                      >
+                        <Text style={styles.bridgeButtonText}>Start Bridge</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </>
+          )}
+        </ScrollView>
+      </Animated.View>
+    </SafeAreaView>
+  );
+}
+
+// Feature Card Component
+function FeatureCard({ icon, title, subtitle, gradient }: { icon: string; title: string; subtitle: string; gradient: [string, string] }) {
+  return (
+    <View style={styles.featureCardWrapper}>
+      <LinearGradient
+        colors={gradient as [string, string]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.featureCardGradient}
+      >
+        <View style={styles.featureCardInner}>
+          <Icon name={icon as any} size={32} color="#FFFFFF" />
+          <Text style={styles.featureCardTitle}>{title}</Text>
+          <Text style={styles.featureCardSubtitle}>{subtitle}</Text>
+        </View>
+      </LinearGradient>
+    </View>
   );
 }
 
 // Tokenized Portfolio Card Component
 function TokenizedPortfolioCard({ portfolio, onTokenize, getNetworkColor }: any) {
   return (
-    <View style={styles.portfolioCard}>
+    <TouchableOpacity style={styles.portfolioCard} activeOpacity={0.95}>
       <View style={styles.portfolioInner}>
         <View style={styles.portfolioHeader}>
           <View style={styles.portfolioInfo}>
@@ -682,6 +763,7 @@ function TokenizedPortfolioCard({ portfolio, onTokenize, getNetworkColor }: any)
 
         {portfolio.isOwned && (
           <View style={styles.ownedTokens}>
+            <Icon name="check-circle" size={16} color="#10B981" />
             <Text style={styles.ownedTokensText}>
               You own {portfolio.ownedTokens.toLocaleString()} tokens
             </Text>
@@ -689,14 +771,20 @@ function TokenizedPortfolioCard({ portfolio, onTokenize, getNetworkColor }: any)
         )}
 
         <TouchableOpacity style={styles.tokenizeButton} onPress={onTokenize} activeOpacity={0.9}>
-          <LinearGradient colors={[UI.colors.primary, '#0051D5']} style={styles.tokenizeButtonGradient}>
+          <LinearGradient 
+            colors={[UI.colors.primary, '#8B5CF6']} 
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.tokenizeButtonGradient}
+          >
             <Text style={styles.tokenizeButtonText}>
               {portfolio.isOwned ? 'Trade Tokens' : 'Buy Tokens'}
             </Text>
+            <Icon name="arrow-right" size={16} color="#FFFFFF" style={{ marginLeft: 4 }} />
           </LinearGradient>
         </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -818,15 +906,22 @@ function GovernanceProposalCard({ proposal, onVote }: any) {
 const cardShadow = UI.shadows.md;
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: UI.colors.background,
+  },
   container: {
     flex: 1,
     backgroundColor: UI.colors.background,
   },
   loadingContainer: {
     flex: 1,
+    backgroundColor: UI.colors.background,
+  },
+  loadingContent: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: UI.colors.background,
   },
   loadingAnimation: {
     width: 120,
@@ -838,24 +933,74 @@ const styles = StyleSheet.create({
     color: UI.colors.textSecondary,
     textAlign: 'center',
   },
-  header: {
+  heroHeader: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  heroContent: {
     paddingHorizontal: UI.layout.containerPadding,
     paddingTop: 18,
-    paddingBottom: UI.spacing.sm,
+    paddingBottom: UI.spacing.md,
   },
-  headerTitle: {
-    ...UI.typography.h2,
+  heroTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: UI.spacing.md,
+  },
+  heroIconContainer: {
+    padding: 8,
+    backgroundColor: 'rgba(96, 165, 250, 0.2)',
+    borderRadius: 12,
+  },
+  heroTextContainer: {
+    flex: 1,
+  },
+  heroTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: UI.colors.text,
+    marginBottom: 4,
+  },
+  heroSubtitle: {
+    fontSize: 14,
+    color: UI.colors.textSecondary,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: UI.spacing.sm,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  heroStatLabel: {
+    fontSize: 12,
+    color: UI.colors.textSecondary,
+    marginBottom: 4,
+  },
+  heroStatValue: {
+    fontSize: 18,
+    fontWeight: '700',
     color: UI.colors.text,
   },
-  headerSubtitle: {
-    ...UI.typography.caption,
-    color: UI.colors.textSecondary,
-    marginTop: UI.spacing.xs,
+  heroStatValueGreen: {
+    color: '#10B981',
   },
   tabNavigationWrapper: {
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  tabNavigationContent: {
     paddingHorizontal: UI.layout.containerPadding,
-    marginTop: UI.spacing.sm,
-    marginBottom: UI.spacing.xs,
+    paddingVertical: 12,
+    gap: 8,
   },
   tabNavigation: {
     flexDirection: 'row',
@@ -864,20 +1009,26 @@ const styles = StyleSheet.create({
     padding: UI.spacing.xs,
   },
   tabButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: UI.spacing.sm,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     borderRadius: UI.borderRadius.full,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    marginRight: 8,
   },
   tabButtonActive: {
-    backgroundColor: UI.colors.surface,
-    ...cardShadow,
+    backgroundColor: UI.colors.primary,
+    shadowColor: UI.colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 8,
+    elevation: 4,
   },
   tabIcon: {
     fontSize: 15,
-    marginRight: UI.spacing.xs,
+    marginRight: 6,
   },
   tabIconActive: {
     opacity: 1,
@@ -886,10 +1037,40 @@ const styles = StyleSheet.create({
     ...UI.typography.small,
     color: UI.colors.textSecondary,
     fontWeight: '500',
+    marginLeft: 6,
   },
   tabTextActive: {
-    color: UI.colors.text,
+    color: '#FFFFFF',
     fontWeight: '600',
+  },
+  featureCardsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: UI.spacing.md,
+  },
+  featureCardWrapper: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  featureCardGradient: {
+    padding: 1,
+  },
+  featureCardInner: {
+    backgroundColor: UI.colors.background,
+    padding: 16,
+    borderRadius: 15,
+  },
+  featureCardTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: UI.colors.text,
+    marginTop: 8,
+  },
+  featureCardSubtitle: {
+    fontSize: 12,
+    color: UI.colors.textSecondary,
+    marginTop: 4,
   },
   content: {
     flex: 1,
@@ -897,7 +1078,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: UI.layout.containerPadding,
     paddingTop: UI.spacing.sm,
-    paddingBottom: UI.spacing.xl + 100, // Extra padding to ensure all content is visible
+    paddingBottom: UI.spacing.xl + 100,
     flexGrow: 1,
   },
   sectionHeader: {
@@ -932,8 +1113,10 @@ const styles = StyleSheet.create({
   },
   portfolioCard: {
     marginBottom: UI.spacing.md,
-    borderRadius: UI.borderRadius.xl,
+    borderRadius: 24,
     backgroundColor: UI.colors.surface,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     ...cardShadow,
   },
   portfolioInner: {
@@ -990,17 +1173,22 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   ownedTokens: {
-    backgroundColor: '#DCFCE7',
-    paddingVertical: 10,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+    paddingVertical: 12,
     paddingHorizontal: UI.spacing.sm,
-    borderRadius: UI.borderRadius.lg,
+    borderRadius: 12,
     marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
   ownedTokensText: {
     ...UI.typography.small,
-    color: '#166534',
+    color: '#10B981',
     fontWeight: '600',
-    textAlign: 'center',
   },
   tokenizeButton: {
     borderRadius: 999,
@@ -1009,6 +1197,8 @@ const styles = StyleSheet.create({
   tokenizeButtonGradient: {
     paddingVertical: 12,
     alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
   },
   tokenizeButtonText: {
     color: UI.colors.surface,
@@ -1200,7 +1390,7 @@ const styles = StyleSheet.create({
   },
   nftContent: {
     marginTop: 8,
-    minHeight: 400, // Ensure minimum height for NFT gallery
+    minHeight: 400,
   },
   bridgeCard: {
     borderRadius: UI.borderRadius.xl,

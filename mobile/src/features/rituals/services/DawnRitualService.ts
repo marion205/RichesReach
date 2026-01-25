@@ -5,6 +5,7 @@
 
 import { API_HTTP } from '../../../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import logger from '../../../utils/logger';
 
 export interface DawnRitualResult {
   transactionsSynced: number;
@@ -38,7 +39,7 @@ class DawnRitualService {
 
       return await response.json();
     } catch (error) {
-      console.error('[DawnRitual] Failed to perform ritual:', error);
+      logger.error('[DawnRitual] Failed to perform ritual:', error);
       // Return fallback haiku if sync fails
       return {
         transactionsSynced: 0,

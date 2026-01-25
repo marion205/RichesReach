@@ -5,6 +5,7 @@
 
 import { ethers } from 'ethers';
 import Web3Service from './Web3Service';
+import logger from '../utils/logger';
 
 export interface PositionRisk {
   positionId: string;
@@ -78,7 +79,7 @@ class RiskEngineService {
       }
       this.positions.set(positionId, risk);
     } catch (error) {
-      console.error(`Failed to add position ${positionId}:`, error);
+      logger.error(`Failed to add position ${positionId}:`, error);
     }
   }
 
@@ -108,7 +109,7 @@ class RiskEngineService {
         // Check for alerts
         this.checkPositionAlerts(positionId, updatedRisk);
       } catch (error) {
-        console.error(`Failed to check position ${positionId}:`, error);
+        logger.error(`Failed to check position ${positionId}:`, error);
       }
     }
   }
@@ -141,7 +142,7 @@ class RiskEngineService {
         };
       }
     } catch (error) {
-      console.error(`Failed to calculate risk for ${positionId}:`, error);
+      logger.error(`Failed to calculate risk for ${positionId}:`, error);
       throw error;
     }
   }
@@ -186,7 +187,7 @@ class RiskEngineService {
         estimatedLiquidationPrice,
       };
     } catch (error) {
-      console.error('Failed to calculate AAVE risk:', error);
+      logger.error('Failed to calculate AAVE risk:', error);
       throw error;
     }
   }
@@ -289,7 +290,7 @@ class RiskEngineService {
       try {
         callback(alert);
       } catch (error) {
-        console.error('Error in alert callback:', error);
+        logger.error('Error in alert callback:', error);
       }
     });
   }

@@ -12,6 +12,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@apollo/client';
 import { GET_AVAILABLE_BENCHMARKS, formatBenchmarkSymbol, getBenchmarkColor } from '../../../graphql/benchmarkQueries';
+import logger from '../../../utils/logger';
 
 const PREF_BENCHMARK_SYMBOL = 'rr.pref.benchmark_symbol';
 
@@ -40,7 +41,7 @@ export default function BenchmarkSelector({
   const { data: availableBenchmarksData, error: benchmarksError } = useQuery(GET_AVAILABLE_BENCHMARKS, {
     errorPolicy: 'all', // Continue rendering even if query has errors
     onError: (error) => {
-      console.warn('Available benchmarks query error:', error);
+      logger.warn('Available benchmarks query error:', error);
     },
   });
 
@@ -53,7 +54,7 @@ export default function BenchmarkSelector({
           onSymbolChange(saved);
         }
       } catch (error) {
-        console.error('Error loading benchmark preference:', error);
+        logger.error('Error loading benchmark preference:', error);
       }
     };
     loadBenchmarkPreference();
@@ -66,7 +67,7 @@ export default function BenchmarkSelector({
     try {
       await AsyncStorage.setItem(PREF_BENCHMARK_SYMBOL, symbol);
     } catch (error) {
-      console.error('Error saving benchmark preference:', error);
+      logger.error('Error saving benchmark preference:', error);
     }
   };
 

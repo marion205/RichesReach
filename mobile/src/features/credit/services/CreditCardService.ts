@@ -6,6 +6,7 @@
 import { API_HTTP } from '../../../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CreditCard, CreditCardRecommendation } from '../types/CreditTypes';
+import logger from '../../../utils/logger';
 
 class CreditCardService {
   private baseUrl: string;
@@ -32,7 +33,7 @@ class CreditCardService {
 
       return await response.json();
     } catch (error) {
-      console.error('[CreditCard] Failed to get cards:', error);
+      logger.error('[CreditCard] Failed to get cards:', error);
       return [];
     }
   }
@@ -55,7 +56,7 @@ class CreditCardService {
 
       return await response.json();
     } catch (error) {
-      console.error('[CreditCard] Failed to get recommendations:', error);
+      logger.error('[CreditCard] Failed to get recommendations:', error);
       // Return fallback recommendations
       return [
         {

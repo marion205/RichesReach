@@ -16,8 +16,8 @@ const wealthOracleVoiceOptions: Speech.SpeechOptions = {
   language: "en-US",
   rate: 0.85,  // Slightly slower for more natural delivery
   pitch: 1.0,  // Neutral pitch (less robotic)
-  quality: Speech.VoiceQuality.Enhanced,  // Use enhanced quality if available
-};
+  // quality: Speech.VoiceQuality.Enhanced,  // Property not available in this version
+} as Speech.SpeechOptions;
 
 // Max text length for TTS (prevent accidentally passing novels)
 // Increased to allow full paragraphs to be read

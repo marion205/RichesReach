@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -104,11 +104,27 @@ export default function TheWhisperScreen({
   const [showChartModal, setShowChartModal] = useState(false); // Full-screen chart modal
   const [showSymbolPicker, setShowSymbolPicker] = useState(false); // Symbol picker modal
   const [symbolSearch, setSymbolSearch] = useState(''); // Symbol search input
+  const [loadingTimeout, setLoadingTimeout] = useState(false); // Loading timeout state - must be before any returns
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const chartPressStartTime = useRef<number | null>(null);
+  const hideButtonTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
+        longPressTimer.current = null;
+      }
+      if (hideButtonTimeoutRef.current) {
+        clearTimeout(hideButtonTimeoutRef.current);
+        hideButtonTimeoutRef.current = null;
+      }
+    };
+  }, []);
   
   // Update state when props change (if navigated with new symbol)
-  React.useEffect(() => {
+  useEffect(() => {
     if (initialSymbol && initialSymbol !== symbol) {
       setSymbol(initialSymbol);
       setCurrentPrice(initialCurrentPrice || 0);
@@ -127,6 +143,18 @@ export default function TheWhisperScreen({
     '5m',
     1 // Just get the top signal
   );
+  
+  // Loading timeout effect - must be before any conditional returns
+  useEffect(() => {
+    if (signalsLoading && signals.length === 0) {
+      const timer = setTimeout(() => {
+        setLoadingTimeout(true);
+      }, 3000); // Show content after 3 seconds even if still loading
+      return () => clearTimeout(timer);
+    } else {
+      setLoadingTimeout(false);
+    }
+  }, [signalsLoading, signals.length]);
   
   // Trade execution mutation
   const [placeMarketOrder] = useMutation(PLACE_MARKET_ORDER);
@@ -149,8 +177,12 @@ export default function TheWhisperScreen({
         }
         // Hide Pro View button after 3 seconds if not tapped
         if (showProViewButton) {
-          setTimeout(() => {
+          if (hideButtonTimeoutRef.current) {
+            clearTimeout(hideButtonTimeoutRef.current);
+          }
+          hideButtonTimeoutRef.current = setTimeout(() => {
             setShowProViewButton(false);
+            hideButtonTimeoutRef.current = null;
           }, 3000);
         }
         chartPressStartTime.current = null;
@@ -166,7 +198,7 @@ export default function TheWhisperScreen({
   const moodOpacity = useMemo(() => new Animated.Value(0), []);
   const buttonScale = useMemo(() => new Animated.Value(0.95), []);
 
-  React.useEffect(() => {
+  useEffect(() => {
     // Animate ghost candle in when signals are ready (fine-tuned sequence)
     if (signals.length > 0 && !signalsLoading && topSignal) {
       // Ghost candle appears first with smoother easing
@@ -249,10 +281,15 @@ export default function TheWhisperScreen({
       moodOpacity.setValue(0);
       buttonScale.setValue(0.95);
     }
-  }, [signals, signalsLoading, shouldShowTradeButton]);
+  }, [signals, signalsLoading]);
 
   // Calculate P&L projection from top signal (memoized for performance)
   const topSignal = useMemo(() => signals[0], [signals]);
+  
+  // Should show trade button? (only if expectancy is positive and high enough)
+  // Memoized to prevent unnecessary recalculations - declared early to avoid use-before-declaration
+  const shouldShowTradeButtonRef = useRef(false);
+  
   const projectedPNL = useMemo(() => {
     if (!topSignal || !topSignal.price || !topSignal.takeProfit || !topSignal.stopLoss) {
       return null;
@@ -369,7 +406,7 @@ export default function TheWhisperScreen({
     // Show confirmation
     Alert.alert(
       'Place Trade',
-      `Place ${topSignal.signal_type === 'ENTRY_LONG' ? 'LONG' : 'SHORT'} trade on ${symbol}?\n\nEntry: $${topSignal.price}\nStop Loss: $${topSignal.stopLoss || 'N/A'}\nTake Profit: $${topSignal.takeProfit || 'N/A'}\n\nRisk: $${Math.round(projectedPNL.riskAmount || 0)}`,
+      `Place ${topSignal.signalType === 'ENTRY_LONG' ? 'LONG' : 'SHORT'} trade on ${symbol}?\n\nEntry: $${topSignal.price}\nStop Loss: $${topSignal.stopLoss || 'N/A'}\nTake Profit: $${topSignal.takeProfit || 'N/A'}\n\nRisk: $${Math.round(projectedPNL.riskAmount || 0)}`,
       [
         {
           text: 'Cancel',
@@ -388,7 +425,7 @@ export default function TheWhisperScreen({
               const riskPerShare = Math.abs(entryPrice - stopLoss);
               const quantity = riskPerShare > 0 ? Math.max(1, Math.floor(riskAmount / riskPerShare)) : 1;
               
-              const side = topSignal.signal_type === 'ENTRY_LONG' ? 'buy' : 'sell';
+              const side = topSignal.signalType === 'ENTRY_LONG' ? 'buy' : 'sell';
               
               logger.log('🔍 [TheWhisper] Executing trade:', { symbol, side, quantity, entryPrice, stopLoss });
               
@@ -477,8 +514,8 @@ export default function TheWhisperScreen({
     );
   }
 
-  // Edge case: Loading signals
-  if (signalsLoading && signals.length === 0) {
+  // Only show loading screen if actively loading AND no timeout AND no error
+  if (signalsLoading && signals.length === 0 && !loadingTimeout && !signalsError) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingState}>
@@ -490,8 +527,9 @@ export default function TheWhisperScreen({
     );
   }
 
-  // Edge case: No signals found
-  if (!signalsLoading && signals.length === 0) {
+  // Edge case: No signals found (including when there's an error - show empty state)
+  // With errorPolicy: 'all', we should still render even if there's an error
+  if ((!signalsLoading || loadingTimeout || signalsError) && signals.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
         {/* Header with back button */}
@@ -1769,13 +1807,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 40,
-  },
-  loadingText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    marginTop: 16,
-    marginBottom: 8,
   },
   loadingSubtext: {
     fontSize: 14,

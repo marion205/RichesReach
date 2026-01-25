@@ -117,6 +117,7 @@ export default function TomorrowScreen({ navigation }: any) {
   // Real-time price updates via polling (Phase 1 - upgrade to WebSocket in Phase 2)
   const [priceUpdates, setPriceUpdates] = useState<Record<string, { price: number; change: number; changePercent: number; priceHistory: number[] }>>({});
   const pricePollingRef = useRef<NodeJS.Timeout | null>(null);
+  const recommendationsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   // Determine if we're in Regular Trading Hours (RTH) or Extended Trading Hours (ETH)
   // RTH: 9:30 AM - 4:00 PM ET (Monday-Friday)
@@ -154,14 +155,27 @@ export default function TomorrowScreen({ navigation }: any) {
       setUsingCachedData(false);
       
       // Add timeout wrapper (reduced to 5s for faster fallback to mock data)
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Request timeout')), 5000)
-      );
+      let timeoutId: NodeJS.Timeout | null = null;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error('Request timeout'));
+          timeoutId = null;
+        }, 5000);
+        recommendationsTimeoutRef.current = timeoutId;
+      });
       
-      const fetchPromise = FuturesService.getRecommendations();
-      const resp = await Promise.race([fetchPromise, timeoutPromise]) as { recommendations: FuturesRecommendation[] };
-      
-      if (resp.recommendations && resp.recommendations.length > 0) {
+      try {
+        const fetchPromise = FuturesService.getRecommendations();
+        const resp = await Promise.race([fetchPromise, timeoutPromise]) as { recommendations: FuturesRecommendation[] };
+        
+        // Clear timeout if request succeeded
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          recommendationsTimeoutRef.current = null;
+          timeoutId = null;
+        }
+        
+        if (resp.recommendations && resp.recommendations.length > 0) {
         setRecommendations(resp.recommendations);
         setUsingCachedData(false); // Clear cached flag when real data loads
         setError(null); // Clear any previous errors
@@ -191,6 +205,10 @@ export default function TomorrowScreen({ navigation }: any) {
         setError('No live recommendations available. Showing demo data. Pull to refresh.');
         // Start polling for mock symbols (won't work but won't crash)
         startPricePolling(mockData.map(r => r.symbol));
+      }
+      } catch (innerError: any) {
+        // Handle inner try-catch errors (timeout, etc.)
+        throw innerError;
       }
     } catch (e: any) {
       logger.error('❌ [Tomorrow] Failed to load recommendations:', e);
@@ -335,11 +353,11 @@ export default function TomorrowScreen({ navigation }: any) {
   // Phase 3: Add to watchlist
   const handleAddToWatchlist = useCallback(async (rec: FuturesRecommendation) => {
     try {
-      const result = await addToWatchlist({
-        symbol: rec.symbol,
-        company_name: rec.name,
-        notes: `Futures recommendation - ${rec.action} | Probability: ${rec.probability}% | Max Gain: $${rec.max_gain}`,
-      });
+      const result = await addToWatchlist(
+        rec.symbol,
+        rec.name,
+        `Futures recommendation - ${rec.action} | Probability: ${rec.probability}% | Max Gain: $${rec.max_gain}`
+      );
 
       if (result?.data?.addToWatchlist?.success) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -548,7 +566,7 @@ export default function TomorrowScreen({ navigation }: any) {
         </TouchableOpacity>
       </TouchableOpacity>
     );
-  }, [handleTrade, isDark, tradingSession, isTopMover, hasUnusualVolume]);
+  }, [handleTrade, isDark, tradingSession]);
   
   // Render heatmap cell
   const renderHeatmapCell = useCallback((rec: FuturesRecommendation) => {
@@ -623,7 +641,7 @@ export default function TomorrowScreen({ navigation }: any) {
         </View>
       </TouchableOpacity>
     );
-  }, [handleTrade, isDark, isTopMover, hasUnusualVolume]);
+  }, [handleTrade, isDark]);
   
   // Render heatmap view
   const renderHeatmap = useCallback(() => {
@@ -661,7 +679,7 @@ export default function TomorrowScreen({ navigation }: any) {
         })}
       </ScrollView>
     );
-  }, [recommendationsByCategory, renderHeatmapCell, refreshing, handleRefresh, isDark]);
+  }, [renderHeatmapCell, refreshing, handleRefresh, isDark]);
   
   // Skeleton loader for loading state
   const renderSkeletonLoader = useCallback(() => (
@@ -1027,7 +1045,7 @@ export default function TomorrowScreen({ navigation }: any) {
                     </Text>
                   </View>
                   <Text style={styles.positionDetails}>
-                    {pos.side} {pos.quantity} @ ${pos.entry_price.toFixed(2)} • Now: ${pos.current_price.toFixed(2)}
+                    {pos.quantity > 0 ? 'LONG' : 'SHORT'} {Math.abs(pos.quantity)} @ ${pos.entry_price.toFixed(2)} • Now: ${pos.current_price.toFixed(2)}
                   </Text>
                   <Text style={styles.positionPercent}>
                     {pos.pnl_percent >= 0 ? '+' : ''}{pos.pnl_percent.toFixed(2)}%

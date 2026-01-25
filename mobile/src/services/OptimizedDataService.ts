@@ -4,6 +4,7 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNetworkOptimization } from '../hooks/useNetworkOptimization';
+import logger from '../utils/logger';
 
 interface CacheConfig {
   ttl: number; // Time to live in milliseconds
@@ -50,7 +51,7 @@ class OptimizedDataService {
         this.cache = new Map(parsed);
       }
     } catch (error) {
-      console.error('Failed to initialize cache:', error);
+      logger.error('Failed to initialize cache:', error);
     }
   }
 
@@ -59,7 +60,7 @@ class OptimizedDataService {
       const cacheArray = Array.from(this.cache.entries());
       await AsyncStorage.setItem('optimized_data_cache', JSON.stringify(cacheArray));
     } catch (error) {
-      console.error('Failed to save cache:', error);
+      logger.error('Failed to save cache:', error);
     }
   }
 
@@ -113,7 +114,6 @@ class OptimizedDataService {
     if (this.isCacheValid(key)) {
       const cached = this.cache.get(key);
       if (cached) {
-        console.log(`Cache hit for key: ${key}`);
         return this.decompressData(cached.data);
       }
     }
@@ -125,7 +125,6 @@ class OptimizedDataService {
 
     // Check if we should make a network request
     if (this.networkOptimization && !this.networkOptimization.shouldMakeRequest()) {
-      console.log(`Skipping network request for key: ${key} due to optimization`);
       return null;
     }
 
@@ -154,10 +153,9 @@ class OptimizedDataService {
       // Save cache to storage
       await this.saveCache();
       
-      console.log(`Cached fresh data for key: ${key}`);
       return data;
     } catch (error) {
-      console.error(`Failed to fetch data for key: ${key}:`, error);
+      logger.error(`Failed to fetch data for key: ${key}:`, error);
       throw error;
     }
   }

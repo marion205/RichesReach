@@ -2,6 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ApolloClient } from '@apollo/client';
 import { gql } from '@apollo/client';
+import logger from '../../../utils/logger';
 
 const REFRESH_TOKEN_MUTATION = gql`
   mutation RefreshToken {
@@ -55,14 +56,14 @@ class JWTAuthService {
     try {
       // Check if token exists and is a string
       if (!token || typeof token !== 'string') {
-        console.warn('Token is undefined or not a string:', token);
+        logger.warn('Token is undefined or not a string:', token);
         return null;
       }
       
       // Check if token has the expected JWT format (3 parts separated by dots)
       const parts = token.split('.');
       if (parts.length !== 3) {
-        console.warn('Invalid JWT format - expected 3 parts, got:', parts.length);
+        logger.warn('Invalid JWT format - expected 3 parts, got:', parts.length);
         return null;
       }
       
@@ -76,7 +77,7 @@ class JWTAuthService {
       );
       return JSON.parse(jsonPayload);
     } catch (error) {
-      console.error('Error decoding token:', error);
+      logger.error('Error decoding token:', error);
       return null;
     }
   }
@@ -106,7 +107,7 @@ class JWTAuthService {
     try {
       return await AsyncStorage.getItem('token');
     } catch (error) {
-      console.error('Error getting token from storage:', error);
+      logger.error('Error getting token from storage:', error);
       return null;
     }
   }
@@ -118,7 +119,7 @@ class JWTAuthService {
     try {
       await AsyncStorage.setItem('token', token);
     } catch (error) {
-      console.error('Error storing token:', error);
+      logger.error('Error storing token:', error);
       throw error;
     }
   }
@@ -131,7 +132,7 @@ class JWTAuthService {
       await AsyncStorage.removeItem('token');
       this.clearRefreshTimer();
     } catch (error) {
-      console.error('Error removing token:', error);
+      logger.error('Error removing token:', error);
     }
   }
 
@@ -158,7 +159,7 @@ class JWTAuthService {
         throw new Error('Login failed: No token received');
       }
     } catch (error) {
-      console.error('Login error:', error);
+      logger.error('Login error:', error);
       throw error;
     }
   }
@@ -168,7 +169,7 @@ class JWTAuthService {
    */
   async refreshToken(): Promise<string | null> {
     if (!this.apolloClient) {
-      console.error('Apollo client not initialized');
+      logger.error('Apollo client not initialized');
       return null;
     }
 
@@ -181,11 +182,10 @@ class JWTAuthService {
       }
 
       // If token is expired, we need to login again
-      console.log('Token is expired, user needs to login again');
       await this.removeToken();
       return null;
     } catch (error) {
-      console.error('Token refresh error:', error);
+      logger.error('Token refresh error:', error);
       await this.removeToken();
       return null;
     }
@@ -249,13 +249,13 @@ class JWTAuthService {
 
     // For now, just log when the token will expire
     // In a production app, you would implement proper token refresh here
-    console.log(`Token will expire in ${Math.round(timeUntilExpiration / 1000 / 60)} minutes`);
+    // Token expiration tracking - no need to log
     
     // Set a timer to warn when token is about to expire
     const warningTime = Math.max(timeUntilExpiration - (5 * 60 * 1000), 60000); // 5 minutes before expiration
     
     this.refreshTimer = setTimeout(() => {
-      console.log('Token is about to expire, user may need to login again soon');
+      // Token about to expire - no need to log
       if (this.onTokenRefreshFailure) {
         this.onTokenRefreshFailure();
       }

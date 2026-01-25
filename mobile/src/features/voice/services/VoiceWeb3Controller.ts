@@ -2,7 +2,7 @@
  * Voice Web3 Controller
  * Enables voice-controlled Web3 operations
  */
-import { Web3Service } from '../../../services/Web3Service';
+import Web3Service from '../../../services/Web3Service';
 import logger from '../../../utils/logger';
 
 export interface VoiceWeb3Command {
@@ -19,10 +19,11 @@ export interface VoiceWeb3Command {
 
 export class VoiceWeb3Controller {
   private static instance: VoiceWeb3Controller;
-  private web3Service: Web3Service;
+  private web3Service: typeof Web3Service;
 
   private constructor() {
-    this.web3Service = Web3Service.getInstance();
+    // Web3Service is exported as a default instance
+    this.web3Service = Web3Service;
   }
 
   public static getInstance(): VoiceWeb3Controller {
@@ -172,12 +173,15 @@ export class VoiceWeb3Controller {
     }
 
     try {
-      const txHash = await this.web3Service.transferToken(
-        params.token || 'ETH',
-        params.recipient,
-        params.amount
-      );
-      return { success: true, txHash };
+      // TODO: Implement transferToken method in Web3Service
+      // For now, return error as method doesn't exist
+      return { success: false, error: 'Transfer functionality not yet implemented' };
+      // const txHash = await this.web3Service.transferToken(
+      //   params.token || 'ETH',
+      //   params.recipient,
+      //   params.amount
+      // );
+      // return { success: true, txHash };
     } catch (error: any) {
       return { success: false, error: error.message };
     }

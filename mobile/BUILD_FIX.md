@@ -1,46 +1,55 @@
-# 🔧 Build Fix for Demo
+# iOS Build Fix
 
-## Current Issue
+## Issue
+The build is failing because Xcode is trying to use iOS SDK 26.2, but there's a mismatch with the simulator.
 
-RCT-Folly compilation error: `'folly/synchronization/RelaxedAtomic.h' file not found`
+## Solution: Build from Xcode Directly
 
-This is a React Native/Folly dependency issue, not related to our testIDs.
+The easiest way to fix this is to build directly from Xcode:
 
-## ✅ What's Ready
-
-- All testIDs added ✅
-- Demo script ready ✅  
-- Pods installed ✅
-
-## 🚀 Solutions (in order of preference)
-
-### Option 1: Expo CLI (Currently Running)
+### Step 1: Open Xcode
 ```bash
-cd /Users/marioncollins/RichesReach/mobile
-npx expo run:ios
-```
-This often bypasses Folly issues by using prebuilt binaries.
-
-### Option 2: Build in Xcode (Most Reliable)
-```bash
-cd /Users/marioncollins/RichesReach/mobile/ios
-open RichesReach.xcworkspace
-# Then: Product > Build (Cmd+B)
+cd ~/RichesReach/mobile
+open ios/RichesReach.xcworkspace
 ```
 
-### Option 3: Fix Folly Manually
-If the above don't work, we may need to:
-1. Update React Native version
-2. Reinstall node_modules
-3. Clear all caches
+### Step 2: Add the Model File
+1. In Xcode, right-click on "RichesReach" project
+2. Select "Add Files to RichesReach..."
+3. Navigate to `scripts/strategy_predictor.tflite`
+4. ✅ Check "Copy items if needed"
+5. ✅ Ensure "RichesReach" target is checked
+6. Click "Add"
 
-## 🎯 Once Build Succeeds
+### Step 3: Select Simulator
+1. In Xcode, click on the device selector (top toolbar)
+2. Select "iPhone 15 Pro" (or any available simulator)
+3. Make sure it shows as "Booted" or "Available"
 
-Run the demo:
+### Step 4: Build and Run
+1. Press `Cmd + R` or click the Play button
+2. Xcode will build and launch the app
+
+## Alternative: Use Expo Go (No Build Required)
+
+If you just want to test the TFLite integration without building:
+
 ```bash
-cd /Users/marioncollins/RichesReach/mobile
-./demo-detox.sh
+cd ~/RichesReach/mobile
+npx expo start --go
 ```
 
-The demo infrastructure is **100% ready** - we just need a successful build!
+Then scan the QR code with Expo Go app. Note: TFLite won't work in Expo Go (requires native build), but you can test other features.
 
+## Why This Happens
+
+- Expo's build system is trying to use the latest iOS SDK (26.2)
+- Your simulator is running iOS 18.6
+- There's a version mismatch that Xcode handles better when building directly
+
+## After Building from Xcode
+
+Once you've built successfully from Xcode, you can:
+1. Test the TFLite integration in the ML System screen
+2. The model should load and inference should work
+3. You'll see "TensorFlow Lite: Available" and can test predictions

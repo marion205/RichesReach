@@ -20,6 +20,7 @@ import {
 } from '../../cryptoQueries';
 import { gql } from '@apollo/client';
 import { API_RUST_BASE } from '../../config/api';
+import logger from '../../utils/logger';
 
 // Add this lightweight holdings query
 const GET_CRYPTO_HOLDINGS = gql`
@@ -137,11 +138,22 @@ const RecommendationCard: React.FC<{ recommendation: any }> = ({ recommendation 
 const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInterval }) => {
   const [selectedSymbol, setSelectedSymbol] = useState(initialSymbol);
   
-  console.log('[CryptoMLSignalsCard] Initial symbol:', initialSymbol);
-  console.log('[CryptoMLSignalsCard] Selected symbol:', selectedSymbol);
+  logger.log('[CryptoMLSignalsCard] Initial symbol:', initialSymbol);
+  logger.log('[CryptoMLSignalsCard] Selected symbol:', selectedSymbol);
   const [generating, setGenerating] = useState(false);
   const [ownedOnly, setOwnedOnly] = useState(false);
   const topPicked = useRef(false);
+  const generateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (generateTimeoutRef.current) {
+        clearTimeout(generateTimeoutRef.current);
+        generateTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // Alpha Oracle state
   const [showOracle, setShowOracle] = useState(false);
@@ -243,10 +255,10 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
     errorPolicy: 'all',
     // Remove polling - let user manually refresh
     onCompleted: (data) => {
-      console.log('[CryptoMLSignalsCard] Query completed with data:', data);
+      logger.log('[CryptoMLSignalsCard] Query completed with data:', data);
     },
     onError: (error) => {
-      console.log('[CryptoMLSignalsCard] Query error:', error);
+      logger.log('[CryptoMLSignalsCard] Query error:', error);
     }
   });
 
@@ -390,13 +402,13 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
   const signal = useMemo(() => {
     const s = signalData?.cryptoMlSignal ?? {};
     
-    console.log('[CryptoMLSignalsCard] Signal data:', s);
-    console.log('[CryptoMLSignalsCard] Signal loading:', signalLoading);
-    console.log('[CryptoMLSignalsCard] Signal error:', signalError);
+    logger.log('[CryptoMLSignalsCard] Signal data:', s);
+    logger.log('[CryptoMLSignalsCard] Signal loading:', signalLoading);
+    logger.log('[CryptoMLSignalsCard] Signal error:', signalError);
     
     // Priority 1: Use real data from the backend
     if (s.predictionType) {
-      console.log('[CryptoMLSignalsCard] Using real data for', selectedSymbol);
+      logger.log('[CryptoMLSignalsCard] Using real data for', selectedSymbol);
       return {
         predictionType: s.predictionType,
         probability: clamp01(s.probability),
@@ -410,7 +422,7 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
             }
             return s.featuresUsed || {};
           } catch (e) {
-            console.warn('[CryptoMLSignalsCard] Failed to parse featuresUsed:', e);
+            logger.warn('[CryptoMLSignalsCard] Failed to parse featuresUsed:', e);
             return {};
           }
         })(),
@@ -426,12 +438,12 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
     const loadingCompleted = !signalLoading && !signalData?.cryptoMlSignal;
     
     if (hasError || hasNetworkError || loadingCompleted) {
-      console.log('[CryptoMLSignalsCard] Using mock data for', selectedSymbol, 'due to error or no data');
+      logger.log('[CryptoMLSignalsCard] Using mock data for', selectedSymbol, 'due to error or no data');
       return getMockSignal(selectedSymbol);
     }
     
     // Priority 3: While actively loading, show mock data immediately (optimistic loading)
-    console.log('[CryptoMLSignalsCard] Using mock data for', selectedSymbol, 'while loading');
+    logger.log('[CryptoMLSignalsCard] Using mock data for', selectedSymbol, 'while loading');
     return getMockSignal(selectedSymbol);
   }, [signalData, signalLoading, signalError, selectedSymbol]);
 
@@ -588,16 +600,35 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
       setGenerating(true);
       
       // Add timeout wrapper for API call
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Request timeout')), 8000)
-      );
+      let timeoutId: NodeJS.Timeout | null = null;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error('Request timeout'));
+          timeoutId = null;
+        }, 8000);
+        generateTimeoutRef.current = timeoutId;
+      });
       
       let res;
       try {
         const generatePromise = generatePrediction({ variables: { symbol: selectedSymbol } });
         res = await Promise.race([generatePromise, timeoutPromise]);
+        
+        // Clear timeout if request succeeded
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          generateTimeoutRef.current = null;
+          timeoutId = null;
+        }
       } catch (error: any) {
-        console.warn('[CryptoMLSignalsCard] Prediction generation failed, using mock data:', error.message);
+        // Clear timeout on error
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          generateTimeoutRef.current = null;
+          timeoutId = null;
+        }
+        // If it's a timeout or other error, use mock data
+        logger.warn('[CryptoMLSignalsCard] Prediction generation failed, using mock data:', error.message);
         // Generate mock prediction instead of showing error
         const mockProbability = 0.65 + (Math.random() * 0.25); // Random between 0.65 and 0.9
         const mockConfidence = mockProbability > 0.8 ? 'HIGH' : mockProbability > 0.6 ? 'MEDIUM' : 'LOW';
@@ -615,7 +646,7 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
         return;
       }
       
-      console.log('[CryptoMLSignalsCard] Generate prediction response:', res.data);
+      logger.log('[CryptoMLSignalsCard] Generate prediction response:', res.data);
       const ok = res.data?.generateMlPrediction?.success;
       if (ok) {
         const p = clamp01(res.data.generateMlPrediction.probability);
@@ -633,7 +664,7 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
       }
     } catch (e: any) {
       // Final fallback - generate mock prediction instead of showing error
-      console.warn('[CryptoMLSignalsCard] Unexpected error, using mock prediction:', e.message);
+      logger.warn('[CryptoMLSignalsCard] Unexpected error, using mock prediction:', e.message);
       const mockProbability = 0.65 + (Math.random() * 0.25);
       const mockConfidence = mockProbability > 0.8 ? 'HIGH' : mockProbability > 0.6 ? 'MEDIUM' : 'LOW';
       Alert.alert(

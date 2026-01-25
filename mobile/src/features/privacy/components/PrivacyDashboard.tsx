@@ -23,6 +23,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useQuery, useMutation, gql } from '@apollo/client';
+import logger from '../../../utils/logger';
 
 const GET_PRIVACY_SETTINGS = gql`
   query GetPrivacySettings {
@@ -197,7 +198,7 @@ export const PrivacyDashboard: React.FC<PrivacyDashboardProps> = ({
         });
         await refetch();
       } catch (error) {
-        console.error('Failed to update privacy settings:', error);
+        logger.error('Failed to update privacy settings:', error);
         // Revert on error
         setDataCategories(dataCategories);
       }

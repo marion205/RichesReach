@@ -3,6 +3,7 @@
  * Ensures no mock data in production builds
  */
 import { Platform } from 'react-native';
+import logger from '../utils/logger';
 
 // Production build detection
 const isRelease = !__DEV__;
@@ -40,15 +41,15 @@ export function validateProductionFeatures() {
 
 // Log feature flags status
 export function logFeatureFlags() {
-  console.log('🚀 RICHESREACH - FEATURE FLAGS');
-  console.log('=' .repeat(40));
-  console.log(`Build: ${isRelease ? 'PRODUCTION' : 'DEVELOPMENT'}`);
-  console.log('Features:');
+  logger.log('🚀 RICHESREACH - FEATURE FLAGS');
+  logger.log('=' .repeat(40));
+  logger.log(`Build: ${isRelease ? 'PRODUCTION' : 'DEVELOPMENT'}`);
+  logger.log('Features:');
   Object.entries(FEATURES).forEach(([name, enabled]) => {
     const status = enabled ? '🟢 ENABLED' : '🔴 DISABLED';
-    console.log(`  ${name}: ${status}`);
+    logger.log(`  ${name}: ${status}`);
   });
-  console.log('=' .repeat(40));
+  logger.log('=' .repeat(40));
 }
 
 // Initialize feature flags on app start

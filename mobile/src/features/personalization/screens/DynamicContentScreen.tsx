@@ -10,6 +10,7 @@ import {
   Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import logger from '../../../utils/logger';
 
 interface AdaptedContent {
   id: string;
@@ -182,7 +183,7 @@ const DynamicContentScreen: React.FC = () => {
       setPersonalizedContent(mockPersonalizedContent);
       setRecommendations(mockRecommendations);
     } catch (error) {
-      console.error('Error loading dynamic content data:', error);
+      logger.error('Error loading dynamic content data:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, FlatList } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
+import logger from '../../utils/logger';
 
 type HubItem = {
   key: string;
@@ -24,7 +25,7 @@ export default function InvestHubScreen({ navigateTo: navigateToProp }: InvestHu
     try {
       navigation.navigate(screen as never, params as never);
     } catch (error) {
-      console.warn('Navigation error:', error);
+      logger.warn('Navigation error:', error);
     }
   });
 

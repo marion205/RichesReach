@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useMutation } from '@apollo/client';
+import logger from '../../utils/logger';
 import Icon from 'react-native-vector-icons/Feather';
 import { PLACE_STOCK_ORDER } from '../../graphql/queries_actual_schema';
 
@@ -76,7 +77,7 @@ const StockTradingModal: React.FC<StockTradingModalProps> = ({
         Alert.alert('Order Failed', data?.placeStockOrder?.message || 'Unknown error');
       }
     } catch (error) {
-      console.error('Order placement error:', error);
+      logger.error('Order placement error:', error);
       Alert.alert('Error', 'Failed to place order. Please try again.');
     } finally {
       setIsSubmitting(false);

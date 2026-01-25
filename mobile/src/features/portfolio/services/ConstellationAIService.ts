@@ -6,6 +6,7 @@
 import { API_HTTP } from '../../../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MoneySnapshot } from './MoneySnapshotService';
+import logger from '../../../utils/logger';
 
 export interface PersonalizedLifeEvent {
   id: string;
@@ -115,7 +116,7 @@ class ConstellationAIService {
       const data = await response.json();
       return data.events || [];
     } catch (error) {
-      console.warn('[ConstellationAI] Failed to fetch AI life events, using fallback:', error);
+      logger.warn('[ConstellationAI] Failed to fetch AI life events, using fallback:', error);
       return this.getFallbackLifeEvents(snapshot);
     }
   }
@@ -148,7 +149,7 @@ class ConstellationAIService {
       const data = await response.json();
       return data.projections || [];
     } catch (error) {
-      console.warn('[ConstellationAI] Failed to fetch ML projections, using fallback:', error);
+      logger.warn('[ConstellationAI] Failed to fetch ML projections, using fallback:', error);
       return this.getFallbackProjections(snapshot, timeframes);
     }
   }
@@ -180,7 +181,7 @@ class ConstellationAIService {
       const data = await response.json();
       return data.analysis;
     } catch (error) {
-      console.warn('[ConstellationAI] Failed to fetch AI shield analysis, using fallback:', error);
+      logger.warn('[ConstellationAI] Failed to fetch AI shield analysis, using fallback:', error);
       return this.getFallbackShieldAnalysis(snapshot);
     }
   }
@@ -219,7 +220,7 @@ class ConstellationAIService {
       const data = await response.json();
       return data.recommendations || [];
     } catch (error) {
-      console.warn('[ConstellationAI] Failed to fetch AI recommendations, using fallback:', error);
+      logger.warn('[ConstellationAI] Failed to fetch AI recommendations, using fallback:', error);
       return this.getFallbackRecommendations(snapshot);
     }
   }

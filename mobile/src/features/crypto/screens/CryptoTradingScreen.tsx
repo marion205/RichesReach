@@ -735,7 +735,6 @@ const CryptoTradingScreen: React.FC<CryptoTradingScreenProps> = ({ navigation })
         <LicensingDisclosureScreen onClose={() => setShowLicensingDisclosure(false)} />
       </Modal>
     </SafeAreaView>
-    </>
   );
 };
 

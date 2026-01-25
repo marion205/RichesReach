@@ -53,6 +53,7 @@ export default function PortfolioPerformanceCard({
   const [useAdvancedChart, setUseAdvancedChart] = useState(false);
   const [selectedBenchmark, setSelectedBenchmark] = useState('SPY');
   const [showBenchmarkSelector, setShowBenchmarkSelector] = useState(false);
+  const [showTimeframeSelector, setShowTimeframeSelector] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [infoModalContent, setInfoModalContent] = useState<InfoModalContent | null>(null);
   const [chartData, setChartData] = useState<{ portfolio: number[]; benchmark: number[]; labels: string[] }>({
@@ -393,26 +394,70 @@ export default function PortfolioPerformanceCard({
               </View>
             </View>
 
-            {/* Controls Row */}
-            <View style={styles.controlsRow}>
-              {/* Timeframe Tabs */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.tabsContainer}
-              >
-                {TABS.map((t) => (
+              {/* Controls Row */}
+              <View style={styles.controlsRow}>
+                {/* Timeframe Selector */}
+                <View style={styles.controlGroup}>
                   <TouchableOpacity
-                    key={t}
-                    onPress={() => setTab(t)}
-                    style={[styles.tab, tab === t && styles.tabActive]}
+                    onPress={() => setShowTimeframeSelector(!showTimeframeSelector)}
+                    style={[
+                      styles.timeframeButton,
+                      styles.timeframeButtonActive,
+                    ]}
                   >
-                    <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>{t}</Text>
+                    <Text
+                      style={[
+                        styles.timeframeButtonText,
+                        styles.timeframeButtonTextActive,
+                      ]}
+                    >
+                      {tab}
+                    </Text>
+                    <Icon name="chevron-down" size={14} color="#3B82F6" />
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
 
-              {/* Benchmark Selector */}
+                  {showTimeframeSelector && (
+                    <Modal
+                      visible={showTimeframeSelector}
+                      transparent
+                      animationType="fade"
+                      onRequestClose={() => setShowTimeframeSelector(false)}
+                    >
+                      <TouchableOpacity
+                        style={styles.modalOverlay}
+                        activeOpacity={1}
+                        onPress={() => setShowTimeframeSelector(false)}
+                      >
+                        <View style={styles.timeframeDropdown}>
+                          {TABS.map((t) => (
+                            <TouchableOpacity
+                              key={t}
+                              onPress={() => {
+                                setTab(t);
+                                setShowTimeframeSelector(false);
+                              }}
+                              style={[
+                                styles.timeframeOption,
+                                tab === t && styles.timeframeOptionActive,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.timeframeOptionText,
+                                  tab === t && styles.timeframeOptionTextActive,
+                                ]}
+                              >
+                                {t}
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </TouchableOpacity>
+                    </Modal>
+                  )}
+                </View>
+
+                {/* Benchmark Selector */}
               <View style={styles.controlGroup}>
                 <TouchableOpacity
                   onPress={() => setShowBenchmarkSelector(!showBenchmarkSelector)}
@@ -1001,6 +1046,58 @@ const styles = StyleSheet.create({
   },
   controlGroup: {
     position: 'relative',
+  },
+  timeframeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+  },
+  timeframeButtonActive: {
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+  },
+  timeframeButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: UI.colors.primary,
+  },
+  timeframeButtonTextActive: {
+    color: UI.colors.primary,
+  },
+  timeframeDropdown: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    minWidth: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  timeframeOption: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  timeframeOptionActive: {
+    backgroundColor: '#F3F4F6',
+  },
+  timeframeOptionText: {
+    fontSize: 14,
+    color: '#1E293B',
+  },
+  timeframeOptionTextActive: {
+    color: UI.colors.primary,
+    fontWeight: '600',
   },
   benchmarkButton: {
     flexDirection: 'row',

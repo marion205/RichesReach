@@ -8,6 +8,7 @@
 
 import { useEffect, useRef } from 'react';
 import * as Speech from 'expo-speech';
+import logger from '../utils/logger';
 
 interface SpeakOptions {
   language?: string;
@@ -84,7 +85,7 @@ export function useSafeSpeak(text?: string, deps: any[] = []) {
           },
         });
       } catch (error) {
-        console.warn('[useSafeSpeak] Error:', error);
+        logger.warn('[useSafeSpeak] Error:', error);
         if (mounted.current) {
           speaking.current = false;
         }
@@ -150,7 +151,7 @@ export async function safeSpeak(text: string, options?: SpeakOptions): Promise<v
       },
     });
   } catch (error) {
-    console.warn('[safeSpeak] Error:', error);
+    logger.warn('[safeSpeak] Error:', error);
     globalSpeaking = false;
     options?.onError?.(error);
   }

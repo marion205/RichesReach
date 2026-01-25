@@ -21,10 +21,12 @@ class MLWakeWordService {
   private recording: Audio.Recording | null = null;
   private isListening = false;
   private checkInterval: NodeJS.Timeout | null = null;
+  private pauseTimeout: NodeJS.Timeout | null = null;
   private hasPermission = false;
   private model: any = null;
   private normalizationParams: { mean: number[]; std: number[] } | null = null;
   private audioContext: AudioContext | null = null;
+  private sampleRate: number = SAMPLE_RATE;
 
   /**
    * Load TensorFlow.js model
@@ -32,7 +34,7 @@ class MLWakeWordService {
   async loadModel(): Promise<boolean> {
     try {
       // Dynamic import to avoid loading if not needed
-      const tf = await import('@tensorflow/tfjs');
+      const tf = await import('@tensorflow/tfjs' as any);
       await tf.ready();
 
       // Try to load model (if available)
@@ -140,16 +142,16 @@ class MLWakeWordService {
       await recording.prepareToRecordAsync({
         android: {
           extension: '.m4a',
-          outputFormat: Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_MPEG_4,
-          audioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC,
+          outputFormat: 2, // Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_MPEG_4
+          audioEncoder: 3, // Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC
           sampleRate: SAMPLE_RATE,
           numberOfChannels: 1,
           bitRate: 128000,
         },
         ios: {
           extension: '.m4a',
-          outputFormat: Audio.RECORDING_OPTION_IOS_OUTPUT_FORMAT_MPEG4AAC,
-          audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_MEDIUM,
+          outputFormat: 0, // Audio.RECORDING_OPTION_IOS_OUTPUT_FORMAT_MPEG4AAC
+          audioQuality: 127, // Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_MEDIUM
           sampleRate: SAMPLE_RATE,
           numberOfChannels: 1,
           bitRate: 128000,
@@ -197,7 +199,15 @@ class MLWakeWordService {
           triggerHotword();
           
           // Small pause before continuing
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          if (this.pauseTimeout) {
+            clearTimeout(this.pauseTimeout);
+          }
+          await new Promise<void>(resolve => {
+            this.pauseTimeout = setTimeout(() => {
+              this.pauseTimeout = null;
+              resolve();
+            }, 1000);
+          });
         }
       } catch (error) {
         logger.error('Error checking for wake word:', error);
@@ -325,7 +335,7 @@ class MLWakeWordService {
    */
   private async detectWithModel(audioData: Float32Array): Promise<boolean> {
     try {
-      const tf = await import('@tensorflow/tfjs');
+      const tf = await import('@tensorflow/tfjs' as any);
       
       // Extract MFCC features
       const mfccFeatures = extractMFCC(audioData, SAMPLE_RATE);
@@ -390,6 +400,10 @@ class MLWakeWordService {
         clearInterval(this.checkInterval);
         this.checkInterval = null;
       }
+      if (this.pauseTimeout) {
+        clearTimeout(this.pauseTimeout);
+        this.pauseTimeout = null;
+      }
 
       if (this.recording) {
         try {
@@ -398,18 +412,18 @@ class MLWakeWordService {
             const status = await this.recording.getStatusAsync();
             if (status.isRecording && typeof this.recording.stopAndUnloadAsync === 'function') {
               await this.recording.stopAndUnloadAsync();
-            } else if (typeof this.recording.unloadAsync === 'function') {
-              await this.recording.unloadAsync();
+            } else if (this.recording) {
+              await (this.recording as any).stopAndUnloadAsync?.();
             }
-          } else if (typeof this.recording.unloadAsync === 'function') {
-            // If getStatusAsync doesn't exist, try to unload directly
-            await this.recording.unloadAsync();
+          } else if (this.recording) {
+            // If getStatusAsync doesn't exist, try to stop and unload directly
+            await (this.recording as any).stopAndUnloadAsync?.();
           }
         } catch (e) {
-          // Try to unload even if stop failed
-          if (this.recording && typeof this.recording.unloadAsync === 'function') {
+          // Try to stop and unload even if stop failed
+          if (this.recording) {
             try {
-              await this.recording.unloadAsync();
+              await (this.recording as any).stopAndUnloadAsync?.();
             } catch (e2) {
               logger.warn('Could not unload recording:', e2);
             }

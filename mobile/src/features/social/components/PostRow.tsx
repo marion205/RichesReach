@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet, Pressable, Image, Platform } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
-import { renderWithTickers } from '../../../utils/tickers';
+import { renderWithTickers } from '../../../shared/utils/tickers';
 import PollCard from '../../../components/forms/PollCard';
 import TickerChips from '../../stocks/components/TickerChips';
 import TickerFollowButton from '../../stocks/components/TickerFollowButton';

@@ -296,7 +296,7 @@ export default function ScalabilityEngine({ onNavigate, onMicroservicePress, onE
           <View style={styles.overviewContent}>
             {/* System Health */}
             <View style={styles.systemHealthCard}>
-              <View intensity={20} style={styles.systemHealthBlur}>
+              <View style={styles.systemHealthBlur}>
                 <View style={styles.systemHealthHeader}>
                   <Text style={styles.systemHealthTitle}>System Health</Text>
                   <Animated.View
@@ -488,7 +488,7 @@ function MetricCard({ title, value, color, icon }: any) {
 function MicroserviceCard({ service, onPress, getStatusColor, getStatusIcon, getUsageColor }: any) {
   return (
     <TouchableOpacity style={styles.microserviceCard} onPress={onPress}>
-      <View intensity={20} style={styles.microserviceBlur}>
+      <View style={styles.microserviceBlur}>
         <View style={styles.microserviceHeader}>
           <Text style={styles.microserviceName}>{service.name}</Text>
           <View style={[styles.microserviceStatus, { backgroundColor: getStatusColor(service.status) }]}>
@@ -527,7 +527,7 @@ function MicroserviceCard({ service, onPress, getStatusColor, getStatusIcon, get
 function EdgeNodeCard({ node, onPress, getStatusColor, getStatusIcon }: any) {
   return (
     <TouchableOpacity style={styles.edgeNodeCard} onPress={onPress}>
-      <View intensity={20} style={styles.edgeNodeBlur}>
+      <View style={styles.edgeNodeBlur}>
         <View style={styles.edgeNodeHeader}>
           <Text style={styles.edgeNodeLocation}>{node.location}</Text>
           <View style={[styles.edgeNodeStatus, { backgroundColor: getStatusColor(node.status) }]}>

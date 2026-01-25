@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { useQuery } from '@apollo/client';
+import logger from '../../utils/logger';
 import Icon from 'react-native-vector-icons/Feather';
 import { GET_CRYPTO_RECOMMENDATIONS } from '../../cryptoQueries';
 
@@ -48,7 +49,7 @@ const CryptoRecommendationsCard: React.FC<CryptoRecommendationsCardProps> = ({
     try {
       await refetch();
     } catch (error) {
-      console.error('Error refreshing recommendations:', error);
+      logger.error('Error refreshing recommendations:', error);
     } finally {
       setRefreshing(false);
     }

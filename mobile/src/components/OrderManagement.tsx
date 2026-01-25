@@ -639,7 +639,7 @@ export const OrderManagement: React.FC<OrderManagementProps> = ({
                   styles.timeInForceButton,
                   orderForm.timeInForce === option.value && styles.activeTimeInForceButton,
                 ]}
-                onPress={() => setOrderForm({ ...orderForm, timeInForce: option.value })}
+                onPress={() => setOrderForm({ ...orderForm, timeInForce: option.value as 'DAY' | 'GTC' | 'IOC' | 'FOK' })}
               >
                 <Text style={[
                   styles.timeInForceButtonText,

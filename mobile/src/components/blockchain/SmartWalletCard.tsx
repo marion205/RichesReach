@@ -8,6 +8,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } fr
 import Icon from 'react-native-vector-icons/Feather';
 import AccountAbstractionService from '../../services/AccountAbstractionService';
 import { useWallet } from '../../wallet/WalletProvider';
+import logger from '../../utils/logger';
 
 interface SmartWalletCardProps {
   onSessionKeyCreate?: () => void;
@@ -23,6 +24,9 @@ export default function SmartWalletCard({ onSessionKeyCreate }: SmartWalletCardP
   const [loading, setLoading] = useState(false);
   const [hasSessionKey, setHasSessionKey] = useState(false);
 
+  // Initialize Account Abstraction Service instance
+  const [aaService] = useState(() => new AccountAbstractionService('polygon'));
+
   useEffect(() => {
     if (isConnected && address) {
       loadSmartWallet();
@@ -34,18 +38,18 @@ export default function SmartWalletCard({ onSessionKeyCreate }: SmartWalletCardP
     
     try {
       setLoading(true);
-      const walletAddress = await AccountAbstractionService.getSmartWalletAddress(address);
+      const walletAddress = await aaService.getSmartWalletAddress(address);
       setSmartWalletAddress(walletAddress);
       
-      const deployed = await AccountAbstractionService.isWalletDeployed(walletAddress);
+      const deployed = await aaService.isWalletDeployed(walletAddress);
       setIsDeployed(deployed);
       
       if (deployed) {
-        const walletBalance = await AccountAbstractionService.getWalletBalance(walletAddress);
+        const walletBalance = await aaService.getWalletBalance(walletAddress);
         setBalance(walletBalance);
       }
     } catch (error) {
-      console.error('Failed to load smart wallet:', error);
+      logger.error('Failed to load smart wallet:', error);
     } finally {
       setLoading(false);
     }

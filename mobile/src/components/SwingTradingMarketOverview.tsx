@@ -17,7 +17,6 @@ import {
   GET_VOLATILITY_DATA,
   MarketDataPoint,
   SectorDataPoint,
-  VolatilityData,
   formatCurrency,
   formatPercentage,
   formatCompactNumber,
@@ -328,6 +327,17 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  header: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#111827',
   },
   section: {
     marginBottom: 24,

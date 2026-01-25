@@ -6,6 +6,7 @@ import { TOKEN_AUTH } from '../../../graphql/auth';
 import RestAuthService from '../services/RestAuthService';
 import { API_GRAPHQL } from '../../../../config/api';
 import { useAuth } from '../../../contexts/AuthContext';
+import logger from '../../../utils/logger';
 
 // Three common JWT mutations
 const MUTATIONS = [
@@ -64,16 +65,14 @@ export default function LoginScreen({ onLogin, onNavigateToSignUp, onNavigateToF
     inFlight.current = true;
     
     try {
-      console.log('🔄 Trying REST auth...');
       const success = await authLogin(email, password);
       if (success) {
-        console.log('✅ REST login successful!');
         onLogin('success');
       } else {
         throw new Error('Login failed');
       }
     } catch (error) {
-      console.error('❌ REST login failed:', error);
+      logger.error('❌ REST login failed:', error);
       Alert.alert('Login Failed', error instanceof Error ? error.message : 'An error occurred');
     } finally {
       inFlight.current = false;
@@ -88,14 +87,8 @@ export default function LoginScreen({ onLogin, onNavigateToSignUp, onNavigateToF
     setLoginError(null);
     
     try {
-      console.log('🔄 Attempting login...');
-      console.log('📧 Email:', email);
-      console.log('🔑 Password length:', password.length);
-      console.log('🌐 Environment API URL:', process.env.EXPO_PUBLIC_API_BASE_URL);
-      
       const success = await authLogin(email, password);
       if (success) {
-        console.log('✅ Login successful!');
         // Clear any previous errors before navigating
         setLoginError(null);
         onLogin('success');
@@ -104,7 +97,7 @@ export default function LoginScreen({ onLogin, onNavigateToSignUp, onNavigateToF
         throw new Error('Login failed: Authentication returned false');
       }
     } catch (error) {
-      console.error('❌ Login failed:', error);
+      logger.error('❌ Login failed:', error);
       const errorMessage = error instanceof Error ? error.message : 'An error occurred';
       setLoginError(new Error(errorMessage));
       // Only show alert if login actually failed (don't navigate)
@@ -120,7 +113,7 @@ export default function LoginScreen({ onLogin, onNavigateToSignUp, onNavigateToF
       const res = await signup({ variables: { email, name, password } });
       // User created successfully
     } catch (err) {
-      console.error('Signup error:', err);
+      logger.error('Signup error:', err);
     }
   };
 

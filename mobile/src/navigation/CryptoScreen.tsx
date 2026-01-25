@@ -19,6 +19,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useQuery } from '@apollo/client';
 import LicensingDisclosureScreen from '../components/LicensingDisclosureScreen';
 import { FEATURES } from '../config/featureFlags';
+import logger from '../utils/logger';
 
 // GraphQL Queries
 import { GET_CRYPTO_PORTFOLIO, GET_CRYPTO_ANALYTICS } from '../cryptoQueries';
@@ -90,7 +91,7 @@ interface CryptoScreenProps {
   navigation: any;
 }
 
-const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
+const CryptoScreen: React.FC<CryptoScreenProps> = React.memo(({ navigation }) => {
   const [showLicensingDisclosure, setShowLicensingDisclosure] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'portfolio' | 'trading' | 'aave' | 'signals' | 'yields' | 'optimizer'>('portfolio');
@@ -106,7 +107,7 @@ const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
     onError: (error) => {
       // Suppress network errors - will use mock data
       if (!error?.message?.includes('Network request failed')) {
-        console.log('[GQL] Portfolio error:', error.message, error.graphQLErrors);
+        logger.log('[GQL] Portfolio error:', error.message, error.graphQLErrors);
       }
     },
   });
@@ -119,7 +120,7 @@ const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
     onError: (error) => {
       // Suppress network errors - will use mock data
       if (!error?.message?.includes('Network request failed')) {
-        console.log('[GQL] Analytics error:', error.message, error.graphQLErrors);
+        logger.log('[GQL] Analytics error:', error.message, error.graphQLErrors);
       }
     },
   });
@@ -203,7 +204,7 @@ const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
         refetchAnalytics(),
       ]);
     } catch (error) {
-      console.error('Error refreshing crypto data:', error);
+      logger.error('Error refreshing crypto data:', error);
     } finally {
       setRefreshing(false);
     }
@@ -221,6 +222,7 @@ const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
                          analyticsError?.message?.includes('Network request failed');
   
   // Only show error screen if it's a real GraphQL error (not network) and we have no mock data
+  const loadingTimeout = portfolioLoading || analyticsLoading; // Define loadingTimeout
   if (gqlErr && !hasNetworkError && !effectivePortfolio && !effectiveAnalytics && !loadingTimeout) {
     return (
       <SafeAreaView style={styles.container}>
@@ -246,7 +248,7 @@ const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
             analytics={effectiveAnalytics}
             loading={false} // Never show loading state - always show mock data immediately
             onRefresh={onRefresh}
-            onPressHolding={(symbol) => console.log('Pressed holding:', symbol)}
+            onPressHolding={(symbol) => logger.log('Pressed holding:', symbol)}
             onStartTrading={() => setActiveTab('trading')}
             hideBalances={hideBalances}
             onToggleHideBalances={setHideBalances}
@@ -284,7 +286,7 @@ const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
         return (
           <CryptoTradingCardPro 
             onTradeSuccess={() => {
-              console.log('Trade completed successfully');
+              logger.log('Trade completed successfully');
             }}
             balances={{
               'BTC': 0.5,
@@ -328,7 +330,7 @@ const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
             }}
             onSuccess={() => {
               // Refresh data when transactions complete
-              console.log('Transaction completed');
+              logger.log('Transaction completed');
             }}
           />
         );
@@ -473,7 +475,10 @@ const CryptoScreen: React.FC<CryptoScreenProps> = ({ navigation }) => {
     </Modal>
     </>
   );
-};
+
+});
+
+CryptoScreen.displayName = 'CryptoScreen';
 
 const styles = StyleSheet.create({
   container: {
@@ -625,5 +630,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
+
+CryptoScreen.displayName = 'CryptoScreen';
 
 export default CryptoScreen;

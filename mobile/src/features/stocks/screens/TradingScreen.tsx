@@ -64,6 +64,10 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
   const { alpacaAccount, loading: alpacaAccountLoading, refetch: refetchAlpacaAccount } =
     useAlpacaAccount(1);
 
+  // Refs for timeout cleanup
+  const immediateFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const connectModalTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Detect when user returns from Alpaca signup
   useSignupReturnDetection({
     hasAlpacaAccount: !!alpacaAccount,
@@ -176,8 +180,12 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     if (shouldFetchImmediately) {
       setQuoteSymbol(symbol);
       // Small delay to ensure state update
-      setTimeout(() => {
+      if (immediateFetchTimeoutRef.current) {
+        clearTimeout(immediateFetchTimeoutRef.current);
+      }
+      immediateFetchTimeoutRef.current = setTimeout(() => {
         refetchQuote?.({ symbol });
+        immediateFetchTimeoutRef.current = null;
       }, 50);
     } else {
       // Debounce for typing
@@ -189,6 +197,10 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
 
     return () => {
       if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current);
+      if (immediateFetchTimeoutRef.current) {
+        clearTimeout(immediateFetchTimeoutRef.current);
+        immediateFetchTimeoutRef.current = null;
+      }
     };
   }, [orderForm.symbol, showOrderModal, refetchQuote, quoteSymbol]);
 
@@ -197,6 +209,14 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     if (!showOrderModal) {
       setQuoteSymbol('');
       if (quoteTimerRef.current) clearTimeout(quoteTimerRef.current);
+      if (immediateFetchTimeoutRef.current) {
+        clearTimeout(immediateFetchTimeoutRef.current);
+        immediateFetchTimeoutRef.current = null;
+      }
+      if (connectModalTimeoutRef.current) {
+        clearTimeout(connectModalTimeoutRef.current);
+        connectModalTimeoutRef.current = null;
+      }
     }
   }, [showOrderModal]);
 
@@ -392,8 +412,12 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
       alpacaAccount,
       onConnectRequired: () => {
         setShowOrderModal(false);
-        setTimeout(() => {
+        if (connectModalTimeoutRef.current) {
+          clearTimeout(connectModalTimeoutRef.current);
+        }
+        connectModalTimeoutRef.current = setTimeout(() => {
           setShowConnectModal(true);
+          connectModalTimeoutRef.current = null;
         }, 300);
       },
       onSuccess: () => {
@@ -769,6 +793,14 @@ const styles = StyleSheet.create({
   tabPillActive: { backgroundColor: C.card, borderWidth: 1, borderColor: C.line },
   tabPillText: { color: '#5B6473', fontWeight: '600' },
   tabPillTextActive: { color: C.text },
+  helpTabButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    alignItems: 'center',
+    backgroundColor: '#E9EDF7',
+    marginLeft: 8,
+  },
 
   scroller: { paddingHorizontal: 16 },
 

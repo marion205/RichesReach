@@ -104,10 +104,6 @@ export function ShellScreenRenderer({
       return (
         <BankAccountScreen
           navigateTo={navigateTo || windowWithNav?.__navigateToGlobal}
-          navigation={{
-            navigate: navigateTo || windowWithNav?.__navigateToGlobal,
-            goBack: () => setCurrentScreen('home'),
-          }}
         />
       );
 
@@ -153,7 +149,7 @@ export function ShellScreenRenderer({
                   isActive: true,
                   priority: 0,
                 },
-              },
+              } as any,
             },
           }}
         />
@@ -166,7 +162,7 @@ export function ShellScreenRenderer({
             navigate: navigateTo,
             goBack: () => setCurrentScreen('SBLOCBankSelection'),
           }}
-          route={{ params: { sessionId: '' } }}
+          route={{ params: { sessionId: '' } as any }}
         />
       );
 

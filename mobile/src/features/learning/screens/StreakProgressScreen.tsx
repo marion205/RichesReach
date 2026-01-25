@@ -18,6 +18,7 @@ import Icon from 'react-native-vector-icons/Feather';
 import { LinearGradient } from 'expo-linear-gradient';
 import { API_HTTP } from '../../../config/api';
 import { useAuth } from '../../../contexts/AuthContext';
+import logger from '../../../utils/logger';
 
 interface ProgressData {
   streak: {
@@ -138,7 +139,7 @@ export default function StreakProgressScreen({ navigateTo }: { navigateTo?: (scr
       
       setProgress(transformedData);
     } catch (error: any) {
-      console.error('Error loading progress:', error);
+      logger.error('Error loading progress:', error);
       setError(error.message || 'Failed to load progress');
     } finally {
       setLoading(false);

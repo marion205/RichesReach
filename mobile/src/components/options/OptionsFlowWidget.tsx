@@ -498,5 +498,10 @@ const styles = StyleSheet.create({
     color: '#DC2626',
     fontWeight: '700',
   },
+  loadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#6B7280',
+  },
 });
 

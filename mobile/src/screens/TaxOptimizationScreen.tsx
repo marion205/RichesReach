@@ -19,6 +19,7 @@ import Slider from '@react-native-community/slider';
 import { useAuth } from '../contexts/AuthContext';
 import taxOptimizationService from '../services/taxOptimizationService';
 import { API_BASE } from '../config/api';
+import logger from '../utils/logger';
 
 interface TaxOptimizationData {
   summary?: any;
@@ -577,7 +578,7 @@ const TaxOptimizationScreen: React.FC = () => {
         if (maxTrades !== null) setAutoHarvestMaxTrades(parseInt(maxTrades, 10));
         if (lastRun !== null) setAutoHarvestLastRun(new Date(lastRun));
       } catch (error) {
-        console.error('Error loading auto-harvest settings:', error);
+        logger.error('Error loading auto-harvest settings:', error);
       }
     };
     
@@ -594,7 +595,7 @@ const TaxOptimizationScreen: React.FC = () => {
         await AsyncStorage.setItem('auto_harvest_last_run', autoHarvestLastRun.toISOString());
       }
     } catch (error) {
-      console.error('Error saving auto-harvest settings:', error);
+      logger.error('Error saving auto-harvest settings:', error);
     }
   }, [autoHarvestEnabled, autoHarvestMinLoss, autoHarvestMaxTrades, autoHarvestLastRun]);
 
@@ -667,7 +668,7 @@ const TaxOptimizationScreen: React.FC = () => {
           );
         }
       } catch (error) {
-        console.error('Auto-harvest error:', error);
+        logger.error('Auto-harvest error:', error);
         // Silent fail - don't bother user with errors in auto mode
       }
     };
@@ -691,7 +692,7 @@ const TaxOptimizationScreen: React.FC = () => {
         }
       }
     } catch (e) {
-      console.error('Error loading cache:', e);
+      logger.error('Error loading cache:', e);
     }
     return null;
   }, []);
@@ -707,7 +708,7 @@ const TaxOptimizationScreen: React.FC = () => {
         })
       );
     } catch (e) {
-      console.error('Error saving cache:', e);
+      logger.error('Error saving cache:', e);
     }
   }, []);
 
@@ -770,15 +771,11 @@ const TaxOptimizationScreen: React.FC = () => {
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
       try {
-        console.log('📊 [Tax Optimization] Fetching optimization summary...');
         const summaryData = await taxOptimizationService.getOptimizationSummary(token || '');
-        console.log('📊 [Tax Optimization] Summary data received:', summaryData);
         
         if (summaryData?.holdings && Array.isArray(summaryData.holdings) && summaryData.holdings.length > 0) {
           rawHoldings = summaryData.holdings;
-          console.log(`📊 [Tax Optimization] Found ${rawHoldings.length} holdings from API`);
         } else {
-          console.log('📊 [Tax Optimization] No holdings from API, trying GraphQL fallback...');
           const portfolioResponse = await fetch(`${API_BASE}/graphql`, {
             method: 'POST',
             headers: {
@@ -838,7 +835,6 @@ const TaxOptimizationScreen: React.FC = () => {
       }
 
       if (rawHoldings.length === 0) {
-        console.log('⚠️ [Tax Optimization] No holdings found, setting empty data');
         const emptyData = {
           summary: {
             estimatedAnnualTax: 0,
@@ -869,7 +865,6 @@ const TaxOptimizationScreen: React.FC = () => {
       }
 
       // Process holdings with wash sale detection
-      console.log(`📊 [Tax Optimization] Processing ${rawHoldings.length} holdings...`);
       const integratedHoldings = rawHoldings.map((holding: any) => {
         const quantity = holding.quantity || holding.shares || 0;
         const currentPrice = parseFloat(holding.currentPrice) || 0;
@@ -892,12 +887,8 @@ const TaxOptimizationScreen: React.FC = () => {
           name: holding.companyName || holding.name || holding.symbol,
         };
       });
-      console.log(`✅ [Tax Optimization] Processed ${integratedHoldings.length} holdings`);
       
       // Ensure we have at least some data structure even if empty
-      if (integratedHoldings.length === 0) {
-        console.log('⚠️ [Tax Optimization] No holdings after processing, using empty data');
-      }
 
       const washSales = detectWashSales(integratedHoldings);
       washSales.forEach((ws) => {
@@ -980,7 +971,7 @@ const TaxOptimizationScreen: React.FC = () => {
       setRetryCount(0);
       await saveToCache(finalData);
     } catch (error: any) {
-      console.error('Error loading tax optimization data:', error);
+      logger.error('Error loading tax optimization data:', error);
       handleError(error, 'loadData');
       
       // Try to load from cache as fallback
@@ -1075,7 +1066,7 @@ const TaxOptimizationScreen: React.FC = () => {
       setSmartHarvestData(recommendations);
       setShowSmartHarvestModal(true);
     } catch (error: any) {
-      console.error('Error getting smart harvest recommendations:', error);
+      logger.error('Error getting smart harvest recommendations:', error);
       // Fallback to local calculations
       const potentialSavings = data.lossHarvesting?.potentialSavings || 0;
       const recommendations = {
@@ -1127,7 +1118,7 @@ const TaxOptimizationScreen: React.FC = () => {
         [{ text: 'OK', onPress: () => loadData() }]
       );
     } catch (error: any) {
-      console.error('Error executing smart harvest:', error);
+      logger.error('Error executing smart harvest:', error);
       Alert.alert(
         'Execution Failed',
         error.message || 'Could not execute smart harvest. Please try again.',
@@ -1213,7 +1204,7 @@ PDF report has been generated. Check your email or download from the app.
             title: `Tax Optimization Report ${currentYear}`,
           });
         } catch (shareError) {
-          console.error('Share error:', shareError);
+          logger.error('Share error:', shareError);
           Alert.alert('Success', 'PDF report generated! Check your downloads or email.');
         }
       };
@@ -1223,7 +1214,7 @@ PDF report has been generated. Check your email or download from the app.
       };
       
     } catch (error: any) {
-      console.error('Error exporting report:', error);
+      logger.error('Error exporting report:', error);
       Alert.alert(
         'Export Failed',
         error.message || 'Could not generate PDF report. Please try again later.',
@@ -1288,7 +1279,6 @@ PDF report has been generated. Check your email or download from the app.
     const sectionTitle = tabs.find((tab) => tab.key === activeTab)?.label || 'Overview';
 
     // Always show content, even if data is empty
-    console.log(`📊 [Tax Optimization] Rendering tab: ${activeTab}, has data: ${!!sectionData}, data keys: ${Object.keys(data)}`);
 
     return (
       <View style={styles.tabContent}>

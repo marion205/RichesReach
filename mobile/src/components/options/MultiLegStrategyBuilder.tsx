@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Alert, ActivityIndicator } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import { useMutation } from '@apollo/client';
+import logger from '../../utils/logger';
 import { PLACE_MULTI_LEG_OPTIONS_ORDER } from '../../graphql/optionsMutations';
 import StrategyPayoffChart from './StrategyPayoffChart';
 
@@ -61,8 +62,8 @@ export default function MultiLegStrategyBuilder({
     
     const newLegs: StrategyLeg[] = template.legs.map((leg, index) => ({
       id: `leg-${index}`,
-      optionType: leg.type,
-      action: leg.action,
+      optionType: leg.type as LegType,
+      action: leg.action as LegAction,
       strike: '',
       expiration: '',
       quantity: '1',
@@ -144,7 +145,7 @@ export default function MultiLegStrategyBuilder({
         Alert.alert('Order Failed', response?.error || 'Unknown error occurred');
       }
     } catch (error: any) {
-      console.error('Error placing multi-leg order:', error);
+      logger.error('Error placing multi-leg order:', error);
       Alert.alert('Error', error.message || 'Failed to place order. Please try again.');
     } finally {
       setPlacingOrder(false);

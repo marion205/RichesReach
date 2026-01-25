@@ -169,7 +169,7 @@ const safeFixed = (val: unknown, dp = 2, fallback = '—') =>
   Number.isFinite(val) ? Number(val).toFixed(dp) : fallback;
 
 const safePct = (val: unknown, dp = 0, fallback = '—') =>
-  Number.isFinite(val) ? `${Number(val * 100).toFixed(dp)}%` : fallback;
+  Number.isFinite(val) ? `${(Number(val) * 100).toFixed(dp)}%` : fallback;
 
 const safeMoney = (val: unknown, dp = 2, fallback = '—') =>
   Number.isFinite(val) ? `$${Number(val).toFixed(dp)}` : fallback;
@@ -594,7 +594,7 @@ interface NavigateParams {
   [key: string]: unknown;
 }
 
-export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s: string, d?: NavigateParams) => void }) {
+function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s: string, d?: NavigateParams) => void }) {
   const [activeTab, setActiveTab] = useState<'browse' | 'beginner' | 'watchlist' | 'research' | 'options'>('browse');
   
   const handleRowPress = useCallback((item: Stock) => {
@@ -613,11 +613,16 @@ export default function StockScreen({ navigateTo = () => {} }: { navigateTo?: (s
     });
   };
 
+  // Declare handleRustAnalysis ref to avoid hoisting issues
+  const handleRustAnalysisRef = useRef<((symbol: string) => Promise<void>) | null>(null);
+  
   const openAnalysis = useCallback((item: Stock) => {
     logger.log('🔍 ANALYSIS PRESS', item.symbol);
     // Open the rust analysis modal
-    handleRustAnalysis(item.symbol);
-  }, [handleRustAnalysis]);
+    if (handleRustAnalysisRef.current) {
+      handleRustAnalysisRef.current(item.symbol);
+    }
+  }, []);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [tooltip, setTooltip] = useState<{ title: string; description: string } | null>(null);
@@ -654,6 +659,8 @@ interface RustAnalysis {
   const [showEducation, setShowEducation] = useState<string | null>(null);
   const optionsScrollViewRef = useRef<any>(null);
   const optionsChainRef = useRef<View>(null);
+  const rustQueryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const chartQueryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
   const [placeBracketOrderMutation] = useMutation(PLACE_BRACKET_OPTIONS_ORDER);
   
@@ -1307,27 +1314,50 @@ interface OptionOrder {
       // Try the rust analysis first with a timeout, but fallback to chart data if it fails or times out
       try {
         // Add timeout to prevent hanging
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Query timeout after 5 seconds')), 5000)
-        );
-        
-        const queryPromise = client.query({ 
-          query: GET_RUST_STOCK_ANALYSIS, 
-          variables: { symbol }, 
-          fetchPolicy: 'network-only',
-          errorPolicy: 'all' // Continue even if there are GraphQL errors
+        let timeoutId: NodeJS.Timeout | null = null;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => {
+            reject(new Error('Query timeout after 5 seconds'));
+            timeoutId = null;
+          }, 5000);
+          rustQueryTimeoutRef.current = timeoutId;
         });
         
-        const { data } = await Promise.race([queryPromise, timeoutPromise]) as { data?: { rustStockAnalysis?: RustAnalysis } };
-        logger.log('📊 Received rust data:', data);
-        
-        if (data?.rustStockAnalysis) {
-          logger.log('✅ Setting rust data');
-          setRust(data.rustStockAnalysis);
-          setRustLoading(false);
-          return;
-        } else {
-          logger.log('⚠️ Rust analysis returned no data, using fallback');
+        try {
+          const queryPromise = client.query({ 
+            query: GET_RUST_STOCK_ANALYSIS, 
+            variables: { symbol }, 
+            fetchPolicy: 'network-only',
+            errorPolicy: 'all' // Continue even if there are GraphQL errors
+          });
+          
+          const { data } = await Promise.race([queryPromise, timeoutPromise]) as { data?: { rustStockAnalysis?: RustAnalysis } };
+          
+          // Clear timeout if query succeeded
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            rustQueryTimeoutRef.current = null;
+            timeoutId = null;
+          }
+          
+          logger.log('📊 Received rust data:', data);
+          
+          if (data?.rustStockAnalysis) {
+            logger.log('✅ Setting rust data');
+            setRust(data.rustStockAnalysis);
+            setRustLoading(false);
+            return;
+          } else {
+            logger.log('⚠️ Rust analysis returned no data, using fallback');
+          }
+        } catch (raceError) {
+          // Clear timeout on error
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            rustQueryTimeoutRef.current = null;
+            timeoutId = null;
+          }
+          throw raceError;
         }
       } catch (rustError: unknown) {
         const errorMessage = rustError instanceof Error ? rustError.message : String(rustError);
@@ -1337,29 +1367,42 @@ interface OptionOrder {
       // Fallback: Use chart data for basic analysis
       logger.log('📊 Fetching chart data for fallback analysis...');
       try {
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Chart query timeout')), 5000)
-        );
-        
-        const queryPromise = client.query({ 
-          query: CHART_QUERY, 
-          variables: { symbol, tf: '1D', iv: '1D', limit: 30, inds: ['SMA20', 'SMA50', 'RSI', 'MACD'] },
-          fetchPolicy: 'network-only',
-          errorPolicy: 'all'
+        let chartTimeoutId: NodeJS.Timeout | null = null;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          chartTimeoutId = setTimeout(() => {
+            reject(new Error('Chart query timeout'));
+            chartTimeoutId = null;
+          }, 5000);
+          chartQueryTimeoutRef.current = chartTimeoutId;
         });
         
-        interface ChartDataResponse {
-          stockChartData?: {
-            symbol?: string;
-            changePercent?: number;
-            currentPrice?: number;
-            indicators?: Record<string, unknown>;
-            [key: string]: unknown;
-          };
-        }
-        const { data: chartData } = await Promise.race([queryPromise, timeoutPromise]) as { data?: ChartDataResponse };
-        
-        if (chartData?.stockChartData) {
+        try {
+          const queryPromise = client.query({ 
+            query: CHART_QUERY, 
+            variables: { symbol, tf: '1D', iv: '1D', limit: 30, inds: ['SMA20', 'SMA50', 'RSI', 'MACD'] },
+            fetchPolicy: 'network-only',
+            errorPolicy: 'all'
+          });
+          
+          interface ChartDataResponse {
+            stockChartData?: {
+              symbol?: string;
+              changePercent?: number;
+              currentPrice?: number;
+              indicators?: Record<string, unknown>;
+              [key: string]: unknown;
+            };
+          }
+          const { data: chartData } = await Promise.race([queryPromise, timeoutPromise]) as { data?: ChartDataResponse };
+          
+          // Clear timeout if query succeeded
+          if (chartTimeoutId) {
+            clearTimeout(chartTimeoutId);
+            chartQueryTimeoutRef.current = null;
+            chartTimeoutId = null;
+          }
+          
+          if (chartData?.stockChartData) {
           const indicators = chartData.stockChartData.indicators || {};
           const analysis = {
             symbol: chartData.stockChartData.symbol || symbol,
@@ -1370,13 +1413,13 @@ interface OptionOrder {
               rsi: indicators.RSI14 || 50, // Default RSI if not available
               macd: indicators.MACD || 0,
               macdSignal: indicators.MACDSignal || 0,
-              macdHistogram: indicators.MACDHist || (indicators.MACD && indicators.MACDSignal ? indicators.MACD - indicators.MACDSignal : 0),
+              macdHistogram: indicators.MACDHist || (indicators.MACD && indicators.MACDSignal ? (Number(indicators.MACD) - Number(indicators.MACDSignal)) : 0),
               sma20: indicators.SMA20 || chartData.stockChartData.currentPrice,
               sma50: indicators.SMA50 || chartData.stockChartData.currentPrice,
               ema12: indicators.EMA12 || indicators.SMA20 || chartData.stockChartData.currentPrice,
               ema26: indicators.EMA26 || indicators.SMA50 || chartData.stockChartData.currentPrice,
-              bollingerUpper: indicators.BBUpper || (indicators.SMA20 ? indicators.SMA20 * 1.02 : chartData.stockChartData.currentPrice * 1.02),
-              bollingerLower: indicators.BBLower || (indicators.SMA20 ? indicators.SMA20 * 0.98 : chartData.stockChartData.currentPrice * 0.98),
+              bollingerUpper: indicators.BBUpper || (indicators.SMA20 ? Number(indicators.SMA20) * 1.02 : Number(chartData.stockChartData.currentPrice) * 1.02),
+              bollingerLower: indicators.BBLower || (indicators.SMA20 ? Number(indicators.SMA20) * 0.98 : Number(chartData.stockChartData.currentPrice) * 0.98),
               bollingerMiddle: indicators.BBMiddle || indicators.SMA20 || chartData.stockChartData.currentPrice
             },
             fundamentalAnalysis: {
@@ -1389,13 +1432,13 @@ interface OptionOrder {
             reasoning: `Based on current price of $${chartData.stockChartData.currentPrice || 'N/A'} and ${chartData.stockChartData.changePercent > 0 ? 'positive' : 'negative'} momentum.`
           };
           
-          logger.log('✅ Using fallback analysis data with indicators:', analysis.technicalIndicators);
-          setRust(analysis);
-          setRustLoading(false);
-        } else {
-          logger.log('❌ No chart data received, showing basic analysis');
-          // Show a basic analysis even if we can't get data
-          const basicAnalysis = {
+            logger.log('✅ Using fallback analysis data with indicators:', analysis.technicalIndicators);
+            setRust(analysis);
+            setRustLoading(false);
+          } else {
+            logger.log('❌ No chart data received, showing basic analysis');
+            // Show a basic analysis even if we can't get data
+            const basicAnalysis = {
             symbol: symbol,
             beginnerFriendlyScore: 75,
             riskLevel: 'MEDIUM',
@@ -1424,6 +1467,15 @@ interface OptionOrder {
           };
           setRust(basicAnalysis);
           setRustLoading(false);
+        }
+        } catch (innerChartError: unknown) {
+          // Clear timeout on error
+          if (chartTimeoutId) {
+            clearTimeout(chartTimeoutId);
+            chartQueryTimeoutRef.current = null;
+            chartTimeoutId = null;
+          }
+          throw innerChartError;
         }
       } catch (chartError: unknown) {
         const errorMessage = chartError instanceof Error ? chartError.message : String(chartError);
@@ -1733,8 +1785,8 @@ interface OptionOrder {
             underlyingPrice={transformedOptionsData.underlyingPrice || undefined}
             calls={transformedOptionsData.calls}
             puts={transformedOptionsData.puts}
-            selected={selectedOption}
-            onSelect={(opt) => setSelectedOption(opt)}
+            selected={selectedOption as any}
+            onSelect={(opt) => setSelectedOption(opt as any)}
             fullBleed
             gutter={20}
           />
@@ -1763,10 +1815,10 @@ interface OptionOrder {
         <View style={styles.orderForm}>
           <View style={styles.orderInfo}>
             <Text style={styles.orderInfoText}>
-              {selectedOption.optionType} {optionsSymbol} ${selectedOption.strike} {selectedOption.expiration}
+              {String(selectedOption.optionType || '')} {optionsSymbol} ${String(selectedOption.strike || '')} {String(selectedOption.expiration || '')}
             </Text>
             <Text style={styles.orderInfoSubtext}>
-              Bid: ${selectedOption.bid} | Ask: ${selectedOption.ask}
+              Bid: ${String(selectedOption.bid || '')} | Ask: ${String(selectedOption.ask || '')}
             </Text>
           </View>
 
@@ -3210,7 +3262,7 @@ placeholderTextColor="#999"
                   Beginner Score: <Text style={{ fontWeight: '600', color: '#3b82f6' }}>{rust?.beginnerFriendlyScore}/100</Text>
                 </Text>
                 <Text style={{ marginBottom: 12, color: '#6b7280', lineHeight: 20 }}>
-                  {rust?.reasoning}
+                  {Array.isArray(rust?.reasoning) ? (rust.reasoning as string[]).join(' ') : (rust?.reasoning as string) || ''}
                 </Text>
               </View>
 
@@ -3228,7 +3280,7 @@ placeholderTextColor="#999"
                     >
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                         <Text style={{ color: '#6b7280' }}>RSI (14):</Text>
-                        <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>{rust.technicalIndicators.rsi?.toFixed(2)}</Text>
+                        <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>{(rust.technicalIndicators.rsi as number)?.toFixed(2)}</Text>
                       </View>
                     </EducationalTooltip>
                     <EducationalTooltip
@@ -3238,7 +3290,7 @@ placeholderTextColor="#999"
                     >
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                         <Text style={{ color: '#6b7280' }}>MACD:</Text>
-                        <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>{rust.technicalIndicators.macd?.toFixed(3)}</Text>
+                        <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>{(rust.technicalIndicators.macd as number)?.toFixed(3)}</Text>
                       </View>
                     </EducationalTooltip>
                     <EducationalTooltip
@@ -3248,7 +3300,7 @@ placeholderTextColor="#999"
                     >
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                         <Text style={{ color: '#6b7280' }}>SMA 20:</Text>
-                        <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>${rust.technicalIndicators.sma20?.toFixed(2)}</Text>
+                        <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>${(rust.technicalIndicators.sma20 as number)?.toFixed(2)}</Text>
                       </View>
                     </EducationalTooltip>
                     <EducationalTooltip
@@ -3258,16 +3310,16 @@ placeholderTextColor="#999"
                     >
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                         <Text style={{ color: '#6b7280' }}>SMA 50:</Text>
-                        <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>${rust.technicalIndicators.sma50?.toFixed(2)}</Text>
+                        <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>${(rust.technicalIndicators.sma50 as number)?.toFixed(2)}</Text>
                       </View>
                     </EducationalTooltip>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                       <Text style={{ color: '#6b7280' }}>Bollinger Upper:</Text>
-                      <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>${rust.technicalIndicators.bollingerUpper?.toFixed(2)}</Text>
+                      <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>${(rust.technicalIndicators.bollingerUpper as number)?.toFixed(2)}</Text>
                     </View>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                       <Text style={{ color: '#6b7280' }}>Bollinger Lower:</Text>
-                      <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>${rust.technicalIndicators.bollingerLower?.toFixed(2)}</Text>
+                      <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>${(rust.technicalIndicators.bollingerLower as number)?.toFixed(2)}</Text>
                     </View>
                   </View>
                 </View>
@@ -3282,23 +3334,23 @@ placeholderTextColor="#999"
                   <View style={{ backgroundColor: '#f8f9fa', padding: 16, borderRadius: 12, marginBottom: 12 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                       <Text style={{ color: '#6b7280' }}>Valuation Score:</Text>
-                      <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>{rust.fundamentalAnalysis.valuationScore?.toFixed(1)}/100</Text>
+                      <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>{((rust.fundamentalAnalysis as any).valuationScore as number)?.toFixed(1)}/100</Text>
                     </View>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                       <Text style={{ color: '#6b7280' }}>Growth Score:</Text>
-                      <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>{rust.fundamentalAnalysis.growthScore?.toFixed(1)}/100</Text>
+                      <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>{((rust.fundamentalAnalysis as any).growthScore as number)?.toFixed(1)}/100</Text>
                     </View>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                       <Text style={{ color: '#6b7280' }}>Stability Score:</Text>
-                      <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>{rust.fundamentalAnalysis.stabilityScore?.toFixed(1)}/100</Text>
+                      <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>{((rust.fundamentalAnalysis as any).stabilityScore as number)?.toFixed(1)}/100</Text>
                     </View>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
                       <Text style={{ color: '#6b7280' }}>Dividend Score:</Text>
-                      <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>{rust.fundamentalAnalysis.dividendScore?.toFixed(1)}/100</Text>
+                      <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>{((rust.fundamentalAnalysis as any).dividendScore as number)?.toFixed(1)}/100</Text>
                     </View>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                       <Text style={{ color: '#6b7280' }}>Debt Score:</Text>
-                      <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>{rust.fundamentalAnalysis.debtScore?.toFixed(1)}/100</Text>
+                      <Text style={{ fontWeight: '600', color: '#1a1a1a' }}>{((rust.fundamentalAnalysis as any).debtScore as number)?.toFixed(1)}/100</Text>
                     </View>
                   </View>
                 </View>
@@ -3321,7 +3373,6 @@ placeholderTextColor="#999"
             >
               <Text style={{ fontSize: 16, fontWeight: '600', color: '#fff' }}>Done</Text>
             </TouchableOpacity>
-            )}
 </View>
 </View>
       </Modal>
@@ -4013,40 +4064,6 @@ searchContainer: {
     color: '#666',
     marginBottom: 4,
   },
-  loadingContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#666',
-  },
-  errorContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 40,
-    paddingHorizontal: 20,
-  },
-  errorText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#ef4444',
-    textAlign: 'center',
-  },
-  retryButton: {
-    marginTop: 16,
-    backgroundColor: '#00cc99',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -4113,3 +4130,7 @@ searchContainer: {
     marginBottom: 16,
   },
 });
+
+StockScreen.displayName = 'StockScreen';
+
+export default React.memo(StockScreen);

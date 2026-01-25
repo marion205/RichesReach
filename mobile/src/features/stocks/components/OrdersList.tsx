@@ -10,6 +10,8 @@ import {
 import Icon from 'react-native-vector-icons/Feather';
 import { AlpacaOrder } from '../types';
 
+type FlatListItem = { type: 'section' | 'order'; label?: string; order?: AlpacaOrder; };
+
 const C = {
   card: '#FFFFFF',
   line: '#E9EAF0',
@@ -88,11 +90,6 @@ export const OrdersList: React.FC<OrdersListProps> = React.memo(
     const flatListData = useMemo(() => {
       if (loading || filtered.length === 0) return [];
       
-      interface FlatListItem {
-        type: 'section' | 'order';
-        label?: string;
-        order?: AlpacaOrder;
-      }
       const items: FlatListItem[] = [];
       (['Today', 'This Week', 'Earlier'] as const).forEach((label) => {
         if (sections[label].length > 0) {
@@ -288,7 +285,7 @@ export const OrdersList: React.FC<OrdersListProps> = React.memo(
           const height = item?.type === 'section' ? 40 : 120; // Section header: 40px, Order: 120px
           return {
             length: height,
-            offset: (data || []).slice(0, index).reduce((acc: number, i: FlatListItem | undefined) => {
+            offset: ((data || []) as FlatListItem[]).slice(0, index).reduce((acc: number, i: FlatListItem | undefined) => {
               return acc + (i?.type === 'section' ? 40 : 120);
             }, 0),
             index,

@@ -86,7 +86,7 @@ const PortfolioHoldings: React.FC<PortfolioHoldingsProps> = ({
         <HoldingRow
           holding={item}
           allocationPercent={allocationPercent}
-          onPress={onStockPress}
+          onPress={(holding) => onStockPress(holding.symbol)}
           onBuy={onBuy}
           onSell={onSell}
           isLast={index === holdings.length - 1}

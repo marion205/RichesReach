@@ -26,6 +26,7 @@ import {
   OptionsCopilotRequest,
   OptionsStrategy,
 } from '../types/OptionsCopilotTypes';
+import logger from '../../../utils/logger';
 
 const { width } = Dimensions.get('window');
 
@@ -43,7 +44,9 @@ export default function OptionsCopilotScreen({ navigation }: any) {
   const [optionsChain, setOptionsChain] = useState<any>(null);
 
   const logEvent = useCallback((event: string, meta?: any) => {
-    console.log(JSON.stringify({ event, meta, t: new Date().toISOString() }));
+    if (__DEV__) {
+      logger.log(JSON.stringify({ event, meta, t: new Date().toISOString() }));
+    }
   }, []);
 
   const loadOptionsChain = useCallback(async () => {
@@ -51,7 +54,7 @@ export default function OptionsCopilotScreen({ navigation }: any) {
       const chain = await OptionsCopilotService.getOptionsChain(symbol);
       setOptionsChain(chain);
     } catch (e) {
-      console.warn('Failed to load options chain:', e);
+      logger.warn('Failed to load options chain:', e);
       // Don't show alert for chain failure, it's not critical
     }
   }, [symbol]);

@@ -25,6 +25,7 @@ import ScanCard from '../components/ScanCard';
 import PlaybookCard from '../components/PlaybookCard';
 import AIScansService from '../services/AIScansService';
 import { logUX } from '../../../utils/telemetry';
+import logger from '../../../utils/logger';
 
 const { width } = Dimensions.get('window');
 
@@ -124,7 +125,9 @@ const AIScansScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   // 📊 Analytics / Event Logging Hook
   const logEvent = useCallback((event: string, meta?: Record<string, any>) => {
-    console.log(JSON.stringify({ event, meta, ts: Date.now() }));
+    if (__DEV__) {
+      logger.log(JSON.stringify({ event, meta, ts: Date.now() }));
+    }
   }, []);
 
   const handleRunScan = useCallback(

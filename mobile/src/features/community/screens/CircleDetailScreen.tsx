@@ -21,7 +21,8 @@ import * as Notifications from 'expo-notifications'; // For push notifications
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme } from '../../theme/PersonalizedThemes';
+import logger from '../../../utils/logger';
+import { useTheme } from '../../../theme/PersonalizedThemes';
 
 // Extend interfaces
 interface WealthCircle {
@@ -194,7 +195,7 @@ export default function CircleDetailScreen({ route, navigation }: CircleDetailPr
         ]);
       }
     } catch (err) {
-      console.error('Error loading posts:', err);
+      logger.error('Error loading posts:', err);
     } finally {
       setLoading(false);
     }
@@ -262,7 +263,7 @@ export default function CircleDetailScreen({ route, navigation }: CircleDetailPr
         loadPosts();
       }
     } catch (err) {
-      console.error('Error posting:', err);
+      logger.error('Error posting:', err);
       Alert.alert('Error', 'Failed to post. Try again.');
     } finally {
       setLoading(false);
@@ -292,7 +293,7 @@ export default function CircleDetailScreen({ route, navigation }: CircleDetailPr
         loadPosts();
       }
     } catch (err) {
-      console.error('Error commenting:', err);
+      logger.error('Error commenting:', err);
     }
   }, [loadPosts]);
 
@@ -301,7 +302,7 @@ export default function CircleDetailScreen({ route, navigation }: CircleDetailPr
   };
 
   const renderPost = ({ item: post }: { item: CirclePost }) => (
-    <View style={[styles.postCard, { backgroundColor: theme.currentTheme.colors.card }]}>
+    <View style={[styles.postCard, { backgroundColor: theme.currentTheme.colors.surface }]}>
       <LinearGradient
         colors={['#f8f9fa', '#ffffff']}
         style={styles.postGradient}
@@ -312,11 +313,11 @@ export default function CircleDetailScreen({ route, navigation }: CircleDetailPr
             <View style={styles.onlineDot} />
           </View>
           <View style={styles.userInfo}>
-            <Text style={[styles.postUser, { color: theme.currentTheme.colors.textPrimary }]}>{post.user.name}</Text>
+            <Text style={[styles.postUser, { color: theme.currentTheme.colors.text }]}>{post.user.name}</Text>
             <Text style={[styles.postTime, { color: theme.currentTheme.colors.textSecondary }]}>{post.timestamp}</Text>
           </View>
         </View>
-        <Text style={[styles.postContent, { color: theme.currentTheme.colors.textPrimary }]}>{post.content}</Text>
+        <Text style={[styles.postContent, { color: theme.currentTheme.colors.text }]}>{post.content}</Text>
         {post.image && (
           <Image source={{ uri: post.image }} style={styles.postImage} resizeMode="cover" />
         )}
@@ -343,8 +344,8 @@ export default function CircleDetailScreen({ route, navigation }: CircleDetailPr
               <View style={styles.commentItem}>
                 <Image source={{ uri: comment.user.avatar }} style={styles.commentAvatar} />
                 <View style={styles.commentContent}>
-                  <Text style={[styles.commentUser, { color: theme.currentTheme.colors.textPrimary }]}>{comment.user.name}</Text>
-                  <Text style={[styles.commentText, { color: theme.currentTheme.colors.textPrimary }]}>{comment.content}</Text>
+                  <Text style={[styles.commentUser, { color: theme.currentTheme.colors.text }]}>{comment.user.name}</Text>
+                  <Text style={[styles.commentText, { color: theme.currentTheme.colors.text }]}>{comment.content}</Text>
                   <Text style={[styles.commentTime, { color: theme.currentTheme.colors.textSecondary }]}>{comment.timestamp}</Text>
                 </View>
               </View>
@@ -355,7 +356,7 @@ export default function CircleDetailScreen({ route, navigation }: CircleDetailPr
           {/* Comment Input */}
           <View style={styles.commentInputContainer}>
             <TextInput
-              style={[styles.commentInput, { color: theme.currentTheme.colors.textPrimary }]}
+              style={[styles.commentInput, { color: theme.currentTheme.colors.text }]}
               placeholder="Add a comment..."
               placeholderTextColor={theme.currentTheme.colors.textSecondary}
               value={newComment[post.id] || ''}
@@ -393,14 +394,14 @@ export default function CircleDetailScreen({ route, navigation }: CircleDetailPr
         contentContainerStyle={styles.postsContent}
       />
       {/* Enhanced Post Input Bar with Image Picker */}
-      <View style={[styles.inputBar, { backgroundColor: theme.currentTheme.colors.card }]}>
+      <View style={[styles.inputBar, { backgroundColor: theme.currentTheme.colors.surface }]}>
         <TouchableOpacity onPress={pickImage} style={styles.imagePicker}>
           <LinearGradient colors={['#FF9500', '#FF3B30']} style={styles.imagePickerGradient}>
             <Text style={styles.imagePickerText}>📷</Text>
           </LinearGradient>
         </TouchableOpacity>
         <TextInput
-          style={[styles.input, { color: theme.currentTheme.colors.textPrimary }]}
+          style={[styles.input, { color: theme.currentTheme.colors.text }]}
           placeholder="Share your thoughts or insights..."
           placeholderTextColor={theme.currentTheme.colors.textSecondary}
           value={newPostText}

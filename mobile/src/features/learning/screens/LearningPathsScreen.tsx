@@ -824,17 +824,7 @@ lineHeight: 20,
     borderRadius: 3 
   },
   // --- path card polish ---
-  pathCard: { 
-    position: 'relative', 
-    backgroundColor: '#FFFFFF', 
-    borderRadius: 16, 
-    padding: 16, 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.08, 
-    shadowRadius: 6, 
-    elevation: 2 
-  },
+  // Note: pathCard already defined above, removing duplicate
   pathAccent: { 
     position: 'absolute', 
     left: 0, 
@@ -849,7 +839,8 @@ lineHeight: 20,
     gap: 8, 
     marginTop: 6 
   },
-  pathHeader: { 
+  // Note: pathHeader already defined above, removing duplicate
+  pathHeaderDuplicate: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     marginBottom: 12 
@@ -974,22 +965,23 @@ lineHeight: 20,
     borderColor: '#007AFF', 
     backgroundColor: '#007AFF' 
   },
-  optionButton: { 
+  // Note: optionButton, optionButtonSelected, pathInfo, moduleIcon already defined above, removing duplicates
+  optionButtonDuplicate: { 
     backgroundColor: '#F2F2F7', 
     borderRadius: 10, 
     padding: 14, 
     marginBottom: 10 
   },
-  optionButtonSelected: { 
+  optionButtonSelectedDuplicate: { 
     backgroundColor: '#E6F0FF', 
     borderWidth: 1, 
     borderColor: '#B3D4FF' 
   },
   // --- subtle tweaks ---
-  pathInfo: { 
+  pathInfoDuplicate: { 
     flex: 1 
   },
-  moduleIcon: { 
+  moduleIconDuplicate: { 
     width: 40, 
     height: 40, 
     borderRadius: 10, 

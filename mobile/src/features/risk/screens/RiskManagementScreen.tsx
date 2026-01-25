@@ -23,6 +23,7 @@ import {
   CreatePositionResponse,
   CheckExitsResponse,
 } from '../../../graphql/riskManagement';
+import logger from '../../../utils/logger';
 
 interface RiskManagementScreenProps {
   navigateTo?: (screen: string) => void;
@@ -55,7 +56,7 @@ export default function RiskManagementScreen({ navigateTo }: RiskManagementScree
     try {
       await Promise.all([refetchRisk(), refetchPositions()]);
     } catch (error) {
-      console.error('Error refreshing data:', error);
+      logger.error('Error refreshing data:', error);
     } finally {
       setRefreshing(false);
     }

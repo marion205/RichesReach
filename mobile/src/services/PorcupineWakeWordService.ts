@@ -1,6 +1,7 @@
 import { isExpoGo } from '../utils/expoGoCheck';
 import { triggerHotword } from './VoiceHotword';
 import logger from '../utils/logger';
+import { Audio } from 'expo-av';
 
 /**
  * Porcupine Wake Word Service
@@ -13,6 +14,7 @@ class PorcupineWakeWordService {
   private porcupineManager: any = null;
   private isInitialized = false;
   private isStarted = false;
+  private hasPermission = false;
 
   /**
    * Initialize Porcupine with "Hey Riches" keyword
@@ -96,6 +98,25 @@ class PorcupineWakeWordService {
   }
 
   /**
+   * Request microphone permissions
+   */
+  async requestPermissions(): Promise<boolean> {
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      this.hasPermission = status === 'granted';
+      
+      if (!this.hasPermission) {
+        logger.warn('⚠️ Microphone permission not granted for Porcupine wake word detection');
+      }
+      
+      return this.hasPermission;
+    } catch (error) {
+      logger.error('Permission request error:', error);
+      return false;
+    }
+  }
+
+  /**
    * Start listening for wake word
    */
   async start(): Promise<boolean> {
@@ -111,13 +132,78 @@ class PorcupineWakeWordService {
       return true;
     }
 
+    // Request microphone permissions before starting
+    if (!this.hasPermission) {
+      const granted = await this.requestPermissions();
+      if (!granted) {
+        logger.warn('⚠️ Cannot start Porcupine: microphone permission denied');
+        return false;
+      }
+    }
+
     try {
+      // CRITICAL: Stop any existing audio recordings first to avoid conflicts
+      // This ensures no other service is holding the audio session
+      try {
+        // Give a small delay to ensure any previous audio operations complete
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Reset audio mode first to release any existing session
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: false,
+          staysActiveInBackground: false,
+        });
+        
+        // Small delay before reconfiguring
+        await new Promise(resolve => setTimeout(resolve, 50));
+      } catch (resetError) {
+        logger.warn('⚠️ Error resetting audio mode (may be normal):', resetError);
+      }
+
+      // Configure audio mode for iOS before starting
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      });
+
+      // Additional small delay to ensure audio session is ready
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       await this.porcupineManager.start();
       this.isStarted = true;
       logger.log('✅ Porcupine wake word detection started');
       return true;
-    } catch (error) {
-      logger.error('❌ Failed to start Porcupine:', error);
+    } catch (error: any) {
+      // Handle specific iOS audio errors gracefully
+      const errorMessage = error?.message || String(error);
+      const errorCode = error?.code || '';
+      
+      // Error code 1718449215 (0x66696C65) often indicates audio session or permission issues
+      if (errorCode === 1718449215 || errorCode === '1718449215' || 
+          errorMessage.includes('NSOSStatusErrorDomain') || 
+          errorMessage.includes('Code=1718449215') ||
+          errorMessage.includes('audio') || errorMessage.includes('permission')) {
+        logger.warn('⚠️ Porcupine wake word not available (audio session conflict)');
+        logger.warn('💡 This usually means another service is using the microphone');
+        logger.warn('💡 The app will continue with fallback wake word services');
+        
+        // Try to reset audio mode on error
+        try {
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: false,
+            playsInSilentModeIOS: false,
+            staysActiveInBackground: false,
+          });
+        } catch (resetError) {
+          // Ignore reset errors
+        }
+      } else {
+        logger.warn('⚠️ Porcupine wake word not available:', errorMessage);
+      }
       return false;
     }
   }
@@ -134,8 +220,31 @@ class PorcupineWakeWordService {
       await this.porcupineManager.stop();
       this.isStarted = false;
       logger.log('✅ Porcupine wake word detection stopped');
+      
+      // Reset audio mode to release the audio session
+      // This allows other services to use the microphone
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: false,
+          staysActiveInBackground: false,
+        });
+      } catch (audioError) {
+        logger.warn('⚠️ Error resetting audio mode after stop (may be normal):', audioError);
+      }
     } catch (error) {
       logger.error('❌ Failed to stop Porcupine:', error);
+      
+      // Still try to reset audio mode even if stop failed
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: false,
+          staysActiveInBackground: false,
+        });
+      } catch (audioError) {
+        // Ignore audio reset errors
+      }
     }
   }
 

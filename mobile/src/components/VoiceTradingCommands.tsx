@@ -13,7 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
-import { useVoice } from '../../contexts/VoiceContext';
+import { useVoice } from '../contexts/VoiceContext';
 
 interface VoiceCommand {
   id: string;
@@ -42,7 +42,7 @@ const VoiceTradingCommands: React.FC<VoiceTradingCommandsProps> = ({
   const [showManualInput, setShowManualInput] = useState(false);
   const [lastCommandResult, setLastCommandResult] = useState<any>(null);
 
-  const speechTimeoutRef = useRef<NodeJS.Timeout>();
+  const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     return () => {
@@ -367,7 +367,7 @@ const VoiceTradingCommands: React.FC<VoiceTradingCommandsProps> = ({
             style={styles.actionButton} 
             onPress={() => setShowManualInput(true)}
           >
-            <Ionicons name="keyboard" size={20} color="#007bff" />
+            <Ionicons name="create-outline" size={20} color="#007bff" />
             <Text style={styles.actionButtonText}>Manual</Text>
           </TouchableOpacity>
         </View>

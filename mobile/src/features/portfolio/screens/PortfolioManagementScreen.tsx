@@ -23,6 +23,7 @@ REMOVE_PORTFOLIO_HOLDING,
 GET_STOCKS_FOR_PORTFOLIO 
 } from '../../../portfolioQueries';
 import { SecureMarketDataService } from '../../stocks/services/SecureMarketDataService';
+import logger from '../../../utils/logger';
 
 // ProfileScreen's query to refetch after portfolio creation
 const GET_ME = gql`
@@ -102,10 +103,10 @@ prices[quote.symbol] = quote.price;
 });
       setRealTimePrices(prices);
     } catch (error: any) {
-console.error('Failed to fetch real-time prices:', error);
-} finally {
-setLoadingPrices(false);
-}
+      logger.error('Failed to fetch real-time prices:', error);
+    } finally {
+      setLoadingPrices(false);
+    }
 };
 // Update real-time prices when stocks data changes
 useEffect(() => {
@@ -131,14 +132,13 @@ setShowCreatePortfolioModal(false);
 setNewPortfolioName('');
 Alert.alert('Success', result.data.createPortfolio.message);
 } else {
-console.error('Portfolio creation failed:', result.data?.createPortfolio);
-Alert.alert('Error', result.data?.createPortfolio?.message || 'Failed to create portfolio');
-}
-} catch (error: any) {
-console.error('Error creating portfolio:', error);
-console.error('Error details:', JSON.stringify(error, null, 2));
-Alert.alert('Error', `Failed to create portfolio: ${error?.message || error?.toString() || 'Unknown error'}`);
-}
+      logger.error('Portfolio creation failed:', result.data?.createPortfolio);
+      Alert.alert('Error', result.data?.createPortfolio?.message || 'Failed to create portfolio');
+    }
+  } catch (error: any) {
+    logger.error('Error creating portfolio:', error);
+    Alert.alert('Error', `Failed to create portfolio: ${error?.message || error?.toString() || 'Unknown error'}`);
+  }
 };
   const handleAddStock = async () => {
     if (!selectedStock || !shares || !selectedPortfolio) {

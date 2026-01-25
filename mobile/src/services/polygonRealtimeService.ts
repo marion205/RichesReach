@@ -38,6 +38,7 @@ let ws: any = null;
 let reconnectAttempts = 0;
 let subscribedSymbols = new Set<string>();
 let apolloClient: any = null;
+let reconnectTimeout: NodeJS.Timeout | null = null;
 const MAX_RECONNECTS = 5;
 const RECONNECT_DELAY = 1000;
 
@@ -135,9 +136,13 @@ export const initPolygonStream = (client: any, symbols: string[] = []) => {
     ws.onclose = () => {
       logger.log('🔌 Polygon disconnected - reconnecting...');
       if (reconnectAttempts < MAX_RECONNECTS) {
-        setTimeout(() => {
+        if (reconnectTimeout) {
+          clearTimeout(reconnectTimeout);
+        }
+        reconnectTimeout = setTimeout(() => {
           reconnectAttempts++;
           initPolygonStream(client, Array.from(subscribedSymbols));
+          reconnectTimeout = null;
         }, RECONNECT_DELAY * reconnectAttempts);
       } else {
         logger.warn('⚠️ Max reconnection attempts reached - using REST fallback');
@@ -260,6 +265,10 @@ const updateApolloCacheWithQuote = (
  * Close WebSocket connection
  */
 export const closePolygonStream = () => {
+  if (reconnectTimeout) {
+    clearTimeout(reconnectTimeout);
+    reconnectTimeout = null;
+  }
   if (ws?.readyState === 1) {
     ws.close();
     ws = null;

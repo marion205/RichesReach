@@ -21,8 +21,12 @@ export default function AuraHalo({ score, children }: AuraHaloProps) {
   const borderColor = clamped < -0.33 ? '#FF3B30' : clamped < 0.33 ? '#FF9500' : '#34C759';
 
   return (
-    <LinearGradient colors={colors} style={[styles.halo, { borderColor }]}
-      start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+    <LinearGradient 
+      colors={colors as [string, string]} 
+      style={[styles.halo, { borderColor }]}
+      start={{ x: 0, y: 0 }} 
+      end={{ x: 1, y: 1 }}
+    >
       <View style={styles.inner}>{children}</View>
     </LinearGradient>
   );

@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 import Toast from 'react-native-toast-message';
-import { useAAVEUserData } from '../../hooks/useAAVEUserData';
+import { useAAVEUserData } from '../../hooks/useAaveUserData';
 
 // Optional: if you have react-native-linear-gradient or expo-linear-gradient, uncomment:
 // import LinearGradient from 'react-native-linear-gradient';

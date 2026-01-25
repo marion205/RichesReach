@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import logger from '../../../utils/logger';
 
 const { width, height } = Dimensions.get('window');
 
@@ -138,7 +139,7 @@ const SocialFeed: React.FC<SocialFeedProps> = ({
       await new Promise(resolve => setTimeout(resolve, 1000));
       setPosts(mockPosts);
     } catch (error) {
-      console.error('Error loading posts:', error);
+      logger.error('Error loading posts:', error);
     } finally {
       setLoading(false);
     }

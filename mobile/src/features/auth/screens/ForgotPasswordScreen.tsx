@@ -13,6 +13,7 @@ Animated
 } from 'react-native';
 import { gql, useMutation } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
+import logger from '../../../utils/logger';
 const FORGOT_PASSWORD = gql`
 mutation ForgotPassword($email: String!) {
 forgotPassword(email: $email) {
@@ -75,8 +76,8 @@ Alert.alert(
 throw new Error(response.data?.forgotPassword?.message || 'Failed to send reset email');
 }
 } catch (err: any) {
-console.error('Forgot password error:', err);
-Alert.alert(
+  logger.error('Forgot password error:', err);
+  Alert.alert(
 'Error',
 err.message || 'Failed to send reset email. Please try again.',
 [{ text: 'OK' }]

@@ -3,7 +3,7 @@
  * and calculating position metrics
  */
 
-import { AAVEPosition } from '../../components/crypto/PositionManagementModal';
+import type { AAVEPosition } from '../../components/crypto/PositionManagementModal';
 
 export interface AAVEAccountData {
   supplies: Array<{

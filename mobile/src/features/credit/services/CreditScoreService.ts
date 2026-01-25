@@ -6,6 +6,7 @@
 import { API_HTTP } from '../../../config/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { CreditScore, CreditProjection, CreditSnapshot } from '../types/CreditTypes';
+import logger from '../../../utils/logger';
 
 class CreditScoreService {
   private baseUrl: string;
@@ -38,7 +39,7 @@ class CreditScoreService {
         // 404 is expected when backend isn't deployed yet - use fallback silently
         if (response.status === 404) {
           if (__DEV__) {
-            console.warn('[CreditScore] API endpoint not found (404) - using fallback data');
+            logger.warn('[CreditScore] API endpoint not found (404) - using fallback data');
           }
         } else {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -57,14 +58,14 @@ class CreditScoreService {
       // Only log non-404 errors as errors, 404s are expected in dev
       if (error?.message?.includes('404')) {
         if (__DEV__) {
-          console.warn('[CreditScore] API unavailable (404), using fallback data');
+          logger.warn('[CreditScore] API unavailable (404), using fallback data');
         }
       } else if (error?.message?.includes('timeout')) {
         if (__DEV__) {
-          console.warn('[CreditScore] Request timeout, using fallback data');
+          logger.warn('[CreditScore] Request timeout, using fallback data');
         }
       } else {
-        console.warn('[CreditScore] Failed to get score:', error);
+        logger.warn('[CreditScore] Failed to get score:', error);
       }
       // Return fallback
       return {
@@ -95,7 +96,7 @@ class CreditScoreService {
 
       return await response.json();
     } catch (error) {
-      console.error('[CreditScore] Failed to refresh score:', error);
+      logger.error('[CreditScore] Failed to refresh score:', error);
       throw error;
     }
   }
@@ -124,7 +125,7 @@ class CreditScoreService {
         // 404 is expected when backend isn't deployed yet - use fallback silently
         if (response.status === 404) {
           if (__DEV__) {
-            console.warn('[CreditScore] Projection API endpoint not found (404) - using fallback data');
+            logger.warn('[CreditScore] Projection API endpoint not found (404) - using fallback data');
           }
         } else {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -143,14 +144,14 @@ class CreditScoreService {
       // Only log non-404 errors as errors, 404s are expected in dev
       if (error?.message?.includes('404')) {
         if (__DEV__) {
-          console.warn('[CreditScore] Projection API unavailable (404), using fallback data');
+          logger.warn('[CreditScore] Projection API unavailable (404), using fallback data');
         }
       } else if (error?.message?.includes('timeout')) {
         if (__DEV__) {
-          console.warn('[CreditScore] Projection request timeout, using fallback data');
+          logger.warn('[CreditScore] Projection request timeout, using fallback data');
         }
       } else {
-        console.warn('[CreditScore] Failed to get projection:', error);
+        logger.warn('[CreditScore] Failed to get projection:', error);
       }
       // Return fallback
       return {
@@ -185,13 +186,13 @@ class CreditScoreService {
 
         if (!response.ok) {
           const errorText = await response.text().catch(() => 'Unknown error');
-          console.warn(`[CreditScore] HTTP error! status: ${response.status}, body: ${errorText}`);
+          logger.warn(`[CreditScore] HTTP error! status: ${response.status}, body: ${errorText}`);
           // Fall through to fallback
           throw new Error(`HTTP error! status: ${response.status}`);
         }
 
         const data = await response.json();
-        console.log('[CreditScore] Successfully loaded snapshot from API');
+        // Successfully loaded - no need to log
         
         // Ensure actions and shield arrays exist (backend might return empty arrays)
         if (!data.actions || data.actions.length === 0) {
@@ -244,7 +245,7 @@ class CreditScoreService {
         throw fetchError;
       }
     } catch (error) {
-      console.warn('[CreditScore] API unavailable, using fallback data:', error);
+      logger.warn('[CreditScore] API unavailable, using fallback data:', error);
       
       // Return fallback snapshot immediately - don't wait for other API calls
       // This ensures the UI loads quickly even if backend is down

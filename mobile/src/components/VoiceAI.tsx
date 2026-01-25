@@ -17,6 +17,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useVoice } from '../contexts/VoiceContext';
 import { API_BASE_URL } from '../config/api';
+import logger from '../utils/logger';
+
+// @ts-ignore - cacheDirectory may not be in type definitions but exists at runtime
+const CACHE_DIR = ((FileSystem as any).cacheDirectory || (FileSystem as any).documentDirectory || '') as string;
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -79,13 +83,13 @@ export default function VoiceAI({
     // This prevents spam errors when the backend doesn't have this endpoint
     try {
       // Verify API_BASE_URL is set correctly
-      console.log('🎤 [DEBUG] API_BASE_URL from config:', API_BASE_URL);
-      console.log('🎤 [DEBUG] EXPO_PUBLIC_API_BASE_URL env:', process.env.EXPO_PUBLIC_API_BASE_URL);
+      logger.log('🎤 [DEBUG] API_BASE_URL from config:', API_BASE_URL);
+      logger.log('🎤 [DEBUG] EXPO_PUBLIC_API_BASE_URL env:', process.env.EXPO_PUBLIC_API_BASE_URL);
       
       // Ensure we're not using localhost
       if (API_BASE_URL.includes('localhost') || API_BASE_URL.includes('127.0.0.1')) {
-        console.warn('⚠️ [DEBUG] API_BASE_URL contains localhost! This will fail on physical devices.');
-        console.warn('⚠️ [DEBUG] Current API_BASE_URL:', API_BASE_URL);
+        logger.warn('⚠️ [DEBUG] API_BASE_URL contains localhost! This will fail on physical devices.');
+        logger.warn('⚠️ [DEBUG] Current API_BASE_URL:', API_BASE_URL);
         // Don't proceed if using localhost
         setAvailableVoices({});
         return;
@@ -94,8 +98,8 @@ export default function VoiceAI({
       const voicesPath = (process.env.EXPO_PUBLIC_TTS_VOICES_PATH || '/api/voices/').replace(/^\/?/, '/');
       const voicesUrl = `${API_BASE_URL}${voicesPath}`;
       
-      console.log('🎤 [DEBUG] Attempting to load voices from:', voicesUrl);
-      console.log('🎤 [DEBUG] Full URL breakdown:', {
+      logger.log('🎤 [DEBUG] Attempting to load voices from:', voicesUrl);
+      logger.log('🎤 [DEBUG] Full URL breakdown:', {
         base: API_BASE_URL,
         path: voicesPath,
         full: voicesUrl,
@@ -118,11 +122,11 @@ export default function VoiceAI({
         
         if (response.ok) {
           const data = await response.json();
-          console.log('✅ [DEBUG] Voices loaded successfully');
+          logger.log('✅ [DEBUG] Voices loaded successfully');
           setAvailableVoices(data.voices || {});
         } else {
           // Endpoint doesn't exist or returned error - use default voices silently
-          console.log('ℹ️ [DEBUG] Voices endpoint not available (status:', response.status, '), using default voices');
+          logger.log('ℹ️ [DEBUG] Voices endpoint not available (status:', response.status, '), using default voices');
           setAvailableVoices({}); // Use empty object, will fall back to defaults
         }
       } finally {
@@ -131,11 +135,11 @@ export default function VoiceAI({
     } catch (error: any) {
       // Network error or endpoint doesn't exist - this is OK, use default voices
       if (error?.name === 'AbortError' || error?.name === 'TimeoutError') {
-        console.log('ℹ️ [DEBUG] Voices endpoint timeout, using default voices');
+        logger.log('ℹ️ [DEBUG] Voices endpoint timeout, using default voices');
       } else if (error?.message?.includes('Network request failed')) {
-        console.log('ℹ️ [DEBUG] Voices endpoint not reachable, using default voices');
+        logger.log('ℹ️ [DEBUG] Voices endpoint not reachable, using default voices');
       } else {
-        console.log('ℹ️ [DEBUG] Voices endpoint unavailable, using default voices:', error?.message?.substring(0, 100));
+        logger.log('ℹ️ [DEBUG] Voices endpoint unavailable, using default voices:', error?.message?.substring(0, 100));
       }
       // Silently use default voices - don't spam errors
       setAvailableVoices({});
@@ -155,11 +159,11 @@ export default function VoiceAI({
       };
       const buf = await synthesize(text, cfg);
       const b64 = arrayBufferToBase64(buf);
-      const path = FileSystem.cacheDirectory + `tts_${Date.now()}.mp3`;
-      await FileSystem.writeAsStringAsync(path, b64, { encoding: FileSystem.EncodingType.Base64 });
+      const path = CACHE_DIR + `tts_${Date.now()}.mp3`;
+      await FileSystem.writeAsStringAsync(path, b64, { encoding: 'base64' as any });
       return path;
     } catch (error: any) {
-      console.error('TTS synthesis error:', error?.message || String(error));
+      logger.error('TTS synthesis error:', error?.message || String(error));
       onError?.(error?.message || 'Failed to generate speech');
       return null;
     } finally {
@@ -192,7 +196,7 @@ export default function VoiceAI({
       if (!response.ok) {
         try {
           const errText = await response.text();
-          console.error('Voice preview server error:', errText.slice(0, 600));
+          logger.error('Voice preview server error:', errText.slice(0, 600));
         } catch {}
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -205,7 +209,7 @@ export default function VoiceAI({
 
       return `${API_BASE_URL}${data.audio_url}`;
     } catch (error) {
-      console.error('Voice preview error:', error);
+      logger.error('Voice preview error:', error);
       return null;
     }
   };
@@ -248,7 +252,7 @@ export default function VoiceAI({
       });
 
     } catch (error) {
-      console.error('Playback error:', error);
+      logger.error('Playback error:', error);
       onError?.(error instanceof Error ? error.message : 'Failed to play audio');
       setIsPlaying(false);
     }
@@ -265,7 +269,7 @@ export default function VoiceAI({
       stopAnimations();
       onPlayEnd?.();
     } catch (error) {
-      console.error('Stop error:', error);
+      logger.error('Stop error:', error);
     }
   };
 
@@ -322,7 +326,6 @@ export default function VoiceAI({
     const bytes = new Uint8Array(buffer);
     const len = bytes.byteLength;
     for (let i = 0; i < len; i++) binary += String.fromCharCode(bytes[i]);
-    // @ts-expect-error: btoa may not be available in all environments, but Buffer.from is a valid fallback
     if (typeof btoa === 'function') {
       return btoa(binary);
     }
@@ -397,8 +400,8 @@ export default function VoiceAI({
                 const sample = process.env.EXPO_PUBLIC_TTS_PREVIEW_SAMPLE || 'This is a quick voice preview.';
                 const buf = await synthesize(sample, cfg);
                 const b64 = arrayBufferToBase64(buf);
-                const path = FileSystem.cacheDirectory + `tts_preview_${Date.now()}.mp3`;
-                await FileSystem.writeAsStringAsync(path, b64, { encoding: FileSystem.EncodingType.Base64 });
+                const path = CACHE_DIR + `tts_preview_${Date.now()}.mp3`;
+                await FileSystem.writeAsStringAsync(path, b64, { encoding: 'base64' as any });
                 const { sound: previewSound } = await Audio.Sound.createAsync(
                   { uri: path },
                   { shouldPlay: true }
@@ -410,7 +413,7 @@ export default function VoiceAI({
                 });
                 return;
               } catch (fallbackErr) {
-                console.error('Preview fallback synth error:', fallbackErr);
+                logger.error('Preview fallback synth error:', fallbackErr);
               }
             }
           }}

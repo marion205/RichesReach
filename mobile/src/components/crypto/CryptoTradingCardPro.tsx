@@ -17,6 +17,7 @@ import {
 } from '../../cryptoQueries';
 import { FEATURES } from '../../config/featureFlags';
 import LicensingDisclosureScreen from '../LicensingDisclosureScreen';
+import logger from '../../utils/logger';
 
 type TradeSide = 'BUY' | 'SELL';
 type InputMode = 'QTY' | 'USD';
@@ -79,7 +80,7 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
   // Force refresh price data when component mounts or symbol changes
   useEffect(() => {
     if (selectedSymbol) {
-      console.log(`[Crypto Trading] Refreshing price for ${selectedSymbol}`);
+      logger.log(`[Crypto Trading] Refreshing price for ${selectedSymbol}`);
       refetchPrice();
     }
   }, [selectedSymbol, refetchPrice]);
@@ -149,7 +150,7 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
     const list: any[] = currenciesData?.supportedCurrencies ?? [];
     if (list.length === 0) {
       // Use fallback if query returns empty
-      console.log('[Crypto Trading] No currencies from query, using fallback list');
+      logger.log('[Crypto Trading] No currencies from query, using fallback list');
       return FALLBACK_CRYPTOS;
     }
     return list.map(s => ({
@@ -170,7 +171,7 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
       if (aMajor !== bMajor) return aMajor - bMajor;
       return a.symbol.localeCompare(b.symbol);
     });
-    console.log('[Crypto Trading] All symbols:', sorted.length, sorted.map(s => s.symbol).join(', '));
+    logger.log('[Crypto Trading] All symbols:', sorted.length, sorted.map(s => s.symbol).join(', '));
     return sorted;
   }, [allSymbolsRaw]);
 
@@ -380,7 +381,7 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
         maxSlippageBps: orderType === 'MARKET' ? 100 : undefined,
       };
 
-      console.log('Submitting trade with variables:', variables);
+      logger.log('Submitting trade with variables:', variables);
 
       const { data } = await executeTrade({ variables });
       
@@ -408,7 +409,7 @@ const CryptoTradingCardPro: React.FC<CryptoTradingCardProps> = ({
         Alert.alert('Trade Failed', error?.message || 'Unknown error occurred');
       }
     } catch (e) {
-      console.error('Trade error:', e);
+      logger.error('Trade error:', e);
       Alert.alert('Error', 'Failed to execute trade. Please try again.');
     } finally {
       setIsSubmitting(false);

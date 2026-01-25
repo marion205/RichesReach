@@ -12,9 +12,8 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  PanGestureHandler,
-  State,
 } from 'react-native';
+import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { LineChart, BarChart, PieChart } from 'react-native-chart-kit';
 import { useQuery, gql } from '@apollo/client';
 import Animated, {
@@ -241,7 +240,7 @@ export const AdvancedChart: React.FC<AdvancedChartProps> = ({
         { translateX: translateX.value },
         { scale: scale.value },
       ],
-    };
+    } as any;
   });
 
   const handleGestureEvent = (event: any) => {
@@ -386,6 +385,8 @@ export const AdvancedChart: React.FC<AdvancedChartProps> = ({
               chartConfig={volumeConfig}
               style={styles.chart}
               showValuesOnTopOfBars={false}
+              yAxisLabel=""
+              yAxisSuffix=""
             />
           )}
 

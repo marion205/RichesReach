@@ -25,6 +25,7 @@ import { useColorScheme } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../../../contexts/AuthContext';
 import Icon from 'react-native-vector-icons/Feather';
+import logger from '../../../utils/logger';
 
 // GraphQL Queries
 const GET_PAPER_ACCOUNT_SUMMARY = gql`
@@ -163,7 +164,7 @@ export default function PaperTradingScreen({ navigation: propNavigation }: Paper
   useEffect(() => {
     if (loading && !data && !error) {
       const timeout = setTimeout(() => {
-        console.warn('⚠️ Paper Trading query timeout - forcing loading state to false');
+        logger.warn('⚠️ Paper Trading query timeout - forcing loading state to false');
         setLoadingTimeout(true);
       }, 8000); // 8 second timeout
       
@@ -340,7 +341,7 @@ export default function PaperTradingScreen({ navigation: propNavigation }: Paper
               await logout();
               // App.tsx will automatically show login screen when isAuthenticated becomes false
             } catch (error) {
-              console.error('Logout error:', error);
+              logger.error('Logout error:', error);
               Alert.alert(
                 'Authentication Required',
                 'Please log in to access Paper Trading. You may need to restart the app.',
