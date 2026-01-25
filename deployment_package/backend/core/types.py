@@ -452,6 +452,20 @@ class FollowType(DjangoObjectType):
 
         model = Follow
         fields = ("id", "follower", "following", "created_at")
+class FSSScoreType(graphene.ObjectType):
+    """Future Success Score (FSS) v3.0 breakdown"""
+    fss_score = graphene.Float(description="Overall FSS score (0-100)")
+    trend_score = graphene.Float(description="Trend component score (0-100)")
+    fundamental_score = graphene.Float(description="Fundamental component score (0-100)")
+    capital_flow_score = graphene.Float(description="Capital flow component score (0-100)")
+    risk_score = graphene.Float(description="Risk component score (0-100)")
+    confidence = graphene.String(description="Confidence level: high, medium, low")
+    regime = graphene.String(description="Market regime: Expansion, Parabolic, Deflation, Crisis")
+    passed_safety_filters = graphene.Boolean(description="Whether stock passed safety filters")
+    safety_reason = graphene.String(description="Safety filter result reason")
+    last_updated = graphene.DateTime(description="When FSS was last calculated")
+
+
 class StockType(DjangoObjectType):
     class Meta:
 
@@ -472,6 +486,9 @@ class StockType(DjangoObjectType):
 # Add camelCase fields for frontend compatibility
     companyName = graphene.String()  # camelCase field
     currentPrice = graphene.Float()  # camelCase field
+    fssScore = graphene.Field('core.types.FSSScoreType', description="Future Success Score v3.0")
+    mlScore = graphene.Float(description="ML-based stock score")
+    
 # Resolver for camelCase field
     def resolve_companyName(self, info):
         return self.company_name
@@ -482,6 +499,37 @@ class StockType(DjangoObjectType):
         # to avoid async issues in GraphQL resolvers. The database price is updated there.
         if self.current_price:
             return float(self.current_price)
+        return None
+    
+    def resolve_fssScore(self, info):
+        """Calculate FSS v3.0 score for this stock"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        from .fss_service import get_fss_service
+        try:
+            fss_service = get_fss_service()
+            # Run async function
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If already in async context, return None (would need background task)
+                logger.warning(f"FSS calculation for {self.symbol} skipped (async context)")
+                return None
+            else:
+                fss_result = loop.run_until_complete(
+                    fss_service.get_stock_fss(self.symbol)
+                )
+                if fss_result:
+                    # Convert to FSSScoreType-compatible format
+                    from .types import FSSScoreType
+                    return type('FSSScore', (), fss_result)()
+        except Exception as e:
+            logger.warning(f"Failed to calculate FSS for {self.symbol}: {e}")
+        return None
+    
+    def resolve_mlScore(self, info):
+        """Get ML score (if available)"""
+        # This would come from ML service
         return None
 class StockDataType(DjangoObjectType):
     class Meta:

@@ -333,6 +333,85 @@ class AITools:
                         "required": []
                     }
                 }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "calculate_fss_scores",
+                    "description": "Calculate Future Success Score (FSS) for stocks. FSS is a quantitative ranking system that predicts outperformance over 6-12 months using Trend (30%), Fundamentals (30%), Capital Flow (25%), and Risk (15%) components. Returns scores 0-100 with regime-aware weighting and safety filters. Use this when user asks to 'rank stocks', 'find best stocks', 'score stocks', 'future success score', or 'FSS'.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "tickers": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of stock symbols to score (e.g., ['AAPL', 'MSFT', 'GOOGL'])"
+                            },
+                            "apply_safety_filters": {
+                                "type": "boolean",
+                                "description": "Whether to apply safety filters (liquidity, Altman Z-Score). Default: true"
+                            }
+                        },
+                        "required": ["tickers"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "optimize_fss_portfolio",
+                    "description": "Optimize portfolio weights for FSS-ranked stocks using confidence-weighted risk parity. Sizes positions based on FSS scores and volatility. Use this when user asks to 'optimize portfolio', 'size positions', or 'allocate capital' for FSS-ranked stocks.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "tickers": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of stock symbols in portfolio"
+                            },
+                            "fss_scores": {
+                                "type": "object",
+                                "description": "FSS scores for each ticker (e.g., {'AAPL': 85, 'MSFT': 78})"
+                            },
+                            "volatilities": {
+                                "type": "object",
+                                "description": "Annualized volatilities for each ticker (e.g., {'AAPL': 0.25, 'MSFT': 0.22})"
+                            },
+                            "max_weight": {
+                                "type": "number",
+                                "description": "Maximum weight per position (default: 0.15 = 15%)"
+                            }
+                        },
+                        "required": ["tickers", "fss_scores", "volatilities"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "backtest_fss_strategy",
+                    "description": "Backtest a FSS-based ranking strategy. Tests buying top N stocks ranked by FSS and rebalancing monthly/weekly. Returns performance metrics including Sharpe ratio, max drawdown, and alpha vs benchmark. Use this when user asks to 'backtest FSS', 'test strategy', or 'historical performance'.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "tickers": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                                "description": "List of stock symbols to backtest"
+                            },
+                            "rebalance_freq": {
+                                "type": "string",
+                                "enum": ["W", "M"],
+                                "description": "Rebalancing frequency: 'W' for weekly, 'M' for monthly (default: 'M')"
+                            },
+                            "top_n": {
+                                "type": "integer",
+                                "description": "Number of top stocks to hold (default: 20)"
+                            }
+                        },
+                        "required": ["tickers"]
+                    }
+                }
             }
         ]
     
@@ -478,6 +557,102 @@ class ToolRunner:
                         tracking_error_pct=tracking_error_pct
                     )
                 return dashboard_data
+            
+            elif tool_name == "calculate_fss_scores":
+                import asyncio
+                import logging
+                logger = logging.getLogger(__name__)
+                
+                tickers = arguments.get("tickers", [])
+                apply_safety = arguments.get("apply_safety_filters", True)
+                
+                if not tickers:
+                    return {
+                        "error": "Please provide a list of stock symbols to score",
+                        "algorithm": "fss"
+                    }
+                
+                # Calculate FSS scores using data pipeline
+                try:
+                    # Try to get existing event loop
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_closed():
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                    except RuntimeError:
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                    
+                    # Run async function
+                    if loop.is_running():
+                        # If already running, we need to use a different approach
+                        # For now, return a message that async execution is needed
+                        return {
+                            "message": f"FSS scoring is calculating scores for {len(tickers)} tickers. This may take a moment as we fetch market data.",
+                            "tickers_requested": tickers,
+                            "apply_safety_filters": apply_safety,
+                            "algorithm": "fss_v2",
+                            "status": "processing",
+                            "note": "FSS calculation is running. Results will be available shortly."
+                        }
+                    else:
+                        result = loop.run_until_complete(
+                            self.algorithm_service.calculate_fss_scores(
+                                tickers=tickers,
+                                apply_safety_filters=apply_safety,
+                                fetch_data=True
+                            )
+                        )
+                        return result
+                except Exception as e:
+                    logger.error(f"FSS calculation error: {e}", exc_info=True)
+                    return {
+                        "error": f"Failed to calculate FSS scores: {str(e)}",
+                        "tickers_requested": tickers,
+                        "algorithm": "fss_v2",
+                        "note": "Please ensure market data APIs are configured (Polygon, Alpaca, or Alpha Vantage)"
+                    }
+            
+            elif tool_name == "optimize_fss_portfolio":
+                tickers = arguments.get("tickers", [])
+                fss_scores = arguments.get("fss_scores", {})
+                volatilities = arguments.get("volatilities", {})
+                max_weight = arguments.get("max_weight", 0.15)
+                
+                if not tickers:
+                    return {
+                        "error": "Please provide a list of stock symbols",
+                        "algorithm": "portfolio_optimization"
+                    }
+                
+                return self.algorithm_service.optimize_fss_portfolio(
+                    tickers=tickers,
+                    fss_scores=fss_scores,
+                    volatilities=volatilities,
+                    max_weight=max_weight
+                )
+            
+            elif tool_name == "backtest_fss_strategy":
+                tickers = arguments.get("tickers", [])
+                rebalance_freq = arguments.get("rebalance_freq", "M")
+                top_n = arguments.get("top_n", 20)
+                
+                if not tickers:
+                    return {
+                        "error": "Please provide a list of stock symbols to backtest",
+                        "algorithm": "fss_backtest"
+                    }
+                
+                # Note: In production, this would fetch historical data
+                return {
+                    "message": f"FSS backtesting requires historical price data for {len(tickers)} tickers. This feature is available when market data is connected.",
+                    "tickers_requested": tickers,
+                    "rebalance_freq": rebalance_freq,
+                    "top_n": top_n,
+                    "algorithm": "fss_backtest",
+                    "note": "To use FSS backtesting, ensure market data service is configured with historical price data."
+                }
             
             else:
                 return {

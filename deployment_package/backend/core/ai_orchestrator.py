@@ -230,11 +230,12 @@ class AIOrchestrator:
             intent = routing_decision.get('intent')
             if intent and self.intent_classifier.requires_quantitative_algorithm(intent):
                 # These intents should use function calling, not the old algorithm path
-                if intent in [
-                    IntentType.DIRECT_INDEXING,
-                    IntentType.TAX_SMART_TRANSITION,
-                    IntentType.TAX_ALPHA_DASHBOARD
-                ]:
+              if intent in [
+                  IntentType.DIRECT_INDEXING,
+                  IntentType.TAX_SMART_TRANSITION,
+                  IntentType.TAX_ALPHA_DASHBOARD,
+                  IntentType.FSS_SCORING
+              ]:
                     # Fall through to ChatGPT with function calling below
                     routing_decision['use_chatgpt'] = True
                     routing_decision['model'] = 'chatgpt'

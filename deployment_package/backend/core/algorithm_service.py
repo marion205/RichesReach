@@ -13,6 +13,7 @@ This service provides a clean API that the LLM can call.
 import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime
+import pandas as pd
 
 from .quantitative_algorithms import (
     MonteCarloSimulation,
@@ -35,6 +36,10 @@ from .ml_behavioral_layer import (
 from .refinement_loop import RefinementLoop
 from .direct_indexing import get_direct_indexing_service
 from .tax_smart_transitions import get_tspt_service
+from .fss_engine import get_fss_engine, get_safety_filter, get_portfolio_optimizer
+from .fss_backtest import get_fss_backtester
+from .fss_ml_weights import get_fss_ml_optimizer
+from .fss_data_pipeline import get_fss_data_pipeline, FSSDataRequest
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +63,12 @@ class AlgorithmService:
         self.refinement_loop = RefinementLoop()
         self.direct_indexing = get_direct_indexing_service()
         self.tspt = get_tspt_service()
+        self.fss_engine = get_fss_engine()
+        self.safety_filter = get_safety_filter()
+        self.portfolio_optimizer = get_portfolio_optimizer()
+        self.fss_backtester = get_fss_backtester()
+        self.fss_ml_optimizer = get_fss_ml_optimizer()
+        self.fss_data_pipeline = get_fss_data_pipeline()
     
     def run_goal_simulation(
         self,
@@ -408,6 +419,190 @@ class AlgorithmService:
             "estimated_completion_date": result.get("estimated_completion_date"),
             "time_horizon_months": time_horizon_months,
             "algorithm": "tspt"
+        }
+    
+    async def calculate_fss_scores(
+        self,
+        tickers: List[str],
+        prices: Optional[pd.DataFrame] = None,
+        volumes: Optional[pd.DataFrame] = None,
+        spy: Optional[pd.Series] = None,
+        vix: Optional[pd.Series] = None,
+        fundamentals_daily: Optional[Dict[str, pd.DataFrame]] = None,
+        apply_safety_filters: bool = True,
+        fetch_data: bool = True,
+        lookback_days: int = 252
+    ) -> Dict[str, Any]:
+        """
+        Calculate Future Success Scores for a list of stocks.
+        
+        Args:
+            tickers: List of stock symbols
+            prices: Optional Price DataFrame (if None, will fetch from data pipeline)
+            volumes: Optional Volume DataFrame (if None, will fetch from data pipeline)
+            spy: Optional SPY Series (if None, will fetch from data pipeline)
+            vix: Optional VIX Series (for regime detection)
+            fundamentals_daily: Optional dict of fundamental DataFrames
+            apply_safety_filters: Whether to apply safety filters (default: True)
+            fetch_data: Whether to fetch data if not provided (default: True)
+            lookback_days: Days of historical data to fetch (default: 252)
+            
+        Returns:
+            Dictionary with FSS scores, components, and safety filter results
+        """
+        import pandas as pd
+        
+        # Fetch data if not provided
+        if fetch_data and (prices is None or volumes is None or spy is None):
+            logger.info(f"Fetching market data for {len(tickers)} tickers...")
+            async with self.fss_data_pipeline:
+                data_request = FSSDataRequest(
+                    tickers=tickers,
+                    lookback_days=lookback_days,
+                    include_fundamentals=fundamentals_daily is None
+                )
+                data_result = await self.fss_data_pipeline.fetch_fss_data(data_request)
+                
+                prices = data_result.prices
+                volumes = data_result.volumes
+                spy = data_result.spy
+                vix = data_result.vix if vix is None else vix
+                if fundamentals_daily is None:
+                    fundamentals_daily = data_result.fundamentals_daily
+        
+        if prices is None or volumes is None or spy is None:
+            return {
+                "error": "Failed to fetch required market data",
+                "tickers": tickers,
+                "algorithm": "fss_v2"
+            }
+        
+        # Compute FSS v3.0 (uses fractal momentum and VPT)
+        fss_data = self.fss_engine.compute_fss_v3(
+            prices=prices,
+            volumes=volumes,
+            spy=spy,
+            vix=vix,
+            fundamentals_daily=fundamentals_daily
+        )
+        
+        # Detect regime
+        regime_result = self.fss_engine.detect_market_regime(spy, vix)
+        
+        # Get scores for each ticker
+        results = []
+        for ticker in tickers:
+            # Check safety filters
+            safety_passed = True
+            safety_reason = "Clear"
+            
+            if apply_safety_filters:
+                safety_passed, safety_reason = self.safety_filter.check_safety(
+                    ticker=ticker,
+                    volumes=volumes
+                )
+            
+            # Get FSS result
+            fss_result = self.fss_engine.get_stock_fss(
+                ticker=ticker,
+                fss_data=fss_data,
+                regime=regime_result.regime,
+                safety_passed=safety_passed,
+                safety_reason=safety_reason
+            )
+            
+            results.append({
+                "ticker": ticker,
+                "fss_score": fss_result.fss_score,
+                "trend_score": fss_result.trend_score,
+                "fundamental_score": fss_result.fundamental_score,
+                "capital_flow_score": fss_result.capital_flow_score,
+                "risk_score": fss_result.risk_score,
+                "confidence": fss_result.confidence,
+                "regime": fss_result.regime,
+                "passed_safety_filters": fss_result.passed_safety_filters,
+                "safety_reason": fss_result.safety_reason
+            })
+        
+        return {
+            "scores": results,
+            "regime": regime_result.regime,
+            "regime_confidence": regime_result.confidence,
+            "algorithm": "fss_v2"
+        }
+    
+    def optimize_fss_portfolio(
+        self,
+        tickers: List[str],
+        fss_scores: Dict[str, float],
+        volatilities: Dict[str, float],
+        max_weight: float = 0.15
+    ) -> Dict[str, Any]:
+        """
+        Optimize portfolio weights using confidence-weighted risk parity.
+        
+        Args:
+            tickers: List of stock symbols
+            fss_scores: FSS scores for each ticker
+            volatilities: Annualized volatilities for each ticker
+            max_weight: Maximum weight per position (default: 15%)
+            
+        Returns:
+            Optimal portfolio weights
+        """
+        weights = self.portfolio_optimizer.size_positions(
+            tickers=tickers,
+            fss_scores=fss_scores,
+            volatilities=volatilities,
+            max_weight=max_weight
+        )
+        
+        return {
+            "weights": weights,
+            "total_weight": sum(weights.values()),
+            "algorithm": "confidence_weighted_risk_parity"
+        }
+    
+    def backtest_fss_strategy(
+        self,
+        prices: pd.DataFrame,
+        fss_data: pd.DataFrame,
+        spy: Optional[pd.Series] = None,
+        rebalance_freq: str = "M",
+        top_n: int = 20
+    ) -> Dict[str, Any]:
+        """
+        Backtest FSS-based ranking strategy.
+        
+        Args:
+            prices: Price DataFrame
+            fss_data: FSS scores DataFrame (from compute_fss_v2, use ["FSS"] layer)
+            spy: Optional SPY benchmark
+            rebalance_freq: "W" for weekly, "M" for monthly
+            top_n: Number of stocks to hold
+            
+        Returns:
+            Backtest results with performance metrics
+        """
+        result = self.fss_backtester.backtest_rank_strategy(
+            prices=prices,
+            fss=fss_data,
+            spy=spy,
+            rebalance_freq=rebalance_freq,
+            top_n=top_n
+        )
+        
+        return {
+            "annual_return": result.annual_return,
+            "annual_volatility": result.annual_volatility,
+            "sharpe_ratio": result.sharpe_ratio,
+            "max_drawdown": result.max_drawdown,
+            "win_rate": result.win_rate,
+            "total_trades": result.total_trades,
+            "benchmark_return": result.benchmark_return,
+            "alpha": result.alpha,
+            "equity_curve": result.equity_curve.to_dict() if hasattr(result.equity_curve, 'to_dict') else {},
+            "algorithm": "fss_backtest"
         }
 
 

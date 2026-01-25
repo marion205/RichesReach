@@ -330,6 +330,19 @@ class Query(graphene.ObjectType):
 
     stock = graphene.Field(StockType, symbol=graphene.String(required=True))
     
+    # FSS queries
+    fss_scores = graphene.List(
+        graphene.Field('core.types.FSSScoreType'),
+        symbols=graphene.List(graphene.String, required=True),
+        description="Get FSS v3.0 scores for multiple stocks"
+    )
+    
+    top_fss_stocks = graphene.List(
+        StockType,
+        limit=graphene.Int(default_value=20),
+        description="Get top stocks ranked by FSS v3.0 score"
+    )
+    
     def resolve_stock(self, info, symbol):
         """Get a specific stock by symbol"""
         from .models import Stock
@@ -343,6 +356,68 @@ class Query(graphene.ObjectType):
             return Stock.objects.get(symbol=symbol)
         except Stock.DoesNotExist:
             return None
+    
+    def resolve_fss_scores(self, info, symbols):
+        """Get FSS scores for multiple stocks"""
+        from .fss_service import get_fss_service
+        import asyncio
+        
+        try:
+            fss_service = get_fss_service()
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                logger.warning("FSS scores query skipped (async context)")
+                return []
+            else:
+                results = loop.run_until_complete(
+                    fss_service.get_stocks_fss(symbols)
+                )
+                # Convert to FSSScoreType format
+                fss_scores = []
+                for symbol, result in results.items():
+                    if result:
+                        fss_scores.append(result)
+                return fss_scores
+        except Exception as e:
+            logger.error(f"Error resolving FSS scores: {e}", exc_info=True)
+            return []
+    
+    def resolve_top_fss_stocks(self, info, limit):
+        """Get top stocks ranked by FSS score"""
+        from .fss_service import get_fss_service
+        from .models import Stock
+        import asyncio
+        
+        try:
+            # Get popular stocks from database
+            stocks = Stock.objects.all()[:100]  # Limit to avoid too many calculations
+            symbols = [stock.symbol for stock in stocks]
+            
+            if not symbols:
+                return []
+            
+            # Get FSS scores
+            fss_service = get_fss_service()
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                logger.warning("Top FSS stocks query skipped (async context)")
+                return []
+            else:
+                results = loop.run_until_complete(
+                    fss_service.get_stocks_fss(symbols)
+                )
+                
+                # Rank by FSS
+                ranked = fss_service.rank_stocks_by_fss(results)
+                
+                # Get top N and return Stock objects
+                top_symbols = [r['symbol'] for r in ranked[:limit]]
+                return Stock.objects.filter(symbol__in=top_symbols).order_by(
+                    *[f"symbol={s}" for s in top_symbols]  # Preserve order
+                )
+        except Exception as e:
+            logger.error(f"Error resolving top FSS stocks: {e}", exc_info=True)
+            return []
 
     # my_watchlist = graphene.List(WatchlistItemType) # TODO: Uncomment when WatchlistItemType is available
 

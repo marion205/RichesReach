@@ -330,6 +330,7 @@ class MLService:
         market_conditions: Dict[str, Any],
         user_profile: Dict[str, Any],
         spending_analysis: Optional[Dict[str, Any]] = None,
+        use_fss: bool = True,
     ) -> List[Dict[str, Any]]:
         """
         Score stocks using the best available ML model with spending habits
@@ -368,6 +369,43 @@ class MLService:
             )
 
         try:
+            # Optionally enhance with FSS v3.0 scores
+            if use_fss:
+                try:
+                    from .fss_service import get_fss_service
+                    import asyncio
+                    
+                    fss_service = get_fss_service()
+                    symbols = [stock.get('symbol', '') for stock in stocks]
+                    
+                    # Get FSS scores (non-blocking if in async context)
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if not loop.is_running():
+                            fss_results = loop.run_until_complete(
+                                fss_service.get_stocks_fss(symbols)
+                            )
+                            
+                            # Enhance stocks with FSS scores
+                            for stock in stocks:
+                                symbol = stock.get('symbol', '')
+                                fss_data = fss_results.get(symbol)
+                                if fss_data:
+                                    stock['fss_score'] = fss_data.get('fss_score', 0)
+                                    stock['fss_confidence'] = fss_data.get('confidence', 'low')
+                                    stock['fss_regime'] = fss_data.get('regime', 'Unknown')
+                                    # Blend FSS with ML score if available
+                                    if 'ml_score' in stock:
+                                        # Weighted blend: 60% FSS, 40% ML
+                                        stock['ml_score'] = (
+                                            0.6 * (fss_data.get('fss_score', 0) / 100.0) +
+                                            0.4 * stock['ml_score']
+                                        )
+                    except RuntimeError:
+                        logger.debug("FSS calculation skipped (no event loop)")
+                except Exception as e:
+                    logger.warning(f"FSS integration failed: {e}")
+            
             # Try to use improved ML service first
             if ImprovedMLService is None:
                 raise ImportError("ImprovedMLService not available")

@@ -480,7 +480,37 @@ return True
 except Exception as e:
 logger.error(f"Error updating stock overview for {stock.symbol}: {e}")
 return False
-def _calculate_beginner_score(self, overview_data: dict) -> int:
+def get_fss_score(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        Get FSS v3.0 score for a stock.
+        
+        This integrates FSS into stock_service for use across the app.
+        
+        Args:
+            symbol: Stock symbol
+            
+        Returns:
+            Dictionary with FSS score and components, or None if error
+        """
+        try:
+            from .fss_service import get_fss_service
+            fss_service = get_fss_service()
+            
+            # Run async function
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If already in async context, return None (would need background task)
+                logger.warning(f"FSS calculation for {symbol} skipped (async context)")
+                return None
+            else:
+                return loop.run_until_complete(
+                    fss_service.get_stock_fss(symbol)
+                )
+        except Exception as e:
+            logger.warning(f"Error getting FSS score for {symbol}: {e}")
+            return None
+    
+    def _calculate_beginner_score(self, overview_data: dict) -> int:
 """Calculate beginner-friendly score based on company data"""
 score = 60 # Higher base score for more stocks to qualify
 try:

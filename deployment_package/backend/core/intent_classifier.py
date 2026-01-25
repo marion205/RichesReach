@@ -32,6 +32,7 @@ class IntentType(str, Enum):
     DIRECT_INDEXING = "DIRECT_INDEXING"  # Direct indexing requests
     TAX_SMART_TRANSITION = "TAX_SMART_TRANSITION"  # TSPT requests
     TAX_ALPHA_DASHBOARD = "TAX_ALPHA_DASHBOARD"  # Tax alpha dashboard requests
+    FSS_SCORING = "FSS_SCORING"  # Future Success Score requests
 
 
 class IntentClassifier:
@@ -124,6 +125,12 @@ class IntentClassifier:
         IntentType.REBALANCING_CHECK: [
             'rebalance', 'rebalancing', 'portfolio drift', 'should i rebalance',
             'when to rebalance', 'rebalancing timing'
+        ],
+        IntentType.FSS_SCORING: [
+            'fss', 'future success score', 'rank stocks', 'score stocks', 'best stocks',
+            'top stocks', 'stock ranking', 'predictive score', 'stock scoring',
+            'which stocks to buy', 'find best stocks', 'stock selection', 'alpha score',
+            'quantitative ranking', 'multi-factor score'
         ]
     }
     
@@ -192,6 +199,10 @@ class IntentClassifier:
             return IntentType.COMPLEX_MATH
         
         # Check for quantitative algorithm intents FIRST (more specific)
+        # Check for FSS Scoring (stock ranking)
+        if any(keyword in query_lower for keyword in self.ALGORITHM_KEYWORDS.get(IntentType.FSS_SCORING, [])):
+            return IntentType.FSS_SCORING
+        
         # Check for Tax Alpha Dashboard (most specific tax-related intent)
         if any(keyword in query_lower for keyword in self.ALGORITHM_KEYWORDS.get(IntentType.TAX_ALPHA_DASHBOARD, [])):
             return IntentType.TAX_ALPHA_DASHBOARD
@@ -284,7 +295,8 @@ class IntentClassifier:
             IntentType.REBALANCING_CHECK,
             IntentType.DIRECT_INDEXING,
             IntentType.TAX_SMART_TRANSITION,
-            IntentType.TAX_ALPHA_DASHBOARD
+            IntentType.TAX_ALPHA_DASHBOARD,
+            IntentType.FSS_SCORING
         }
         return intent in algorithm_intents
     
