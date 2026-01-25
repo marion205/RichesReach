@@ -3,7 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Feather from '@expo/vector-icons/Feather';
-import { View, Platform, TouchableOpacity } from 'react-native';
+import { View, Platform, TouchableOpacity, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ProfileScreen from '../features/user/screens/ProfileScreen';
@@ -180,9 +180,9 @@ function SubscriptionScreenWrapper(props: any) {
 }
 
 function SecurityFortressWrapper(props: any) {
+  // SecurityFortress now handles biometric setup internally
   return (
     <SecurityFortress
-      onBiometricSetup={() => logger.log('Biometric setup requested')}
       onSecurityEventPress={(event) => logger.log('Security event:', event)}
     />
   );
