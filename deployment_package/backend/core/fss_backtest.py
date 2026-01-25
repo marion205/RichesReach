@@ -29,6 +29,7 @@ class BacktestResult:
     annual_volatility: float
     sharpe_ratio: float
     max_drawdown: float
+    calmar_ratio: float  # Annual Return / Max Drawdown
     win_rate: float
     total_trades: int
     turnover: pd.Series
@@ -56,6 +57,51 @@ class FSSBacktester:
         """
         self.transaction_cost_bps = transaction_cost_bps
     
+    def _apply_asymmetric_regime_smoothing(self, regime: pd.Series) -> pd.Series:
+        """
+        Apply asymmetric regime smoothing (hysteresis).
+        
+        Fast Exit: 2 out of 3 days = Crisis → Exit to cash
+        Slow Entry: 8 out of 10 days = Expansion → Re-enter market
+        
+        This prevents whipsaws and reduces transaction costs.
+        
+        Args:
+            regime: Raw regime signals (date-indexed Series)
+            
+        Returns:
+            Smoothed regime signals
+        """
+        final_regimes = []
+        current_state = "Expansion"  # Start in Expansion (risk-on)
+        
+        for i in range(len(regime)):
+            # Short window for fast exit (3 days)
+            short_start = max(0, i - 2)
+            window_short = regime.iloc[short_start:i+1]
+            
+            # Long window for slow entry (10 days)
+            long_start = max(0, i - 9)
+            window_long = regime.iloc[long_start:i+1]
+            
+            # Fast Exit: If currently in Expansion and see 2+ Crisis days in last 3
+            if current_state == "Expansion":
+                crisis_count = (window_short == "Crisis").sum()
+                deflation_count = (window_short == "Deflation").sum()
+                if crisis_count >= 2 or deflation_count >= 2:
+                    current_state = "Crisis"
+            
+            # Slow Entry: If currently in Crisis and see 8+ Expansion days in last 10
+            elif current_state == "Crisis":
+                expansion_count = (window_long == "Expansion").sum()
+                parabolic_count = (window_long == "Parabolic").sum()
+                if expansion_count >= 8 or (expansion_count + parabolic_count) >= 8:
+                    current_state = "Expansion"
+            
+            final_regimes.append(current_state)
+        
+        return pd.Series(final_regimes, index=regime.index, name="regime_smoothed")
+    
     def forward_return(
         self,
         prices: pd.DataFrame,
@@ -82,7 +128,10 @@ class FSSBacktester:
         top_n: int = 20,
         hold_days: Optional[int] = None,
         long_only: bool = True,
-        min_liquidity: float = 1_000_000
+        min_liquidity: float = 1_000_000,
+        regime: Optional[pd.Series] = None,
+        cash_out_on_crisis: bool = True,
+        cash_return_rate: float = 0.02  # 2% annual risk-free rate
     ) -> BacktestResult:
         """
         Backtest a top-N ranking strategy.
@@ -109,6 +158,15 @@ class FSSBacktester:
         # Weights matrix (date x tickers)
         W = pd.DataFrame(0.0, index=prices.index, columns=prices.columns)
         
+        # Cash position tracking (for crisis regime cash-out)
+        cash_position = pd.Series(0.0, index=prices.index)
+        daily_cash_return = cash_return_rate / 252  # Daily risk-free rate
+        
+        # Apply asymmetric regime smoothing (fast exit, slow entry) if regime provided
+        regime_smoothed = None
+        if regime is not None and cash_out_on_crisis:
+            regime_smoothed = self._apply_asymmetric_regime_smoothing(regime)
+        
         # Track trades
         trades = []
         
@@ -116,6 +174,42 @@ class FSSBacktester:
             if d not in fss.index:
                 continue
             
+            # Check if we should go to cash (Crisis/Deflation regime with 1-day lag)
+            go_to_cash = False
+            if cash_out_on_crisis and regime_smoothed is not None:
+                # Use 1-day lag to prevent look-ahead bias
+                lag_idx = regime_smoothed.index.get_loc(d) - 1 if d in regime_smoothed.index else -1
+                if lag_idx >= 0:
+                    prev_date = regime_smoothed.index[lag_idx]
+                    current_regime = regime_smoothed.loc[prev_date]
+                    if current_regime in ["Crisis", "Deflation"]:
+                        go_to_cash = True
+                elif d in regime_smoothed.index:
+                    # First day - use current regime
+                    current_regime = regime_smoothed.loc[d]
+                    if current_regime in ["Crisis", "Deflation"]:
+                        go_to_cash = True
+            
+            if go_to_cash:
+                # Move to 100% cash during crisis/deflation
+                w = pd.Series(0.0, index=prices.columns)
+                # Set cash position for holding period
+                if hold_days is not None:
+                    start_idx = prices.index.get_loc(d)
+                    end_idx = min(start_idx + hold_days, len(prices.index) - 1)
+                    hold_range = prices.index[start_idx:end_idx+1]
+                else:
+                    if i < len(rebal_dates) - 1:
+                        next_d = rebal_dates[i+1]
+                        hold_range = prices.loc[d:next_d].index
+                        hold_range = hold_range[:-1] if len(hold_range) > 1 else hold_range
+                    else:
+                        hold_range = prices.loc[d:].index
+                W.loc[hold_range] = w.values  # 0% in stocks
+                cash_position.loc[hold_range] = 1.0  # 100% cash
+                continue
+            
+            # Normal stock selection
             # Get latest FSS scores
             scores = fss.loc[d].dropna()
             
@@ -144,6 +238,7 @@ class FSSBacktester:
                     hold_range = prices.loc[d:].index
             
             W.loc[hold_range] = w.values
+            cash_position.loc[hold_range] = 0.0  # 0% cash (fully invested)
             
             # Track trade
             trades.append({
@@ -152,8 +247,10 @@ class FSSBacktester:
                 "weights": w[winners].to_dict()
             })
         
-        # Portfolio daily return
-        port_ret = (W.shift(1).fillna(0.0) * daily_ret).sum(axis=1)
+        # Portfolio daily return (stocks + cash)
+        stock_ret = (W.shift(1).fillna(0.0) * daily_ret).sum(axis=1)
+        cash_ret = cash_position.shift(1).fillna(0.0) * daily_cash_return
+        port_ret = stock_ret + cash_ret
         
         # Transaction costs
         W_rebal = W.loc[rebal_dates].copy()
@@ -178,6 +275,9 @@ class FSSBacktester:
         sharpe = ann_return / (ann_vol + 1e-12)
         max_dd = drawdown.min()
         
+        # Calmar Ratio (Annual Return / Max Drawdown)
+        calmar_ratio = abs(ann_return / max_dd) if max_dd != 0 else 0
+        
         # Win rate (positive return periods)
         positive_periods = (port_ret_net > 0).sum()
         win_rate = positive_periods / len(port_ret_net) if len(port_ret_net) > 0 else 0.0
@@ -199,6 +299,7 @@ class FSSBacktester:
             annual_volatility=ann_vol,
             sharpe_ratio=sharpe,
             max_drawdown=max_dd,
+            calmar_ratio=calmar_ratio,
             win_rate=win_rate,
             total_trades=len(trades),
             turnover=turnover,
