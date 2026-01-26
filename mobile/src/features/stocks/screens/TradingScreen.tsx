@@ -461,6 +461,33 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
           loading={accountLoading && !accountLoadingTimeout}
         />
 
+        {/* Alpaca Connect Card - Show when no account connected */}
+        {!alpacaAccount && (
+          <TouchableOpacity
+            style={[styles.card, styles.connectCard]}
+            onPress={() => setShowConnectModal(true)}
+          >
+            <View style={styles.connectCardContent}>
+              <View style={styles.connectCardLeft}>
+                <Icon name="link" size={24} color="#007AFF" />
+                <View style={styles.connectCardText}>
+                  <Text style={styles.connectCardTitle}>Connect Alpaca Account</Text>
+                  <Text style={styles.connectCardDescription}>
+                    Link your Alpaca brokerage to start trading
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.connectButton}
+                onPress={() => setShowConnectModal(true)}
+              >
+                <Text style={styles.connectButtonText}>Connect</Text>
+                <Icon name="arrow-right" size={16} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        )}
+
         {/* Trading Coach - Quick Assistance */}
         <TouchableOpacity
           style={styles.card}
@@ -839,6 +866,52 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#9CA3AF',
     fontWeight: '500',
+  },
+
+  // Alpaca Connect Card styles
+  connectCard: {
+    backgroundColor: '#F0F9FF',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  connectCardContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  connectCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+  },
+  connectCardText: {
+    flex: 1,
+  },
+  connectCardTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: C.text,
+    marginBottom: 4,
+  },
+  connectCardDescription: {
+    fontSize: 13,
+    color: C.sub,
+    lineHeight: 18,
+  },
+  connectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    gap: 6,
+  },
+  connectButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   disclosureFooter: {
     paddingHorizontal: 16,
