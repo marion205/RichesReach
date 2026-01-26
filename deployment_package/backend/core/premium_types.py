@@ -649,7 +649,7 @@ class PremiumQueries(graphene.ObjectType):
         limit=graphene.Int(description="Limit results (default: 50)"),
     )
     ai_recommendations = graphene.Field(
-        AIRecommendationsType,
+        'core.premium_types.AIRecommendationsType',  # Use string reference to avoid import conflicts
         profile=graphene.Argument(
             ProfileInput,
             required=False,

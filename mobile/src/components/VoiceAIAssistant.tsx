@@ -162,11 +162,14 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
     type?: 'stock' | 'crypto'; // Track if it's a stock or crypto trade
   } | null>(null);
   
-  // Animation refs
+  // Enhanced animation refs
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const waveAnim = useRef(new Animated.Value(0)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+  const rippleAnim = useRef(new Animated.Value(0)).current;
 
   // Track if audio mode has been set for this session
   const audioModeSetRef = useRef(false);
@@ -194,16 +197,22 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
     };
     setupAudioMode();
 
-    // Entrance animation
+    // Enhanced entrance animation
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 500,
+        duration: 600,
         useNativeDriver: true,
       }),
-      Animated.timing(scaleAnim, {
+      Animated.spring(scaleAnim, {
         toValue: 1,
-        duration: 500,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
         useNativeDriver: true,
       }),
     ]).start();
@@ -288,8 +297,14 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
   useEffect(() => {
     if (isListening) {
       startWaveAnimation();
+      startPulseAnimation();
+      startGlowAnimation();
+      startRippleAnimation();
     } else {
       stopWaveAnimation();
+      stopPulseAnimation();
+      stopGlowAnimation();
+      stopRippleAnimation();
     }
   }, [isListening]);
 
@@ -326,6 +341,69 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
     };
     
     return voiceParams[voiceId] || voiceParams['alloy'];
+  };
+
+  const startPulseAnimation = () => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.15,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  };
+
+  const stopPulseAnimation = () => {
+    pulseAnim.stopAnimation();
+    Animated.timing(pulseAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const startGlowAnimation = () => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  };
+
+  const stopGlowAnimation = () => {
+    glowAnim.stopAnimation();
+    glowAnim.setValue(0);
+  };
+
+  const startRippleAnimation = () => {
+    Animated.loop(
+      Animated.timing(rippleAnim, {
+        toValue: 1,
+        duration: 2000,
+        useNativeDriver: true,
+      })
+    ).start();
+  };
+
+  const stopRippleAnimation = () => {
+    rippleAnim.stopAnimation();
+    rippleAnim.setValue(0);
   };
 
   const startWaveAnimation = () => {
@@ -1940,68 +2018,141 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
         styles.container,
         {
           opacity: fadeAnim,
-          transform: [{ scale: scaleAnim }],
+          transform: [{ scale: scaleAnim }, { translateY: slideAnim }],
         },
       ]}
     >
       <LinearGradient
-        colors={['#667eea', '#764ba2']}
+        colors={['#1a1a2e', '#16213e', '#0f3460']}
         style={styles.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity 
-            onPress={handleClose}
-            style={styles.closeButton}
-            activeOpacity={0.7}
-            accessibilityLabel="Close"
-            accessibilityRole="button"
-          >
-            <Text style={styles.closeButtonText}>✕</Text>
-          </TouchableOpacity>
-          <View style={styles.titleContainer}>
-            <Text style={styles.title}>Wealth Oracle</Text>
-            <Text style={styles.subtitle}>Ask</Text>
+        {/* Animated background particles */}
+        <View style={styles.particlesContainer}>
+          {[...Array(20)].map((_, i) => (
+            <View
+              key={i}
+              style={[
+                styles.particle,
+                {
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                  opacity: 0.1 + Math.random() * 0.3,
+                },
+              ]}
+            />
+          ))}
+        </View>
+        {/* Header with glassmorphism effect */}
+        <View style={styles.headerBlur}>
+          <View style={styles.header}>
+            <TouchableOpacity 
+              onPress={handleClose}
+              style={styles.closeButton}
+              activeOpacity={0.7}
+              accessibilityLabel="Close"
+              accessibilityRole="button"
+            >
+              <LinearGradient
+                colors={['rgba(255,255,255,0.15)', 'rgba(255,255,255,0.05)']}
+                style={styles.closeButtonGradient}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+            
+            <View style={styles.titleContainer}>
+              <View style={styles.titleRow}>
+                <View style={styles.titleTextContainer}>
+                  <Text style={styles.title}>Wealth Oracle</Text>
+                  <Text style={styles.subtitle}>Your AI Financial Assistant</Text>
+                </View>
+                <View style={styles.logoContainer}>
+                  <LinearGradient
+                    colors={['#667eea', '#764ba2']}
+                    style={styles.logoGradient}
+                  >
+                    <Text style={styles.logoIcon}>🔮</Text>
+                  </LinearGradient>
+                </View>
+              </View>
+            </View>
           </View>
         </View>
 
         {/* Conversation History */}
-        <ScrollView style={styles.conversationContainer} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.conversationContainer} 
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.conversationContent}
+        >
           {conversation.length === 0 && !isProcessing && (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>Say "Hey Riches" or tap the mic to start</Text>
+              <View style={styles.emptyStateIconContainer}>
+                <LinearGradient
+                  colors={['rgba(102,126,234,0.2)', 'rgba(118,75,162,0.2)']}
+                  style={styles.emptyStateIcon}
+                >
+                  <Text style={styles.emptyStateEmoji}>👋</Text>
+                </LinearGradient>
+              </View>
+              <Text style={styles.emptyStateTitle}>Ready to assist you</Text>
+              <Text style={styles.emptyStateText}>
+                Ask me about your portfolio, market trends, or investment strategies
+              </Text>
+              <View style={styles.suggestionChips}>
+                <View style={[styles.chip, { marginRight: 8, marginBottom: 8 }]}>
+                  <Text style={styles.chipText}>📊 Portfolio analysis</Text>
+                </View>
+                <View style={[styles.chip, { marginRight: 8, marginBottom: 8 }]}>
+                  <Text style={styles.chipText}>💡 Investment ideas</Text>
+                </View>
+                <View style={[styles.chip, { marginBottom: 8 }]}>
+                  <Text style={styles.chipText}>📈 Market trends</Text>
+                </View>
+              </View>
             </View>
           )}
-          {conversation.map((message) => (
-            <MessageBubble key={message.id} message={message} />
+          
+          {conversation.map((message, index) => (
+            <MessageBubble 
+              key={message.id} 
+              message={message} 
+              isLast={index === conversation.length - 1}
+            />
           ))}
           
           {isProcessing && (
             <View style={styles.processingBubble}>
-              <ActivityIndicator size="small" color="#667eea" style={styles.processingAnimation} />
-              <Text style={styles.processingText}>Processing your voice...</Text>
+              <View style={styles.processingDots}>
+                <View style={[styles.dot, styles.dot1, { marginRight: 8 }]} />
+                <View style={[styles.dot, styles.dot2, { marginRight: 8 }]} />
+                <View style={[styles.dot, styles.dot3]} />
+              </View>
+              <Text style={styles.processingText}>Analyzing your request...</Text>
             </View>
           )}
         </ScrollView>
 
-        {/* Live Transcription Display */}
+        {/* Live Transcription */}
         {(isListening || isProcessing || liveTranscription) && (
-          <View style={styles.liveTranscriptionContainer}>
-            <Text style={styles.liveTranscriptionLabel}>
-              {isListening ? '🎤 Listening...' : isProcessing ? '⏳ Processing...' : '✅ You said:'}
-            </Text>
-            {liveTranscription ? (
-              <Text style={styles.liveTranscriptionText}>{liveTranscription}</Text>
-            ) : (
-              <Text style={styles.liveTranscriptionPlaceholder}>
-                {isListening ? 'Speak now... (check logs for mic status)' : 'Processing your speech...'}
-              </Text>
-            )}
-            {isListening && Platform.OS === 'ios' && __DEV__ && (
-              <Text style={styles.simulatorWarning}>
-                ⚠️ If using iOS Simulator, mic won't work - use a real device
-              </Text>
-            )}
+          <View style={styles.transcriptionBlur}>
+            <View style={styles.liveTranscriptionContainer}>
+              <View style={styles.transcriptionHeader}>
+                <View style={[styles.statusDot, { backgroundColor: getStatusColor() }]} />
+                <Text style={styles.liveTranscriptionLabel}>
+                  {isListening ? 'Listening' : isProcessing ? 'Processing' : 'You said'}
+                </Text>
+              </View>
+              {liveTranscription ? (
+                <Text style={styles.liveTranscriptionText}>{liveTranscription}</Text>
+              ) : (
+                <Text style={styles.liveTranscriptionPlaceholder}>
+                  {isListening ? 'Start speaking...' : 'Processing your speech...'}
+                </Text>
+              )}
+            </View>
           </View>
         )}
 
@@ -2013,52 +2164,109 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
             </Text>
           </View>
           
-          <TouchableOpacity
-            testID="voice-orb"
-            style={[
-              styles.voiceButton,
-              {
-                backgroundColor: getStatusColor(),
-                transform: [{ scale: isListening ? pulseAnim : 1 }],
-              },
-            ]}
-            onPress={handleVoiceButtonPress}
-            disabled={isProcessing || isSpeaking || !hasPermission}
-          >
-            {isListening ? (
-              <Animated.View
-                style={[
-                  styles.listeningIndicator,
-                  {
-                    transform: [
+          {/* Voice button with ripple effects */}
+          <View style={styles.voiceButtonContainer}>
+            {isListening && (
+              <>
+                {[0, 1, 2].map((index) => (
+                  <Animated.View
+                    key={index}
+                    style={[
+                      styles.ripple,
                       {
-                        scale: waveAnim.interpolate({
+                        opacity: rippleAnim.interpolate({
                           inputRange: [0, 1],
-                          outputRange: [1, 1.2],
+                          outputRange: [0.5, 0],
                         }),
+                        transform: [
+                          {
+                            scale: rippleAnim.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [1, 2 + index * 0.3],
+                            }),
+                          },
+                        ],
                       },
-                    ],
-                  },
-                ]}
-              >
-                <View style={styles.waveCircle} />
-                <View style={[styles.waveCircle, styles.waveCircle2]} />
-                <View style={[styles.waveCircle, styles.waveCircle3]} />
-              </Animated.View>
-            ) : isSpeaking ? (
-              <ActivityIndicator
-                size="small"
-                color="#8B5CF6"
-                style={styles.speakingAnimation}
-              />
-            ) : (
-              <Text style={styles.voiceButtonIcon}>🎤</Text>
+                    ]}
+                  />
+                ))}
+              </>
             )}
-          </TouchableOpacity>
+            
+            <Animated.View
+              style={[
+                styles.voiceButtonOuter,
+                {
+                  transform: [{ scale: pulseAnim }],
+                  opacity: glowAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.3, 0.6],
+                  }),
+                },
+              ]}
+            >
+              <LinearGradient
+                colors={
+                  isListening
+                    ? ['#FF3B30', '#FF6B6B']
+                    : isProcessing
+                    ? ['#FF9500', '#FFB347']
+                    : isSpeaking
+                    ? ['#34C759', '#5FD068']
+                    : ['#667eea', '#764ba2']
+                }
+                style={styles.voiceButtonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <TouchableOpacity
+                  testID="voice-orb"
+                  style={styles.voiceButton}
+                  onPress={handleVoiceButtonPress}
+                  disabled={isProcessing || isSpeaking || !hasPermission}
+                  activeOpacity={0.8}
+                >
+                  {isListening ? (
+                    <View style={styles.listeningIndicator}>
+                      <View style={styles.soundWave}>
+                        {[0, 1, 2, 3, 4].map((i) => (
+                          <View key={i} style={[styles.soundBar, { marginRight: i < 4 ? 4 : 0 }]} />
+                        ))}
+                      </View>
+                    </View>
+                  ) : isSpeaking ? (
+                    <Text style={styles.voiceButtonIcon}>🔊</Text>
+                  ) : isProcessing ? (
+                    <ActivityIndicator size="large" color="white" />
+                  ) : (
+                    <Text style={styles.voiceButtonIcon}>🎤</Text>
+                  )}
+                </TouchableOpacity>
+              </LinearGradient>
+            </Animated.View>
+          </View>
+          
+          {!hasPermission && (
+            <TouchableOpacity 
+              style={styles.permissionButton}
+              onPress={requestPermissions}
+            >
+              <LinearGradient
+                colors={['rgba(102,126,234,0.2)', 'rgba(118,75,162,0.2)']}
+                style={styles.permissionButtonGradient}
+              >
+                <Text style={styles.permissionButtonText}>
+                  🔒 Enable Microphone
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
           
           <View style={styles.voiceHints}>
             <Text style={styles.voiceHintText}>
-              Try asking: "How's my portfolio performing?" or "What should I invest in?"
+              {hasPermission 
+                ? "Tap and speak, or say 'Hey Riches' to activate"
+                : "Grant microphone access to get started"}
             </Text>
           </View>
         </View>
@@ -2078,30 +2286,97 @@ interface MessageBubbleProps {
     insights?: Insight[];
     [key: string]: unknown;
   };
+  isLast?: boolean;
 }
-function MessageBubble({ message }: MessageBubbleProps) {
+
+function MessageBubble({ message, isLast }: MessageBubbleProps) {
   const isUser = message.type === 'user';
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
   
   return (
-    <View style={[styles.messageBubble, isUser ? styles.userBubble : styles.assistantBubble]}>
-      <Text style={[styles.messageText, isUser ? styles.userText : styles.assistantText]}>
-        {message.text}
-      </Text>
-      {message.insights && message.insights.length > 0 && (
-        <View style={styles.insightsContainer}>
-          {message.insights.map((insight: Insight, index: number) => (
-            <View key={index} style={styles.insightItem}>
-              <Text style={styles.insightTitle}>{insight.title}</Text>
-              <Text style={styles.insightValue}>{String(insight.value)}</Text>
-              <Text style={styles.insightDescription}>{insight.description}</Text>
-            </View>
-          ))}
+    <Animated.View
+      style={[
+        styles.messageBubbleContainer,
+        isUser ? styles.userBubbleContainer : styles.assistantBubbleContainer,
+        {
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
+        },
+      ]}
+    >
+      {!isUser && (
+        <View style={styles.avatarContainer}>
+          <LinearGradient
+            colors={['#667eea', '#764ba2']}
+            style={styles.avatar}
+          >
+            <Text style={styles.avatarText}>🔮</Text>
+          </LinearGradient>
         </View>
       )}
-      <Text style={[styles.messageTime, isUser ? styles.userTime : styles.assistantTime]}>
-        {message.timestamp.toLocaleTimeString()}
-      </Text>
-    </View>
+      
+      <View style={[styles.messageBubble, isUser ? styles.userBubble : styles.assistantBubble]}>
+        {!isUser && (
+          <LinearGradient
+            colors={['rgba(102,126,234,0.1)', 'rgba(118,75,162,0.05)']}
+            style={StyleSheet.absoluteFill}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          />
+        )}
+        
+        <Text style={[styles.messageText, isUser ? styles.userText : styles.assistantText]}>
+          {message.text}
+        </Text>
+        
+        {message.insights && message.insights.length > 0 && (
+          <View style={styles.insightsContainer}>
+            {message.insights.map((insight: Insight, index: number) => (
+              <View key={index} style={[styles.insightCard, { marginBottom: 8 }]}>
+                <LinearGradient
+                  colors={['rgba(102,126,234,0.15)', 'rgba(118,75,162,0.1)']}
+                  style={styles.insightGradient}
+                >
+                  <Text style={styles.insightTitle}>{insight.title}</Text>
+                  <Text style={styles.insightValue}>{String(insight.value)}</Text>
+                  {insight.description && (
+                    <Text style={styles.insightDescription}>{insight.description}</Text>
+                  )}
+                </LinearGradient>
+              </View>
+            ))}
+          </View>
+        )}
+        
+        <Text style={[styles.messageTime, isUser ? styles.userTime : styles.assistantTime]}>
+          {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </Text>
+      </View>
+      
+      {isUser && (
+        <View style={styles.avatarContainer}>
+          <View style={styles.userAvatar}>
+            <Text style={styles.userAvatarText}>👤</Text>
+          </View>
+        </View>
+      )}
+    </Animated.View>
   );
 }
 
@@ -2114,41 +2389,104 @@ const styles = StyleSheet.create({
   gradient: {
     flex: 1,
   },
+  particlesContainer: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  particle: {
+    position: 'absolute',
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#667eea',
+  },
+  headerBlur: {
+    paddingTop: Platform.OS === 'ios' ? 20 : 10,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(26,26,46,0.8)',
+  },
   header: {
-    paddingTop: 60,
+    paddingTop: 0,
     paddingHorizontal: 20,
-    paddingBottom: 20,
+    paddingBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   closeButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 10 : 0,
+    left: 20,
+    zIndex: 10,
+  },
+  closeButtonGradient: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   closeButtonText: {
     color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  titleContainer: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  titleTextContainer: {
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 16,
+  },
+  logoContainer: {
+    marginBottom: 0,
+  },
+  logoGradient: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  logoIcon: {
+    fontSize: 32,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
     color: 'white',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   subtitle: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.6)',
+    fontWeight: '500',
   },
   conversationContainer: {
     flex: 1,
+  },
+  conversationContent: {
     paddingHorizontal: 20,
-    marginBottom: 20,
+    paddingTop: 10,
+    paddingBottom: 20,
+    flexGrow: 1,
   },
   messageBubble: {
     maxWidth: '80%',
@@ -2176,28 +2514,32 @@ const styles = StyleSheet.create({
   },
   insightsContainer: {
     marginTop: 12,
-    padding: 12,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 12,
   },
-  insightItem: {
-    marginBottom: 8,
+  insightCard: {
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  insightGradient: {
+    padding: 12,
   },
   insightTitle: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
+    color: 'rgba(255,255,255,0.8)',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  insightValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
     color: 'white',
     marginBottom: 4,
   },
-  insightValue: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginBottom: 4,
-  },
   insightDescription: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.7)',
+    lineHeight: 18,
   },
   messageTime: {
     fontSize: 12,
@@ -2210,136 +2552,268 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   processingBubble: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    padding: 16,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    padding: 20,
     borderRadius: 20,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
-  processingAnimation: {
-    width: 30,
-    height: 30,
-    marginRight: 12,
+  processingDots: {
+    flexDirection: 'row',
+    marginBottom: 12,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#667eea',
+  },
+  dot1: {
+    opacity: 0.4,
+  },
+  dot2: {
+    opacity: 0.6,
+  },
+  dot3: {
+    opacity: 0.8,
   },
   processingText: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.7)',
+    fontWeight: '500',
   },
   voiceInterface: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
     alignItems: 'center',
   },
   statusContainer: {
-    marginBottom: 20,
+    marginBottom: 24,
   },
   statusText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  voiceButtonContainer: {
+    position: 'relative',
+    marginBottom: 20,
+  },
+  ripple: {
+    position: 'absolute',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#667eea',
+    top: '50%',
+    left: '50%',
+    marginLeft: -60,
+    marginTop: -60,
+  },
+  voiceButtonOuter: {
+    shadowColor: '#667eea',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  voiceButtonGradient: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    padding: 3,
   },
   voiceButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    flex: 1,
+    borderRadius: 58,
+    backgroundColor: 'rgba(255,255,255,0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
   },
   voiceButtonIcon: {
-    fontSize: 32,
-    color: 'white',
+    fontSize: 48,
   },
   listeningIndicator: {
-    position: 'relative',
-    width: 40,
+    width: 60,
+    height: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  soundWave: {
+    flexDirection: 'row',
+    alignItems: 'center',
     height: 40,
   },
-  waveCircle: {
-    position: 'absolute',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    borderColor: 'white',
+  soundBar: {
+    width: 4,
+    backgroundColor: 'white',
+    borderRadius: 2,
+    height: 20,
   },
-  waveCircle2: {
-    transform: [{ scale: 1.2 }],
-    opacity: 0.7,
+  permissionButton: {
+    marginBottom: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
-  waveCircle3: {
-    transform: [{ scale: 1.4 }],
-    opacity: 0.4,
+  permissionButtonGradient: {
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(102,126,234,0.3)',
+    borderRadius: 12,
   },
-  speakingAnimation: {
-    width: 40,
-    height: 40,
+  permissionButtonText: {
+    color: 'white',
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   voiceHints: {
     alignItems: 'center',
+    paddingHorizontal: 20,
   },
   voiceHintText: {
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(255,255,255,0.6)',
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 20,
-  },
-  titleContainer: {
-    flex: 1,
-    alignItems: 'center',
+    fontWeight: '500',
   },
   emptyState: {
-    padding: 40,
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'flex-start',
+    paddingTop: 40,
+    paddingBottom: 20,
+    minHeight: height * 0.5,
+  },
+  emptyStateIconContainer: {
+    marginBottom: 20,
+  },
+  emptyStateIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'rgba(102,126,234,0.3)',
+  },
+  emptyStateEmoji: {
+    fontSize: 48,
+  },
+  emptyStateTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 8,
   },
   emptyStateText: {
-    color: 'rgba(255,255,255,0.7)',
     fontSize: 16,
+    color: 'rgba(255,255,255,0.6)',
     textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 32,
+    paddingHorizontal: 40,
+  },
+  suggestionChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  chip: {
+    backgroundColor: 'rgba(102,126,234,0.2)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(102,126,234,0.3)',
+  },
+  chipText: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  messageBubbleContainer: {
+    flexDirection: 'row',
+    marginBottom: 16,
+    alignItems: 'flex-end',
+  },
+  userBubbleContainer: {
+    justifyContent: 'flex-end',
+  },
+  assistantBubbleContainer: {
+    justifyContent: 'flex-start',
+  },
+  avatarContainer: {
+    marginHorizontal: 8,
+  },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    fontSize: 18,
+  },
+  userAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  userAvatarText: {
+    fontSize: 18,
+  },
+  transcriptionBlur: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(26,26,46,0.9)',
   },
   liveTranscriptionContainer: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    marginHorizontal: 20,
-    marginBottom: 16,
     padding: 16,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#667eea',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+  },
+  transcriptionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
   },
   liveTranscriptionLabel: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#667eea',
-    marginBottom: 8,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.9)',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 1,
   },
   liveTranscriptionText: {
-    fontSize: 16,
-    color: '#1f2937',
+    fontSize: 17,
+    color: 'white',
     fontWeight: '500',
-    lineHeight: 22,
+    lineHeight: 26,
   },
   liveTranscriptionPlaceholder: {
-    fontSize: 16,
-    color: '#9ca3af',
-    fontStyle: 'italic',
-  },
-  simulatorWarning: {
-    fontSize: 12,
-    color: '#f59e0b',
-    marginTop: 8,
+    fontSize: 17,
+    color: 'rgba(255,255,255,0.5)',
     fontStyle: 'italic',
   },
 });

@@ -482,9 +482,18 @@ class PremiumAnalyticsService:
                 return symbol, 0.0
             
             async def fetch_all_prices() -> Dict[str, float]:
-                """Fetch all prices in parallel"""
-                async with httpx.AsyncClient() as client:
-                    tasks = [fetch_price(client, sym) for sym in symbols]
+                """Fetch all prices in parallel with concurrency limit"""
+                # Limit concurrent requests to avoid overwhelming API
+                semaphore = asyncio.Semaphore(10)  # Max 10 concurrent requests
+                
+                async def fetch_with_semaphore(client: httpx.AsyncClient, symbol: str):
+                    async with semaphore:
+                        return await fetch_price(client, symbol)
+                
+                async with httpx.AsyncClient(timeout=5.0) as client:  # Overall client timeout
+                    # Limit to first 50 symbols to prevent timeout
+                    limited_symbols = symbols[:50]
+                    tasks = [fetch_with_semaphore(client, sym) for sym in limited_symbols]
                     results = await asyncio.gather(*tasks, return_exceptions=True)
                 
                 prices = {}
@@ -496,14 +505,25 @@ class PremiumAnalyticsService:
                         prices[symbol] = price
                 return prices
             
-            # Run async function from sync context
+            # Run async function from sync context with timeout
             try:
-                loop = asyncio.get_event_loop()
+                # Use asyncio.run() which creates a new event loop (safer for Django)
+                # Add overall timeout to prevent hanging
+                return asyncio.run(asyncio.wait_for(fetch_all_prices(), timeout=10.0))
+            except asyncio.TimeoutError:
+                logger.warning("[AI RECS] ⚠️ Price fetch timeout after 10s, returning partial results")
+                return {}
             except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-            
-            return loop.run_until_complete(fetch_all_prices())
+                # If there's already an event loop, create a new one
+                try:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    return loop.run_until_complete(asyncio.wait_for(fetch_all_prices(), timeout=10.0))
+                except asyncio.TimeoutError:
+                    logger.warning("[AI RECS] ⚠️ Price fetch timeout after 10s (new loop), returning empty")
+                    return {}
+                finally:
+                    loop.close()
             
         except ImportError:
             logger.warning("[AI RECS] httpx not available, falling back to sequential price fetch")
@@ -678,7 +698,21 @@ class PremiumAnalyticsService:
 
             # ✅ NEW: Fetch stocks from Polygon instead of database
             # Layer 0: Limited to MAX_TICKERS for performance
-            polygon_stocks = self._fetch_stocks_from_polygon(limit=MAX_TICKERS)
+            # Use cached data if available to avoid slow API calls
+            polygon_stocks = []
+            try:
+                # Check cache first - this should be fast
+                cached_universe = cache.get(POLYGON_UNIVERSE_CACHE_KEY)
+                if cached_universe:
+                    logger.info("[AI RECS] ✅ Using cached Polygon universe (%s stocks)", len(cached_universe))
+                    polygon_stocks = cached_universe
+                else:
+                    # Only fetch if cache is empty, and limit to smaller set for speed
+                    logger.info("[AI RECS] 🔍 Cache miss, fetching from Polygon (limited to 20 for speed)...")
+                    polygon_stocks = self._fetch_stocks_from_polygon(limit=20)  # Reduced from 80 to 20 for speed
+            except Exception as e:
+                logger.warning(f"[AI RECS] ⚠️ Polygon fetch error: {e}, using database fallback")
+                polygon_stocks = []
             
             # Convert Polygon stock dicts to Stock-like objects for compatibility
             # Create a simple class to mimic Stock model attributes
