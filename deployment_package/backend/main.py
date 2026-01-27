@@ -57,7 +57,14 @@ price_cache = PriceCache(ttl=12)
 # Load environment variables from .env file
 # This ensures FastAPI can access environment variables even if Django hasn't loaded them yet
 env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
-load_dotenv(env_path)
+env_loaded = load_dotenv(env_path)
+logger.info(f"🔧 Loading .env from: {env_path}")
+logger.info(f"🔧 .env file exists: {os.path.exists(env_path)}")
+logger.info(f"🔧 .env loaded: {env_loaded}")
+if os.getenv('OPENAI_API_KEY'):
+    logger.info(f"✅ OPENAI_API_KEY found in environment after loading .env")
+else:
+    logger.warn("⚠️ OPENAI_API_KEY NOT found in environment after loading .env")
 
 # Setup Django to access models
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -430,8 +437,18 @@ def detect_intent(transcript: str, history: list = None, last_trade: dict = None
     if any(phrase in text for phrase in ["what should i invest", "what should i buy", "best trade", "trading opportunity", "day trade", "momentum"]):
         return "get_trade_idea"
     
-    # Portfolio queries
-    if any(word in text for word in ["portfolio", "performance", "positions", "buying power"]):
+    # Portfolio queries - be more specific to avoid false positives
+    # Require "portfolio" keyword OR specific portfolio-related phrases
+    portfolio_keywords = ["portfolio", "my positions", "my holdings", "buying power", "my account"]
+    performance_keywords = ["performance", "how am i doing", "my returns", "my gains"]
+    
+    # Only trigger if user explicitly mentions portfolio OR uses performance in portfolio context
+    has_portfolio_keyword = any(keyword in text for keyword in portfolio_keywords)
+    has_performance_in_context = any(keyword in text for keyword in performance_keywords) and (
+        "portfolio" in text or "my" in text or "positions" in text or "holdings" in text
+    )
+    
+    if has_portfolio_keyword or has_performance_in_context:
         return "portfolio_query"
     
     # Explanation requests (if there's a last trade)
@@ -1403,12 +1420,20 @@ async def process_voice(request: Request):
     
     For demo: Returns intelligent mock responses based on common trading commands.
     """
+    start_time = time.time()
     try:
+        logger.info("=" * 60)
         logger.info("🎤 Voice processing request received")
+        logger.info(f"🎤 Request method: {request.method}")
+        logger.info(f"🎤 Request URL: {request.url}")
+        logger.info(f"🎤 Request headers: {dict(request.headers)}")
+        
         # Parse multipart form data
+        logger.info("🎤 Parsing multipart form data...")
         form = await request.form()
         audio_file = form.get("audio")
         logger.info(f"🎤 Audio file received: {audio_file is not None}")
+        logger.info(f"⏱️ Time elapsed so far: {time.time() - start_time:.2f}s")
         
         audio_file_size = 0
         audio_has_content = False
@@ -1434,26 +1459,28 @@ async def process_voice(request: Request):
                 audio_file_size = len(file_content)
                 logger.info(f"🎤 Audio file read successfully, size: {audio_file_size} bytes")
                 
-                # Check if file has actual audio data (WAV files have headers, so even empty files are ~44 bytes)
-                if audio_file_size < 100:
+                # Check if file has actual audio data
+                # M4A files can be small for short recordings, so lower the threshold
+                if audio_file_size < 50:
                     logger.warn(f"⚠️ Audio file is very small ({audio_file_size} bytes) - likely empty or corrupted")
                     logger.warn(f"⚠️ For demo purposes, will use mock transcription")
-                    audio_has_content = False
-                elif audio_file_size < 1000:
-                    logger.warn(f"⚠️ Audio file is small ({audio_file_size} bytes) - may be very short recording")
-                    logger.warn(f"⚠️ Will use mock transcription for demo")
                     audio_has_content = False
                 else:
                     logger.info(f"✅ Audio file looks good ({audio_file_size} bytes)")
                     audio_has_content = True
                     
-                    # Log first few bytes to verify it's a valid WAV file
+                    # Log first few bytes to verify file type
                     if len(file_content) > 4:
                         header = file_content[:4]
+                        # Check for different audio formats
                         if header == b'RIFF':
                             logger.info(f"✅ Valid WAV file detected (RIFF header)")
+                        elif header == b'ftyp' or file_content[:8] == b'\x00\x00\x00\x20ftyp':
+                            logger.info(f"✅ Valid M4A/MP4 file detected (ftyp header)")
+                        elif file_content[:3] == b'ID3':
+                            logger.info(f"✅ Valid MP3 file detected (ID3 header)")
                         else:
-                            logger.warn(f"⚠️ File doesn't appear to be a WAV file (header: {header})")
+                            logger.info(f"ℹ️ Audio file format: header={header.hex()} (may be M4A or other format)")
             except Exception as read_error:
                 import traceback
                 logger.error(f"❌ Error reading audio file: {read_error}")
@@ -1471,8 +1498,21 @@ async def process_voice(request: Request):
         
         if audio_has_content and file_content:
             # Check if OpenAI API key is available
-            openai_api_key = os.getenv('OPENAI_API_KEY')
-            logger.info(f"🔑 OpenAI API key check: {'Found' if openai_api_key else 'NOT FOUND'}")
+            # Try multiple ways to get the API key
+            openai_api_key = (
+                os.getenv('OPENAI_API_KEY') or 
+                os.environ.get('OPENAI_API_KEY') or
+                None
+            )
+            
+            # Log detailed info about API key
+            if openai_api_key:
+                logger.info(f"🔑 OpenAI API key found: {openai_api_key[:10]}...{openai_api_key[-4:] if len(openai_api_key) > 14 else '***'}")
+            else:
+                logger.error("❌ OpenAI API key NOT FOUND!")
+                logger.error("❌ Check that OPENAI_API_KEY is set in environment or .env file")
+                logger.error("❌ Current environment variables:", {k: v[:10] + '...' if len(v) > 10 else v for k, v in os.environ.items() if 'OPENAI' in k or 'API' in k})
+            
             if openai_api_key:
                 try:
                     import openai
@@ -1483,12 +1523,23 @@ async def process_voice(request: Request):
                     logger.info(f"🎤 Audio file size: {len(file_content)} bytes")
                     
                     # Save audio to temporary file for OpenAI API
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_audio:
+                    # Use .m4a extension since that's what the app sends
+                    audio_ext = '.m4a'  # Default to m4a
+                    if hasattr(audio_file, 'content_type'):
+                        content_type = audio_file.content_type.lower()
+                        if 'wav' in content_type:
+                            audio_ext = '.wav'
+                        elif 'm4a' in content_type or 'mp4' in content_type or 'aac' in content_type:
+                            audio_ext = '.m4a'
+                        elif 'mp3' in content_type:
+                            audio_ext = '.mp3'
+                    
+                    logger.info(f"🎤 Using file extension: {audio_ext} for content type: {getattr(audio_file, 'content_type', 'unknown')}")
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=audio_ext) as temp_audio:
                         temp_audio.write(file_content)
                         temp_audio_path = temp_audio.name
-                    
-                    logger.info(f"🎤 Saved audio to temp file: {temp_audio_path}")
-                    logger.info(f"🎤 Temp file size: {os_module.path.getsize(temp_audio_path)} bytes")
+                        logger.info(f"🎤 Saved audio to temp file: {temp_audio_path} ({len(file_content)} bytes)")
+                        logger.info(f"🎤 Temp file size: {os_module.path.getsize(temp_audio_path)} bytes")
                     
                     try:
                         # Initialize OpenAI client
@@ -1496,20 +1547,75 @@ async def process_voice(request: Request):
                         openai_client = openai.OpenAI(api_key=openai_api_key)
                         logger.info("✅ OpenAI client initialized")
                         
-                        # Call OpenAI Whisper API
-                        logger.info("🎤 Calling Whisper API...")
+                        # Call OpenAI Audio Transcriptions API
+                        # Using gpt-4o-mini-transcribe (faster) or whisper-1 (more accurate)
+                        logger.info("🎤 Calling OpenAI Audio Transcriptions API...")
+                        logger.info(f"🎤 Temp file path: {temp_audio_path}")
+                        logger.info(f"🎤 Temp file exists: {os_module.path.exists(temp_audio_path)}")
+                        logger.info(f"🎤 Temp file size: {os_module.path.getsize(temp_audio_path) if os_module.path.exists(temp_audio_path) else 'N/A'} bytes")
+                        
                         with open(temp_audio_path, 'rb') as audio_file_obj:
-                            transcript_response = openai_client.audio.transcriptions.create(
-                                model="whisper-1",
-                                file=audio_file_obj,
-                                language="en"
-                            )
+                            # Try gpt-4o-mini-transcribe first (faster), fallback to whisper-1
+                            # Add timeout to prevent hanging (30 seconds max)
+                            try:
+                                # Run synchronous OpenAI call in thread with timeout
+                                def call_openai():
+                                    logger.info("🎤 Calling OpenAI with whisper-1...")
+                                    start_whisper = time.time()
+                                    result = openai_client.audio.transcriptions.create(
+                                        model="whisper-1",  # Correct Whisper model name
+                                        file=audio_file_obj,
+                                        language="en"
+                                    )
+                                    whisper_time = time.time() - start_whisper
+                                    logger.info(f"✅ OpenAI transcription completed in {whisper_time:.2f}s")
+                                    return result
+                                
+                                loop = asyncio.get_event_loop()
+                                transcript_response = await asyncio.wait_for(
+                                    loop.run_in_executor(None, call_openai),
+                                    timeout=30.0
+                                )
+                            except asyncio.TimeoutError:
+                                logger.error("❌ OpenAI transcription timed out after 30 seconds")
+                                raise Exception("OpenAI API timeout - transcription took too long")
+                            except Exception as model_error:
+                                logger.warn(f"⚠️ gpt-4o-mini-transcribe failed, trying whisper-1: {model_error}")
+                                # Reset file pointer
+                                audio_file_obj.seek(0)
+                                try:
+                                    def call_whisper():
+                                        logger.info("🎤 Calling OpenAI with whisper-1 (fallback model)...")
+                                        start_whisper = time.time()
+                                        result = openai_client.audio.transcriptions.create(
+                                            model="whisper-1",  # Fallback
+                                            file=audio_file_obj,
+                                            language="en"
+                                        )
+                                        whisper_time = time.time() - start_whisper
+                                        logger.info(f"✅ OpenAI whisper-1 transcription completed in {whisper_time:.2f}s")
+                                        return result
+                                    
+                                    loop = asyncio.get_event_loop()
+                                    transcript_response = await asyncio.wait_for(
+                                        loop.run_in_executor(None, call_whisper),
+                                        timeout=30.0
+                                    )
+                                except asyncio.TimeoutError:
+                                    logger.error("❌ OpenAI whisper-1 transcription also timed out")
+                                    raise Exception("OpenAI API timeout - both models timed out")
+                            
                             transcription = transcript_response.text.strip()
                             use_real_transcription = True
                             logger.info(f"✅ Real transcription successful!")
                             logger.info(f"🎤 ============================================")
                             logger.info(f"🎤 USER ACTUALLY SAID: '{transcription}'")
+                            logger.info(f"🎤 Transcription length: {len(transcription)} characters")
                             logger.info(f"🎤 ============================================")
+                            
+                            # If transcription is empty, log a warning
+                            if not transcription:
+                                logger.warn("⚠️ Whisper returned empty transcription - audio may be too quiet or no speech detected")
                     finally:
                         # Clean up temp file
                         if os_module.path.exists(temp_audio_path):
@@ -1527,23 +1633,39 @@ async def process_voice(request: Request):
         
         # Fallback to mock transcription if real transcription failed or unavailable
         if not transcription or not use_real_transcription:
-            mock_transcriptions = [
-                "Show me the best day trade right now",
-                "Find me the strongest momentum play",
-                "Buy one hundred shares of NVIDIA at market",
-                "What's my portfolio performance",
-                "Show me my positions",
-                "What's my buying power",
-                "Find me something good today",
-                "Show me the risk reward analysis",
-                "Why should I take this trade",
-                "What stocks should I buy today",
-                "Show me the top trading opportunities",
-                "What's the best trade right now",
-            ]
+            # Log why we're using mock transcription
+            if not audio_has_content:
+                logger.warn("⚠️ Using mock transcription because audio file was too small or empty")
+            elif not openai_api_key:
+                logger.warn("⚠️ Using mock transcription because OpenAI API key not found")
+            else:
+                logger.warn("⚠️ Using mock transcription because Whisper API call failed")
             
-            import random
-            transcription = random.choice(mock_transcriptions)
+            # Only use mock if we truly couldn't transcribe
+            # If transcription is empty string, that means Whisper returned empty (user said nothing or too quiet)
+            if transcription == "":
+                transcription = "[No speech detected - please speak louder or try again]"
+                logger.warn("⚠️ Whisper returned empty transcription - user may not have spoken")
+            else:
+                # No transcription at all - use mock
+                mock_transcriptions = [
+                    "Show me the best day trade right now",
+                    "Find me the strongest momentum play",
+                    "Buy one hundred shares of NVIDIA at market",
+                    "What's my portfolio performance",
+                    "Show me my positions",
+                    "What's my buying power",
+                    "Find me something good today",
+                    "Show me the risk reward analysis",
+                    "Why should I take this trade",
+                    "What stocks should I buy today",
+                    "Show me the top trading opportunities",
+                    "What's the best trade right now",
+                ]
+                
+                import random
+                transcription = random.choice(mock_transcriptions)
+                logger.warn(f"⚠️ Using random mock transcription: '{transcription}'")
             
             # Log what we're doing
             if audio_has_content:
@@ -1571,8 +1693,15 @@ async def process_voice(request: Request):
             pass
         
         # Step 1: Detect intent
+        # CRITICAL: Log the actual transcription before intent detection
+        logger.info(f"🎤 ============================================")
+        logger.info(f"🎤 ACTUAL TRANSCRIPTION RECEIVED: '{transcription}'")
+        logger.info(f"🎤 Transcription length: {len(transcription)} characters")
+        logger.info(f"🎤 Using real Whisper: {use_real_transcription}")
+        logger.info(f"🎤 ============================================")
+        
         intent = detect_intent(transcription, conversation_history, last_trade)
-        logger.info(f"🎯 Detected intent: {intent}")
+        logger.info(f"🎯 Detected intent: {intent} for transcription: '{transcription[:50]}...'")
         
         # Step 2: Build context (fetch real data)
         context = await build_context(intent, transcription, conversation_history, last_trade)
@@ -3289,5 +3418,16 @@ async def run_market_regime_prediction():
         logger.error(f"Market regime prediction background task error: {e}")
 
 if __name__ == "__main__":
+    # Log startup info
+    logger.info("=" * 60)
+    logger.info("🚀 Starting RichesReach Backend Server")
+    logger.info("=" * 60)
+    logger.info(f"📁 .env file path: {env_path}")
+    logger.info(f"📁 .env exists: {os.path.exists(env_path)}")
+    logger.info(f"🔑 OPENAI_API_KEY loaded: {'YES ✅' if os.getenv('OPENAI_API_KEY') else 'NO ❌'}")
+    if os.getenv('OPENAI_API_KEY'):
+        key = os.getenv('OPENAI_API_KEY')
+        logger.info(f"🔑 API Key preview: {key[:10]}...{key[-4:] if len(key) > 14 else '***'}")
+    logger.info("=" * 60)
     port = int(os.getenv("PORT", 8000))
     uvicorn.run(app, host="0.0.0.0", port=port)

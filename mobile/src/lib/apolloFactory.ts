@@ -9,13 +9,43 @@ import { retryLink } from '../graphql/links/timeoutLink';
 
 // Use the same configuration as the main API
 import { API_GRAPHQL } from '../config/api';
+import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
-// Prefer environment variable directly, fallback to api.ts config
-// This ensures we use the env var if it's set, even if api.ts hasn't loaded it yet
-const GRAPHQL_URL = 
-  process.env.EXPO_PUBLIC_GRAPHQL_URL || 
-  (process.env.EXPO_PUBLIC_API_BASE_URL ? `${process.env.EXPO_PUBLIC_API_BASE_URL}/graphql/` : null) ||
-  API_GRAPHQL;
+// Use the centralized API config (handles device detection automatically)
+// Only use env var if it's NOT localhost (to avoid breaking physical devices)
+const envGraphQLUrl = process.env.EXPO_PUBLIC_GRAPHQL_URL;
+const isPhysicalDevice = Constants.isDevice && !Constants.deviceName?.toLowerCase().includes('simulator');
+const envHasLocalhost = envGraphQLUrl && /localhost|127\.0\.0\.1/.test(envGraphQLUrl);
+
+// Priority: Use API_GRAPHQL (smart device detection) unless env var is explicitly set for a non-localhost URL
+// Never use localhost from env var on physical devices
+// FORCE use API_GRAPHQL for physical devices to ensure correct IP
+let GRAPHQL_URL: string;
+if (isPhysicalDevice) {
+  // Physical device: ALWAYS use API_GRAPHQL (which has correct LAN IP)
+  // Even if env var is set, ignore it on physical devices to prevent localhost issues
+  GRAPHQL_URL = API_GRAPHQL;
+  logger.log('🔧 [ApolloFactory] Physical device detected - forcing API_GRAPHQL:', GRAPHQL_URL);
+  if (envGraphQLUrl && envHasLocalhost) {
+    logger.warn('⚠️ [ApolloFactory] Ignoring localhost env var on physical device');
+  }
+} else {
+  // Simulator: Can use env var if it's not localhost, otherwise use API_GRAPHQL
+  GRAPHQL_URL = 
+    (envGraphQLUrl && !envHasLocalhost) 
+      ? envGraphQLUrl 
+      : API_GRAPHQL;
+  logger.log('🔧 [ApolloFactory] Simulator - using:', GRAPHQL_URL);
+}
+
+// Final safety check: If somehow we still have localhost on physical device, force correct IP
+if (isPhysicalDevice && (GRAPHQL_URL.includes('127.0.0.1') || GRAPHQL_URL.includes('localhost'))) {
+  logger.error('⚠️ [ApolloFactory] CRITICAL: Physical device but GRAPHQL_URL is localhost!');
+  logger.error('⚠️ [ApolloFactory] Forcing correct LAN IP from API_GRAPHQL');
+  GRAPHQL_URL = API_GRAPHQL;
+  logger.error('⚠️ [ApolloFactory] Corrected GRAPHQL_URL to:', GRAPHQL_URL);
+}
 
 if (!GRAPHQL_URL) {
   throw new Error(
@@ -33,10 +63,32 @@ export function getApiBase(): string {
 }
 
 export function makeApolloClient() {
-  logger.log('[ApolloFactory] Environment EXPO_PUBLIC_GRAPHQL_URL:', process.env.EXPO_PUBLIC_GRAPHQL_URL);
-  logger.log('[ApolloFactory] Environment EXPO_PUBLIC_API_BASE_URL:', process.env.EXPO_PUBLIC_API_BASE_URL);
-  logger.log('[ApolloFactory] Resolved GRAPHQL_URL:', GRAPHQL_URL);
-  logger.log('[ApolloFactory] Creating client with GraphQL URL:', GRAPHQL_URL);
+  logger.log('[ApolloFactory] ========================================');
+  logger.log('[ApolloFactory] Device Detection:');
+  logger.log('[ApolloFactory]   Constants.isDevice:', Constants.isDevice);
+  logger.log('[ApolloFactory]   Constants.deviceName:', Constants.deviceName);
+  logger.log('[ApolloFactory]   isPhysicalDevice:', isPhysicalDevice);
+  logger.log('[ApolloFactory] Environment Variables:');
+  logger.log('[ApolloFactory]   EXPO_PUBLIC_GRAPHQL_URL:', process.env.EXPO_PUBLIC_GRAPHQL_URL);
+  logger.log('[ApolloFactory]   EXPO_PUBLIC_API_BASE_URL:', process.env.EXPO_PUBLIC_API_BASE_URL);
+  logger.log('[ApolloFactory] Config Values:');
+  logger.log('[ApolloFactory]   API_GRAPHQL (from api.ts):', API_GRAPHQL);
+  logger.log('[ApolloFactory]   envGraphQLUrl:', envGraphQLUrl);
+  logger.log('[ApolloFactory]   envHasLocalhost:', envHasLocalhost);
+  logger.log('[ApolloFactory] Final Resolution:');
+  logger.log('[ApolloFactory]   GRAPHQL_URL:', GRAPHQL_URL);
+  logger.log('[ApolloFactory] ========================================');
+  
+  // Safety check: If we're on a physical device but using localhost, warn and force correct IP
+  if (isPhysicalDevice && GRAPHQL_URL.includes('127.0.0.1')) {
+    logger.error('⚠️ [ApolloFactory] CRITICAL: Physical device detected but using localhost!');
+    logger.error('⚠️ [ApolloFactory] Forcing correct LAN IP...');
+    // Force use API_GRAPHQL which has the correct IP
+    const forcedUrl = API_GRAPHQL;
+    logger.error('⚠️ [ApolloFactory] Forced GRAPHQL_URL to:', forcedUrl);
+    // Note: We can't reassign const, but we can log the issue
+    // The fix above should prevent this, but this is a safety check
+  }
 
   // Runtime guardrail to prevent localhost:8001
   if (/localhost:8001|127\.0\.0\.1:8001/i.test(GRAPHQL_URL)) {

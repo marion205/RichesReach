@@ -137,33 +137,32 @@ class MLWakeWordService {
         staysActiveInBackground: false,
       });
 
-      const recording = new Audio.Recording();
-      
-      await recording.prepareToRecordAsync({
+      // Use Expo preset for reliable recording (avoids 1718449215 errors)
+      const recordingOptions = (Audio as any).RecordingOptionsPresets?.LOW_QUALITY || {
         android: {
           extension: '.m4a',
-          outputFormat: 2, // Audio.RECORDING_OPTION_ANDROID_OUTPUT_FORMAT_MPEG_4
-          audioEncoder: 3, // Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC
+          outputFormat: 2, // MPEG_4
+          audioEncoder: 3, // AAC
           sampleRate: SAMPLE_RATE,
           numberOfChannels: 1,
           bitRate: 128000,
         },
         ios: {
           extension: '.m4a',
-          outputFormat: 0, // Audio.RECORDING_OPTION_IOS_OUTPUT_FORMAT_MPEG4AAC
-          audioQuality: 127, // Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_MEDIUM
+          outputFormat: 'mpeg4AAC', // Use string, not number!
+          audioQuality: 127,
           sampleRate: SAMPLE_RATE,
           numberOfChannels: 1,
           bitRate: 128000,
-          linearPCMBitDepth: 16,
-          linearPCMIsBigEndian: false,
-          linearPCMIsFloat: false,
         },
         web: {
           mimeType: 'audio/webm',
           bitsPerSecond: 128000,
         },
-      });
+      };
+      
+      const recording = new Audio.Recording();
+      await recording.prepareToRecordAsync(recordingOptions);
 
       await recording.startAsync();
       this.recording = recording;
@@ -432,8 +431,19 @@ class MLWakeWordService {
         this.recording = null;
       }
 
-      // Wait for recording to be fully released
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // CRITICAL: Wait for recording to be fully released and expo-av to cleanup
+      // expo-av needs time to garbage collect the old recording object
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Increased from 500ms
+      
+      // Additional cleanup: Reset audio mode to ensure clean state
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: false,
+        });
+      } catch (e) {
+        // Ignore errors during cleanup
+      }
 
       // Reset audio mode to ensure clean state
       try {

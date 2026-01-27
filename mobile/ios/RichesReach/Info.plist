@@ -49,6 +49,8 @@
     <dict>
       <key>NSAllowsArbitraryLoads</key>
       <true/>
+      <key>NSAllowsLocalNetworking</key>
+      <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
     <string>This app needs access to your camera for live streaming and AR portfolio preview.</string>

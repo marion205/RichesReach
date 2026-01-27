@@ -2589,6 +2589,8 @@ async def process_voice(request: Request):
     - Intent detection (detect_intent)
     - Context building with real market data (build_context)
     - Specialized response handlers (respond_with_* functions)
+    
+    Has a 45-second overall timeout to prevent hanging.
     """
     import logging
     import json
@@ -2598,276 +2600,363 @@ async def process_voice(request: Request):
     
     logger = logging.getLogger(__name__)
     
-    try:
-        logger.info("🎤 [VoiceAPI] Voice processing request received")
-        # Parse multipart form data
-        form = await request.form()
-        audio_file = form.get("audio")
-        logger.info(f"🎤 [VoiceAPI] Audio file received: {audio_file is not None}")
-        
-        audio_file_size = 0
-        audio_has_content = False
-        file_content = None
-        
-        if audio_file:
-            # Log file details if available
-            if hasattr(audio_file, 'filename'):
-                logger.info(f"🎤 [VoiceAPI] Audio filename: {audio_file.filename}")
-            if hasattr(audio_file, 'size'):
-                logger.info(f"🎤 [VoiceAPI] Audio file size: {audio_file.size} bytes")
-                audio_file_size = audio_file.size
-            if hasattr(audio_file, 'content_type'):
-                logger.info(f"🎤 [VoiceAPI] Audio content type: {audio_file.content_type}")
+    # Wrap entire processing in timeout to prevent hanging
+    async def process_voice_internal():
+        try:
+            logger.info("🎤 [VoiceAPI] Voice processing request received")
+            # Parse multipart form data
+            form = await request.form()
+            audio_file = form.get("audio")
+            logger.info(f"🎤 [VoiceAPI] Audio file received: {audio_file is not None}")
             
-            # Try to read the file to verify it has content
-            try:
-                # Reset file pointer in case it was already read
-                if hasattr(audio_file, 'seek'):
-                    await audio_file.seek(0)
+            audio_file_size = 0
+            audio_has_content = False
+            file_content = None
+            
+            if audio_file:
+                # Log file details if available
+                if hasattr(audio_file, 'filename'):
+                    logger.info(f"🎤 [VoiceAPI] Audio filename: {audio_file.filename}")
+                if hasattr(audio_file, 'size'):
+                    logger.info(f"🎤 [VoiceAPI] Audio file size: {audio_file.size} bytes")
+                    audio_file_size = audio_file.size
+                if hasattr(audio_file, 'content_type'):
+                    logger.info(f"🎤 [VoiceAPI] Audio content type: {audio_file.content_type}")
                 
-                file_content = await audio_file.read()
-                audio_file_size = len(file_content)
-                logger.info(f"🎤 [VoiceAPI] Audio file read successfully, size: {audio_file_size} bytes")
-                
-                # Check if file has actual audio data (WAV files have headers, so even empty files are ~44 bytes)
-                if audio_file_size < 100:
-                    logger.warning(f"⚠️ [VoiceAPI] Audio file is very small ({audio_file_size} bytes) - likely empty or corrupted")
-                    logger.warning(f"⚠️ [VoiceAPI] Will use mock transcription")
-                    audio_has_content = False
-                elif audio_file_size < 1000:
-                    logger.warning(f"⚠️ [VoiceAPI] Audio file is small ({audio_file_size} bytes) - may be very short recording")
-                    logger.warning(f"⚠️ [VoiceAPI] Will use mock transcription")
-                    audio_has_content = False
-                else:
-                    logger.info(f"✅ [VoiceAPI] Audio file looks good ({audio_file_size} bytes)")
-                    audio_has_content = True
-                    
-                    # Log first few bytes to verify it's a valid WAV file
-                    if len(file_content) > 4:
-                        header = file_content[:4]
-                        if header == b'RIFF':
-                            logger.info(f"✅ [VoiceAPI] Valid WAV file detected (RIFF header)")
-                        else:
-                            logger.warning(f"⚠️ [VoiceAPI] File doesn't appear to be a WAV file (header: {header})")
-            except Exception as read_error:
-                import traceback
-                logger.error(f"❌ [VoiceAPI] Error reading audio file: {read_error}")
-                logger.error(f"❌ [VoiceAPI] Traceback: {traceback.format_exc()}")
-                logger.warning(f"⚠️ [VoiceAPI] Will use mock transcription")
-                audio_has_content = False
-        else:
-            logger.warning("⚠️ [VoiceAPI] No audio file received - using mock transcription")
-        
-        # Try to transcribe using OpenAI Whisper API if available
-        transcription = None
-        use_real_transcription = False
-        
-        logger.info(f"🔍 [VoiceAPI] Debug: audio_has_content={audio_has_content}, file_content is {'set' if file_content is not None else 'None'}, file_content size={len(file_content) if file_content else 0}")
-        
-        if audio_has_content and file_content:
-            # Check if OpenAI API key is available
-            openai_api_key = os.getenv('OPENAI_API_KEY')
-            logger.info(f"🔑 [VoiceAPI] OpenAI API key check: {'Found' if openai_api_key else 'NOT FOUND'}")
-            if openai_api_key:
+                # Try to read the file to verify it has content
                 try:
-                    import openai
-                    logger.info("🎤 [VoiceAPI] Attempting real transcription with OpenAI Whisper...")
-                    logger.info(f"🎤 [VoiceAPI] Audio file size: {len(file_content)} bytes")
+                    # Reset file pointer in case it was already read
+                    if hasattr(audio_file, 'seek'):
+                        await audio_file.seek(0)
                     
-                    # Save audio to temporary file for OpenAI API
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_audio:
-                        temp_audio.write(file_content)
-                        temp_audio_path = temp_audio.name
+                    file_content = await audio_file.read()
+                    audio_file_size = len(file_content)
+                    logger.info(f"🎤 [VoiceAPI] Audio file read successfully, size: {audio_file_size} bytes")
                     
-                    logger.info(f"🎤 [VoiceAPI] Saved audio to temp file: {temp_audio_path}")
-                    logger.info(f"🎤 [VoiceAPI] Temp file size: {os_module.path.getsize(temp_audio_path)} bytes")
-                    
-                    try:
-                        # Initialize OpenAI client
-                        logger.info("🎤 [VoiceAPI] Initializing OpenAI client...")
-                        openai_client = openai.OpenAI(api_key=openai_api_key)
-                        logger.info("✅ [VoiceAPI] OpenAI client initialized")
+                    # Check if file has actual audio data (WAV files have headers, so even empty files are ~44 bytes)
+                    if audio_file_size < 100:
+                        logger.warning(f"⚠️ [VoiceAPI] Audio file is very small ({audio_file_size} bytes) - likely empty or corrupted")
+                        logger.warning(f"⚠️ [VoiceAPI] Will use mock transcription")
+                        audio_has_content = False
+                    elif audio_file_size < 1000:
+                        logger.warning(f"⚠️ [VoiceAPI] Audio file is small ({audio_file_size} bytes) - may be very short recording")
+                        logger.warning(f"⚠️ [VoiceAPI] Will use mock transcription")
+                        audio_has_content = False
+                    else:
+                        logger.info(f"✅ [VoiceAPI] Audio file looks good ({audio_file_size} bytes)")
+                        audio_has_content = True
                         
-                        # Call OpenAI Whisper API
-                        logger.info("🎤 [VoiceAPI] Calling Whisper API...")
-                        with open(temp_audio_path, 'rb') as audio_file_obj:
-                            transcript_response = openai_client.audio.transcriptions.create(
-                                model="whisper-1",
-                                file=audio_file_obj,
-                                language="en"
+                        # Log first few bytes to verify it's a valid WAV file
+                        if len(file_content) > 4:
+                            header = file_content[:4]
+                            if header == b'RIFF':
+                                logger.info(f"✅ [VoiceAPI] Valid WAV file detected (RIFF header)")
+                            else:
+                                logger.warning(f"⚠️ [VoiceAPI] File doesn't appear to be a WAV file (header: {header})")
+                except Exception as read_error:
+                    import traceback
+                    logger.error(f"❌ [VoiceAPI] Error reading audio file: {read_error}")
+                    logger.error(f"❌ [VoiceAPI] Traceback: {traceback.format_exc()}")
+                    logger.warning(f"⚠️ [VoiceAPI] Will use mock transcription")
+                    audio_has_content = False
+            else:
+                logger.warning("⚠️ [VoiceAPI] No audio file received - using mock transcription")
+            
+            # Try to transcribe using OpenAI Whisper API if available
+            transcription = None
+            use_real_transcription = False
+            
+            logger.info(f"🔍 [VoiceAPI] Debug: audio_has_content={audio_has_content}, file_content is {'set' if file_content is not None else 'None'}, file_content size={len(file_content) if file_content else 0}")
+            
+            if audio_has_content and file_content:
+                # Check if OpenAI API key is available
+                openai_api_key = os.getenv('OPENAI_API_KEY')
+                logger.info(f"🔑 [VoiceAPI] OpenAI API key check: {'Found' if openai_api_key else 'NOT FOUND'}")
+                if openai_api_key:
+                    try:
+                        import openai
+                        logger.info("🎤 [VoiceAPI] Attempting real transcription with OpenAI Whisper...")
+                        logger.info(f"🎤 [VoiceAPI] Audio file size: {len(file_content)} bytes")
+                        
+                        # Save audio to temporary file for OpenAI API
+                        # Determine file extension based on content type or filename
+                        audio_extension = '.m4a'  # Default to m4a (iOS format)
+                        if hasattr(audio_file, 'filename') and audio_file.filename:
+                            if audio_file.filename.endswith('.wav'):
+                                audio_extension = '.wav'
+                            elif audio_file.filename.endswith('.mp3'):
+                                audio_extension = '.mp3'
+                            elif audio_file.filename.endswith('.m4a'):
+                                audio_extension = '.m4a'
+                        elif hasattr(audio_file, 'content_type'):
+                            # Use content type to determine extension
+                            content_type = audio_file.content_type or ''
+                            if 'wav' in content_type:
+                                audio_extension = '.wav'
+                            elif 'mp3' in content_type:
+                                audio_extension = '.mp3'
+                            elif 'm4a' in content_type or 'mp4' in content_type:
+                                audio_extension = '.m4a'
+                        
+                        logger.info(f"🎤 [VoiceAPI] Using file extension: {audio_extension}")
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=audio_extension) as temp_audio:
+                            temp_audio.write(file_content)
+                            temp_audio_path = temp_audio.name
+                        
+                        logger.info(f"🎤 [VoiceAPI] Saved audio to temp file: {temp_audio_path}")
+                        logger.info(f"🎤 [VoiceAPI] Temp file size: {os_module.path.getsize(temp_audio_path)} bytes")
+                        
+                        try:
+                            # Initialize OpenAI client
+                            logger.info("🎤 [VoiceAPI] Initializing OpenAI client...")
+                            openai_client = openai.OpenAI(api_key=openai_api_key)
+                            logger.info("✅ [VoiceAPI] OpenAI client initialized")
+                            
+                            # Call OpenAI Whisper API with timeout
+                            logger.info("🎤 [VoiceAPI] Calling Whisper API with 30s timeout...")
+                            start_whisper = time.time()
+                            
+                            # Run synchronous OpenAI call in thread with timeout
+                            def call_whisper():
+                                with open(temp_audio_path, 'rb') as audio_file_obj:
+                                    return openai_client.audio.transcriptions.create(
+                                        model="whisper-1",  # Correct Whisper model name
+                                        file=audio_file_obj,
+                                        language="en"
+                                    )
+                            
+                            loop = asyncio.get_event_loop()
+                            transcript_response = await asyncio.wait_for(
+                                loop.run_in_executor(None, call_whisper),
+                                timeout=30.0  # 30 second timeout
                             )
+                            
+                            whisper_time = time.time() - start_whisper
+                            logger.info(f"✅ [VoiceAPI] Whisper transcription completed in {whisper_time:.2f}s")
+                            
                             transcription = transcript_response.text.strip()
                             use_real_transcription = True
                             logger.info(f"✅ [VoiceAPI] Real transcription successful!")
                             logger.info(f"🎤 [VoiceAPI] ============================================")
                             logger.info(f"🎤 [VoiceAPI] USER ACTUALLY SAID: '{transcription}'")
                             logger.info(f"🎤 [VoiceAPI] ============================================")
-                    finally:
-                        # Clean up temp file
-                        if os_module.path.exists(temp_audio_path):
-                            os_module.unlink(temp_audio_path)
-                            
-                except ImportError:
-                    logger.warning("⚠️ [VoiceAPI] OpenAI library not installed. Install with: pip install openai")
-                except Exception as whisper_error:
-                    import traceback
-                    logger.error(f"❌ [VoiceAPI] Whisper transcription failed!")
-                    logger.error(f"❌ [VoiceAPI] Error type: {type(whisper_error).__name__}")
-                    logger.error(f"❌ [VoiceAPI] Error message: {str(whisper_error)}")
-                    logger.error(f"❌ [VoiceAPI] Full traceback:\n{traceback.format_exc()}")
-                    logger.warning("⚠️ [VoiceAPI] Falling back to mock transcription")
-        
-        # Fallback to mock transcription if real transcription failed or unavailable
-        if not transcription or not use_real_transcription:
-            mock_transcriptions = [
-                "Show me the best day trade right now",
-                "Find me the strongest momentum play",
-                "Buy one hundred shares of NVIDIA at market",
-                "What's my portfolio performance",
-                "Show me my positions",
-                "What's my buying power",
-                "Find me something good today",
-                "Show me the risk reward analysis",
-                "Why should I take this trade",
-                "What stocks should I buy today",
-                "Show me the top trading opportunities",
-                "What's the best trade right now",
-            ]
+                        finally:
+                            # Clean up temp file
+                            if os_module.path.exists(temp_audio_path):
+                                os_module.unlink(temp_audio_path)
+                                
+                    except ImportError:
+                        logger.warning("⚠️ [VoiceAPI] OpenAI library not installed. Install with: pip install openai")
+                    except asyncio.TimeoutError:
+                        logger.error(f"❌ [VoiceAPI] Whisper API call timed out after 30 seconds!")
+                        logger.warning("⚠️ [VoiceAPI] Falling back to mock transcription")
+                    except Exception as whisper_error:
+                        import traceback
+                        logger.error(f"❌ [VoiceAPI] Whisper transcription failed!")
+                        logger.error(f"❌ [VoiceAPI] Error type: {type(whisper_error).__name__}")
+                        logger.error(f"❌ [VoiceAPI] Error message: {str(whisper_error)}")
+                        logger.error(f"❌ [VoiceAPI] Full traceback:\n{traceback.format_exc()}")
+                        logger.warning("⚠️ [VoiceAPI] Falling back to mock transcription")
             
-            transcription = random.choice(mock_transcriptions)
+            # Fallback to mock transcription if real transcription failed or unavailable
+            if not transcription or not use_real_transcription:
+                mock_transcriptions = [
+                    "Show me the best day trade right now",
+                    "Find me the strongest momentum play",
+                    "Buy one hundred shares of NVIDIA at market",
+                    "What's my portfolio performance",
+                    "Show me my positions",
+                    "What's my buying power",
+                    "Find me something good today",
+                    "Show me the risk reward analysis",
+                    "Why should I take this trade",
+                    "What stocks should I buy today",
+                    "Show me the top trading opportunities",
+                    "What's the best trade right now",
+                ]
+                
+                transcription = random.choice(mock_transcriptions)
+                
+                # Log what we're doing
+                if audio_has_content:
+                    logger.info(f"🎭 [VoiceAPI] Using mock transcription (Whisper unavailable): '{transcription}'")
+                else:
+                    logger.info(f"🎭 [VoiceAPI] Demo mode: Using mock transcription '{transcription}' (audio file was empty/small: {audio_file_size} bytes)")
             
-            # Log what we're doing
-            if audio_has_content:
-                logger.info(f"🎭 [VoiceAPI] Using mock transcription (Whisper unavailable): '{transcription}'")
-            else:
-                logger.info(f"🎭 [VoiceAPI] Demo mode: Using mock transcription '{transcription}' (audio file was empty/small: {audio_file_size} bytes)")
-        
-        # ✅ PRODUCTION ARCHITECTURE: Transcribe → Understand → Decide → Generate natural language
-        # Get conversation history from request (if available)
-        conversation_history = []
-        try:
-            history_json = form.get("history")
-            if history_json:
-                conversation_history = json.loads(history_json) if isinstance(history_json, str) else history_json
-        except:
-            pass
-        
-        # Get last trade from request (if available)
-        last_trade = None
-        try:
-            last_trade_json = form.get("last_trade")
-            if last_trade_json:
-                last_trade = json.loads(last_trade_json) if isinstance(last_trade_json, str) else last_trade_json
-        except:
-            pass
-        
-        # Step 1: Detect intent (production-level)
-        intent = detect_intent(transcription, conversation_history, last_trade)
-        logger.info(f"🎯 [VoiceAPI] Detected intent: {intent}")
-        
-        # Step 2: Build context (fetch real data)
-        context = await build_context(intent, transcription, conversation_history, last_trade)
-        
-        # Step 3: Generate natural language response based on intent (production-level)
-        try:
-            if intent == "get_trade_idea":
-                result = await respond_with_trade_idea(transcription, conversation_history, context)
-                ai_response = result["text"]
-                trade_data = result.get("trade", {})
-            elif intent == "crypto_query":
-                result = await respond_with_crypto_update(transcription, conversation_history, context)
-                ai_response = result["text"]
-                trade_data = result.get("crypto", {})
-            elif intent == "stock_query":
-                # Use similar structure to crypto_query
-                stock = context.get("stock", {})
-                system_prompt = """You are RichesReach, a calm, concise trading coach specializing in stocks.
+            # ✅ PRODUCTION ARCHITECTURE: Transcribe → Understand → Decide → Generate natural language
+            # Get conversation history from request (if available)
+            conversation_history = []
+            try:
+                history_json = form.get("history")
+                if history_json:
+                    conversation_history = json.loads(history_json) if isinstance(history_json, str) else history_json
+            except:
+                pass
+            
+            # Get last trade from request (if available)
+            last_trade = None
+            try:
+                last_trade_json = form.get("last_trade")
+                if last_trade_json:
+                    last_trade = json.loads(last_trade_json) if isinstance(last_trade_json, str) else last_trade_json
+            except:
+                pass
+            
+            # Step 1: Detect intent (production-level)
+            intent = detect_intent(transcription, conversation_history, last_trade)
+            logger.info(f"🎯 [VoiceAPI] Detected intent: {intent}")
+            
+            # Step 2: Build context (fetch real data) - with timeout to prevent hanging
+            logger.info(f"🔄 [VoiceAPI] Building context for intent: {intent}")
+            try:
+                context = await asyncio.wait_for(
+                    build_context(intent, transcription, conversation_history, last_trade),
+                    timeout=10.0  # 10 second timeout for context building
+                )
+                logger.info(f"✅ [VoiceAPI] Context built successfully")
+            except asyncio.TimeoutError:
+                logger.error(f"❌ [VoiceAPI] build_context timed out after 10 seconds!")
+                # Use minimal context if timeout
+                context = {
+                    "intent": intent,
+                    "transcript": transcription,
+                    "history": conversation_history or [],
+                    "last_trade": last_trade,
+                }
+            
+            # Step 3: Generate natural language response based on intent (production-level)
+            try:
+                if intent == "get_trade_idea":
+                    result = await respond_with_trade_idea(transcription, conversation_history, context)
+                    ai_response = result["text"]
+                    trade_data = result.get("trade", {})
+                elif intent == "crypto_query":
+                    result = await respond_with_crypto_update(transcription, conversation_history, context)
+                    ai_response = result["text"]
+                    trade_data = result.get("crypto", {})
+                elif intent == "stock_query":
+                    # Use similar structure to crypto_query
+                    stock = context.get("stock", {})
+                    system_prompt = """You are RichesReach, a calm, concise trading coach specializing in stocks.
 - Always use the *provided* price data; do not invent prices.
 - Explain stock opportunities in plain language.
 - Keep answers under 3-4 sentences unless user asks for more detail.
 - Mention current price, change, and volume if available.
 - If data_age_seconds is provided and is low (< 30), emphasize that this is real-time, current data."""
-                user_prompt = f"""User just said: {transcription}
+                    user_prompt = f"""User just said: {transcription}
 
 Here is the stock data:
 {json.dumps(stock, indent=2)}
 
 Respond naturally to the user's question about this stock. Use the real prices provided. If is_fresh is true, emphasize that you're giving current, real-time information."""
-                ai_response = await generate_voice_reply(system_prompt, user_prompt, conversation_history)
-                if not ai_response:
-                    # Fallback
-                    symbol = stock.get("symbol", "the stock")
-                    price = stock.get("price", 0)
-                    change = stock.get("change_percent", 0)
-                    ai_response = f"{symbol} is currently trading at ${price:,.2f}, {change:+.2f}% change. Would you like me to show you the full analysis?"
-                trade_data = stock
-            elif intent == "execute_trade":
-                result = await respond_with_execution_confirmation(transcription, conversation_history, context)
-                ai_response = result["text"]
-                trade_data = result.get("executed_trade", last_trade)
-            elif intent == "buy_multiple_stocks":
-                result = await respond_with_buy_multiple_stocks(transcription, conversation_history, context)
-                ai_response = result["text"]
-                trade_data = result.get("executed_trades", [])
-            elif intent == "portfolio_query":
-                result = await respond_with_portfolio_answer(transcription, conversation_history, context)
-                ai_response = result["text"]
+                    ai_response = await generate_voice_reply(system_prompt, user_prompt, conversation_history)
+                    if not ai_response:
+                        # Fallback
+                        symbol = stock.get("symbol", "the stock")
+                        price = stock.get("price", 0)
+                        change = stock.get("change_percent", 0)
+                        ai_response = f"{symbol} is currently trading at ${price:,.2f}, {change:+.2f}% change. Would you like me to show you the full analysis?"
+                    trade_data = stock
+                elif intent == "execute_trade":
+                    result = await respond_with_execution_confirmation(transcription, conversation_history, context)
+                    ai_response = result["text"]
+                    trade_data = result.get("executed_trade", last_trade)
+                elif intent == "buy_multiple_stocks":
+                    result = await respond_with_buy_multiple_stocks(transcription, conversation_history, context)
+                    ai_response = result["text"]
+                    trade_data = result.get("executed_trades", [])
+                elif intent == "portfolio_query":
+                    result = await respond_with_portfolio_answer(transcription, conversation_history, context)
+                    ai_response = result["text"]
+                    trade_data = None
+                elif intent == "explain_trade":
+                    result = await respond_with_explanation(transcription, conversation_history, context)
+                    ai_response = result["text"]
+                    trade_data = last_trade
+                else:  # small_talk or unknown
+                    result = await respond_with_small_talk(transcription, conversation_history, context)
+                    ai_response = result["text"]
+                    trade_data = None
+            except Exception as e:
+                import traceback
+                logger.exception(f"❌ [VoiceAPI] Error in LLM voice pipeline: {e}")
+                logger.error(f"❌ [VoiceAPI] Traceback: {traceback.format_exc()}")
+                # Fallback so the app doesn't break
+                ai_response = f"I had trouble generating a detailed answer just now, but I heard you say: \"{transcription}\". Can you try asking again in a moment?"
+                intent = "error_fallback"
                 trade_data = None
-            elif intent == "explain_trade":
-                result = await respond_with_explanation(transcription, conversation_history, context)
-                ai_response = result["text"]
-                trade_data = last_trade
-            else:  # small_talk or unknown
-                result = await respond_with_small_talk(transcription, conversation_history, context)
-                ai_response = result["text"]
-                trade_data = None
+            
+            # Return response with detected intent
+            return {
+                "success": True,
+                "response": {
+                    "transcription": transcription,
+                    "text": ai_response,
+                    "confidence": 0.95,
+                    "intent": intent,  # ✅ Intent determined by detect_intent()
+                    "whisper_used": use_real_transcription,
+                    "trade": trade_data,  # Include trade data if available
+                    "debug": {
+                        "audio_has_content": audio_has_content,
+                        "file_content_size": len(file_content) if file_content else 0,
+                        "openai_key_found": bool(os.getenv('OPENAI_API_KEY'))
+                    }
+                }
+        }
         except Exception as e:
             import traceback
-            logger.exception(f"❌ [VoiceAPI] Error in LLM voice pipeline: {e}")
+            logger.error(f"❌ [VoiceAPI] Error in process_voice_internal: {e}")
             logger.error(f"❌ [VoiceAPI] Traceback: {traceback.format_exc()}")
-            # Fallback so the app doesn't break
-            ai_response = f"I had trouble generating a detailed answer just now, but I heard you say: \"{transcription}\". Can you try asking again in a moment?"
-            intent = "error_fallback"
-            trade_data = None
-        
-        # Return response with detected intent
-        return {
-            "success": True,
-            "response": {
-                "transcription": transcription,
-                "text": ai_response,
-                "confidence": 0.95,
-                "intent": intent,  # ✅ Intent determined by detect_intent()
-                "whisper_used": use_real_transcription,
-                "trade": trade_data,  # Include trade data if available
-                "debug": {
-                    "audio_has_content": audio_has_content,
-                    "file_content_size": len(file_content) if file_content else 0,
-                    "openai_key_found": bool(os.getenv('OPENAI_API_KEY'))
+            return {
+                "success": True,  # Always true so frontend doesn't throw
+                "response": {
+                    "transcription": "Error occurred",
+                    "text": "I'm sorry, I had trouble processing that. Could you please try again?",
+                    "confidence": 0.0,
+                    "intent": "error",
+                    "whisper_used": False,
+                    "trade": None,
+                    "debug": {
+                        "error": str(e),
+                        "audio_has_content": False,
+                        "file_content_size": 0,
+                        "openai_key_found": bool(os.getenv('OPENAI_API_KEY'))
+                    }
                 }
             }
-        }
-    except Exception as e:
-        import traceback
-        logger.error(f"❌ [VoiceAPI] Error in process_voice endpoint: {e}")
-        logger.error(f"❌ [VoiceAPI] Traceback: {traceback.format_exc()}")
-        return {
-            "success": True,  # Always true so frontend doesn't throw
+    
+    # Execute with overall timeout (45 seconds max)
+    try:
+        result = await asyncio.wait_for(process_voice_internal(), timeout=45.0)
+        return JSONResponse(result)
+    except asyncio.TimeoutError:
+        logger.error("❌ [VoiceAPI] Entire voice processing timed out after 45 seconds!")
+        return JSONResponse({
+            "success": False,
+            "error": "Request timed out - the server took too long to process your audio. Please try again with a shorter command.",
             "response": {
-                "transcription": "Error occurred",
-                "text": "I'm sorry, I had trouble processing that. Could you please try again?",
+                "transcription": "Request timeout",
+                "text": "I'm sorry, but the request took too long to process. Please try speaking a shorter command or try again in a moment.",
                 "confidence": 0.0,
                 "intent": "error",
                 "whisper_used": False,
-                "trade": None,
-                "debug": {
-                    "error": str(e),
-                    "audio_has_content": False,
-                    "file_content_size": 0,
-                    "openai_key_found": bool(os.getenv('OPENAI_API_KEY'))
-                }
             }
-        }
+        })
+    except Exception as e:
+        import traceback
+        logger.error(f"❌ [VoiceAPI] Unexpected error in voice processing: {e}")
+        logger.error(f"❌ [VoiceAPI] Traceback: {traceback.format_exc()}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e),
+            "response": {
+                "transcription": "Error",
+                "text": "I encountered an error processing your request. Please try again.",
+                "confidence": 0.0,
+                "intent": "error",
+                "whisper_used": False,
+            }
+        })
 
 @app.get("/api/market/quotes")
 async def get_market_quotes(symbols: str):
