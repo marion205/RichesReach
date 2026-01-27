@@ -61,6 +61,85 @@ export interface CreditUtilization {
   optimalUtilization: number; // 0.3 (30%)
   paydownSuggestion: number;
   projectedScoreGain: number;
+  // New: Velocity tracking
+  spendingVelocity?: number; // % of limit spent per day in current cycle
+  historicalAverageVelocity?: number; // 6-month average
+  projectedUtilizationAtStatement?: number; // Predicted utilization at statement date
+  statementDate?: string; // ISO date
+}
+
+// Credit Velocity & Behavioral Tracking
+export interface SpendingVelocity {
+  currentCycleSpend: number;
+  daysIntoCycle: number;
+  projectedCycleEndSpend: number;
+  projectedUtilization: number; // Predicted utilization at statement date
+  velocityMultiplier: number; // Current velocity / historical average
+  statementDate: string;
+  daysUntilStatement: number;
+}
+
+export interface BehavioralShadowScore {
+  paymentEfficiency: number; // Days between statement and payment (lower = better)
+  paymentTrend: 'improving' | 'stable' | 'declining';
+  behavioralAlpha: number; // Composite score of financial habits
+  efficiencyMilestones: Array<{
+    id: string;
+    name: string;
+    date: string;
+    improvement: number;
+  }>;
+  lastPaymentEfficiency: number; // Days to pay last statement
+  averagePaymentEfficiency: number; // 6-month average
+}
+
+// Macro-Economic Sentiment
+export interface MacroEconomicData {
+  fedRate: number;
+  rateTrend: 'rising' | 'stable' | 'falling';
+  inflationRate: number;
+  lastUpdated: string;
+  recommendationShift: 'liquidity' | 'revolving' | 'neutral';
+}
+
+// Crystal Ball Simulation
+export interface FinancialAction {
+  type: 'LARGE_PURCHASE' | 'NEW_CREDIT_LINE' | 'DEBT_CONSOLIDATION' | 'PAYMENT' | 'BALANCE_TRANSFER';
+  amount: number;
+  merchant?: string;
+  description?: string;
+  targetCardId?: string;
+}
+
+export interface SimulationResult {
+  projectedScore: number;
+  scoreDelta: number;
+  projectedUtilization: number;
+  monthlyInterestLeak: number;
+  recoveryMonths: number;
+  futureState: Partial<CreditSnapshot>;
+  insight: string;
+  zeroGravityOption?: {
+    merchant: string;
+    option: string;
+    benefit: string;
+    interestLeak: number; // Should be 0
+  };
+  opportunityCost?: {
+    guaranteedReturn: number; // % return by avoiding interest
+    totalInterestSaved: number;
+  };
+}
+
+// Merchant Intelligence
+export interface MerchantDeal {
+  name: string;
+  option: string;
+  benefit: string;
+  impact: string;
+  apr: number; // 0 for 0% offers
+  termMonths: number;
+  eligibility?: string;
 }
 
 export interface CreditAction {
@@ -102,6 +181,16 @@ export interface CreditSnapshot {
     inDays: number | null;
     message: string;
     suggestion: string;
+  }>;
+  // New: Enhanced tracking
+  spendingVelocity?: SpendingVelocity;
+  behavioralShadow?: BehavioralShadowScore;
+  macroEconomic?: MacroEconomicData;
+  recentInquiries?: number;
+  accountAges?: Array<{
+    cardId: string;
+    ageMonths: number;
+    isOldest: boolean;
   }>;
 }
 
@@ -234,10 +323,17 @@ export interface OracleInsight {
   description: string;
   confidence: number; // 0-1
   timeHorizon: string; // e.g., "Q4 2025"
-  source: 'crowdsourced' | 'ai' | 'market_data';
+  source: 'crowdsourced' | 'ai' | 'market_data' | 'real_time' | 'ai_behavioral_model' | 'velocity_tracker';
   location?: string; // city/region
   affectedFactors: string[];
   recommendation: string;
+  priority?: number; // 1-10, higher = more critical (for sorting/filtering)
+  // New: Predictive fields
+  prediction?: string; // e.g., "Predicted Score Change: -15pts"
+  urgency?: 'critical' | 'high' | 'medium' | 'low';
+  interestLeak?: number; // Monthly interest cost
+  recoveryTime?: string; // e.g., "4 months"
+  behavioralAlpha?: number; // Shadow score metric
   biasCheck?: {
     detected: boolean;
     adjusted: boolean;

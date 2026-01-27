@@ -76,6 +76,15 @@ export const CreditOracle: React.FC<CreditOracleProps> = ({
             )}
           </View>
           <Text style={styles.insightDescription}>{insight.description}</Text>
+          {/* Yellow tip / recommendation bubble */}
+          <View style={styles.tipWrap}>
+            <View style={styles.tipFullWidth}>
+              <View style={styles.tipRowCentered}>
+                <Icon name="star" size={18} color="#E6B800" style={styles.tipIcon} />
+                <Text style={styles.tipTextCentered}>{insight.recommendation}</Text>
+              </View>
+            </View>
+          </View>
           <View style={styles.insightMeta}>
             <View style={styles.confidenceBox}>
               <Text style={styles.confidenceLabel}>Confidence</Text>
@@ -109,13 +118,6 @@ export const CreditOracle: React.FC<CreditOracleProps> = ({
               </Text>
             </LinearGradient>
           )}
-          <LinearGradient
-            colors={['#FFF8E1', '#FFEFD5']}
-            style={styles.recommendationBox}
-          >
-            <Icon name="star" size={16} color="#FFB800" />
-            <Text style={styles.recommendationText}>{insight.recommendation}</Text>
-          </LinearGradient>
         </View>
       </View>
     </TouchableOpacity>
@@ -363,17 +365,33 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontWeight: '600',
   },
-  recommendationBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    padding: 12,
-    borderRadius: 12,
+  tipWrap: {
+    width: '100%',
+    marginTop: 12,
   },
-  recommendationText: {
-    flex: 1,
+  // Full width inside the card's content area
+  tipFullWidth: {
+    width: '100%',
+    backgroundColor: '#FFF2CC',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    // pull outward to cancel parent padding (insightCard has padding: 16)
+    marginHorizontal: -16,
+  },
+  tipRowCentered: {
+    flexDirection: 'row',
+    justifyContent: 'center', // centers icon + text as a group
+    alignItems: 'center',
+  },
+  tipIcon: {
+    marginRight: 10,
+  },
+  tipTextCentered: {
+    flexShrink: 1,        // allows wrapping
+    textAlign: 'center',  // centers multi-line text
     fontSize: 14,
-    color: '#1A1A1A',
     lineHeight: 20,
+    color: '#2A2A2A',
   },
 });

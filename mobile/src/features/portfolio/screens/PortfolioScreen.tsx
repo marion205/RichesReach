@@ -792,10 +792,12 @@ return (
       onClose={() => setShowDawnRitual(false)}
     />
     {/* Credit Quest Modal */}
-    <CreditQuestScreen
-      visible={showCreditQuest}
-      onClose={() => setShowCreditQuest(false)}
-    />
+    {showCreditQuest && (
+      <CreditQuestScreen
+        visible={showCreditQuest}
+        onClose={() => setShowCreditQuest(false)}
+      />
+    )}
     {/* Milestones Timeline below orb */}
     <MilestonesTimeline milestones={milestones} onCelebrate={(t) => setCelebrateTitle(t)} />
   </View>
