@@ -138,11 +138,13 @@ function StockCard(props: StockCardProps) {
 
       {/* Trade Button - Removed as requested */}
 
-      {/* Advanced Analysis Button */}
+      {/* Advanced Analysis Button - Always visible */}
       <TouchableOpacity
         style={styles.analysisBtn}
         onPress={() => {
-          props.onPressAnalysis();
+          if (props.onPressAnalysis) {
+            props.onPressAnalysis();
+          }
         }}
         activeOpacity={0.85}
       >

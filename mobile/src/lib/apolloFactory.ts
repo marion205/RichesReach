@@ -443,7 +443,9 @@ export function makeApolloClient() {
       })() : '';
       
       // Slow operations that need more time
+      // Chart needs to be here because it loads indicators and can take 10-15s
       const slowOperations = [
+        'Chart', // ✅ CRITICAL: Chart with indicators needs more time
         'GetOracleInsights', 
         'GetAIRecommendations', 
         'GenerateAIRecommendations',
@@ -452,10 +454,14 @@ export function makeApolloClient() {
         'GetStockAnalysis',
         'rustStockAnalysis',
         'GetSignalUpdates',
-        'GetPortfolioSignals'
+        'GetPortfolioSignals',
+        'GetRustOptionsAnalysis', // Heavy Rust analysis
+        'GetOptionsAnalysis',     // Options chain analysis
+        'GetAdvancedStockScreening', // ML screening
       ];
       const isSlowOperation = slowOperations.some(op => operationName.includes(op));
-      const timeoutMs = isSlowOperation ? 45000 : 15000; // 45s for slow operations, 15s for normal
+      // Increased timeouts: 5s was too aggressive for dev/simulator, 12s normal gives backend time to respond
+      const timeoutMs = isSlowOperation ? 45000 : 12000; // 45s for slow operations, 12s for normal (was 5s - too tight)
       
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {

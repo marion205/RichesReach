@@ -471,12 +471,35 @@ const RESEARCH_QUERY = gql`
 const CHART_QUERY = gql`
   query Chart(
     $symbol: String!,
-    $tf: String = "1D"
+    $tf: String! = "1D"
   ) {
     stockChartData(
       symbol: $symbol,
       timeframe: $tf
-    )
+    ) {
+      symbol
+      data {
+        timestamp
+        open
+        high
+        low
+        close
+        volume
+      }
+      indicators {
+        SMA20
+        SMA50
+        EMA12
+        EMA26
+        RSI
+        MACD
+        MACDSignal
+        MACDHist
+        BBUpper
+        BBMiddle
+        BBLower
+      }
+    }
   }
 `;
 
@@ -665,10 +688,11 @@ interface RustAnalysis {
   const [placeBracketOrderMutation] = useMutation(PLACE_BRACKET_OPTIONS_ORDER);
   
   // Fetch Rust options analysis for recommendations
-  // Fetch Rust options analysis for recommendations
+  // ✅ Lazy-load: Only fetch when on options tab AND have symbol (prevents parallel query overload)
+  const shouldLoadRustOptions = activeTab === 'options' && !!optionsSymbol && optionsSymbol.length > 0;
   const { data: rustOptionsData } = useQuery(GET_RUST_OPTIONS_ANALYSIS, {
     variables: { symbol: optionsSymbol },
-    skip: !optionsSymbol || optionsSymbol.length === 0,
+    skip: !shouldLoadRustOptions, // ✅ Only load when actually needed
     fetchPolicy: 'cache-and-network',
     errorPolicy: 'all',
   });
@@ -678,9 +702,11 @@ interface RustAnalysis {
   const { positions: optionsPositions, refetch: refetchOptionsPositions } = useOptionsPositions(alpacaAccount?.id || null);
   
   // Fetch options analysis
+  // ✅ Lazy-load: Only fetch options analysis when on options tab (prevents parallel query overload)
+  const shouldLoadOptionsAnalysis = activeTab === 'options' && !!optionsSymbol && optionsSymbol.length > 0;
   const { data: optionsData, loading: optionsLoading, error: optionsError, refetch: refetchOptions } = useQuery(GET_OPTIONS_ANALYSIS, {
     variables: { symbol: optionsSymbol },
-    skip: !optionsSymbol || optionsSymbol.length === 0,
+    skip: !shouldLoadOptionsAnalysis, // ✅ Only load when on options tab
     fetchPolicy: 'cache-and-network',
     errorPolicy: 'all',
   });
@@ -858,9 +884,11 @@ interface OptionOrder {
     });
 
   // Research queries
+  // ✅ Only load when on research tab (prevents loading when not needed)
+  const shouldLoadResearch = activeTab === 'research' && !!researchSymbol;
   const { data: researchData, loading: researchLoading, error: researchError, refetch: refetchResearch } = useQuery(RESEARCH_QUERY, {
     variables: { s: researchSymbol },
-    skip: !researchSymbol,
+    skip: !shouldLoadResearch, // ✅ Only load when on research tab
   });
 
   // Timeout handling for research loading
@@ -944,8 +972,15 @@ interface OptionOrder {
     return getMockResearchData();
   }, [researchData, researchLoadingTimeout, researchError, researchLoading, getMockResearchData]);
   
-  const effectiveResearchLoading = researchLoadingTimeout ? false : (researchLoading && !effectiveResearchData?.researchHub);
+  // Always show mock data immediately - never show loading state for research
+  // The mock data provides instant feedback while real data loads in background
+  const effectiveResearchLoading = false;
 
+  // ✅ Fix #3: Only load chart when on research tab AND have symbol
+  // Removed researchData check since effectiveResearchData always has mock data
+  // This prevents "thundering herd" of parallel queries that block the server
+  const shouldLoadChart = activeTab === 'research' && !!researchSymbol;
+  
   const { data: chartData, loading: chartLoading, error: chartError, refetch: refetchChart } = useQuery(CHART_QUERY, {
     variables: {
       symbol: researchSymbol,
@@ -954,11 +989,27 @@ interface OptionOrder {
       limit: 180,
       inds: ["SMA20","SMA50","EMA12","EMA26","RSI","MACD","MACDHist","BB"],
     },
-    skip: !researchSymbol,
+    skip: !shouldLoadChart, // ✅ Only load when conditions are met (prevents parallel query overload)
     fetchPolicy: 'cache-first', // Use cache first for faster loads
     nextFetchPolicy: 'cache-first', // Keep using cache for subsequent loads
     errorPolicy: 'all',
+    notifyOnNetworkStatusChange: true,
   });
+
+  // Timeout handling for chart loading
+  // Frontend timeout should be 8-10s to align with backend (10s) + network overhead
+  const [chartLoadingTimeout, setChartLoadingTimeout] = useState(false);
+  useEffect(() => {
+    if (chartLoading && !chartData?.stockChartData && researchSymbol) {
+      const timer = setTimeout(() => {
+        setChartLoadingTimeout(true);
+        logger.warn('Chart loading timeout after 9 seconds');
+      }, 9000); // 9 second timeout (aligned with backend 10s + network buffer)
+      return () => clearTimeout(timer);
+    } else {
+      setChartLoadingTimeout(false);
+    }
+  }, [chartLoading, chartData, researchSymbol]);
 
 
   // Options trading mutations
@@ -1076,7 +1127,12 @@ interface OptionOrder {
   // ✅ Derived values after all hooks are declared
   const hasChartData = chartSeries.length > 0;
   const isResearchTab = activeTab === 'research';
-  const isChartLoading = chartLoading || !chartData;
+  // Check for error responses from backend (source: "timeout" or "error")
+  const hasChartError = chartData?.stockChartData?.source === 'timeout' || chartData?.stockChartData?.source === 'error';
+  // Only show loading if actively loading AND we don't have any data yet AND haven't timed out
+  // If we have data (even if loading more), show the chart
+  // If we've timed out, show error/empty state instead of infinite loading
+  const isChartLoading = chartLoadingTimeout || hasChartError ? false : (chartLoading && !chartData?.stockChartData);
 
   // 🔍 Debug chart data
   React.useEffect(() => {
@@ -1546,6 +1602,11 @@ interface OptionOrder {
       setRustLoading(false);
     }
   }, [client]);
+
+  // Assign handleRustAnalysis to ref so it can be called from openAnalysis
+  useEffect(() => {
+    handleRustAnalysisRef.current = handleRustAnalysis;
+  }, [handleRustAnalysis]);
 
   // Function to determine if a stock is good for the user's income profile
   const isStockGoodForIncomeProfile = useCallback((stock: Stock) => {
@@ -2475,7 +2536,7 @@ placeholderTextColor="#999"
             </View>
           </View>
 
-          {effectiveResearchLoading || chartLoading ? (
+          {effectiveResearchLoading ? (
             <View style={styles.loadingContainer}>
               <Text style={styles.loadingText}>Loading research data...</Text>
             </View>
@@ -2538,8 +2599,19 @@ placeholderTextColor="#999"
                   <View style={styles.chartLoading}>
                     <Text style={{ color: '#666' }}>Loading chart...</Text>
                   </View>
+                ) : hasChartError ? (
+                  // ✅ Backend timeout/error state (from backend source field)
+                  <View style={[styles.chartLoading, { padding: 16 }]}>
+                    <Text style={{ color: '#EF4444', marginBottom: 8 }}>Chart Unavailable</Text>
+                    <Text style={{ color: '#666', fontSize: 12 }}>
+                      {chartData?.stockChartData?.error || 'Chart data temporarily unavailable'}
+                    </Text>
+                    <Text style={{ color: '#999', fontSize: 11, marginTop: 4 }}>
+                      Source: {chartData?.stockChartData?.source || 'unknown'}
+                    </Text>
+                  </View>
                 ) : !chartLoading && chartError ? (
-                  // ✅ Error state
+                  // ✅ Frontend error state
                   <View style={[styles.chartLoading, { padding: 16 }]}>
                     <Text style={{ color: '#EF4444', marginBottom: 8 }}>Chart Error</Text>
                     <Text style={{ color: '#666', fontSize: 12 }}>

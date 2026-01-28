@@ -5080,12 +5080,65 @@ async def graphql_endpoint(request: Request):
                 use_mock = USE_MOCK_STOCK_DATA
             
             # Get real or mock data based on environment
+            # Add timeout to prevent hanging - fallback to mock if real data takes too long
             if use_mock:
                 # MOCK PATH (dev/test only)
                 chart_response = await _get_mock_chart_data(symbol, interval, limit, indicators)
             else:
                 # REAL DATA PATH (production and dev with real APIs)
-                chart_response = await _get_real_chart_data(symbol, interval, limit, indicators)
+                # Add timeout wrapper - charts with indicators need 10-12s, not 3s
+                # asyncio is already imported at module level
+                import time
+                start_time = time.perf_counter()
+                
+                try:
+                    chart_response = await asyncio.wait_for(
+                        _get_real_chart_data(symbol, interval, limit, indicators),
+                        timeout=10.0  # 10 second timeout (was 3s - too aggressive for indicators)
+                    )
+                    duration = time.perf_counter() - start_time
+                    print(f"📊 Chart fetch took {duration:.2f}s for {symbol} (interval={interval})")
+                except asyncio.TimeoutError:
+                    duration = time.perf_counter() - start_time
+                    print(f"⏱️ REAL chart timed out at {duration:.2f}s for {symbol} (interval={interval})")
+                    # Only use mock in demo/dev mode, not production
+                    if USE_MOCK_STOCK_DATA and not IS_PRODUCTION:
+                        print(f"⚠️ Using mock data for {symbol} (demo mode)")
+                        chart_response = await _get_mock_chart_data(symbol, interval, limit, indicators)
+                    else:
+                        # Return error response instead of silent mock in production
+                        print(f"❌ Chart data unavailable for {symbol} - returning error response")
+                        chart_response = {
+                            "symbol": symbol,
+                            "interval": interval,
+                            "limit": limit,
+                            "currentPrice": 0.0,
+                            "change": 0.0,
+                            "changePercent": 0.0,
+                            "data": [],
+                            "indicators": {},
+                            "error": "Chart data temporarily unavailable",
+                            "source": "timeout"
+                        }
+                except Exception as e:
+                    duration = time.perf_counter() - start_time
+                    print(f"⚠️ Chart data fetch error for {symbol} after {duration:.2f}s: {e}")
+                    # Only use mock in demo/dev mode
+                    if USE_MOCK_STOCK_DATA and not IS_PRODUCTION:
+                        chart_response = await _get_mock_chart_data(symbol, interval, limit, indicators)
+                    else:
+                        chart_response = {
+                            "symbol": symbol,
+                            "interval": interval,
+                            "limit": limit,
+                            "currentPrice": 0.0,
+                            "change": 0.0,
+                            "changePercent": 0.0,
+                            "data": [],
+                            "indicators": {},
+                            "error": f"Chart data error: {str(e)}",
+                            "source": "error"
+                        }
             
             # Cache the response in both Redis (if available) and in-memory
             cache_entry = {
@@ -7595,4 +7648,18 @@ if __name__ == "__main__":
     print("Press Ctrl+C to stop the server")
     
     # Use the application (socket.io-wrapped if available, otherwise just FastAPI app)
-    uvicorn.run(application, host="0.0.0.0", port=8000)
+    # ✅ Use multiple workers to prevent one slow query from blocking all others
+    # In dev, use 2-4 workers; in production, use more (4-8)
+    # NOTE: When using workers > 1, must pass app as import string, not object
+    import os
+    workers = int(os.getenv("UVICORN_WORKERS", "1"))  # Default to 1 worker (safer for dev with socket.io)
+    
+    if workers > 1:
+        print(f"🚀 Starting with {workers} workers to handle concurrent requests")
+        print(f"⚠️  Note: Socket.io may not work correctly with multiple workers")
+        # With workers, must use import string format
+        uvicorn.run("main_server:application", host="0.0.0.0", port=8000, workers=workers, reload=False)
+    else:
+        # Single worker mode (for debugging and socket.io compatibility)
+        print("🚀 Starting with single worker (socket.io compatible)")
+        uvicorn.run(application, host="0.0.0.0", port=8000, reload=False)

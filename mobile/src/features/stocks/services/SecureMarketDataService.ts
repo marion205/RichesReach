@@ -83,6 +83,11 @@ export class SecureMarketDataService {
 
     const promise = this._fetchQuotesFromBackend(symbols)
       .then(async data => {
+        // ✅ Fix #1: Validate data before caching (prevent "empty success" trap)
+        if (!data || !Array.isArray(data) || data.length === 0) {
+          logger.warn(`⚠️ Backend returned empty/invalid data for symbols: ${key}`);
+          throw new Error("Empty data received from backend");
+        }
         // Cache successful response in both memory and persistent cache
         cache.set(key, { at: now, data });
         await imageCache.cacheData(`quotes_${key}`, data, CACHE_TTL_MS);
@@ -124,8 +129,9 @@ export class SecureMarketDataService {
     
     try {
       // Use AbortController for proper timeout handling
+      // Increased to 8s to account for server load and network latency
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout (reduced from 10)
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout (was 3s - too aggressive)
       
       const response = await fetch(url, {
         method: 'GET',
