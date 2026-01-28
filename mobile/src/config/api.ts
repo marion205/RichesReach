@@ -15,8 +15,8 @@ import logger from '../utils/logger';
 const LOCALHOST = Platform.OS === 'android' ? '10.0.2.2' : '127.0.0.1';
 
 // Your Mac's LAN IP - for physical devices only
-// Current IP: 10.0.0.54 (updated automatically)
-const LAN_IP = '10.0.0.54';
+// Current IP: 192.168.1.246 (updated from 10.0.0.54 - that IP doesn't exist on this machine)
+const LAN_IP = '192.168.1.246';
 
 // For simulator/emulator, use localhost; for physical devices, use LAN IP
 // In dev mode, prefer localhost for simulator (faster, more reliable)
