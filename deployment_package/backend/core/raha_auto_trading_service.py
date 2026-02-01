@@ -58,6 +58,7 @@ class RAHAAutoTradingService:
         - Fixed dollar amount
         - Percentage of account equity
         - Risk-based sizing (R-multiple)
+        - Kelly Criterion (optimal position sizing based on historical performance)
         """
         equity = Decimal(str(account_info.get('equity', 0) or account_info.get('cash', 0)))
         
@@ -96,6 +97,74 @@ class RAHAAutoTradingService:
             # Cap at max position size
             max_position = equity * (Decimal(str(settings.max_position_size_percent)) / Decimal('100'))
             return min(position_value, max_position)
+        
+        # Method 4: Kelly Criterion
+        elif settings.position_sizing_method == 'KELLY':
+            try:
+                from .chan_quant_signal_engine import ChanQuantSignalEngine
+                from .fss_data_pipeline import FSSDataPipeline, FSSDataRequest
+                import pandas as pd
+                import asyncio
+                
+                symbol = signal.symbol
+                entry_price = Decimal(str(signal.price))
+                
+                engine = ChanQuantSignalEngine()
+                
+                # Fetch historical price data
+                try:
+                    pipeline = FSSDataPipeline()
+                    data_result = asyncio.run(pipeline.fetch_data(
+                        tickers=[symbol],
+                        request=FSSDataRequest(lookback_days=252, include_fundamentals=False)
+                    ))
+                    
+                    if not data_result or data_result.prices.empty or symbol not in data_result.prices.columns:
+                        # Fallback to yfinance
+                        try:
+                            import yfinance as yf
+                            ticker = yf.Ticker(symbol)
+                            hist = ticker.history(period="1y")
+                            if hist.empty:
+                                logger.warning(f"No data for {symbol}, falling back to percentage method")
+                                return equity * (Decimal(str(settings.position_size_percent)) / Decimal('100'))
+                            prices = hist['Close']
+                        except Exception as yf_error:
+                            logger.warning(f"Failed to fetch data for {symbol}: {yf_error}, falling back to percentage method")
+                            return equity * (Decimal(str(settings.position_size_percent)) / Decimal('100'))
+                    else:
+                        prices = data_result.prices[symbol]
+                    
+                    if len(prices) < 20:
+                        logger.warning(f"Insufficient data for {symbol} ({len(prices)} days), falling back to percentage method")
+                        return equity * (Decimal(str(settings.position_size_percent)) / Decimal('100'))
+                    
+                    # Calculate Kelly
+                    returns = prices.pct_change().dropna()
+                    kelly_result = engine.calculate_kelly_position_size(symbol, returns)
+                    
+                    # Use recommended fraction (conservative Kelly = 25% of optimal)
+                    recommended_fraction = Decimal(str(kelly_result.recommended_fraction))
+                    
+                    # Calculate position value based on Kelly
+                    position_value = equity * recommended_fraction
+                    
+                    # Apply max position cap if provided
+                    if settings.max_position_size_percent:
+                        max_position = equity * (Decimal(str(settings.max_position_size_percent)) / Decimal('100'))
+                        position_value = min(position_value, max_position)
+                    
+                    logger.info(f"Kelly position size for {symbol}: {position_value} (Kelly fraction: {kelly_result.kelly_fraction:.4f}, Recommended: {recommended_fraction:.4f})")
+                    return position_value
+                    
+                except Exception as e:
+                    logger.error(f"Error calculating Kelly position size for {symbol}: {e}", exc_info=True)
+                    # Fall back to percentage method
+                    return equity * (Decimal(str(settings.position_size_percent)) / Decimal('100'))
+            except Exception as e:
+                logger.error(f"Error in Kelly calculation setup for {signal.symbol}: {e}", exc_info=True)
+                # Fall back to percentage method
+                return equity * (Decimal(str(settings.position_size_percent)) / Decimal('100'))
         
         # Default: 1% of equity
         return equity * Decimal('0.01')

@@ -127,6 +127,7 @@ import ProLabsScreen from './features/raha/screens/ProLabsScreen';
 import StrategyBuilderScreen from './features/raha/screens/StrategyBuilderScreen';
 import MLTrainingScreen from './features/raha/screens/MLTrainingScreen';
 import StrategyBlendBuilderScreen from './features/raha/screens/StrategyBlendBuilderScreen';
+import AutoTradingSettingsScreen from './features/raha/screens/AutoTradingSettingsScreen';
 // Components
 import { TopHeader, PersonalizedDashboard } from './components';
 // Services
@@ -730,6 +731,7 @@ logger.log('🔍 renderScreen called:', { currentScreen, isLoggedIn, isLoading, 
     'strategy-builder',
     'ml-training',
     'strategy-blend-builder',
+    'raha-auto-trading-settings',
   ];
   
   if (isLoggedIn && hasCompletedOnboarding && !isShellScreen && !screensThatNeedDirectRendering.includes(currentScreen)) {
@@ -884,6 +886,10 @@ return <DayTradingScreen navigateTo={navigateTo} />;
           // Strategy Blend Builder - Combine strategies with custom weights
           logger.log('🔍 Rendering StrategyBlendBuilderScreen');
           return <StrategyBlendBuilderScreen navigateTo={navigateTo} onBack={() => navigateTo('pro-labs')} />;
+        case 'raha-auto-trading-settings':
+          // Auto-Trading Settings - Configure automatic signal execution
+          logger.log('🔍 Rendering AutoTradingSettingsScreen');
+          return <AutoTradingSettingsScreen navigateTo={navigateTo} onBack={() => navigateTo('pro-labs')} />;
         case 'the-whisper':
           // The Whisper - The one magical P&L moment
           // This is accessed from DayTradingScreen when user wants to see their likely outcome

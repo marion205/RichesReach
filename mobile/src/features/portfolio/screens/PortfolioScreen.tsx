@@ -34,6 +34,7 @@ import { FamilyManagementModal } from '../../family/components/FamilyManagementM
 import { familySharingService, FamilyGroup, FamilyMember } from '../../family/services/FamilySharingService';
 import { DawnRitualScreen } from '../../rituals/screens/DawnRitualScreen';
 import { CreditQuestScreen } from '../../credit/screens/CreditQuestScreen';
+import PortfolioKellyMetricsCard from '../../../components/quant/PortfolioKellyMetricsCard';
 interface PortfolioScreenProps {
 navigateTo?: (screen: string) => void;
 }
@@ -847,8 +848,13 @@ return (
   </View>
 )}
 
+{/* Portfolio Kelly Metrics - Risk Overview */}
+<View style={{ marginTop: 24, marginBottom: 8, paddingHorizontal: 16 }}>
+  <PortfolioKellyMetricsCard />
+</View>
+
 {/* Portfolio Holdings - Mid Section */}
-<View style={{ marginTop: 24, marginBottom: 16, paddingHorizontal: 16 }}>
+<View style={{ marginTop: 16, marginBottom: 16, paddingHorizontal: 16 }}>
     <PortfolioHoldings
       holdings={allHoldings}
       onStockPress={(symbol) => {

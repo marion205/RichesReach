@@ -64,7 +64,7 @@ export default function AutoTradingSettingsScreen({
     parseFloat(settings?.minConfidenceThreshold) || 0.75
   );
   const [positionSizingMethod, setPositionSizingMethod] = useState<
-    'FIXED' | 'PERCENTAGE' | 'RISK_BASED'
+    'FIXED' | 'PERCENTAGE' | 'RISK_BASED' | 'KELLY'
   >(settings?.positionSizingMethod ?? 'PERCENTAGE');
   const [fixedPositionSize, setFixedPositionSize] = useState(
     parseFloat(settings?.fixedPositionSize) || 1000
@@ -277,6 +277,22 @@ export default function AutoTradingSettingsScreen({
                       Risk-Based
                     </Text>
                   </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.methodButton,
+                      positionSizingMethod === 'KELLY' && styles.methodButtonActive,
+                    ]}
+                    onPress={() => setPositionSizingMethod('KELLY')}
+                  >
+                    <Text
+                      style={[
+                        styles.methodButtonText,
+                        positionSizingMethod === 'KELLY' && styles.methodButtonTextActive,
+                      ]}
+                    >
+                      Kelly
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 
@@ -337,6 +353,39 @@ export default function AutoTradingSettingsScreen({
                       Max Position Size (
                       {maxPositionSizePercent ? maxPositionSizePercent.toFixed(1) : '10.0'}% of
                       equity)
+                    </Text>
+                    <Slider
+                      style={styles.slider}
+                      minimumValue={5}
+                      maximumValue={25}
+                      step={1}
+                      value={maxPositionSizePercent || 10.0}
+                      onValueChange={setMaxPositionSizePercent}
+                      minimumTrackTintColor="#1D4ED8"
+                      maximumTrackTintColor="#D1D5DB"
+                      thumbTintColor="#1D4ED8"
+                    />
+                  </View>
+                </>
+              )}
+
+              {positionSizingMethod === 'KELLY' && (
+                <>
+                  <View style={styles.preferenceItem}>
+                    <Text style={styles.preferenceLabel}>Kelly Criterion</Text>
+                    <Text style={styles.preferenceDescription}>
+                      Automatically calculates optimal position size based on historical win rate and risk/reward ratio.
+                      Uses a conservative fraction (25% of optimal Kelly) for safety.
+                    </Text>
+                  </View>
+                  <View style={styles.preferenceItem}>
+                    <Text style={styles.preferenceLabel}>
+                      Max Position Cap (
+                      {maxPositionSizePercent ? maxPositionSizePercent.toFixed(1) : '10.0'}% of
+                      equity)
+                    </Text>
+                    <Text style={styles.preferenceDescription}>
+                      Maximum position size regardless of Kelly calculation (safety limit)
                     </Text>
                     <Slider
                       style={styles.slider}

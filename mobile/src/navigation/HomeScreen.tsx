@@ -29,6 +29,7 @@ import { isMarketDataHealthy, MarketDataHealthStatus } from '../services/healthS
 import { mark, PerformanceMarkers } from '../utils/timing';
 import { API_BASE, API_HTTP } from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
+import type { NavigateParams } from './types';
 // Create a safe logger that always works, even if the import fails
 // This prevents "Property 'logger' doesn't exist" errors
 const createSafeLogger = () => {
@@ -434,13 +435,6 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
   });
   
   /* ===================== Home Screen ===================== */
-  interface NavigateParams {
-    symbol?: string;
-    bankId?: string;
-    [key: string]: unknown;
-  }
-  
-  
   const HomeScreen = ({ navigateTo }: { navigateTo?: (screen: string, data?: NavigateParams) => void }) => {
     const client = useApolloClient();
     // Timeout refs for various operations

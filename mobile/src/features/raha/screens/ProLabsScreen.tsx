@@ -277,6 +277,40 @@ export default function ProLabsScreen({ navigateTo }: ProLabsScreenProps = {}) {
             </View>
             <Icon name="chevron-right" size={20} color="#9CA3AF" />
           </TouchableOpacity>
+
+          {/* Auto Trading Settings */}
+          <TouchableOpacity
+            style={styles.menuCard}
+            onPress={() => {
+              logger.log('🔍 Auto Trading Settings pressed');
+              if (navigateTo) {
+                logger.log('🔍 Using navigateTo function to go to raha-auto-trading-settings');
+                navigateTo('raha-auto-trading-settings');
+              } else if (typeof window !== 'undefined') {
+                if ((window as any).__navigateToGlobal) {
+                  logger.log('🔍 Using window.__navigateToGlobal to go to raha-auto-trading-settings');
+                  (window as any).__navigateToGlobal('raha-auto-trading-settings');
+                } else if ((window as any).__setCurrentScreen) {
+                  logger.log('🔍 Using window.__setCurrentScreen to go to raha-auto-trading-settings');
+                  (window as any).__setCurrentScreen('raha-auto-trading-settings');
+                }
+              } else {
+                logger.error('🔍 No navigation method available!');
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.menuCardIcon, { backgroundColor: '#D1FAE5' }]}>
+              <Icon name="settings" size={24} color="#10B981" />
+            </View>
+            <View style={styles.menuCardContent}>
+              <Text style={styles.menuCardTitle}>Auto Trading Settings</Text>
+              <Text style={styles.menuCardDescription}>
+                Configure automatic signal execution with Kelly Criterion sizing
+              </Text>
+            </View>
+            <Icon name="chevron-right" size={20} color="#9CA3AF" />
+          </TouchableOpacity>
         </View>
 
         {/* Info Section */}

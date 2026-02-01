@@ -30,6 +30,8 @@ const CALCULATE_POSITION_SIZE = gql`
     $riskPerTrade: Float
     $maxPositionPct: Float
     $confidence: Float
+    $method: String
+    $symbol: String
   ) {
     calculatePositionSize(
       accountEquity: $accountEquity
@@ -38,6 +40,8 @@ const CALCULATE_POSITION_SIZE = gql`
       riskPerTrade: $riskPerTrade
       maxPositionPct: $maxPositionPct
       confidence: $confidence
+      method: $method
+      symbol: $symbol
     ) {
       positionSize
       dollarRisk
@@ -48,6 +52,12 @@ const CALCULATE_POSITION_SIZE = gql`
       riskPerShare
       maxSharesFixedRisk
       maxSharesPosition
+      kellyFraction
+      recommendedFraction
+      maxDrawdownRisk
+      winRate
+      avgWin
+      avgLoss
     }
   }
 `;
@@ -224,9 +234,24 @@ const RiskCoachScreen: React.FC<RiskCoachScreenProps> = ({ navigateTo }) => {
     if (!isFinite(eq) || eq <= 0) e['position.accountEquity'] = 'Enter equity > 0';
     if (!isFinite(entry) || entry <= 0) e['position.entryPrice'] = 'Enter valid entry';
     if (!isFinite(stop) || stop <= 0) e['position.stopPrice'] = 'Enter valid stop';
-    if (!isFinite(risk) || risk <= 0 || risk > 1) e['position.riskPerTrade'] = 'Use a fraction (e.g., 0.01)';
-    if (!isFinite(maxPos) || maxPos <= 0 || maxPos > 1) e['position.maxPositionPct'] = 'Use a fraction (e.g., 0.1)';
-    if (!isFinite(conf) || conf <= 0 || conf > 1) e['position.confidence'] = '0–1';
+    
+    // Kelly method requires symbol
+    if (positionInputs.method === 'KELLY') {
+      if (!positionInputs.symbol || positionInputs.symbol.trim().length === 0) {
+        e['position.symbol'] = 'Symbol required for Kelly method';
+      }
+    }
+    
+    // Only validate risk controls for non-Kelly methods
+    if (positionInputs.method !== 'KELLY') {
+      if (!isFinite(risk) || risk <= 0 || risk > 1) e['position.riskPerTrade'] = 'Use a fraction (e.g., 0.01)';
+      if (!isFinite(conf) || conf <= 0 || conf > 1) e['position.confidence'] = '0–1';
+    }
+    
+    // Max position cap is optional for Kelly, but validate if provided
+    if (positionInputs.maxPositionPct && (!isFinite(maxPos) || maxPos <= 0 || maxPos > 1)) {
+      e['position.maxPositionPct'] = 'Use a fraction (e.g., 0.1)';
+    }
 
     // Long/short directional check (align with stop)
     if (positionInputs.side === 'long' && isFinite(entry) && isFinite(stop) && !(stop < entry)) {
@@ -322,6 +347,8 @@ const RiskCoachScreen: React.FC<RiskCoachScreenProps> = ({ navigateTo }) => {
           riskPerTrade: safeFloat(positionInputs.riskPerTrade),
           maxPositionPct: safeFloat(positionInputs.maxPositionPct),
           confidence: safeFloat(positionInputs.confidence),
+          method: positionInputs.method,
+          symbol: positionInputs.method === 'KELLY' ? positionInputs.symbol : null,
         },
       });
     });
@@ -471,6 +498,8 @@ const RiskCoachScreen: React.FC<RiskCoachScreenProps> = ({ navigateTo }) => {
           riskPerTrade: safeFloat(positionInputs.riskPerTrade),
           maxPositionPct: safeFloat(positionInputs.maxPositionPct),
           confidence: safeFloat(positionInputs.confidence),
+          method: positionInputs.method,
+          symbol: positionInputs.method === 'KELLY' ? positionInputs.symbol : null,
         },
       });
     };
@@ -486,6 +515,28 @@ const RiskCoachScreen: React.FC<RiskCoachScreenProps> = ({ navigateTo }) => {
           options={[{ value: 'long', label: 'LONG' }, { value: 'short', label: 'SHORT' }]}
         />
 
+        <Text style={[styles.sectionTitle, { marginTop: 16, marginBottom: 8 }]}>Position Sizing Method</Text>
+        <Segmented
+          value={positionInputs.method}
+          onChange={(v) => updatePosition('method', v as 'FIXED_RISK' | 'PERCENTAGE' | 'KELLY')}
+          options={[
+            { value: 'FIXED_RISK', label: 'Fixed Risk' },
+            { value: 'PERCENTAGE', label: 'Percentage' },
+            { value: 'KELLY', label: 'Kelly' },
+          ]}
+        />
+
+        {positionInputs.method === 'KELLY' && (
+          <InputRow 
+            label="Stock Symbol (required for Kelly)" 
+            value={positionInputs.symbol}
+            onChange={(v) => updatePosition('symbol', v.toUpperCase())} 
+            placeholder="AAPL" 
+            error={err('symbol')}
+            testID="pos-symbol" 
+          />
+        )}
+
         <InputRow label="Account Equity" value={positionInputs.accountEquity}
           onChange={(v) => updatePosition('accountEquity', v)} placeholder="10000" error={err('accountEquity')}
           testID="pos-equity" />
@@ -499,18 +550,40 @@ const RiskCoachScreen: React.FC<RiskCoachScreenProps> = ({ navigateTo }) => {
             testID="pos-stop" />
         </TwoCol>
 
-        <Text style={[styles.sectionTitle, { marginTop: 8 }]}>Risk Controls</Text>
-        <TwoCol>
-          <InputRow label="Risk / Trade (fraction)" value={positionInputs.riskPerTrade}
-            onChange={(v) => updatePosition('riskPerTrade', v)} placeholder="0.01" error={err('riskPerTrade')}
-            testID="pos-risk" />
-          <InputRow label="Max Position (fraction)" value={positionInputs.maxPositionPct}
-            onChange={(v) => updatePosition('maxPositionPct', v)} placeholder="0.10" error={err('maxPositionPct')}
-            testID="pos-maxpos" />
-        </TwoCol>
-        <InputRow label="Signal Confidence (0–1)" value={positionInputs.confidence}
-          onChange={(v) => updatePosition('confidence', v)} placeholder="0.80" error={err('confidence')}
-          testID="pos-conf" />
+        {positionInputs.method !== 'KELLY' && (
+          <>
+            <Text style={[styles.sectionTitle, { marginTop: 8 }]}>Risk Controls</Text>
+            <TwoCol>
+              <InputRow label="Risk / Trade (fraction)" value={positionInputs.riskPerTrade}
+                onChange={(v) => updatePosition('riskPerTrade', v)} placeholder="0.01" error={err('riskPerTrade')}
+                testID="pos-risk" />
+              <InputRow label="Max Position (fraction)" value={positionInputs.maxPositionPct}
+                onChange={(v) => updatePosition('maxPositionPct', v)} placeholder="0.10" error={err('maxPositionPct')}
+                testID="pos-maxpos" />
+            </TwoCol>
+            <InputRow label="Signal Confidence (0–1)" value={positionInputs.confidence}
+              onChange={(v) => updatePosition('confidence', v)} placeholder="0.80" error={err('confidence')}
+              testID="pos-conf" />
+          </>
+        )}
+
+        {positionInputs.method === 'KELLY' && (
+          <View style={{ marginTop: 8 }}>
+            <Text style={[styles.sectionTitle, { marginBottom: 8 }]}>Kelly Method</Text>
+            <Text style={{ fontSize: 13, color: '#6B7280', marginBottom: 12 }}>
+              Kelly Criterion calculates optimal position size based on historical win rate and risk/reward ratio.
+              A conservative fraction (25% of optimal) is recommended.
+            </Text>
+            <InputRow 
+              label="Max Position Cap (fraction, optional)" 
+              value={positionInputs.maxPositionPct}
+              onChange={(v) => updatePosition('maxPositionPct', v)} 
+              placeholder="0.10" 
+              error={err('maxPositionPct')}
+              testID="pos-maxpos-kelly" 
+            />
+          </View>
+        )}
 
         <PrimaryButton onPress={runNow} label="Calculate Position Size" loading={positionLoading} testID="pos-run" />
 
@@ -530,6 +603,21 @@ const RiskCoachScreen: React.FC<RiskCoachScreenProps> = ({ navigateTo }) => {
               <MetricRow label="Risk / Share" value={fmtMoney(positionData.calculatePositionSize.riskPerShare)} />
               <MetricRow label="Max Shares (Fixed Risk)" value={positionData.calculatePositionSize.maxSharesFixedRisk?.toLocaleString() ?? '—'} />
               <MetricRow label="Max Shares (Position Cap)" value={positionData.calculatePositionSize.maxSharesPosition?.toLocaleString() ?? '—'} />
+              
+              {/* Kelly-specific metrics */}
+              {positionData.calculatePositionSize.method === 'kelly' && positionData.calculatePositionSize.kellyFraction != null && (
+                <>
+                  <Divider />
+                  <Text style={[styles.sectionTitle, { fontSize: 16, marginBottom: 8, marginTop: 8 }]}>Kelly Criterion Metrics</Text>
+                  <MetricRow label="Kelly Optimal" value={fmtPct(positionData.calculatePositionSize.kellyFraction)} />
+                  <MetricRow label="Recommended (25% Kelly)" value={fmtPct(positionData.calculatePositionSize.recommendedFraction)} />
+                  <MetricRow label="Max Drawdown Risk" value={fmtPct(positionData.calculatePositionSize.maxDrawdownRisk)} />
+                  <Divider />
+                  <MetricRow label="Historical Win Rate" value={fmtPct(positionData.calculatePositionSize.winRate)} />
+                  <MetricRow label="Avg Win %" value={fmtPct(positionData.calculatePositionSize.avgWin)} />
+                  <MetricRow label="Avg Loss %" value={fmtPct(positionData.calculatePositionSize.avgLoss)} />
+                </>
+              )}
             </Card>
           </View>
         )}
