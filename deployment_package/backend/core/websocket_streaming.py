@@ -70,7 +70,12 @@ class WebSocketStreamingService:
                     await ws.send_json(auth_message)
                     auth_response = await ws.receive_json()
                     
-                    if auth_response.get("T") == "success":
+                    # Handle both dict and list responses
+                    if isinstance(auth_response, list):
+                        # Alpaca sometimes returns list of messages
+                        auth_response = auth_response[0] if auth_response else {}
+                    
+                    if isinstance(auth_response, dict) and auth_response.get("T") == "success":
                         logger.info("✅ Alpaca WebSocket authenticated")
                     else:
                         logger.error(f"❌ Alpaca authentication failed: {auth_response}")
