@@ -412,6 +412,11 @@ CELERY_BEAT_SCHEDULE = {
 'task': 'core.stock_service.cleanup_old_cache',
 'schedule': 86400.0, # Every day
 },
+'precalculate-kelly-metrics': {
+'task': 'core.kelly_tasks.precalculate_kelly_metrics_task',
+'schedule': 86400.0, # Every day at midnight UTC
+'kwargs': {'user_id': None},  # Process all users
+},
 }
 # Channels Configuration
 CHANNEL_LAYERS = {

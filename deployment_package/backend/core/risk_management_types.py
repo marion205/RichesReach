@@ -3,6 +3,7 @@ GraphQL types and resolvers for risk management calculations
 """
 import graphene
 from .graphql_utils import get_user_from_context
+from django.core.cache import cache
 
 
 class PositionSizeType(graphene.ObjectType):
@@ -122,6 +123,13 @@ class RiskManagementQueries(graphene.ObjectType):
                 totalPositions=0
             )
         
+        # Check cache first (5 minute TTL - portfolio can change)
+        cache_key = f"kelly:portfolio_metrics:{user.id}"
+        cached_result = cache.get(cache_key)
+        if cached_result:
+            logger.debug(f"Portfolio Kelly: Cache hit for user {user.id}")
+            return PortfolioKellyMetricsType(**cached_result)
+        
         try:
             from .portfolio_service import PortfolioService
             from .chan_quant_signal_engine import ChanQuantSignalEngine
@@ -144,10 +152,11 @@ class RiskManagementQueries(graphene.ObjectType):
                     totalPositions=0
                 )
             
-            # Collect all holdings across all portfolios
+            # Collect all holdings across all portfolios (optimized batch processing)
             all_holdings = []
             total_portfolio_value = 0.0
             total_positions = 0
+            symbols_to_calculate = set()  # Track unique symbols for batch processing
             
             logger.info(f"Portfolio Kelly: Processing {len(portfolios_data.get('portfolios', []))} portfolios")
             for portfolio in portfolios_data.get('portfolios', []):
@@ -192,6 +201,7 @@ class RiskManagementQueries(graphene.ObjectType):
                             'position_value': position_value
                         })
                         total_portfolio_value += position_value
+                        symbols_to_calculate.add(symbol)  # Track for batch processing
                     else:
                         logger.debug(f"Portfolio Kelly: {symbol} skipped - position_value is 0 (shares={shares}, price={current_price})")
             
@@ -217,68 +227,109 @@ class RiskManagementQueries(graphene.ObjectType):
                     totalPositions=0
                 )
             
-            # Calculate Kelly metrics for each position
+            # Calculate Kelly metrics for each position (optimized: process by unique symbol)
             engine = ChanQuantSignalEngine()
             pipeline = FSSDataPipeline()
             
+            # Pre-fetch Kelly calculations for all unique symbols (batch processing)
+            symbol_kelly_cache = {}
+            for symbol in symbols_to_calculate:
+                symbol_cache_key = f"kelly:symbol:{symbol}"
+                cached_kelly = cache.get(symbol_cache_key)
+                if cached_kelly:
+                    symbol_kelly_cache[symbol] = cached_kelly
+                    logger.debug(f"Portfolio Kelly: Using cached Kelly for {symbol}")
+            
             kelly_data = []
             positions_with_kelly = 0
+            symbols_to_fetch = symbols_to_calculate - set(symbol_kelly_cache.keys())
+            
+            # Batch fetch missing Kelly calculations
+            if symbols_to_fetch:
+                logger.info(f"Portfolio Kelly: Need to calculate Kelly for {len(symbols_to_fetch)} symbols")
             
             for holding in all_holdings:
                 symbol = holding['symbol']
                 position_value = holding['position_value']
                 
                 try:
-                    prices = None
-                    # Fetch historical data - use yfinance directly (simpler and more reliable)
-                    try:
-                        import yfinance as yf
-                        ticker = yf.Ticker(symbol)
-                        hist = ticker.history(period="1y")
-                        if not hist.empty:
-                            prices = hist['Close']
-                    except Exception as yf_error:
-                        logger.debug(f"yfinance failed for {symbol}: {yf_error}, trying FSSDataPipeline")
-                        # Fallback to FSSDataPipeline if yfinance fails
+                    # Check if we already have Kelly data for this symbol (from batch cache or individual cache)
+                    symbol_cache_key = f"kelly:symbol:{symbol}"
+                    
+                    # First check batch cache (already loaded)
+                    if symbol in symbol_kelly_cache:
+                        kelly_result_data = symbol_kelly_cache[symbol]
+                    else:
+                        # Check individual cache
+                        cached_kelly = cache.get(symbol_cache_key)
+                        if cached_kelly:
+                            logger.debug(f"Portfolio Kelly: Cache hit for {symbol}")
+                            kelly_result_data = cached_kelly
+                            symbol_kelly_cache[symbol] = cached_kelly  # Add to batch cache
+                        else:
+                            # Cache miss - calculate Kelly
+                            prices = None
+                        # Fetch historical data - use yfinance directly (simpler and more reliable)
                         try:
-                            # Try to get event loop safely
+                            import yfinance as yf
+                            ticker = yf.Ticker(symbol)
+                            hist = ticker.history(period="1y")
+                            if not hist.empty:
+                                prices = hist['Close']
+                        except Exception as yf_error:
+                            logger.debug(f"yfinance failed for {symbol}: {yf_error}, trying FSSDataPipeline")
+                            # Fallback to FSSDataPipeline if yfinance fails
                             try:
-                                loop = asyncio.get_event_loop()
-                                if loop.is_running():
-                                    # Can't use asyncio.run() if loop is running
-                                    logger.warning(f"Event loop running for {symbol}, skipping FSSDataPipeline")
-                                    continue
-                            except RuntimeError:
-                                # No event loop, safe to use asyncio.run()
-                                pass
-                            
-                            data_result = asyncio.run(pipeline.fetch_data(
-                                tickers=[symbol],
-                                request=FSSDataRequest(lookback_days=252, include_fundamentals=False)
-                            ))
-                            
-                            if data_result and not data_result.prices.empty and symbol in data_result.prices.columns:
-                                prices = data_result.prices[symbol]
-                        except Exception as fss_error:
-                            logger.debug(f"FSSDataPipeline also failed for {symbol}: {fss_error}")
+                                # Try to get event loop safely
+                                try:
+                                    loop = asyncio.get_event_loop()
+                                    if loop.is_running():
+                                        # Can't use asyncio.run() if loop is running
+                                        logger.warning(f"Event loop running for {symbol}, skipping FSSDataPipeline")
+                                        continue
+                                except RuntimeError:
+                                    # No event loop, safe to use asyncio.run()
+                                    pass
+                                
+                                data_result = asyncio.run(pipeline.fetch_data(
+                                    tickers=[symbol],
+                                    request=FSSDataRequest(lookback_days=252, include_fundamentals=False)
+                                ))
+                                
+                                if data_result and not data_result.prices.empty and symbol in data_result.prices.columns:
+                                    prices = data_result.prices[symbol]
+                            except Exception as fss_error:
+                                logger.debug(f"FSSDataPipeline also failed for {symbol}: {fss_error}")
+                                continue
+                        
+                        if prices is None or len(prices) < 20:
+                            logger.debug(f"Insufficient data for {symbol} (got {len(prices) if prices is not None else 0} data points)")
                             continue
-                    
-                    if prices is None or len(prices) < 20:
-                        logger.debug(f"Insufficient data for {symbol} (got {len(prices) if prices is not None else 0} data points)")
-                        continue
-                    
-                    # Calculate Kelly
-                    returns = prices.pct_change().dropna()
-                    kelly_result = engine.calculate_kelly_position_size(symbol, returns)
+                        
+                        # Calculate Kelly
+                        returns = prices.pct_change().dropna()
+                        kelly_result = engine.calculate_kelly_position_size(symbol, returns)
+                        
+                        # Cache the Kelly result (1 hour TTL - historical data doesn't change frequently)
+                        kelly_result_data = {
+                            'kelly_fraction': float(kelly_result.kelly_fraction),
+                            'recommended_fraction': float(kelly_result.recommended_fraction),
+                            'max_drawdown_risk': float(kelly_result.max_drawdown_risk),
+                            'win_rate': float(kelly_result.win_rate),
+                            'avg_win': float(kelly_result.avg_win),
+                            'avg_loss': float(kelly_result.avg_loss),
+                        }
+                        cache.set(symbol_cache_key, kelly_result_data, 3600)  # 1 hour TTL
+                        logger.debug(f"Portfolio Kelly: Cached Kelly calculation for {symbol}")
                     
                     # Weight by position value
                     weight = position_value / total_portfolio_value if total_portfolio_value > 0 else 0
                     
                     kelly_data.append({
-                        'kelly_fraction': kelly_result.kelly_fraction,
-                        'recommended_fraction': kelly_result.recommended_fraction,
-                        'max_drawdown_risk': kelly_result.max_drawdown_risk,
-                        'win_rate': kelly_result.win_rate,
+                        'kelly_fraction': kelly_result_data['kelly_fraction'],
+                        'recommended_fraction': kelly_result_data['recommended_fraction'],
+                        'max_drawdown_risk': kelly_result_data['max_drawdown_risk'],
+                        'win_rate': kelly_result_data['win_rate'],
                         'weight': weight,
                         'position_value': position_value
                     })
@@ -308,15 +359,22 @@ class RiskManagementQueries(graphene.ObjectType):
             portfolio_max_drawdown = max(d['max_drawdown_risk'] for d in kelly_data) if kelly_data else 0.0
             
             logger.info(f"Portfolio Kelly: Calculated metrics for {positions_with_kelly}/{total_positions} positions")
-            return PortfolioKellyMetricsType(
-                totalPortfolioValue=float(total_portfolio_value),
-                aggregateKellyFraction=float(aggregate_kelly),
-                aggregateRecommendedFraction=float(aggregate_recommended),
-                portfolioMaxDrawdownRisk=float(portfolio_max_drawdown),
-                weightedWinRate=float(weighted_win_rate),
-                positionCount=positions_with_kelly,
-                totalPositions=total_positions
-            )
+            
+            # Prepare result for caching
+            result_data = {
+                'totalPortfolioValue': float(total_portfolio_value),
+                'aggregateKellyFraction': float(aggregate_kelly),
+                'aggregateRecommendedFraction': float(aggregate_recommended),
+                'portfolioMaxDrawdownRisk': float(portfolio_max_drawdown),
+                'weightedWinRate': float(weighted_win_rate),
+                'positionCount': positions_with_kelly,
+                'totalPositions': total_positions
+            }
+            
+            # Cache the portfolio-level result (5 minute TTL)
+            cache.set(cache_key, result_data, 300)  # 5 minutes TTL
+            
+            return PortfolioKellyMetricsType(**result_data)
             
         except Exception as e:
             logger.error(f"Error calculating portfolio Kelly metrics: {e}", exc_info=True)
@@ -410,9 +468,37 @@ class RiskManagementQueries(graphene.ObjectType):
                     if len(prices) < 20:
                         raise ValueError(f"Insufficient data for {symbol}: {len(prices)} days")
                     
-                    # Calculate Kelly
-                    returns = prices.pct_change().dropna()
-                    kelly_result = engine.calculate_kelly_position_size(symbol, returns)
+                    # Check cache for Kelly calculation (1 hour TTL)
+                    symbol_cache_key = f"kelly:symbol:{symbol}"
+                    cached_kelly = cache.get(symbol_cache_key)
+                    
+                    if cached_kelly:
+                        logger.debug(f"Position Size Kelly: Cache hit for {symbol}")
+                        # Reconstruct KellyPositionSize-like object from cache
+                        from types import SimpleNamespace
+                        kelly_result = SimpleNamespace(
+                            kelly_fraction=cached_kelly['kelly_fraction'],
+                            recommended_fraction=cached_kelly['recommended_fraction'],
+                            max_drawdown_risk=cached_kelly['max_drawdown_risk'],
+                            win_rate=cached_kelly['win_rate'],
+                            avg_win=cached_kelly.get('avg_win', 0.0),
+                            avg_loss=cached_kelly.get('avg_loss', 0.0)
+                        )
+                    else:
+                        # Calculate Kelly
+                        returns = prices.pct_change().dropna()
+                        kelly_result = engine.calculate_kelly_position_size(symbol, returns)
+                        
+                        # Cache the result (1 hour TTL)
+                        cache.set(symbol_cache_key, {
+                            'kelly_fraction': float(kelly_result.kelly_fraction),
+                            'recommended_fraction': float(kelly_result.recommended_fraction),
+                            'max_drawdown_risk': float(kelly_result.max_drawdown_risk),
+                            'win_rate': float(kelly_result.win_rate),
+                            'avg_win': float(kelly_result.avg_win),
+                            'avg_loss': float(kelly_result.avg_loss),
+                        }, 3600)  # 1 hour TTL
+                        logger.debug(f"Position Size Kelly: Cached calculation for {symbol}")
                     
                     # Use recommended fraction (conservative Kelly)
                     recommended_fraction = float(kelly_result.recommended_fraction)

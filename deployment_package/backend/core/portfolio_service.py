@@ -14,7 +14,11 @@ class PortfolioService:
     @staticmethod
     def get_user_portfolios(user):
         """Get all virtual portfolios for a user"""
-        holdings = Portfolio.objects.filter(user=user).select_related('stock')
+        # Optimize: Use select_related to reduce database queries
+        holdings = Portfolio.objects.filter(user=user).select_related('stock').only(
+            'id', 'shares', 'average_price', 'current_price', 'notes', 'created_at', 'updated_at',
+            'stock__symbol', 'stock__name', 'stock__exchange'
+        )
         # Group holdings by portfolio name (stored in notes)
         portfolios = {}
         total_value = Decimal('0')
