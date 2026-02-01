@@ -107,21 +107,11 @@ class RiskManagementQueries(graphene.ObjectType):
         import logging
         logger = logging.getLogger(__name__)
         
-        try:
-            user = get_user_from_context(info.context)
-            if not user or getattr(user, "is_anonymous", True):
-                logger.warning("Portfolio Kelly metrics: User not authenticated")
-                return PortfolioKellyMetricsType(
-                    totalPortfolioValue=0.0,
-                    aggregateKellyFraction=0.0,
-                    aggregateRecommendedFraction=0.0,
-                    portfolioMaxDrawdownRisk=0.0,
-                    weightedWinRate=0.0,
-                    positionCount=0,
-                    totalPositions=0
-                )
-        except Exception as e:
-            logger.error(f"Error getting user from context: {e}", exc_info=True)
+        # Use same approach as resolve_my_portfolios for consistency
+        user = info.context.user
+        
+        if not user or getattr(user, "is_anonymous", True):
+            logger.warning("Portfolio Kelly metrics: User not authenticated")
             return PortfolioKellyMetricsType(
                 totalPortfolioValue=0.0,
                 aggregateKellyFraction=0.0,
@@ -141,7 +131,9 @@ class RiskManagementQueries(graphene.ObjectType):
             
             # Get user's portfolio holdings
             portfolios_data = PortfolioService.get_user_portfolios(user)
+            logger.info(f"Portfolio Kelly: Got portfolios_data: {portfolios_data}")
             if not portfolios_data or not portfolios_data.get('portfolios'):
+                logger.warning(f"Portfolio Kelly: No portfolios found for user {user.id}")
                 return PortfolioKellyMetricsType(
                     totalPortfolioValue=0.0,
                     aggregateKellyFraction=0.0,
@@ -157,11 +149,15 @@ class RiskManagementQueries(graphene.ObjectType):
             total_portfolio_value = 0.0
             total_positions = 0
             
+            logger.info(f"Portfolio Kelly: Processing {len(portfolios_data.get('portfolios', []))} portfolios")
             for portfolio in portfolios_data.get('portfolios', []):
-                for holding in portfolio.get('holdings', []):
+                portfolio_holdings = portfolio.get('holdings', [])
+                logger.info(f"Portfolio Kelly: Portfolio '{portfolio.get('name', 'Unknown')}' has {len(portfolio_holdings)} holdings")
+                for holding in portfolio_holdings:
                     total_positions += 1  # Count all positions
                     stock = holding.get('stock')
                     if not stock:
+                        logger.debug(f"Portfolio Kelly: Holding {total_positions} has no stock object")
                         continue
                     
                     # Handle both model objects and dicts
@@ -170,9 +166,11 @@ class RiskManagementQueries(graphene.ObjectType):
                     elif isinstance(stock, dict):
                         symbol = stock.get('symbol')
                     else:
+                        logger.debug(f"Portfolio Kelly: Holding {total_positions} stock is not a model or dict: {type(stock)}")
                         continue
                     
                     if not symbol:
+                        logger.debug(f"Portfolio Kelly: Holding {total_positions} has no symbol")
                         continue
                     
                     shares = float(holding.get('shares', 0) or 0)
@@ -184,6 +182,8 @@ class RiskManagementQueries(graphene.ObjectType):
                     )
                     position_value = shares * current_price
                     
+                    logger.debug(f"Portfolio Kelly: {symbol} - shares={shares}, price={current_price}, value={position_value}")
+                    
                     if position_value > 0:
                         all_holdings.append({
                             'symbol': symbol,
@@ -192,9 +192,12 @@ class RiskManagementQueries(graphene.ObjectType):
                             'position_value': position_value
                         })
                         total_portfolio_value += position_value
+                    else:
+                        logger.debug(f"Portfolio Kelly: {symbol} skipped - position_value is 0 (shares={shares}, price={current_price})")
             
+            logger.info(f"Portfolio Kelly: Collected {len(all_holdings)} valid holdings from {total_positions} total positions, total value=${total_portfolio_value:.2f}")
             if not all_holdings:
-                logger.info(f"Portfolio Kelly: Found {total_positions} positions but none with valid price data")
+                logger.warning(f"Portfolio Kelly: Found {total_positions} positions but none with valid price data")
                 return PortfolioKellyMetricsType(
                     totalPortfolioValue=float(total_portfolio_value),
                     aggregateKellyFraction=0.0,
@@ -226,16 +229,14 @@ class RiskManagementQueries(graphene.ObjectType):
                 position_value = holding['position_value']
                 
                 try:
-                    # Fetch historical data - use yfinance directly to avoid async issues
-                    # This is simpler and more reliable for this use case
+                    prices = None
+                    # Fetch historical data - use yfinance directly (simpler and more reliable)
                     try:
                         import yfinance as yf
                         ticker = yf.Ticker(symbol)
                         hist = ticker.history(period="1y")
-                        if hist.empty:
-                            logger.debug(f"No data for {symbol}, skipping")
-                            continue
-                        prices = hist['Close']
+                        if not hist.empty:
+                            prices = hist['Close']
                     except Exception as yf_error:
                         logger.debug(f"yfinance failed for {symbol}: {yf_error}, trying FSSDataPipeline")
                         # Fallback to FSSDataPipeline if yfinance fails
@@ -256,28 +257,14 @@ class RiskManagementQueries(graphene.ObjectType):
                                 request=FSSDataRequest(lookback_days=252, include_fundamentals=False)
                             ))
                             
-                            if not data_result or data_result.prices.empty or symbol not in data_result.prices.columns:
-                                continue
-                            prices = data_result.prices[symbol]
+                            if data_result and not data_result.prices.empty and symbol in data_result.prices.columns:
+                                prices = data_result.prices[symbol]
                         except Exception as fss_error:
                             logger.debug(f"FSSDataPipeline also failed for {symbol}: {fss_error}")
                             continue
                     
-                    if not data_result or data_result.prices.empty or symbol not in data_result.prices.columns:
-                        # Fallback to yfinance
-                        try:
-                            import yfinance as yf
-                            ticker = yf.Ticker(symbol)
-                            hist = ticker.history(period="1y")
-                            if hist.empty:
-                                continue
-                            prices = hist['Close']
-                        except Exception:
-                            continue
-                    else:
-                        prices = data_result.prices[symbol]
-                    
-                    if len(prices) < 20:
+                    if prices is None or len(prices) < 20:
+                        logger.debug(f"Insufficient data for {symbol} (got {len(prices) if prices is not None else 0} data points)")
                         continue
                     
                     # Calculate Kelly

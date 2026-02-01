@@ -70,7 +70,6 @@ export default function ChanQuantSignalsCard({ symbol, onShowExplainer }: ChanQu
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Quant Signals</Text>
-          <Text style={styles.subtitle}>Based on Ernest P. Chan's methods</Text>
         </View>
         <Text style={styles.loadingText}>Loading quantitative signals...</Text>
       </View>
@@ -82,7 +81,6 @@ export default function ChanQuantSignalsCard({ symbol, onShowExplainer }: ChanQu
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Quant Signals</Text>
-          <Text style={styles.subtitle}>Based on Ernest P. Chan's methods</Text>
         </View>
         <View style={styles.errorContainer}>
           <Icon name="alert-circle" size={24} color="#EF4444" />
@@ -98,7 +96,6 @@ export default function ChanQuantSignalsCard({ symbol, onShowExplainer }: ChanQu
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Quant Signals</Text>
-          <Text style={styles.subtitle}>Based on Ernest P. Chan's methods</Text>
         </View>
         <View style={styles.errorContainer}>
           <Icon name="info" size={24} color="#6B7280" />
@@ -117,7 +114,6 @@ export default function ChanQuantSignalsCard({ symbol, onShowExplainer }: ChanQu
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Quant Signals</Text>
-          <Text style={styles.subtitle}>Based on Ernest P. Chan's methods</Text>
         </View>
         {onShowExplainer && (
           <TouchableOpacity onPress={onShowExplainer} style={styles.infoButton}>

@@ -61,7 +61,15 @@ export default function PortfolioKellyMetricsCard({ style }: PortfolioKellyMetri
     );
   }
 
-  if (error || !metrics) {
+  // Handle error case - show error message
+  if (error) {
+    const errorMessage = error.graphQLErrors?.[0]?.message || error.networkError?.message || 'Unknown error';
+    console.error('[PortfolioKellyMetricsCard] Full error details:', {
+      error,
+      errorMessage,
+      graphQLErrors: error.graphQLErrors,
+      networkError: error.networkError,
+    });
     return (
       <View style={[styles.container, style]}>
         <View style={styles.header}>
@@ -71,13 +79,36 @@ export default function PortfolioKellyMetricsCard({ style }: PortfolioKellyMetri
         <View style={styles.errorContainer}>
           <Icon name="alert-circle" size={16} color="#EF4444" />
           <Text style={styles.errorText}>Unable to load metrics</Text>
+          {__DEV__ && (
+            <Text style={[styles.errorText, { fontSize: 10, marginTop: 4 }]}>
+              {errorMessage}
+            </Text>
+          )}
         </View>
       </View>
     );
   }
 
-  const hasData = metrics.positionCount > 0;
-  const hasPositions = (metrics.totalPositions || 0) > 0;
+  // Handle case where query succeeded but returned null/undefined
+  if (!metrics) {
+    console.warn('[PortfolioKellyMetricsCard] Query succeeded but metrics is null/undefined');
+    return (
+      <View style={[styles.container, style]}>
+        <View style={styles.header}>
+          <Icon name="trending-up" size={20} color="#1D4ED8" />
+          <Text style={styles.title}>Portfolio Risk Metrics</Text>
+        </View>
+        <View style={styles.errorContainer}>
+          <Icon name="alert-circle" size={16} color="#EF4444" />
+          <Text style={styles.errorText}>No metrics data available</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // Check if we have actual Kelly data (positionCount > 0) or just empty metrics
+  const hasData = metrics && metrics.positionCount > 0;
+  const hasPositions = metrics && (metrics.totalPositions || 0) > 0;
   const portfolioValue = metrics.totalPortfolioValue || 0;
   const kellyOptimal = (metrics.aggregateKellyFraction || 0) * 100;
   const kellyRecommended = (metrics.aggregateRecommendedFraction || 0) * 100;

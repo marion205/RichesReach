@@ -188,9 +188,6 @@ export default function QuantThinkingExplainer({
             RichesReach doesn't copy trades. We extract algorithmic primitives
             and turn them into productized intelligence.
           </Text>
-          <Text style={styles.footerCredit}>
-            Based on "Quantitative Trading" by Ernest P. Chan
-          </Text>
         </View>
       </ScrollView>
     </View>
