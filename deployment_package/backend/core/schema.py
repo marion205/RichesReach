@@ -877,6 +877,15 @@ try:
 except ImportError:
     pass
 
+# Add Speed Optimization Types
+try:
+    from .speed_optimization_types import LatencyStatsType, OptimizationStatusType
+    schema_types.extend([
+        LatencyStatsType, OptimizationStatusType
+    ])
+except ImportError:
+    pass
+
 schema = graphene.Schema(
     query=ExtendedQuery,
     mutation=ExtendedMutation,
