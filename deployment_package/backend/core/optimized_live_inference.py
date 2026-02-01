@@ -197,6 +197,14 @@ class OptimizedLiveInference:
             total_latency = (time.time() - start_time) * 1000
             self.latency_history.append(total_latency)
             
+            # Record latency in speed optimization service
+            try:
+                from .speed_optimization_service import get_speed_optimization_service
+                speed_service = get_speed_optimization_service()
+                speed_service.record_latency(total_latency, operation='inference')
+            except Exception as e:
+                logger.warning(f"Could not record latency: {e}")
+            
             return {
                 'symbol': symbol,
                 'action': action,
