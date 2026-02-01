@@ -103,48 +103,85 @@ class WebSocketStreamingService:
         try:
             async for msg in ws:
                 if msg.type == aiohttp.WSMsgType.TEXT:
-                    data = json.loads(msg.data)
+                    try:
+                        data = json.loads(msg.data)
+                    except json.JSONDecodeError:
+                        logger.warning(f"Invalid JSON message: {msg.data}")
+                        continue
                     
-                    # Handle different message types
-                    if data.get("T") == "t":  # Trade
-                        symbol = data.get("S")
-                        price = data.get("p")
-                        volume = data.get("s")
-                        timestamp = data.get("t")
-                        
-                        self._update_price_cache(symbol, {
-                            'price': price,
-                            'volume': volume,
-                            'timestamp': timestamp,
-                            'source': 'alpaca_trade'
-                        })
-                        
-                    elif data.get("T") == "b":  # Bar
-                        symbol = data.get("S")
-                        bar = data.get("o")  # Open
-                        high = data.get("h")
-                        low = data.get("l")
-                        close = data.get("c")
-                        volume = data.get("v")
-                        timestamp = data.get("t")
-                        
-                        self._update_price_cache(symbol, {
-                            'open': bar,
-                            'high': high,
-                            'low': low,
-                            'close': close,
-                            'volume': volume,
-                            'timestamp': timestamp,
-                            'source': 'alpaca_bar'
-                        })
+                    # Handle list of messages (Alpaca can return arrays)
+                    messages = data if isinstance(data, list) else [data]
+                    
+                    for message in messages:
+                        if not isinstance(message, dict):
+                            continue
+                        await self._process_alpaca_message(message, symbols)
                         
                 elif msg.type == aiohttp.WSMsgType.ERROR:
                     logger.error(f"WebSocket error: {msg}")
                     break
                     
         except Exception as e:
-            logger.error(f"Error handling Alpaca messages: {e}")
+            logger.error(f"Error handling Alpaca messages: {e}", exc_info=True)
             raise
+    
+    async def _process_alpaca_message(self, message: Dict, symbols: List[str]):
+        """Process a single Alpaca WebSocket message"""
+        try:
+            event_type = message.get("T")  # Message type
+            symbol = message.get("S")  # Symbol
+            
+            if not symbol:
+                return
+            
+            if event_type == "t":  # Trade
+                price = message.get("p")
+                volume = message.get("s")
+                timestamp = message.get("t")
+                
+                self._update_price_cache(symbol, {
+                    'price': price,
+                    'volume': volume,
+                    'timestamp': timestamp,
+                    'source': 'alpaca_trade'
+                })
+                
+            elif event_type == "q":  # Quote
+                bid = message.get("bp")
+                ask = message.get("ap")
+                timestamp = message.get("t")
+                
+                # Use mid price
+                price = (bid + ask) / 2 if bid and ask else None
+                
+                if price:
+                    self._update_price_cache(symbol, {
+                        'price': price,
+                        'bid': bid,
+                        'ask': ask,
+                        'timestamp': timestamp,
+                        'source': 'alpaca_quote'
+                    })
+                
+            elif event_type == "b":  # Bar (aggregate)
+                open_price = message.get("o")
+                high = message.get("h")
+                low = message.get("l")
+                close = message.get("c")
+                volume = message.get("v")
+                timestamp = message.get("t")
+                
+                self._update_price_cache(symbol, {
+                    'open': open_price,
+                    'high': high,
+                    'low': low,
+                    'close': close,
+                    'volume': volume,
+                    'timestamp': timestamp,
+                    'source': 'alpaca_bar'
+                })
+        except Exception as e:
+            logger.error(f"Error processing Alpaca message: {e}", exc_info=True)
     
     async def connect_polygon(
         self,
