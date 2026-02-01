@@ -137,6 +137,20 @@ except (ImportError, SyntaxError):
         pass
 
 try:
+    from .chan_quant_types import ChanQuantQueries, ChanQuantSignalsType
+    CHAN_QUANT_AVAILABLE = True
+except (ImportError, SyntaxError) as e:
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.warning(f"ChanQuantQueries not available: {e}")
+    CHAN_QUANT_AVAILABLE = False
+    class ChanQuantQueries(graphene.ObjectType):
+        pass
+    # Create a dummy type for the field definition
+    class ChanQuantSignalsType(graphene.ObjectType):
+        pass
+
+try:
     from .raha_mutations import RAHAMutations
 except (ImportError, SyntaxError):
     class RAHAMutations(graphene.ObjectType):
@@ -148,7 +162,7 @@ except (ImportError, SyntaxError):
     class RAHAAdvancedMutations(graphene.ObjectType):
         pass
 
-class ExtendedQuery(PremiumQueries, BrokerQueries, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, RiskManagementQueries, OptionsAlertQueries, BlockchainQueries, RAHAQueries, Query, graphene.ObjectType):
+class ExtendedQuery(PremiumQueries, BrokerQueries, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, RiskManagementQueries, OptionsAlertQueries, BlockchainQueries, RAHAQueries, ChanQuantQueries, Query, graphene.ObjectType):
     """
     Final Query type exposed by the schema.
 
@@ -157,6 +171,31 @@ class ExtendedQuery(PremiumQueries, BrokerQueries, BankingQueries, SBLOCQueries,
     - Adds Broker, Banking, and SBLOC queries
     - The base Query class has resolve_me which will be available here
     """
+    
+    # Explicitly expose chanQuantSignals to ensure it's available
+    # This helps with MRO (Method Resolution Order) issues in multiple inheritance
+    # Always define the field (even if unavailable) so GraphQL schema recognizes it
+    chanQuantSignals = graphene.Field(
+        ChanQuantSignalsType,
+        symbol=graphene.String(required=True),
+        description="Get Chan quantitative signals (mean reversion, momentum, Kelly, regime robustness) for a symbol"
+    )
+    
+    def resolve_chanQuantSignals(self, info, symbol: str):
+        """Delegate to ChanQuantQueries resolver"""
+        # Call the resolver from ChanQuantQueries directly
+        # This ensures the method is found even with complex MRO
+        if not CHAN_QUANT_AVAILABLE:
+            return None
+        try:
+            resolver = getattr(ChanQuantQueries, 'resolve_chanQuantSignals', None)
+            if resolver:
+                return resolver(self, info, symbol)
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Error in resolve_chanQuantSignals: {e}", exc_info=True)
+        return None
     
     # Legacy aliases for backward compatibility with mobile app
     # These map old field names to new canonical names
@@ -803,6 +842,19 @@ try:
     from .types import StockChartDataType, ChartDataPointType
     schema_types.extend([
         StockChartDataType, ChartDataPointType
+    ])
+except ImportError:
+    pass
+
+# Add Chan Quantitative Signal Types
+try:
+    from .chan_quant_types import (
+        MeanReversionSignalType, MomentumSignalType, MomentumAlignmentType,
+        KellyPositionSizeType, RegimeRobustnessScoreType, ChanQuantSignalsType
+    )
+    schema_types.extend([
+        MeanReversionSignalType, MomentumSignalType, MomentumAlignmentType,
+        KellyPositionSizeType, RegimeRobustnessScoreType, ChanQuantSignalsType
     ])
 except ImportError:
     pass

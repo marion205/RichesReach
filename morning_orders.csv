@@ -1,0 +1,5 @@
+Symbol,Action,Quantity,Limit_Price,Weight_Pct,Robustness,SSR,FSS_Score,Kelly_Fraction,Current_Price,Strategy
+GLD,BUY,56,447.17,25.0,0.717,0.57,71.5,0.0496,444.95,Chan_MeanRev_Momentum
+GOOGL,BUY,73,339.69,25.0,0.785,0.627,59.7,0.0354,338.0,Chan_MeanRev_Momentum
+JNJ,BUY,110,228.39,25.0,0.746,0.51,57.4,0.0278,227.25,Chan_MeanRev_Momentum
+WMT,BUY,209,119.74,25.0,0.78,0.671,64.5,0.041,119.14,Chan_MeanRev_Momentum

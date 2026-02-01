@@ -73,6 +73,8 @@ import { IVSurfaceForecast } from '../../../components/options/IVSurfaceForecast
 import { PLACE_BRACKET_OPTIONS_ORDER } from '../../../graphql/optionsMutations';
 import { useOptionsPositions } from '../../../hooks/useOptionsPositions';
 import { useAlpacaAccount } from '../hooks/useAlpacaAccount';
+import ChanQuantSignalsCard from '../components/ChanQuantSignalsCard';
+import QuantThinkingExplainer from '../../../components/quant/QuantThinkingExplainer';
 
 // Chart data adapter utilities
 // ✅ Robust timestamp conversion: handles seconds, milliseconds, ISO strings, and Date objects
@@ -822,6 +824,7 @@ interface RustAnalysis {
   const [showBracketOrder, setShowBracketOrder] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [showEducation, setShowEducation] = useState<string | null>(null);
+  const [showQuantExplainer, setShowQuantExplainer] = useState(false);
   const optionsScrollViewRef = useRef<any>(null);
   const optionsChainRef = useRef<View>(null);
   const rustQueryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -2854,6 +2857,16 @@ placeholderTextColor="#999"
                 )}
               </View>
 
+              {/* Chan Quantitative Signals */}
+              {researchSymbol && (
+                <View style={styles.card}>
+                  <ChanQuantSignalsCard 
+                    symbol={researchSymbol}
+                    onShowExplainer={() => setShowQuantExplainer(true)}
+                  />
+                </View>
+              )}
+
               {/* Key Metrics */}
               <View style={styles.metricsGrid}>
                 <View style={styles.metricCard}>
@@ -3645,6 +3658,19 @@ placeholderTextColor="#999"
         currency="USD"
       />
 
+      {/* Quant Thinking Explainer Modal */}
+      <Modal
+        visible={showQuantExplainer}
+        transparent={false}
+        animationType="slide"
+        onRequestClose={() => setShowQuantExplainer(false)}
+      >
+        <QuantThinkingExplainer 
+          symbol={researchSymbol}
+          onClose={() => setShowQuantExplainer(false)}
+        />
+      </Modal>
+
 </View>
 );
 }
@@ -4382,6 +4408,24 @@ searchContainer: {
     fontSize: 14,
     color: '#666',
     marginBottom: 16,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    marginHorizontal: 20,
+    width: '90%',
+    maxWidth: 500,
+    maxHeight: '90%',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 1,
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#F3F4F6',
   },
 });
 

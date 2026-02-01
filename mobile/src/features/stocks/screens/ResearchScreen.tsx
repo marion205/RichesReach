@@ -8,6 +8,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   ScrollView,
+  Modal,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLazyQuery, useQuery } from '@apollo/client';
@@ -15,6 +16,8 @@ import Icon from 'react-native-vector-icons/Feather';
 import { SEARCH_STOCKS, TOP_STOCKS, RESEARCH_HUB } from '../../../graphql/queries_actual_schema';
 import StockTradingModal from '../../../components/forms/StockTradingModal';
 import EducationalTooltip from '../../../components/common/EducationalTooltip';
+import ChanQuantSignalsCard from '../components/ChanQuantSignalsCard';
+import QuantThinkingExplainer from '../../../components/quant/QuantThinkingExplainer';
 import logger from '../../../utils/logger';
 
 const RECENTS_KEY = 'research_recent_symbols';
@@ -30,6 +33,7 @@ interface StockItem {
 
 interface ResearchData {
   quote?: {
+    symbol?: string;
     price?: number;
     chg?: number;
     chgPct?: number;
@@ -404,6 +408,7 @@ export default function ResearchScreen() {
 }
 
 function ResearchBody({ data }: { data: ResearchData }) {
+  const [showExplainer, setShowExplainer] = useState(false);
   const quote = data.quote;
   const sentiment = data.sentiment;
   const macro = data.macro;
@@ -466,6 +471,39 @@ function ResearchBody({ data }: { data: ResearchData }) {
           <Text style={styles.priceDetail}>Volume: {quote?.volume ? quote.volume.toLocaleString() : '—'}</Text>
         </View>
       </View>
+
+      {/* Chan Quantitative Signals */}
+      {quote?.symbol && (
+        <View style={styles.section}>
+          <ChanQuantSignalsCard 
+            symbol={quote.symbol}
+            onShowExplainer={() => setShowExplainer(true)}
+          />
+        </View>
+      )}
+
+      {/* Quant Thinking Explainer Modal */}
+      <Modal
+        visible={showExplainer}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowExplainer(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <TouchableOpacity 
+              style={styles.modalCloseButton}
+              onPress={() => setShowExplainer(false)}
+            >
+              <Icon name="x" size={24} color="#6B7280" />
+            </TouchableOpacity>
+            <QuantThinkingExplainer 
+              symbol={quote?.symbol}
+              onClose={() => setShowExplainer(false)}
+            />
+          </View>
+        </View>
+      </Modal>
 
       {/* Technical Analysis - Always show, use mock data if needed */}
       <View style={styles.section}>
@@ -921,5 +959,31 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginLeft: 4,
+  },
+  modalOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    width: '90%',
+    maxHeight: '80%',
+    position: 'relative',
+  },
+  modalCloseButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 1001,
+    padding: 8,
   },
 });

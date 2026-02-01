@@ -464,6 +464,8 @@ class FSSScoreType(graphene.ObjectType):
     passed_safety_filters = graphene.Boolean(description="Whether stock passed safety filters")
     safety_reason = graphene.String(description="Safety filter result reason")
     last_updated = graphene.DateTime(description="When FSS was last calculated")
+    regimeRobustnessScore = graphene.Float(description="Regime robustness score (0-1), how stable across market regimes")
+    signalStabilityRating = graphene.Float(description="Signal Stability Rating (SSR) (0-1), how stable/predictable the signal is")
 
 
 class StockType(DjangoObjectType):

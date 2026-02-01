@@ -1,0 +1,4 @@
+{"symbol": "GLD", "action": "DRY_RUN", "quantity": 56, "limit_price": 447.17, "expected_fill": 447.17, "timestamp": "2026-02-01T02:25:54.345923Z"}
+{"symbol": "GOOGL", "action": "DRY_RUN", "quantity": 73, "limit_price": 339.69, "expected_fill": 339.69, "timestamp": "2026-02-01T02:25:54.346253Z"}
+{"symbol": "JNJ", "action": "DRY_RUN", "quantity": 110, "limit_price": 228.39, "expected_fill": 228.39, "timestamp": "2026-02-01T02:25:54.346311Z"}
+{"symbol": "WMT", "action": "DRY_RUN", "quantity": 209, "limit_price": 119.74, "expected_fill": 119.74, "timestamp": "2026-02-01T02:25:54.346353Z"}

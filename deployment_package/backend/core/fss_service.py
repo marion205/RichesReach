@@ -92,16 +92,20 @@ class FSSService:
                 volumes=data_result.volumes
             )
             
-            # Get FSS result
+            # Get FSS result (with robustness and SSR calculation)
             fss_result = self.fss_engine.get_stock_fss(
                 ticker=symbol,
                 fss_data=fss_data,
                 regime=regime_result.regime,
                 safety_passed=safety_passed,
-                safety_reason=safety_reason
+                safety_reason=safety_reason,
+                prices=data_result.prices,
+                spy=data_result.spy,
+                vix=data_result.vix,
+                calculate_robustness=True
             )
             
-            # Format for GraphQL
+            # Format for GraphQL (camelCase field names)
             result = {
                 "fss_score": fss_result.fss_score,
                 "trend_score": fss_result.trend_score,
@@ -112,6 +116,8 @@ class FSSService:
                 "regime": fss_result.regime,
                 "passed_safety_filters": fss_result.passed_safety_filters,
                 "safety_reason": fss_result.safety_reason,
+                "regimeRobustnessScore": fss_result.regime_robustness_score,  # camelCase for GraphQL
+                "signalStabilityRating": fss_result.signal_stability_rating,  # camelCase for GraphQL
                 "last_updated": datetime.now()
             }
             
