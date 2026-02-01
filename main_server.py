@@ -4335,6 +4335,113 @@ def _calculate_indicators(chart_data: list, current_price: float, indicators: li
     return indicators_obj
 
 
+# Add Django transparency routes
+@app.get("/transparency/")
+@app.get("/transparency")
+async def transparency_dashboard_route(request: Request):
+    """Proxy to Django transparency dashboard view"""
+    try:
+        _setup_django_once()
+        from core.transparency_views import transparency_dashboard_view
+        from django.http import HttpRequest
+        from asgiref.sync import sync_to_async
+        
+        # Convert FastAPI request to Django request
+        django_request = HttpRequest()
+        django_request.method = 'GET'
+        django_request.GET = request.query_params
+        django_request.META = {}
+        for key, value in request.headers.items():
+            django_key = f'HTTP_{key.upper().replace("-", "_")}'
+            django_request.META[django_key] = value
+        django_request.path = '/transparency/'
+        django_request.path_info = '/transparency/'
+        
+        # Call Django view
+        response = await sync_to_async(transparency_dashboard_view)(django_request)
+        return Response(content=response.content, status_code=response.status_code, media_type=response.get('Content-Type', 'text/html'))
+    except Exception as e:
+        print(f"Error in transparency route: {e}", exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/methodology/")
+@app.get("/methodology")
+async def methodology_route(request: Request):
+    """Proxy to Django methodology view"""
+    try:
+        _setup_django_once()
+        from core.transparency_views import methodology_view
+        from django.http import HttpRequest
+        from asgiref.sync import sync_to_async
+        
+        django_request = HttpRequest()
+        django_request.method = 'GET'
+        django_request.GET = request.query_params
+        django_request.META = {}
+        for key, value in request.headers.items():
+            django_key = f'HTTP_{key.upper().replace("-", "_")}'
+            django_request.META[django_key] = value
+        django_request.path = '/methodology/'
+        django_request.path_info = '/methodology/'
+        
+        response = await sync_to_async(methodology_view)(django_request)
+        return Response(content=response.content, status_code=response.status_code, media_type=response.get('Content-Type', 'text/html'))
+    except Exception as e:
+        print(f"Error in methodology route: {e}", exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/transparency/")
+async def transparency_api_route(request: Request):
+    """Proxy to Django transparency API view"""
+    try:
+        _setup_django_once()
+        from core.transparency_views import transparency_api_view
+        from django.http import HttpRequest
+        from asgiref.sync import sync_to_async
+        
+        django_request = HttpRequest()
+        django_request.method = 'GET'
+        django_request.GET = request.query_params
+        django_request.META = {}
+        for key, value in request.headers.items():
+            django_key = f'HTTP_{key.upper().replace("-", "_")}'
+            django_request.META[django_key] = value
+        django_request.path = '/api/transparency/'
+        django_request.path_info = '/api/transparency/'
+        
+        response = await sync_to_async(transparency_api_view)(django_request)
+        return JSONResponse(json.loads(response.content), status_code=response.status_code)
+    except Exception as e:
+        print(f"Error in transparency API route: {e}", exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/methodology/")
+async def methodology_api_route(request: Request):
+    """Proxy to Django methodology API view"""
+    try:
+        _setup_django_once()
+        from core.transparency_views import methodology_api_view
+        from django.http import HttpRequest
+        from asgiref.sync import sync_to_async
+        
+        django_request = HttpRequest()
+        django_request.method = 'GET'
+        django_request.GET = request.query_params
+        django_request.META = {}
+        for key, value in request.headers.items():
+            django_key = f'HTTP_{key.upper().replace("-", "_")}'
+            django_request.META[django_key] = value
+        django_request.path = '/api/methodology/'
+        django_request.path_info = '/api/methodology/'
+        
+        response = await sync_to_async(methodology_api_view)(django_request)
+        return JSONResponse(json.loads(response.content), status_code=response.status_code)
+    except Exception as e:
+        print(f"Error in methodology API route: {e}", exc_info=True)
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+print("✅ Django transparency routes added to FastAPI")
+
 @app.post("/graphql/")
 async def graphql_endpoint(request: Request):
     """GraphQL endpoint for Apollo Client - Uses Django Graphene schema with PostgreSQL."""
