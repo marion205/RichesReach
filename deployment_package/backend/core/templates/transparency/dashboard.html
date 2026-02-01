@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title }}</title>
+    <meta name="description" content="{{ meta_description }}">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #F9FAFB;
+            color: #1F2937;
+            line-height: 1.6;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        header {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        h1 { font-size: 32px; color: #1D4ED8; margin-bottom: 8px; }
+        .subtitle { color: #6B7280; font-size: 16px; }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 700;
+            margin-top: 8px;
+        }
+        .badge.paper { background: #F59E0B; color: white; }
+        .badge.live { background: #10B981; color: white; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .stat-label { font-size: 14px; color: #6B7280; margin-bottom: 8px; }
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1F2937;
+        }
+        .stat-value.positive { color: #10B981; }
+        .stat-value.negative { color: #EF4444; }
+        .signals-table {
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        table { width: 100%; border-collapse: collapse; }
+        th {
+            background: #F9FAFB;
+            padding: 12px;
+            text-align: left;
+            font-size: 12px;
+            font-weight: 600;
+            color: #6B7280;
+            text-transform: uppercase;
+        }
+        td {
+            padding: 12px;
+            border-top: 1px solid #E5E7EB;
+            font-size: 14px;
+        }
+        .action-buy { color: #10B981; font-weight: 600; }
+        .action-sell { color: #EF4444; font-weight: 600; }
+        .action-abstain { color: #6B7280; font-weight: 600; }
+        .status-open { color: #F59E0B; }
+        .status-closed { color: #10B981; }
+        .status-abstained { color: #6B7280; }
+        .footer {
+            margin-top: 48px;
+            padding: 24px;
+            text-align: center;
+            color: #6B7280;
+            font-size: 14px;
+        }
+        .footer a { color: #1D4ED8; text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+        .period-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        .period-btn {
+            padding: 8px 16px;
+            border: 1px solid #E5E7EB;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .period-btn.active {
+            background: #1D4ED8;
+            color: white;
+            border-color: #1D4ED8;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Transparency Dashboard</h1>
+            <p class="subtitle">Public Performance Metrics</p>
+            <span class="badge paper">PAPER TRADING</span>
+        </header>
+
+        <div class="period-selector">
+            <a href="?days=30&limit={{ dashboard.signals|length }}" class="period-btn {% if selected_period == 30 %}active{% endif %}">30 Days</a>
+            <a href="?days=90&limit={{ dashboard.signals|length }}" class="period-btn {% if selected_period == 90 %}active{% endif %}">90 Days</a>
+            <a href="?days=180&limit={{ dashboard.signals|length }}" class="period-btn {% if selected_period == 180 %}active{% endif %}">180 Days</a>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Win Rate</div>
+                <div class="stat-value {% if performance.win_rate > 0.5 %}positive{% else %}negative{% endif %}">
+                    {{ performance.win_rate|floatformat:1 }}%
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Signals</div>
+                <div class="stat-value">{{ performance.total_signals }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total P&L</div>
+                <div class="stat-value {% if performance.total_pnl >= 0 %}positive{% else %}negative{% endif %}">
+                    ${{ performance.total_pnl|floatformat:2 }}
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Sharpe Ratio</div>
+                <div class="stat-value">{{ performance.sharpe_ratio|floatformat:2 }}</div>
+            </div>
+        </div>
+
+        <div class="signals-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Symbol</th>
+                        <th>Action</th>
+                        <th>Entry Price</th>
+                        <th>Exit Price</th>
+                        <th>P&L</th>
+                        <th>Confidence</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for signal in dashboard.signals %}
+                    <tr>
+                        <td><strong>{{ signal.symbol }}</strong></td>
+                        <td class="action-{{ signal.action|lower }}">{{ signal.action }}</td>
+                        <td>${{ signal.entry_price|floatformat:2|default:"N/A" }}</td>
+                        <td>${{ signal.exit_price|floatformat:2|default:"N/A" }}</td>
+                        <td class="{% if signal.pnl >= 0 %}positive{% else %}negative{% endif %}">
+                            ${{ signal.pnl|floatformat:2|default:"N/A" }}
+                            {% if signal.pnl_percent %}({{ signal.pnl_percent|floatformat:2 }}%){% endif %}
+                        </td>
+                        <td>{{ signal.confidence|floatformat:0 }}%</td>
+                        <td class="status-{{ signal.status|lower }}">{{ signal.status }}</td>
+                        <td>{{ signal.entry_timestamp|date:"M d, Y H:i" }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" style="text-align: center; padding: 32px; color: #6B7280;">
+                            No signals available yet. Check back soon!
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="footer">
+            <p>
+                <a href="/methodology">View Methodology</a> |
+                <a href="/api/transparency?format=json">JSON API</a> |
+                <a href="https://richesreach.com">RichesReach Home</a>
+            </p>
+            <p style="margin-top: 8px;">
+                All P&L calculated net of costs (commissions, slippage, spreads). 
+                Last updated: {{ dashboard.statistics.last_updated|date:"M d, Y H:i" }}
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+

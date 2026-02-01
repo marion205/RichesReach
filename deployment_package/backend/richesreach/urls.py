@@ -12,6 +12,13 @@ from core.voices_views import VoicesListView
 from core.ai_options_views import AIOptionsRecommendationsView
 from core.auth_views import LoginView
 from core.ai_async_views import chat_view, stream_chat_view, health_view
+from core.transparency_views import (
+    transparency_dashboard_view,
+    methodology_view,
+    signal_detail_view,
+    transparency_api_view,
+    methodology_api_view
+)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -38,5 +45,12 @@ urlpatterns = [
     path('api/ai/chat/', chat_view, name='ai_chat'),
     path('api/ai/chat/stream/', stream_chat_view, name='ai_chat_stream'),
     path('api/ai/health/', health_view, name='ai_health'),
+    # Transparency Dashboard web pages
+    path('transparency/', transparency_dashboard_view, name='transparency_dashboard'),
+    path('transparency/signal/<str:signal_id>/', signal_detail_view, name='signal_detail'),
+    path('methodology/', methodology_view, name='methodology'),
+    # Transparency API endpoints
+    path('api/transparency/', transparency_api_view, name='transparency_api'),
+    path('api/methodology/', methodology_api_view, name='methodology_api'),
 ]
 
