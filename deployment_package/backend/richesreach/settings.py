@@ -421,6 +421,10 @@ CELERY_BEAT_SCHEDULE = {
 'task': 'core.nightly_backtest_service.run_nightly_backtests_task',
 'schedule': 86400.0, # Every day at 2 AM UTC (after market close)
 },
+'generate-weekly-report': {
+'task': 'core.transparency_tasks.generate_weekly_report_task',
+'schedule': 604800.0, # Every week (7 days)
+},
 }
 # Channels Configuration
 CHANNEL_LAYERS = {
