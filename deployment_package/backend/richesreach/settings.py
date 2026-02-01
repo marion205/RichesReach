@@ -417,6 +417,10 @@ CELERY_BEAT_SCHEDULE = {
 'schedule': 86400.0, # Every day at midnight UTC
 'kwargs': {'user_id': None},  # Process all users
 },
+'nightly-backtests': {
+'task': 'core.nightly_backtest_service.run_nightly_backtests_task',
+'schedule': 86400.0, # Every day at 2 AM UTC (after market close)
+},
 }
 # Channels Configuration
 CHANNEL_LAYERS = {

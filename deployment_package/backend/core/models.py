@@ -692,3 +692,35 @@ from .signal_performance_models import (
     StrategyPerformance,
     UserRiskBudget,
 )
+
+
+class SignalRecord(models.Model):
+    """
+    Database model for tracking signals and their outcomes.
+    Used for transparency dashboard.
+    """
+    symbol = models.CharField(max_length=10)
+    action = models.CharField(max_length=10)  # BUY, SELL, ABSTAIN
+    confidence = models.FloatField()
+    entry_price = models.FloatField(null=True, blank=True)
+    entry_timestamp = models.DateTimeField(default=timezone.now)
+    exit_price = models.FloatField(null=True, blank=True)
+    exit_timestamp = models.DateTimeField(null=True, blank=True)
+    pnl = models.FloatField(null=True, blank=True)  # Net P&L after costs
+    pnl_percent = models.FloatField(null=True, blank=True)
+    reasoning = models.TextField(blank=True)
+    status = models.CharField(max_length=20, default='OPEN')  # OPEN, CLOSED, ABSTAINED
+    user_id = models.IntegerField(null=True, blank=True)  # Optional: track per-user
+    trading_mode = models.CharField(max_length=20, default='PAPER', choices=[('PAPER', 'Paper Trading'), ('LIVE', 'Live Trading')])  # Track live vs paper
+    signal_id = models.CharField(max_length=100, unique=True, null=True, blank=True)  # Immutable signal ID
+    
+    class Meta:
+        db_table = 'transparency_signals'
+        ordering = ['-entry_timestamp']
+        indexes = [
+            models.Index(fields=['symbol', '-entry_timestamp']),
+            models.Index(fields=['status', '-entry_timestamp']),
+        ]
+    
+    def __str__(self):
+        return f"{self.symbol} {self.action} @ {self.entry_price} ({self.status})"

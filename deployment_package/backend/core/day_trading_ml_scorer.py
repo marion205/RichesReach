@@ -26,10 +26,20 @@ class DayTradingMLScorer:
         self.feature_names = None
         self.model_version = "v1.0"
         self.ml_learner = None
+        self.lstm_extractor = None
         self._initialize_model()
     
     def _initialize_model(self):
         """Initialize or load the ML model"""
+        # Initialize LSTM feature extractor (hybrid approach)
+        try:
+            from .lstm_feature_extractor import get_lstm_feature_extractor
+            self.lstm_extractor = get_lstm_feature_extractor()
+            if self.lstm_extractor.is_available():
+                logger.info("✅ LSTM feature extractor available (hybrid LSTM → Tree)")
+        except Exception as e:
+            logger.debug(f"LSTM feature extractor not available: {e}")
+        
         # Try to use ML learner first (learns from past performance)
         try:
             from .day_trading_ml_learner import get_day_trading_ml_learner
@@ -59,19 +69,32 @@ class DayTradingMLScorer:
         self.model = None
         self.scaler = None
     
-    def score(self, features: Dict[str, float], mode: str = 'SAFE', side: str = 'LONG') -> float:
+    def score(self, features: Dict[str, float], mode: str = 'SAFE', side: str = 'LONG', price_data: Optional[pd.DataFrame] = None, symbol: Optional[str] = None) -> float:
         """
         Score a trading opportunity based on features.
         Uses ML learner if available (learns from past performance).
+        Now includes LSTM features for hybrid approach (if available).
         
         Args:
             features: Dictionary of extracted features
             mode: 'SAFE' or 'AGGRESSIVE' (for ML learner)
             side: 'LONG' or 'SHORT' (for ML learner)
+            price_data: Optional DataFrame with OHLCV data for LSTM feature extraction
+            symbol: Optional symbol for LSTM feature extraction
         
         Returns:
             Score from 0.0 to 10.0 (higher = better opportunity)
         """
+        # Enhance features with LSTM if available (hybrid approach)
+        if self.lstm_extractor and self.lstm_extractor.is_available() and price_data is not None and symbol:
+            try:
+                lstm_features = self.lstm_extractor.extract_features(price_data, symbol)
+                # Merge LSTM features into main features dict
+                features = {**features, **lstm_features}
+                logger.debug(f"🎯 LSTM features added for {symbol}: {len(lstm_features)} features")
+            except Exception as e:
+                logger.debug(f"LSTM feature extraction failed: {e}")
+        
         # First, get base score from rule-based or static ML
         if self.model is not None and self.scaler is not None:
             base_score = self._ml_score(features)

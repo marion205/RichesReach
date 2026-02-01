@@ -162,7 +162,16 @@ except (ImportError, SyntaxError):
     class RAHAAdvancedMutations(graphene.ObjectType):
         pass
 
-class ExtendedQuery(PremiumQueries, BrokerQueries, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, RiskManagementQueries, OptionsAlertQueries, BlockchainQueries, RAHAQueries, ChanQuantQueries, Query, graphene.ObjectType):
+try:
+    from .transparency_types import TransparencyQueries
+except (ImportError, SyntaxError) as e:
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.warning(f"Could not import TransparencyQueries: {e}")
+    class TransparencyQueries(graphene.ObjectType):
+        pass
+
+class ExtendedQuery(PremiumQueries, BrokerQueries, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, RiskManagementQueries, OptionsAlertQueries, BlockchainQueries, RAHAQueries, ChanQuantQueries, TransparencyQueries, Query, graphene.ObjectType):
     """
     Final Query type exposed by the schema.
 

@@ -27,6 +27,7 @@ from .spending_trend_predictor import spending_predictor, SPENDING_TO_STOCKS
 from .market_data_api_service import MarketDataAPIService
 from .data_sources.options_flow_service import OptionsFlowService
 from .options_service import OptionsAnalysisService
+from .deep_social_sentiment_service import get_deep_social_sentiment_service
 
 logger = logging.getLogger(__name__)
 
@@ -587,6 +588,21 @@ class HybridMLPredictor:
             earnings_feat = await self.earnings_insider.get_earnings_features(symbol)
             insider_feat = await self.earnings_insider.get_insider_features(symbol)
             
+            # Get social sentiment features (deep integration)
+            social_feat = {}
+            if include_social_sentiment:
+                try:
+                    social_data = await self.social_sentiment_service.get_comprehensive_sentiment(symbol, hours_back=24)
+                    social_feat = {
+                        'social_sentiment': social_data.sentiment_score,
+                        'social_volume': social_data.volume,
+                        'social_engagement': social_data.engagement_score,
+                        'social_momentum': social_data.momentum,
+                        'social_divergence': social_data.divergence
+                    }
+                except Exception as e:
+                    logger.debug(f"Social sentiment not available for {symbol}: {e}")
+            
             # Stage 1: Get predictions from each model
             stage1_preds = {}
             
@@ -635,6 +651,8 @@ class HybridMLPredictor:
                 reasoning_parts.append(f"Earnings: {stage1_preds['earnings']:.2%}")
             if 'insider' in stage1_preds and abs(stage1_preds['insider']) > 0.05:
                 reasoning_parts.append(f"Insider: {stage1_preds['insider']:.2%}")
+            if social_feat and abs(social_feat.get('social_sentiment', 0)) > 0.1:
+                reasoning_parts.append(f"Social sentiment: {social_feat['social_sentiment']:.2%} ({social_feat.get('social_volume', 0)} mentions)")
             
             reasoning = " | ".join(reasoning_parts) if reasoning_parts else "Hybrid ensemble prediction"
             
@@ -648,7 +666,8 @@ class HybridMLPredictor:
                     'spending': float(stage1_preds.get('spending', 0.0)),
                     'options': float(stage1_preds.get('options', 0.0)),
                     'earnings': float(stage1_preds.get('earnings', 0.0)),
-                    'insider': float(stage1_preds.get('insider', 0.0))
+                    'insider': float(stage1_preds.get('insider', 0.0)),
+                    **{k: float(v) for k, v in social_feat.items()}  # Include social sentiment features
                 }
             }
             

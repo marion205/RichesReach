@@ -35,6 +35,7 @@ import { familySharingService, FamilyGroup, FamilyMember } from '../../family/se
 import { DawnRitualScreen } from '../../rituals/screens/DawnRitualScreen';
 import { CreditQuestScreen } from '../../credit/screens/CreditQuestScreen';
 import PortfolioKellyMetricsCard from '../../../components/quant/PortfolioKellyMetricsCard';
+import TransparencyDashboardCard from '../../../components/quant/TransparencyDashboardCard';
 interface PortfolioScreenProps {
 navigateTo?: (screen: string) => void;
 }
@@ -851,6 +852,11 @@ return (
 {/* Portfolio Kelly Metrics - Risk Overview */}
 <View style={{ marginTop: 24, marginBottom: 8, paddingHorizontal: 16 }}>
   <PortfolioKellyMetricsCard />
+</View>
+
+{/* Transparency Dashboard - Public Performance Metrics */}
+<View style={{ marginTop: 16, marginBottom: 8, paddingHorizontal: 16 }}>
+  <TransparencyDashboardCard limit={50} />
 </View>
 
 {/* Portfolio Holdings - Mid Section */}

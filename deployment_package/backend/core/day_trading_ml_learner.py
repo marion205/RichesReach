@@ -91,13 +91,20 @@ class DayTradingMLearner:
         """
         Extract ML features from a DayTradingSignal.
         These features will be used to predict success.
+        Includes execution features (spread, slippage, fill quality).
         """
         features_dict = signal.features if isinstance(signal.features, dict) else {}
+        
+        # Extract execution features (for separating signal quality from execution quality)
+        spread_bps = float(features_dict.get('spreadBps', features_dict.get('spread_bps', 5.0)))
+        execution_quality = float(features_dict.get('executionQualityScore', features_dict.get('execution_quality_score', 5.0)))
         
         return {
             'momentum_15m': float(features_dict.get('momentum15m', 0.0)),
             'rvol_10m': float(features_dict.get('rvol10m', 0.0)),
             'vwap_dist': float(features_dict.get('vwapDist', 0.0)),
+            'spread_bps': spread_bps,  # Execution feature
+            'execution_quality_score': execution_quality,  # Execution feature
             'breakout_pct': float(features_dict.get('breakoutPct', 0.0)),
             'spread_bps': float(features_dict.get('spreadBps', 0.0)),
             'catalyst_score': float(features_dict.get('catalystScore', 0.0)),
@@ -182,18 +189,49 @@ class DayTradingMLearner:
                     if not perf:
                         continue  # Skip signals without performance data
                     
-                    # Extract features
+                    # Extract features (includes execution features: spread_bps, execution_quality_score)
                     features = self.extract_features_from_signal(signal)
                     X.append(features)
                     
-                    # Determine success (1.0 = win, 0.0 = loss)
-                    # Success = positive PnL or hit target
+                    # CRITICAL: Label that separates signal from execution
+                    # Outcome = sign(return over horizon - estimated costs)
+                    # This prevents the learner from learning execution quirks as if they were alpha
+                    
+                    # Estimate costs (spread + fees + slippage)
+                    spread_bps = features.get('spread_bps', 5.0)  # Basis points
+                    spread_cost_pct = spread_bps / 10000.0  # Convert to percentage
+                    
+                    # Estimate commission (typical: $0.01 per share or $1 per trade)
+                    # For day trading, assume ~$1 per trade (entry + exit = $2)
+                    # Convert to percentage based on position size
+                    entry_price = float(signal.entry_price) if hasattr(signal, 'entry_price') else 100.0
+                    position_size = entry_price * 100  # Assume 100 shares (typical day trade size)
+                    commission_pct = (2.0 / position_size) * 100  # $2 commission as % of position
+                    
+                    # Estimate slippage (from execution quality score)
+                    execution_quality = features.get('execution_quality_score', 5.0)
+                    # Map quality score (0-10) to slippage estimate (0.5% worst, 0.05% best)
+                    slippage_pct = 0.005 - (execution_quality / 10.0) * 0.0045  # 0.5% to 0.05%
+                    
+                    # Total estimated costs
+                    total_costs_pct = spread_cost_pct + commission_pct + slippage_pct
+                    
+                    # Net return after costs
+                    gross_return_pct = float(perf.pnl_percent) if perf.pnl_percent else 0.0
+                    net_return_pct = gross_return_pct - total_costs_pct
+                    
+                    # Success label: net return > threshold (e.g., 0.1% to account for noise)
+                    # This ensures we only label as "win" if the signal was profitable AFTER costs
+                    cost_threshold = 0.001  # 0.1% minimum to be considered a win
                     success = 1.0 if (
-                        float(perf.pnl_percent) > 0.0 or 
-                        perf.hit_target_1 or 
-                        perf.outcome == 'WIN' or
-                        perf.outcome == 'TARGET_HIT'
+                        net_return_pct > cost_threshold or 
+                        (perf.hit_target_1 and net_return_pct > -0.002)  # Hit target with minimal cost drag
                     ) else 0.0
+                    
+                    # Store cost breakdown for debugging/analysis
+                    features['estimated_costs_pct'] = total_costs_pct
+                    features['net_return_pct'] = net_return_pct
+                    features['gross_return_pct'] = gross_return_pct
                     
                     y.append(success)
                     
