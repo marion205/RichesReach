@@ -14,53 +14,64 @@ from .models import SignalRecord
 import json
 
 
-@require_http_methods(["GET"])
 def transparency_dashboard_view(request):
     """
     Public-facing transparency dashboard web page
     URL: /transparency
     """
-    dashboard_service = get_transparency_dashboard()
-    
-    # Get dashboard data
-    limit = int(request.GET.get('limit', 50))
-    data = dashboard_service.get_dashboard_data(limit=limit)
-    
-    # Get performance summary
-    days = int(request.GET.get('days', 30))
-    performance = dashboard_service.get_performance_summary(days=days)
-    
-    context = {
-        'dashboard': data,
-        'performance': performance,
-        'selected_period': days,
-        'page_title': 'Transparency Dashboard - RichesReach',
-        'meta_description': 'Public performance metrics for RichesReach AI trading signals. Real-time win rates, P&L, and signal tracking.',
-    }
-    
-    return render(request, 'transparency/dashboard.html', context)
+    try:
+        dashboard_service = get_transparency_dashboard()
+        
+        # Get dashboard data
+        limit = int(request.GET.get('limit', 50))
+        data = dashboard_service.get_dashboard_data(limit=limit)
+        
+        # Get performance summary
+        days = int(request.GET.get('days', 30))
+        performance = dashboard_service.get_performance_summary(days=days)
+        
+        context = {
+            'dashboard': data,
+            'performance': performance,
+            'selected_period': days,
+            'page_title': 'Transparency Dashboard - RichesReach',
+            'meta_description': 'Public performance metrics for RichesReach AI trading signals. Real-time win rates, P&L, and signal tracking.',
+        }
+        
+        return render(request, 'transparency/dashboard.html', context)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in transparency_dashboard_view: {e}", exc_info=True)
+        from django.http import HttpResponse
+        return HttpResponse(f"Error loading transparency dashboard: {str(e)}", status=500)
 
 
-@require_http_methods(["GET"])
 def methodology_view(request):
     """
     Methodology documentation page
     URL: /methodology
     """
-    methodology = get_methodology_content()
-    summary = get_methodology_summary()
-    
-    context = {
-        'methodology': methodology,
-        'summary': summary,
-        'page_title': 'Methodology - RichesReach',
-        'meta_description': 'How RichesReach calculates trading signals, P&L, and performance metrics. Net-of-costs methodology explained.',
-    }
-    
-    return render(request, 'transparency/methodology.html', context)
+    try:
+        methodology = get_methodology_content()
+        summary = get_methodology_summary()
+        
+        context = {
+            'methodology': methodology,
+            'summary': summary,
+            'page_title': 'Methodology - RichesReach',
+            'meta_description': 'How RichesReach calculates trading signals, P&L, and performance metrics. Net-of-costs methodology explained.',
+        }
+        
+        return render(request, 'transparency/methodology.html', context)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in methodology_view: {e}", exc_info=True)
+        from django.http import HttpResponse
+        return HttpResponse(f"Error loading methodology page: {str(e)}", status=500)
 
 
-@require_http_methods(["GET"])
 def signal_detail_view(request, signal_id):
     """
     Individual signal detail page
@@ -71,7 +82,11 @@ def signal_detail_view(request, signal_id):
         try:
             signal = SignalRecord.objects.get(signal_id=signal_id)
         except SignalRecord.DoesNotExist:
-            signal = SignalRecord.objects.get(id=int(signal_id))
+            try:
+                signal = SignalRecord.objects.get(id=int(signal_id))
+            except (ValueError, SignalRecord.DoesNotExist):
+                from django.http import HttpResponse
+                return HttpResponse(f"Signal not found: {signal_id}", status=404)
         
         context = {
             'signal': signal,
@@ -80,8 +95,12 @@ def signal_detail_view(request, signal_id):
         }
         
         return render(request, 'transparency/signal_detail.html', context)
-    except SignalRecord.DoesNotExist:
-        return render(request, 'transparency/404.html', {'message': 'Signal not found'}, status=404)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error in signal_detail_view: {e}", exc_info=True)
+        from django.http import HttpResponse
+        return HttpResponse(f"Error loading signal: {str(e)}", status=500)
 
 
 @require_http_methods(["GET"])
