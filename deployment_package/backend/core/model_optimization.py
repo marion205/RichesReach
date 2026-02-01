@@ -47,8 +47,16 @@ class ModelOptimizer:
             
             logger.info(f"Converting LSTM model to ONNX: {model_path} -> {output_path}")
             
-            # Load Keras model
-            keras_model = tf.keras.models.load_model(model_path)
+            # Load Keras model with custom objects to handle version compatibility
+            try:
+                keras_model = tf.keras.models.load_model(model_path)
+            except Exception as e:
+                # Try loading with compile=False to avoid metric deserialization issues
+                logger.warning(f"Standard load failed, trying with compile=False: {e}")
+                keras_model = tf.keras.models.load_model(model_path, compile=False)
+                # Recompile if needed
+                if hasattr(keras_model, 'compile'):
+                    keras_model.compile(optimizer='adam', loss='mse')
             
             # Convert to ONNX
             onnx_model, _ = convert.from_keras(
@@ -108,8 +116,9 @@ class ModelOptimizer:
                 import joblib
                 xgb_model = joblib.load(model_path)
             
-            # Convert to ONNX
-            initial_type = [('input', onnx.ml.proto.TensorProto.FLOAT, [None, n_features])]
+            # Convert to ONNX using onnxmltools (not skl2onnx)
+            from onnxmltools.convert.common.data_types import FloatTensorType
+            initial_type = [('input', FloatTensorType([None, n_features]))]
             onnx_model = convert_xgboost(xgb_model, initial_types=initial_type)
             
             # Save ONNX model

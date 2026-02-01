@@ -49,25 +49,39 @@ class OptionsFlowFeatures:
             # Get options analysis
             options_data = self.options_analysis.get_comprehensive_analysis(symbol)
             
+            # Handle unusual_flow (can be list or dict)
             unusual_flow = options_data.get('unusual_flow', {})
+            if isinstance(unusual_flow, list):
+                # Convert list to dict format
+                unusual_flow = {
+                    'unusual_volume': len(unusual_flow),
+                    'total_volume': len(unusual_flow) * 10,  # Estimate
+                    'top_trades': unusual_flow[:10] if unusual_flow else []
+                }
+            
             market_sentiment = options_data.get('market_sentiment', {})
+            if not isinstance(market_sentiment, dict):
+                market_sentiment = {}
+            
             options_chain = options_data.get('options_chain', {})
+            if not isinstance(options_chain, dict):
+                options_chain = {}
             
             # Extract features
             features = {}
             
             # Put/Call Ratio
-            put_call_ratio = market_sentiment.get('put_call_ratio', 1.0)
+            put_call_ratio = market_sentiment.get('put_call_ratio', 1.0) if isinstance(market_sentiment, dict) else 1.0
             features['put_call_ratio'] = float(put_call_ratio)
             features['call_bias'] = 1.0 - put_call_ratio if put_call_ratio > 0 else 0.0  # Higher = more bullish
             
             # Unusual Volume
-            unusual_volume = unusual_flow.get('unusual_volume', 0)
-            total_volume = unusual_flow.get('total_volume', 1)
+            unusual_volume = unusual_flow.get('unusual_volume', 0) if isinstance(unusual_flow, dict) else 0
+            total_volume = unusual_flow.get('total_volume', 1) if isinstance(unusual_flow, dict) else 1
             features['unusual_volume_pct'] = float(unusual_volume / total_volume) if total_volume > 0 else 0.0
             
             # Top Trades Analysis
-            top_trades = unusual_flow.get('top_trades', [])
+            top_trades = unusual_flow.get('top_trades', []) if isinstance(unusual_flow, dict) else []
             if top_trades:
                 call_volume = sum(t.get('volume', 0) for t in top_trades if t.get('option_type') == 'call')
                 put_volume = sum(t.get('volume', 0) for t in top_trades if t.get('option_type') == 'put')
@@ -90,11 +104,11 @@ class OptionsFlowFeatures:
                 features['sweep_detection'] = 0.0
             
             # Implied Volatility Rank
-            iv_rank = market_sentiment.get('implied_volatility_rank', 50.0)
+            iv_rank = market_sentiment.get('implied_volatility_rank', 50.0) if isinstance(market_sentiment, dict) else 50.0
             features['iv_rank'] = float(iv_rank / 100.0)  # Normalize to 0-1
             
             # Skew (put/call skew)
-            skew = market_sentiment.get('skew', 0.0)
+            skew = market_sentiment.get('skew', 0.0) if isinstance(market_sentiment, dict) else 0.0
             features['skew'] = float(skew)
             features['bearish_skew'] = 1.0 if skew > 0.2 else 0.0  # High skew = bearish
             
@@ -590,9 +604,10 @@ class HybridMLPredictor:
             
             # Get social sentiment features (deep integration)
             social_feat = {}
-            if include_social_sentiment:
-                try:
-                    social_data = await self.social_sentiment_service.get_comprehensive_sentiment(symbol, hours_back=24)
+            try:
+                social_sentiment_service = get_deep_social_sentiment_service()
+                if social_sentiment_service:
+                    social_data = await social_sentiment_service.get_comprehensive_sentiment(symbol, hours_back=24)
                     social_feat = {
                         'social_sentiment': social_data.sentiment_score,
                         'social_volume': social_data.volume,
@@ -600,8 +615,8 @@ class HybridMLPredictor:
                         'social_momentum': social_data.momentum,
                         'social_divergence': social_data.divergence
                     }
-                except Exception as e:
-                    logger.debug(f"Social sentiment not available for {symbol}: {e}")
+            except Exception as e:
+                logger.debug(f"Social sentiment not available for {symbol}: {e}")
             
             # Stage 1: Get predictions from each model
             stage1_preds = {}

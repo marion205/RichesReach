@@ -232,10 +232,14 @@ class RiskManagementQueries(graphene.ObjectType):
             pipeline = FSSDataPipeline()
             
             # Pre-fetch Kelly calculations for all unique symbols (batch processing)
+            # Use aggressive caching service for better performance
+            from .aggressive_caching_service import get_aggressive_caching_service
+            caching_service = get_aggressive_caching_service()
+            
             symbol_kelly_cache = {}
             for symbol in symbols_to_calculate:
                 symbol_cache_key = f"kelly:symbol:{symbol}"
-                cached_kelly = cache.get(symbol_cache_key)
+                cached_kelly = caching_service.get_cached(symbol_cache_key, ttl=3600)  # 1 hour TTL
                 if cached_kelly:
                     symbol_kelly_cache[symbol] = cached_kelly
                     logger.debug(f"Portfolio Kelly: Using cached Kelly for {symbol}")
@@ -260,8 +264,8 @@ class RiskManagementQueries(graphene.ObjectType):
                     if symbol in symbol_kelly_cache:
                         kelly_result_data = symbol_kelly_cache[symbol]
                     else:
-                        # Check individual cache
-                        cached_kelly = cache.get(symbol_cache_key)
+                        # Check individual cache (using aggressive caching)
+                        cached_kelly = caching_service.get_cached(symbol_cache_key, ttl=3600)
                         if cached_kelly:
                             logger.debug(f"Portfolio Kelly: Cache hit for {symbol}")
                             kelly_result_data = cached_kelly

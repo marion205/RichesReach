@@ -24,6 +24,7 @@ class OptimizationStatusType(graphene.ObjectType):
     """Speed optimization status"""
     websocket_active = graphene.Boolean()
     model_optimized = graphene.Boolean()
+    cloud_locality_enabled = graphene.Boolean()
     latency_target_ms = graphene.Float()
     current_avg_latency_ms = graphene.Float()
     below_target_percent = graphene.Float()
@@ -52,6 +53,7 @@ class SpeedOptimizationQueries(graphene.ObjectType):
         return OptimizationStatusType(
             websocket_active=status['websocket_active'],
             model_optimized=status['model_optimized'],
+            cloud_locality_enabled=status.get('cloud_locality_enabled', False),
             latency_target_ms=status['latency_target_ms'],
             current_avg_latency_ms=status['current_avg_latency_ms'],
             below_target_percent=status['below_target_percent'],

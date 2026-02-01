@@ -34,7 +34,7 @@ class WebSocketStreamingService:
         symbols: List[str],
         api_key: str,
         api_secret: str,
-        base_url: str = "wss://stream.data.alpaca.markets/v2/iex"
+        base_url: str = None
     ) -> bool:
         """
         Connect to Alpaca WebSocket stream.
@@ -43,11 +43,15 @@ class WebSocketStreamingService:
             symbols: List of symbols to subscribe to
             api_key: Alpaca API key
             api_secret: Alpaca API secret
-            base_url: WebSocket URL
+            base_url: WebSocket URL (defaults to paper trading if not provided)
         
         Returns:
             True if connection successful
         """
+        # Use paper trading WebSocket by default
+        if base_url is None:
+            base_url = "wss://stream.data.alpaca.markets/v2/iex"  # Paper trading WebSocket
+        
         try:
             auth_message = {
                 "action": "authenticate",
@@ -77,6 +81,7 @@ class WebSocketStreamingService:
                     
                     if isinstance(auth_response, dict) and auth_response.get("T") == "success":
                         logger.info("✅ Alpaca WebSocket authenticated")
+                        self.is_active = True
                     else:
                         logger.error(f"❌ Alpaca authentication failed: {auth_response}")
                         return False
@@ -380,6 +385,7 @@ class WebSocketStreamingService:
     async def stop_streaming(self):
         """Stop all WebSocket connections"""
         self.is_running = False
+        self.is_active = False
         
         for symbol, ws in self.connections.items():
             try:
@@ -389,6 +395,10 @@ class WebSocketStreamingService:
         
         self.connections.clear()
         logger.info("✅ Stopped all WebSocket connections")
+    
+    def is_websocket_active(self) -> bool:
+        """Check if WebSocket is actively streaming"""
+        return self.is_active and len(self.connections) > 0
 
 
 # Global instance

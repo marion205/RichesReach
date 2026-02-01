@@ -25,6 +25,7 @@ class SpeedOptimizationService:
     def __init__(self):
         self.websocket_active = False
         self.model_optimized = False
+        self.cloud_locality_enabled = False
         self.latency_target_ms = 500.0
         self.latency_history = deque(maxlen=1000)
         self.alert_threshold_ms = 1000.0  # Alert if latency exceeds 1s
@@ -34,6 +35,9 @@ class SpeedOptimizationService:
         
         # Check for optimized models
         self._check_model_optimization()
+        
+        # Check cloud locality status
+        self._check_cloud_locality_status()
     
     def _init_websocket(self):
         """Initialize WebSocket streaming service"""
@@ -180,6 +184,20 @@ class SpeedOptimizationService:
             'target_ms': self.latency_target_ms
         }
     
+    def _check_websocket_status(self):
+        """Check if WebSocket is actually active"""
+        if self.ws_service:
+            try:
+                # Check if WebSocket service reports as active
+                if hasattr(self.ws_service, 'is_websocket_active'):
+                    self.websocket_active = self.ws_service.is_websocket_active()
+                elif hasattr(self.ws_service, 'is_active'):
+                    self.websocket_active = self.ws_service.is_active
+                elif len(self.ws_service.connections) > 0:
+                    self.websocket_active = True
+            except Exception as e:
+                logger.warning(f"Could not check WebSocket status: {e}")
+    
     def get_optimization_status(self) -> Dict[str, Any]:
         """
         Get current optimization status.
@@ -187,11 +205,16 @@ class SpeedOptimizationService:
         Returns:
             Dict with optimization status
         """
+        # Check actual WebSocket status
+        self._check_websocket_status()
+        self._check_cloud_locality_status()
+        
         latency_stats = self.get_latency_stats()
         
         return {
             'websocket_active': self.websocket_active,
             'model_optimized': self.model_optimized,
+            'cloud_locality_enabled': self.cloud_locality_enabled,
             'latency_target_ms': self.latency_target_ms,
             'current_avg_latency_ms': latency_stats.get('avg_ms', 0.0),
             'below_target_percent': latency_stats.get('below_target', 0.0),

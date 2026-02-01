@@ -40,6 +40,7 @@ class Command(BaseCommand):
         self.stdout.write("\n📊 Current Status:")
         self.stdout.write(f"   WebSocket Active: {'✅' if status['websocket_active'] else '❌'}")
         self.stdout.write(f"   Model Optimized: {'✅' if status['model_optimized'] else '❌'}")
+        self.stdout.write(f"   Cloud Locality: {'✅' if status.get('cloud_locality_enabled', False) else '❌'}")
         self.stdout.write(f"   Target Latency: {status['latency_target_ms']}ms")
         self.stdout.write(f"   Current Avg Latency: {status['current_avg_latency_ms']:.1f}ms")
         self.stdout.write(f"   Below Target: {status['below_target_percent']:.1f}%")

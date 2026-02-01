@@ -12,6 +12,7 @@ from typing import List, Optional, Dict, Any, Tuple
 from dataclasses import dataclass
 from django.core.cache import cache
 import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 

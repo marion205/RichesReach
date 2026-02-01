@@ -153,6 +153,11 @@ class HybridLSTMXGBoostTrainer:
             # Use TimeSeriesSplit for financial data (no look-ahead bias)
             tscv = TimeSeriesSplit(n_splits=5)
             
+            # Remove non-numeric columns (like 'symbol') before training
+            if isinstance(X_hybrid, pd.DataFrame):
+                numeric_cols = X_hybrid.select_dtypes(include=[np.number]).columns
+                X_hybrid = X_hybrid[numeric_cols]
+            
             # Split data
             split_idx = int(len(X_hybrid) * (1 - validation_split))
             X_train, X_val = X_hybrid[:split_idx], X_hybrid[split_idx:]
@@ -178,7 +183,6 @@ class HybridLSTMXGBoostTrainer:
                 self.xgboost_model.fit(
                     X_cv_train, y_cv_train,
                     eval_set=[(X_cv_val, y_cv_val)],
-                    early_stopping_rounds=50,
                     verbose=False
                 )
                 
@@ -190,7 +194,6 @@ class HybridLSTMXGBoostTrainer:
             self.xgboost_model.fit(
                 X_train, y_train,
                 eval_set=[(X_val, y_val)],
-                early_stopping_rounds=50,
                 verbose=False
             )
             

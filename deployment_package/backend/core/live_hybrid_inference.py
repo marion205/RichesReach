@@ -19,26 +19,42 @@ class LiveHybridInference:
     Handles data fetching, feature extraction, and prediction with abstention.
     """
     
-    def __init__(self, confidence_threshold: float = 0.78):
+    def __init__(self, confidence_threshold: float = 0.78, use_ensemble: bool = True):
         """
         Initialize live inference pipeline.
         
         Args:
             confidence_threshold: Minimum confidence to execute (default: 0.78)
+            use_ensemble: Use ensemble predictor (default: True)
         """
         self.confidence_threshold = confidence_threshold
+        self.use_ensemble = use_ensemble
         
         # Initialize components
         from .lstm_data_fetcher import get_lstm_data_fetcher
         from .lstm_feature_extractor import get_lstm_feature_extractor
         from .hybrid_lstm_xgboost_trainer import get_hybrid_trainer
+        from .enhanced_alternative_data_service import get_enhanced_alternative_data_service
         
         self.data_fetcher = get_lstm_data_fetcher()
         self.lstm_extractor = get_lstm_feature_extractor()
         self.hybrid_trainer = get_hybrid_trainer()
+        self.enhanced_alt_data = get_enhanced_alternative_data_service()
         
         # Load models if available
         self.hybrid_trainer._load_models()
+        
+        # Initialize ensemble predictor if enabled
+        if self.use_ensemble:
+            try:
+                from .ensemble_predictor import get_ensemble_predictor
+                self.ensemble_predictor = get_ensemble_predictor()
+            except Exception as e:
+                logger.warning(f"Could not initialize ensemble predictor: {e}")
+                self.ensemble_predictor = None
+                self.use_ensemble = False
+        else:
+            self.ensemble_predictor = None
     
     async def generate_live_signal(
         self,
@@ -66,28 +82,74 @@ class LiveHybridInference:
                 temporal_momentum_score = self.lstm_extractor.extract_temporal_momentum_score(
                     lstm_input, symbol
                 )
-                
-                # Add to alternative data
-                alt_data_df['lstm_temporal_momentum_score'] = temporal_momentum_score
             else:
-                alt_data_df['lstm_temporal_momentum_score'] = 0.0
                 temporal_momentum_score = 0.0
             
-            # Step C: Get prediction from XGBoost (with abstention)
-            if self.hybrid_trainer.xgboost_model is not None:
+            # Step C: Get enhanced alternative data (social sentiment + options flow)
+            enhanced_alt_features = await self.enhanced_alt_data.get_all_features(symbol, hours_back=24)
+            
+            # Step D: Use ensemble predictor if available, otherwise fallback to XGBoost
+            if self.use_ensemble and self.ensemble_predictor and self.ensemble_predictor.ensemble_model is not None:
+                # Use ensemble predictor (combines LSTM + XGBoost + Random Forest)
+                # Prepare technical features (simplified - would use actual technical indicators)
+                technical_features = {
+                    'rsi': 50.0,  # Would calculate from price data
+                    'sma_ratio': 1.0,  # Would calculate from price data
+                    'volume_ratio': 1.0,  # Would calculate from volume data
+                }
+                
+                # Convert enhanced alt features to dict format
+                alt_data_features = enhanced_alt_features
+                
+                # Get ensemble prediction
+                ensemble_result = self.ensemble_predictor.predict(
+                    lstm_features=temporal_momentum_score,
+                    alt_data_features=alt_data_features,
+                    technical_features=technical_features,
+                    confidence_threshold=self.confidence_threshold
+                )
+                
+                action = ensemble_result['action']
+                confidence = ensemble_result['confidence']
+                reasoning = ensemble_result.get('reasoning', 'Ensemble prediction')
+                
+            elif self.hybrid_trainer.xgboost_model is not None:
+                # Fallback to XGBoost (original method)
+                # Add LSTM feature and enhanced alt data to DataFrame
+                alt_data_df['lstm_temporal_momentum_score'] = temporal_momentum_score
+                for key, value in enhanced_alt_features.items():
+                    alt_data_df[key] = value
+                
                 action, confidence = self.hybrid_trainer.predict_with_abstention(
                     alt_data_df,
                     confidence_threshold=self.confidence_threshold
                 )
+                reasoning = f"XGBoost prediction (confidence: {confidence:.2%})"
             else:
                 # Fallback: use simple rule-based logic
                 action = 'ABSTAIN'
                 confidence = 0.5
+                reasoning = 'Models not available'
             
-            # Step D: Generate reasoning
+            # Step E: Generate enhanced reasoning
             reasoning_parts = []
+            if self.use_ensemble and self.ensemble_predictor:
+                reasoning_parts.append(f"Ensemble: {reasoning}")
+            else:
+                reasoning_parts.append(reasoning)
+            
             if abs(temporal_momentum_score) > 0.1:
                 reasoning_parts.append(f"LSTM momentum: {temporal_momentum_score:+.3f}")
+            
+            # Add alternative data insights
+            if enhanced_alt_features.get('social_sentiment', 0) != 0:
+                social_sent = enhanced_alt_features['social_sentiment']
+                reasoning_parts.append(f"Social sentiment: {social_sent:+.2f}")
+            
+            if enhanced_alt_features.get('unusual_volume_pct', 0) > 0.1:
+                unusual_vol = enhanced_alt_features['unusual_volume_pct']
+                reasoning_parts.append(f"Unusual options volume: {unusual_vol:.1%}")
+            
             if confidence >= self.confidence_threshold:
                 reasoning_parts.append(f"High confidence: {confidence:.2%}")
             else:
@@ -98,7 +160,9 @@ class LiveHybridInference:
                 'action': action,
                 'confidence': confidence,
                 'temporal_momentum_score': temporal_momentum_score,
-                'reasoning': ' | '.join(reasoning_parts) if reasoning_parts else 'Hybrid model prediction',
+                'reasoning': ' | '.join(reasoning_parts),
+                'enhanced_alt_data': enhanced_alt_features,
+                'model_type': 'ensemble' if (self.use_ensemble and self.ensemble_predictor) else 'xgboost',
                 'timestamp': datetime.now().isoformat()
             }
             
@@ -174,10 +238,10 @@ class LiveHybridInference:
 # Global instance
 _live_inference = None
 
-def get_live_inference(confidence_threshold: float = 0.78) -> LiveHybridInference:
+def get_live_inference(confidence_threshold: float = 0.78, use_ensemble: bool = True) -> LiveHybridInference:
     """Get global live inference instance"""
     global _live_inference
     if _live_inference is None:
-        _live_inference = LiveHybridInference(confidence_threshold=confidence_threshold)
+        _live_inference = LiveHybridInference(confidence_threshold=confidence_threshold, use_ensemble=use_ensemble)
     return _live_inference
 

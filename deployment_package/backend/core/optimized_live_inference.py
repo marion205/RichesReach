@@ -50,6 +50,15 @@ class OptimizedLiveInference:
         # Latency monitoring
         self.latency_history = deque(maxlen=100)
         
+        # Aggressive caching for features and predictions
+        from .aggressive_caching_service import get_aggressive_caching_service
+        self.caching_service = get_aggressive_caching_service()
+        
+        # Cloud locality optimization
+        from .cloud_locality_service import get_cloud_locality_service
+        self.locality_service = get_cloud_locality_service()
+        self.inference_endpoint = None  # Will be set on first use
+        
     async def _get_price_via_websocket(self, symbol: str) -> Optional[Dict]:
         """
         Get price data via WebSocket (fastest method).
@@ -232,21 +241,28 @@ class OptimizedLiveInference:
     
     async def _get_hybrid_features_cached(self, symbol: str) -> Tuple[np.ndarray, pd.DataFrame]:
         """
-        Get hybrid features with aggressive caching.
+        Get hybrid features with aggressive caching (multi-layer).
         Cache TTL: 1 second (for 1-minute bars).
         """
         cache_key = f"features_{symbol}"
-        cached = self.price_cache.get(cache_key)
         
-        if cached and (time.time() - cached['timestamp']) < self.cache_ttl:
-            return cached['data']
+        # Try aggressive caching service first (memory + Redis)
+        cached = self.caching_service.get_cached(cache_key, ttl=1)
+        if cached is not None:
+            return cached
+        
+        # Fallback to local price cache
+        local_cached = self.price_cache.get(cache_key)
+        if local_cached and (time.time() - local_cached['timestamp']) < self.cache_ttl:
+            return local_cached['data']
         
         # Fetch fresh
         lstm_input, alt_data_df = await self.data_fetcher.get_hybrid_features(
             symbol, use_alpaca=True
         )
         
-        # Cache it
+        # Cache in both layers
+        self.caching_service.set_cached(cache_key, (lstm_input, alt_data_df), ttl=1)
         self.price_cache[cache_key] = {
             'data': (lstm_input, alt_data_df),
             'timestamp': time.time()
