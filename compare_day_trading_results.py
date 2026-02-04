@@ -8,6 +8,8 @@ import json
 from datetime import datetime, date
 from typing import Dict, List, Optional
 import os
+import asyncio
+import aiohttp
 
 # GraphQL endpoint
 GRAPHQL_URL = "http://localhost:8000/graphql/"
@@ -154,11 +156,94 @@ def display_picks_summary(picks_data: Dict, mode: str):
     print()
 
 
+async def fetch_price_from_alpaca(symbol: str) -> Optional[float]:
+    """Fetch current price from Alpaca API"""
+    api_key = os.getenv('ALPACA_API_KEY')
+    api_secret = os.getenv('ALPACA_SECRET_KEY')
+    if not api_key or not api_secret:
+        return None
+    
+    try:
+        url = f"https://data.alpaca.markets/v2/stocks/{symbol}/bars/latest"
+        headers = {
+            'APCA-API-KEY-ID': api_key,
+            'APCA-API-SECRET-KEY': api_secret
+        }
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=3.0)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    bar = data.get('bar', {})
+                    if bar:
+                        return float(bar.get('c', 0))  # Close price
+    except Exception as e:
+        print(f"⚠️  Alpaca error for {symbol}: {e}")
+    return None
+
+
+async def fetch_price_from_polygon(symbol: str) -> Optional[float]:
+    """Fetch current price from Polygon API"""
+    api_key = os.getenv('POLYGON_API_KEY')
+    if not api_key:
+        return None
+    
+    try:
+        url = f"https://api.polygon.io/v2/last/trade/{symbol}"
+        params = {'apiKey': api_key}
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=3.0)) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    results = data.get('results', {})
+                    if results:
+                        return float(results.get('p', 0))  # Price
+    except Exception as e:
+        print(f"⚠️  Polygon error for {symbol}: {e}")
+    return None
+
+
+async def fetch_single_price(symbol: str) -> Optional[float]:
+    """Fetch price for a single symbol from available APIs"""
+    # Try Alpaca first
+    price = await fetch_price_from_alpaca(symbol)
+    if price:
+        return price
+    
+    # Fallback to Polygon
+    price = await fetch_price_from_polygon(symbol)
+    if price:
+        return price
+    
+    return None
+
+
+async def get_current_prices_async(picks: List[Dict]) -> Dict[str, float]:
+    """Get current prices for all picks using real market data APIs"""
+    symbols = [pick['symbol'] for pick in picks if 'symbol' in pick]
+    prices = {}
+    
+    # Fetch all prices concurrently
+    tasks = [fetch_single_price(symbol) for symbol in symbols]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    for symbol, result in zip(symbols, results):
+        if isinstance(result, Exception):
+            print(f"⚠️  Error fetching price for {symbol}: {result}")
+        elif result:
+            prices[symbol] = result
+    
+    return prices
+
+
 def get_current_prices(picks: List[Dict]) -> Dict[str, float]:
-    """Get current prices for all picks (placeholder - implement with your price API)"""
-    # TODO: Implement actual price fetching
-    # For now, return empty dict
-    return {}
+    """Get current prices for all picks (wrapper for async function)"""
+    try:
+        return asyncio.run(get_current_prices_async(picks))
+    except Exception as e:
+        print(f"⚠️  Error fetching prices: {e}")
+        return {}
 
 
 def main():

@@ -4,10 +4,12 @@ REST API for AI-Powered Options Recommendations
 """
 
 import logging
+import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import json  # used for serialization test
+import aiohttp
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from pydantic import BaseModel
 
@@ -41,6 +43,61 @@ ml_models = OptionsMLModels()
 
 # Create API router
 router = APIRouter(prefix="/api/ai-options", tags=["AI Options"])
+
+
+# ---------------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------------
+async def _fetch_current_price(symbol: str) -> float:
+    """Fetch current price from market data APIs"""
+    # Try Alpaca first
+    api_key = os.getenv('ALPACA_API_KEY')
+    api_secret = os.getenv('ALPACA_SECRET_KEY')
+    
+    if api_key and api_secret:
+        try:
+            url = f"https://data.alpaca.markets/v2/stocks/{symbol}/bars/latest"
+            headers = {
+                'APCA-API-KEY-ID': api_key,
+                'APCA-API-SECRET-KEY': api_secret
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=3.0)) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        bar = data.get('bar', {})
+                        if bar:
+                            price = float(bar.get('c', 0))
+                            if price > 0:
+                                logger.info("  Fetched price from Alpaca: $%.2f", price)
+                                return price
+        except Exception as e:
+            logger.warning("  Alpaca price fetch failed: %s", e)
+    
+    # Try Polygon as fallback
+    polygon_key = os.getenv('POLYGON_API_KEY')
+    if polygon_key:
+        try:
+            url = f"https://api.polygon.io/v2/last/trade/{symbol}"
+            params = {'apiKey': polygon_key}
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=3.0)) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        results = data.get('results', {})
+                        if results:
+                            price = float(results.get('p', 0))
+                            if price > 0:
+                                logger.info("  Fetched price from Polygon: $%.2f", price)
+                                return price
+        except Exception as e:
+            logger.warning("  Polygon price fetch failed: %s", e)
+    
+    # Fallback to placeholder
+    logger.warning("  Could not fetch real price for %s, using placeholder 100.0", symbol)
+    return 100.0
 
 
 # ---------------------------------------------------------------------------
@@ -223,12 +280,15 @@ async def get_ai_recommendations(request: OptionsRequest):
         logger.info(" Successfully converted %d recommendations", len(recommendations_dict))
 
         # ------------------------------------------------------------------
-        # Market analysis placeholder (since new engine may not expose it)
+        # Market analysis - fetch real price
         # ------------------------------------------------------------------
-        logger.info(" Building placeholder market analysis...")
+        logger.info(" Fetching current price for %s...", request.symbol)
+        current_price = await _fetch_current_price(request.symbol)
+        
+        logger.info(" Building market analysis...")
         market_analysis_dict: Dict[str, Any] = {
             "symbol": request.symbol,
-            "current_price": 100.0,  # TODO: replace with real price
+            "current_price": current_price,
             "volatility": 0.2,
             "implied_volatility": 0.25,
             "volume": 1_000_000,

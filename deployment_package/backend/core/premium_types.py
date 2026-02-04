@@ -4,8 +4,10 @@ Premium GraphQL Types and Mutations
 
 import json
 import logging
+import os
 import random
 from datetime import datetime
+from typing import Optional
 
 import graphene
 from django.core.cache import cache
@@ -18,6 +20,15 @@ from .premium_analytics import PremiumAnalyticsService
 from .mutations import GenerateAIRecommendations
 
 logger = logging.getLogger(__name__)
+
+# Try to import Stripe
+try:
+    import stripe
+    stripe.api_key = os.getenv('STRIPE_SECRET_KEY', '')
+    STRIPE_AVAILABLE = bool(stripe.api_key)
+except ImportError:
+    STRIPE_AVAILABLE = False
+    logger.warning("Stripe not installed. Install with: pip install stripe")
 
 
 # ============
@@ -1186,10 +1197,48 @@ class CancelPremiumSubscription(graphene.Mutation):
                 success=False, message="Authentication required"
             )
         try:
-            # TODO: integrate with real payment provider + subscription model
-            return CancelPremiumSubscription(
-                success=True, message="Subscription cancelled successfully"
-            )
+            # Check if Stripe is available and configured
+            if not STRIPE_AVAILABLE:
+                logger.warning("Stripe not configured, using mock cancellation")
+                return CancelPremiumSubscription(
+                    success=True, 
+                    message="Subscription cancelled successfully (mock mode)"
+                )
+            
+            # Get user's subscription ID from user model (assumed field)
+            subscription_id = getattr(user, 'stripe_subscription_id', None)
+            
+            if not subscription_id:
+                return CancelPremiumSubscription(
+                    success=False, 
+                    message="No active subscription found"
+                )
+            
+            # Cancel subscription in Stripe
+            try:
+                subscription = stripe.Subscription.retrieve(subscription_id)
+                cancelled_sub = stripe.Subscription.cancel(subscription_id)
+                
+                # Update user model
+                user.stripe_subscription_id = None
+                user.subscription_status = 'cancelled'
+                user.subscription_end_date = datetime.fromtimestamp(
+                    cancelled_sub.current_period_end
+                )
+                user.save()
+                
+                logger.info(f"Cancelled subscription {subscription_id} for user {user.id}")
+                return CancelPremiumSubscription(
+                    success=True,
+                    message=f"Subscription cancelled. Access until {user.subscription_end_date.strftime('%Y-%m-%d')}"
+                )
+            except stripe.error.StripeError as e:
+                logger.error(f"Stripe error cancelling subscription: {e}")
+                return CancelPremiumSubscription(
+                    success=False,
+                    message=f"Payment provider error: {str(e)}"
+                )
+                
         except Exception as e:
             logger.error("Error cancelling subscription: %s", e)
             return CancelPremiumSubscription(

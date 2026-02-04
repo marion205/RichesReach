@@ -441,9 +441,27 @@ class FSSDataPipeline:
             return None
         
         # Convert to daily-aligned DataFrames
-        # For now, use most recent values (in production, align by report date)
-        # This is a placeholder - real implementation would need report dates
-        return None  # TODO: Implement proper daily alignment
+        # Create a date range for the lookback period
+        end_date = pd.Timestamp.now()
+        start_date = end_date - pd.Timedelta(days=lookback_days)
+        date_range = pd.date_range(start=start_date, end=end_date, freq='D')
+        
+        # Build daily-aligned DataFrames for each fundamental metric
+        fundamentals_daily = {}
+        
+        for metric in ['eps_accel', 'rev_yoy', 'gm_trend', 'balance_strength']:
+            metric_df = pd.DataFrame(index=date_range, columns=tickers)
+            
+            for ticker in tickers:
+                if ticker in fundamentals and metric in fundamentals[ticker]:
+                    # Forward-fill the quarterly value across all dates
+                    # In production, this would align by actual report dates
+                    value = fundamentals[ticker][metric]
+                    metric_df[ticker] = value
+            
+            fundamentals_daily[metric] = metric_df.fillna(method='ffill').fillna(0)
+        
+        return fundamentals_daily
     
     async def _fetch_alpha_vantage_income(
         self,
