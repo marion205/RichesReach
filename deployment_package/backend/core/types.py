@@ -492,35 +492,97 @@ class StockType(DjangoObjectType):
     mlScore = graphene.Float(description="ML-based stock score")
 
     def resolve_beginner_friendly_score(self, info):
-        """Return stored score if set; otherwise compute from market_cap/pe_ratio for variety."""
+        """Calculate beginner-friendly score based on stock fundamentals.
+        
+        Score considers:
+        - Market cap (larger = more stable for beginners)
+        - Volatility (lower = better)
+        - P/E ratio (reasonable range = better)
+        - Sector stability
+        """
+        # First check if we have a meaningful stored value
         stored = getattr(self, "beginner_friendly_score", None)
-        if stored is not None and int(stored) > 0:
+        if stored is not None and int(stored) >= 40:  # Only use if >= 40 (meaningful)
             return int(stored)
-        # Derive a varied score (55–85) so not every stock shows the same number
-        base = 60
+        
+        # Calculate dynamically from stock fundamentals
+        score = 50  # Base score
+        
         try:
-            mc = getattr(self, "market_cap", None)
-            if mc is not None and mc > 0:
-                if mc >= 100_000_000_000:
-                    base += 18
-                elif mc >= 10_000_000_000:
-                    base += 12
-                elif mc >= 1_000_000_000:
-                    base += 6
-            pe = getattr(self, "pe_ratio", None)
-            if pe is not None and pe > 0:
-                pe_f = float(pe)
-                if 10 <= pe_f <= 25:
-                    base += 12
-                elif 5 <= pe_f <= 35:
-                    base += 6
-            # Vary by symbol hash so same sector doesn’t all get same score
-            symbol = (getattr(self, "symbol", None) or "").upper()
-            if symbol:
-                base = base + (hash(symbol) % 11) - 5  # -5 to +5
-            return min(100, max(0, base))
+            # 1. Market Cap (Large caps are safer)
+            market_cap = getattr(self, "market_cap", None)
+            if market_cap:
+                mc = float(market_cap) if market_cap else 0
+                if mc >= 500_000_000_000:  # $500B+
+                    score += 20
+                elif mc >= 100_000_000_000:  # $100B+
+                    score += 18
+                elif mc >= 50_000_000_000:  # $50B+
+                    score += 16
+                elif mc >= 10_000_000_000:  # $10B+
+                    score += 12
+                elif mc >= 2_000_000_000:  # $2B+
+                    score += 8
+                elif mc >= 1_000_000_000:  # $1B+
+                    score += 5
+            
+            # 2. Volatility (Lower volatility = more beginner-friendly)
+            volatility = getattr(self, "volatility", None)
+            if volatility:
+                vol = float(volatility) if volatility else 0
+                if vol < 15:
+                    score += 15  # Very stable
+                elif vol < 20:
+                    score += 12  # Stable
+                elif vol < 25:
+                    score += 8   # Moderate
+                elif vol < 35:
+                    score += 3   # Volatile
+                else:
+                    score -= 5   # Very volatile
+            
+            # 3. P/E Ratio (Reasonable P/E = more beginner-friendly)
+            pe_ratio = getattr(self, "pe_ratio", None)
+            if pe_ratio:
+                pe = float(pe_ratio) if pe_ratio else 0
+                if 10 <= pe <= 20:
+                    score += 10  # Sweet spot
+                elif 8 <= pe < 25:
+                    score += 8   # Good range
+                elif 5 <= pe < 30:
+                    score += 5   # Acceptable
+                elif pe > 50 or pe < 0:
+                    score -= 5   # Extreme/negative
+            
+            # 4. Sector stability
+            sector = getattr(self, "sector", None)
+            sector_stability = {
+                'Technology': 70,
+                'Consumer Cyclical': 60,
+                'Financial Services': 75,
+                'Financial': 75,
+                'Healthcare': 80,
+                'Utilities': 85,
+                'Consumer Defensive': 85,
+                'Consumer Staples': 85,
+                'Industrial': 65,
+                'Energy': 55,
+                'Materials': 50,
+                'Real Estate': 65,
+                'Communication Services': 60,
+            }
+            
+            if sector:
+                sector_boost = sector_stability.get(sector, 60)
+                # Normalize to 0-20 point bonus
+                sector_score = (sector_boost - 50) / 3.5
+                score += sector_score
+            
+            # Clamp to 0-100
+            return max(0, min(100, int(round(score))))
         except Exception:
-            return 60
+            # Fallback if calculation fails
+            return 65
 
 # Resolver for camelCase field
     def resolve_companyName(self, info):
