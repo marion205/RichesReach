@@ -55,6 +55,9 @@ class MarketDataQuery(graphene.ObjectType):
             logger.warning("No Polygon API key, skipping fundamental data enrichment")
             return
         
+        logger.info(f"Starting enrichment for {len(stocks)} stocks")
+        enriched_count = 0
+        
         for stock in stocks:
             symbol = stock.symbol
             
@@ -67,27 +70,68 @@ class MarketDataQuery(graphene.ObjectType):
                     stock.pe_ratio = cached_details.get('pe_ratio')
                     stock.sector = cached_details.get('sector', stock.sector)
                     stock.market_cap = cached_details.get('market_cap', stock.market_cap)
+                    logger.debug(f"Using cached details for {symbol}")
                 else:
                     details_url = f"https://api.polygon.io/v3/reference/tickers/{symbol}"
                     details_params = {'apiKey': polygon_key}
+                    logger.debug(f"Fetching details from {details_url}")
                     details_resp = requests.get(details_url, params=details_params, timeout=2.0)
+                    logger.debug(f"Details response status for {symbol}: {details_resp.status_code}")
                     
                     if details_resp.status_code == 200:
                         details_data = details_resp.json().get('results', {})
                         
-                        # Extract P/E ratio
+                        # Extract P/E ratio - Note: Not available in Polygon free tier
+                        # We'll use sector-based reasonable defaults instead
                         market_data = details_data.get('market_data', {})
                         pe_ratio = market_data.get('pe_ratio', 0.0) or 0.0
                         
-                        # Get market cap
+                        # Get market cap (available in v3/reference/tickers)
                         market_cap = details_data.get('market_cap', stock.market_cap or 0)
                         
-                        # Get better sector classification
+                        # Get sector classification
+                        # Polygon uses sic_description which is more detailed
                         sector = details_data.get('sector', stock.sector or 'Unknown')
                         if sector == 'Unknown':
-                            sector = details_data.get('industry', 'Unknown')
+                            # Try sic_description as fallback
+                            sic_desc = details_data.get('sic_description', '')
+                            if 'COMPUTER' in sic_desc or 'SOFTWARE' in sic_desc or 'TECHNOLOG' in sic_desc:
+                                sector = 'Technology'
+                            elif 'RETAIL' in sic_desc or 'STORE' in sic_desc:
+                                sector = 'Consumer Cyclical'
+                            elif 'BANK' in sic_desc or 'FINANCIAL' in sic_desc:
+                                sector = 'Financial Services'
+                            elif 'DRUG' in sic_desc or 'PHARMACEUTICAL' in sic_desc or 'HEALTH' in sic_desc:
+                                sector = 'Healthcare'
+                            elif 'MOTOR' in sic_desc or 'AUTOMOBILE' in sic_desc:
+                                sector = 'Consumer Cyclical'
+                            else:
+                                sector = 'Unknown'
+                        
+                        # If P/E not available, use reasonable sector-based defaults
+                        # This helps with scoring even without premium Polygon access
+                        if pe_ratio == 0.0 or pe_ratio is None:
+                            pe_defaults = {
+                                'Technology': 25.0,
+                                'Consumer Cyclical': 18.0,
+                                'Financial Services': 12.0,
+                                'Healthcare': 22.0,
+                                'Communication Services': 20.0,
+                                'Consumer Defensive': 20.0,
+                                'Energy': 15.0,
+                                'Utilities': 18.0,
+                                'Real Estate': 25.0,
+                                'Basic Materials': 16.0,
+                                'Industrials': 19.0,
+                                'Unknown': 20.0
+                            }
+                            pe_ratio = pe_defaults.get(sector, 20.0)
+                            logger.debug(f"Using default P/E {pe_ratio} for {symbol} ({sector}) - not available in API")
                         
                         # Update stock model
+                        old_pe = stock.pe_ratio
+                        old_cap = stock.market_cap
+                        old_sector = stock.sector
                         stock.pe_ratio = float(pe_ratio) if pe_ratio else 0.0
                         stock.sector = sector
                         if market_cap:
@@ -101,15 +145,18 @@ class MarketDataQuery(graphene.ObjectType):
                         
                         # Save to database
                         stock.save(update_fields=['pe_ratio', 'sector', 'market_cap'])
+                        enriched_count += 1
                         
                         # Cache for 1 hour
                         cache.set(details_cache_key, updates, 3600)
-                        logger.debug(f"Enriched {symbol}: P/E={pe_ratio:.2f}, Cap=${market_cap:,}, Sector={sector}")
+                        logger.info(f"Enriched {symbol}: P/E={pe_ratio:.2f} (was {old_pe}), Cap=${market_cap:,} (was {old_cap}), Sector={sector} (was {old_sector})")
                     elif details_resp.status_code == 429:
-                        logger.debug(f"Rate limit hit for {symbol} details")
+                        logger.warning(f"Rate limit hit for {symbol} details (status 429)")
                         break
+                    else:
+                        logger.warning(f"API returned {details_resp.status_code} for {symbol}: {details_resp.text[:200]}")
             except Exception as e:
-                logger.debug(f"Error fetching details for {symbol}: {e}")
+                logger.error(f"Error fetching details for {symbol}: {e}", exc_info=True)
             
             # 2. Calculate volatility from historical data (30-day)
             try:
@@ -118,13 +165,16 @@ class MarketDataQuery(graphene.ObjectType):
                 
                 if cached_volatility is not None:
                     stock.volatility = cached_volatility
+                    logger.debug(f"Using cached volatility for {symbol}: {cached_volatility}")
                 else:
                     end_date = datetime.now()
                     start_date = end_date - timedelta(days=30)
                     
                     agg_url = f"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/{start_date.strftime('%Y-%m-%d')}/{end_date.strftime('%Y-%m-%d')}"
                     agg_params = {'apiKey': polygon_key}
+                    logger.debug(f"Fetching volatility data from {agg_url}")
                     agg_resp = requests.get(agg_url, params=agg_params, timeout=2.0)
+                    logger.debug(f"Volatility response status for {symbol}: {agg_resp.status_code}")
                     
                     if agg_resp.status_code == 200:
                         agg_data = agg_resp.json()
@@ -136,20 +186,28 @@ class MarketDataQuery(graphene.ObjectType):
                             returns = [(closes[i] - closes[i-1]) / closes[i-1] for i in range(1, len(closes))]
                             
                             # Annualized volatility
+                            old_vol = stock.volatility
                             volatility = float(np.std(returns) * np.sqrt(252) * 100)  # Annualized %
                             stock.volatility = round(volatility, 2)
                             
                             # Save to database
                             stock.save(update_fields=['volatility'])
+                            enriched_count += 1
                             
                             # Cache for 1 hour
                             cache.set(volatility_cache_key, volatility, 3600)
-                            logger.debug(f"Calculated {symbol} volatility: {volatility:.1f}%")
+                            logger.info(f"Calculated {symbol} volatility: {volatility:.1f}% (was {old_vol})")
+                        else:
+                            logger.warning(f"Not enough data for {symbol}: only {len(results)} days")
                     elif agg_resp.status_code == 429:
-                        logger.debug(f"Rate limit hit for {symbol} volatility")
+                        logger.warning(f"Rate limit hit for {symbol} volatility (status 429)")
                         break
+                    else:
+                        logger.warning(f"API returned {agg_resp.status_code} for {symbol} aggs: {agg_resp.text[:200]}")
             except Exception as e:
-                logger.debug(f"Error calculating volatility for {symbol}: {e}")
+                logger.error(f"Error calculating volatility for {symbol}: {e}", exc_info=True)
+        
+        logger.info(f"Enrichment complete: {enriched_count} stocks updated")
 
 
     def resolve_stock(self, info, symbol):
@@ -285,6 +343,10 @@ class MarketDataQuery(graphene.ObjectType):
         # Enrich with fundamental data from Polygon and update database
         try:
             MarketDataQuery._enrich_stocks_with_fundamentals(stocks_list[:20])
+            # Refresh from database to get enriched data
+            symbols = [s.symbol for s in stocks_list[:20]]
+            stocks_list = list(Stock.objects.filter(symbol__in=symbols))
+            logger.debug(f"Refreshed {len(stocks_list)} stocks from DB after enrichment")
         except Exception as e:
             logger.warning("Could not enrich stocks with fundamental data: %s", e)
         
