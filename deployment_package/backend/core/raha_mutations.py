@@ -154,13 +154,20 @@ class RunBacktest(graphene.Mutation):
                 status='PENDING'
             )
             
-            # Queue backtest job (async)
-            # TODO: Use Celery or similar for async execution
-            from .raha_backtest_service import RAHABacktestService
-            backtest_service = RAHABacktestService()
-            # For now, run synchronously (will be async in production)
+            # Queue backtest job (async with Celery if available)
             try:
-                backtest_service.run_backtest(backtest.id)
+                from .celery_tasks import run_backtest_async, CELERY_AVAILABLE
+                
+                if CELERY_AVAILABLE:
+                    # Use Celery for async execution
+                    run_backtest_async.delay(backtest.id)
+                    logger.info(f"Queued backtest {backtest.id} for async execution")
+                else:
+                    # Fall back to synchronous execution
+                    logger.warning("Celery not available, running backtest synchronously")
+                    from .raha_backtest_service import RAHABacktestService
+                    backtest_service = RAHABacktestService()
+                    backtest_service.run_backtest(backtest.id)
             except Exception as e:
                 logger.error(f"Error running backtest: {e}", exc_info=True)
                 backtest.status = 'FAILED'

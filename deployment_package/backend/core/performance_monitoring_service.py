@@ -7,6 +7,9 @@ import logging
 import json
 import time
 import asyncio
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from typing import Dict, List, Any, Optional, Union
 from datetime import datetime, timedelta
 import pandas as pd
@@ -17,6 +20,14 @@ import threading
 import queue
 import sqlite3
 from pathlib import Path
+from .alert_notifications import send_email_alert, send_slack_alert
+
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+    
 logger = logging.getLogger(__name__)
 class MetricType(Enum):
 """Types of metrics to monitor"""
@@ -401,6 +412,10 @@ try:
 # Log alert
 logger.warning(f"ALERT [{alert.level.value.upper()}]: {alert.message}")
 # TODO: Implement alert notifications (email, Slack, etc.)
+            # Send email and Slack notifications
+            from .alert_notifications import send_email_alert, send_slack_alert
+            send_email_alert(alert.level.value, alert.metric_name, alert.message, alert.timestamp, alert.details)
+            send_slack_alert(alert.level.value, alert.metric_name, alert.message, alert.timestamp, alert.details)
 # For now, just log to console
 except Exception as e:
 logger.error(f"Error sending alert: {e}")

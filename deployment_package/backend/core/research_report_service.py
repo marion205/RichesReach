@@ -553,18 +553,71 @@ class ResearchReportService:
         """
         Generate PDF version of research report
         
-        Returns PDF bytes (would use reportlab or similar)
+        Returns PDF bytes using reportlab
         """
-        # TODO: Implement PDF generation using reportlab
-        # For now, return empty bytes
         report = self.generate_stock_report(symbol, user_id, report_type)
         
-        # In production, would use reportlab to create PDF
-        # from reportlab.lib.pagesizes import letter
-        # from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-        # ...
-        
-        return b''  # Placeholder
+        try:
+            from io import BytesIO
+            from reportlab.lib.pagesizes import letter
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.units import inch
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+            from reportlab.lib import colors
+            from reportlab.lib.enums import TA_CENTER, TA_LEFT
+            
+            buffer = BytesIO()
+            doc = SimpleDocTemplate(buffer, pagesize=letter)
+            styles = getSampleStyleSheet()
+            story = []
+            
+            # Title
+            title_style = ParagraphStyle(
+                'CustomTitle',
+                parent=styles['Heading1'],
+                fontSize=24,
+                textColor=colors.HexColor('#1a1a1a'),
+                spaceAfter=30,
+                alignment=TA_CENTER
+            )
+            story.append(Paragraph(f"Research Report: {report.get('company_name', symbol)}", title_style))
+            story.append(Spacer(1, 0.2*inch))
+            
+            # Executive Summary
+            heading_style = styles['Heading2']
+            story.append(Paragraph("Executive Summary", heading_style))
+            story.append(Spacer(1, 0.1*inch))
+            story.append(Paragraph(report.get('executive_summary', 'N/A'), styles['BodyText']))
+            story.append(Spacer(1, 0.3*inch))
+            
+            # Sections
+            sections = report.get('sections', {})
+            for section_name, section_data in sections.items():
+                story.append(Paragraph(section_name.replace('_', ' ').title(), heading_style))
+                story.append(Spacer(1, 0.1*inch))
+                
+                if isinstance(section_data, dict):
+                    for key, value in section_data.items():
+                        story.append(Paragraph(f"<b>{key.replace('_', ' ').title()}:</b> {value}", styles['BodyText']))
+                elif isinstance(section_data, str):
+                    story.append(Paragraph(section_data, styles['BodyText']))
+                
+                story.append(Spacer(1, 0.2*inch))
+            
+            # Build PDF
+            doc.build(story)
+            pdf_bytes = buffer.getvalue()
+            buffer.close()
+            
+            logger.info(f"Generated PDF report for {symbol}, size: {len(pdf_bytes)} bytes")
+            return pdf_bytes
+            
+        except ImportError:
+            logger.error("reportlab not installed. Install with: pip install reportlab")
+            return b''  # Return empty if reportlab not available
+        except Exception as e:
+            logger.error(f"Error generating PDF: {e}", exc_info=True)
+            return b''
     
     def send_report_email(
         self,

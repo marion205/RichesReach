@@ -825,7 +825,7 @@ class WebhookView(View):
             from .banking_models import BankWebhookEvent
             
             # Store webhook event
-            BankWebhookEvent.objects.create(
+            webhook_event = BankWebhookEvent.objects.create(
                 event_type=event_type,
                 provider_account_id=provider_account_id,
                 payload=data,
@@ -833,8 +833,28 @@ class WebhookView(View):
                 processed=False,
             )
             
-            # TODO: Process webhook (refresh accounts, update transactions, etc.)
-            # This can be done async via Celery
+            # Process webhook asynchronously with Celery if available
+            try:
+                from .celery_tasks import process_webhook_async, CELERY_AVAILABLE
+                
+                if CELERY_AVAILABLE:
+                    # Queue webhook processing
+                    process_webhook_async.delay(webhook_event.id)
+                    logger.info(f"Queued webhook {webhook_event.id} for async processing")
+                else:
+                    # Process synchronously as fallback
+                    logger.warning("Celery not available, processing webhook synchronously")
+                    from .banking_service import refresh_account_data, sync_transactions
+                    
+                    if event_type == 'ACCOUNT_UPDATE':
+                        refresh_account_data(provider_account_id)
+                    elif event_type == 'TRANSACTION_UPDATE':
+                        sync_transactions(provider_account_id)
+                    
+                    webhook_event.processed = True
+                    webhook_event.save()
+            except Exception as e:
+                logger.error(f"Error processing webhook: {e}", exc_info=True)
             
             return JsonResponse({'success': True, 'message': 'Webhook received'})
         

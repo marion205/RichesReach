@@ -130,10 +130,38 @@ class AuditTrailLogger:
         
         # Log to database if enabled
         if self.enable_database_logging:
-            # TODO: Implement database storage
-            # from core.models import AuditTrail
-            # AuditTrail.objects.create(**entry_dict)
-            pass
+            try:
+                # Try to import and use the AuditTrail model
+                from django.apps import apps
+                
+                # Check if model exists
+                if apps.is_installed('core'):
+                    try:
+                        AuditTrail = apps.get_model('core', 'AuditTrail')
+                        
+                        # Create audit trail entry in database
+                        AuditTrail.objects.create(
+                            timestamp=entry.timestamp,
+                            user_id=entry.user_id,
+                            session_id=entry.session_id,
+                            decision_type=entry.decision_type.value,
+                            raw_llm_input=entry.raw_llm_input,
+                            user_context=entry.user_context,
+                            routing_decision=entry.routing_decision,
+                            model_used=entry.model_used,
+                            tool_called=entry.tool_called,
+                            tool_output_raw=entry.tool_output_raw,
+                            llm_response=entry.llm_response,
+                            disclosure_version=entry.disclosure_version,
+                            compliance_flags=entry.compliance_flags,
+                            error_occurred=entry.error_occurred,
+                            error_details=entry.error_details
+                        )
+                        logger.debug(f"Stored audit entry in database for {entry.decision_type}")
+                    except LookupError:
+                        logger.debug("AuditTrail model not found, skipping database storage")
+            except Exception as e:
+                logger.warning(f"Failed to store audit trail in database: {e}")
         
         # Also log to application logger for debugging
         logger.debug(f"Audit trail: {entry.decision_type} | Tool: {entry.tool_called} | Model: {entry.model_used}")
