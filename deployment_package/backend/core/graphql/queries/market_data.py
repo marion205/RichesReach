@@ -277,8 +277,9 @@ class MarketDataQuery(graphene.ObjectType):
         else:
             scored_stocks.sort(key=lambda item: item[1], reverse=True)
 
-        # Beginner Friendly should show only BUY-tier stocks
-        scored_stocks = [item for item in scored_stocks if item[1] >= 60]
+        # Beginner Friendly should show only BUY-tier stocks (score >= 60)
+        # Temporarily allow >= 50 to debug why scores aren't reaching 60
+        scored_stocks = [item for item in scored_stocks if item[1] >= 50]
         stocks_list = [item[0] for item in scored_stocks]
         
         # Enrich with fundamental data from Polygon and update database
