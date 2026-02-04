@@ -17,7 +17,8 @@ from typing import Dict, List, Any, Optional
 from django.utils import timezone
 from django.core.cache import cache
 from .models import Stock
-from .market_data_api_service import MarketDataAPIService, DataProvider
+from .market_data_manager import get_market_data_service
+
 logger = logging.getLogger(__name__)
 
 
@@ -28,7 +29,7 @@ class EnhancedStockService:
     """
 
     def __init__(self):
-        self.market_data_service = MarketDataAPIService()
+        self.market_data_service = get_market_data_service()
         self.cache_timeout = 300  # 5 minutes cache
         # No hardcoded fallback prices - always use real data from database
         self.fallback_prices = {}
@@ -54,7 +55,7 @@ class EnhancedStockService:
 
             logger.info(f"Fetching real-time price for {symbol}")
 
-            # Use the unified MarketDataAPIService (prioritizes Finnhub, then Alpha Vantage)
+            # Use shared market data facade (prioritizes Finnhub, then Alpha Vantage)
 
             try:
                 price_data = await self.market_data_service.get_stock_quote(symbol)

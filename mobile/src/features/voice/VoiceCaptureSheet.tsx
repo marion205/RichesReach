@@ -15,10 +15,10 @@ export default function VoiceCaptureSheet({ visible, onClose, onResult }: Props)
       <View style={styles.overlay}>
         <View style={styles.card}>
           <View style={styles.header}>
-            <Text style={styles.title}>Voice Capture (Stub)</Text>
+            <Text style={styles.title}>Voice Capture</Text>
             <TouchableOpacity onPress={onClose}><Icon name="x" size={20} color="#8E8E93" /></TouchableOpacity>
           </View>
-          <Text style={styles.subtitle}>Real ASR/wake-word requires native modules. For now, type or paste.</Text>
+          <Text style={styles.subtitle}>Type or paste your request. ASR coming soon.</Text>
           <View style={styles.box}>
             <Text style={styles.text}>{transcript || '“set calm investing goal”'}</Text>
           </View>

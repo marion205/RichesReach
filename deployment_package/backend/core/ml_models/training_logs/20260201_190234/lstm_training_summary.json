@@ -1,0 +1,8 @@
+{
+  "phase": "LSTM",
+  "final_train_loss": 7.956423360155895e-05,
+  "final_val_loss": 1.7095259181587608e-06,
+  "total_epochs": 10,
+  "elapsed_seconds": 11.905155181884766,
+  "timestamp": "2026-02-01T19:02:46.825322"
+}

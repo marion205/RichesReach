@@ -150,9 +150,9 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> User:
     try:
         import asyncio
         loop = asyncio.get_event_loop()
-            user = await loop.run_in_executor(None, lambda: User.objects.first() or User.objects.create_user(
-                email='test@example.com', name='Test User', password=os.getenv('DEV_TEST_USER_PASSWORD', secrets.token_urlsafe(16))
-            ))
+        user = await loop.run_in_executor(None, lambda: User.objects.first() or User.objects.create_user(
+            email='test@example.com', name='Test User', password=os.getenv('DEV_TEST_USER_PASSWORD', secrets.token_urlsafe(16))
+        ))
         logger.info(f"Using fallback user: {user.email}")
         return user
     except Exception as e:
@@ -623,9 +623,28 @@ async def invite_member(
             user_id=user.id,
             expires_at=datetime.now() + timedelta(days=7),
         )
-        
-        # TODO: Send email invitation
-        
+        # Send email invitation with invite link
+        try:
+            from django.core.mail import send_mail
+            frontend_url = getattr(settings, 'FRONTEND_URL', os.getenv('FRONTEND_URL', 'http://localhost:3000'))
+            accept_url = f"{frontend_url.rstrip('/')}/family/accept?code={invite_code}"
+            inviter_name = getattr(user, 'name', None) or getattr(user, 'username', None) or user.email
+            subject = "You're invited to join a family group on RichesReach"
+            message = (
+                f"Hi,\n\n{inviter_name} has invited you to join their family group on RichesReach.\n\n"
+                f"To accept, use this link (valid for 7 days):\n{accept_url}\n\n"
+                f"If you don't have an account, you'll be prompted to sign up first.\n\n— RichesReach"
+            )
+            send_mail(
+                subject=subject,
+                message=message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[request.email],
+                fail_silently=True,
+            )
+            logger.info(f"Invite email sent to {request.email}")
+        except Exception as mail_err:
+            logger.warning(f"Could not send invite email: {mail_err}")
         return {
             "success": True,
             "inviteCode": invite_code,
@@ -798,9 +817,29 @@ async def sync_orb_state(
                 "viewMode": request.viewMode,
             }
         )
-        
-        # TODO: Broadcast to other family members via WebSocket
-        
+        # Broadcast to other family members via channel layer (WebSocket)
+        try:
+            channel_layer = getattr(settings, 'CHANNEL_LAYERS', {}).get('default')
+            if channel_layer:
+                from channels.layers import get_channel_layer
+                layer = get_channel_layer()
+                if layer:
+                    import asyncio
+                    payload = {
+                        "type": "orb_sync",
+                        "userId": str(user.id),
+                        "userName": getattr(user, 'name', None) or getattr(user, 'username', None) or user.email,
+                        "netWorth": request.netWorth,
+                        "gesture": request.gesture,
+                        "viewMode": request.viewMode,
+                        "syncedAt": datetime.now().isoformat(),
+                    }
+                    group_name = f"family_orb_{group_id}"
+                    loop = asyncio.get_event_loop()
+                    loop.run_in_executor(None, lambda: layer.group_send(group_name, payload))
+                    logger.info(f"Orb sync broadcast to group {group_name}")
+        except Exception as broadcast_err:
+            logger.warning(f"Orb sync broadcast skipped: {broadcast_err}")
         return {
             "success": True,
             "syncedAt": datetime.now().isoformat(),

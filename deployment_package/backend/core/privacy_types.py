@@ -7,6 +7,11 @@ from django.utils import timezone
 
 User = get_user_model()
 
+try:
+    from .models import PrivacySettings
+except ImportError:
+    PrivacySettings = None
+
 
 class PrivacySettingsType(graphene.ObjectType):
     """Privacy settings for a user"""
@@ -39,33 +44,37 @@ class PrivacyQueries(graphene.ObjectType):
                 dataRetentionDays=90,
                 lastUpdated=timezone.now()
             )
-        
-        # TODO: Replace with actual database model when PrivacySettings model is created
-        # For now, return default settings
-        # In the future, this would be:
-        # try:
-        #     settings = PrivacySettings.objects.get(user=user)
-        #     return PrivacySettingsType(
-        #         dataSharingEnabled=settings.data_sharing_enabled,
-        #         aiAnalysisEnabled=settings.ai_analysis_enabled,
-        #         mlPredictionsEnabled=settings.ml_predictions_enabled,
-        #         analyticsEnabled=settings.analytics_enabled,
-        #         sessionTrackingEnabled=settings.session_tracking_enabled,
-        #         dataRetentionDays=settings.data_retention_days,
-        #         lastUpdated=settings.updated_at
-        #     )
-        # except PrivacySettings.DoesNotExist:
-        #     return default settings
-        
-        return PrivacySettingsType(
-            dataSharingEnabled=True,
-            aiAnalysisEnabled=True,
-            mlPredictionsEnabled=True,
-            analyticsEnabled=True,
-            sessionTrackingEnabled=False,
-            dataRetentionDays=90,
-            lastUpdated=timezone.now()
-        )
+        if PrivacySettings is None:
+            return PrivacySettingsType(
+                dataSharingEnabled=True,
+                aiAnalysisEnabled=True,
+                mlPredictionsEnabled=True,
+                analyticsEnabled=True,
+                sessionTrackingEnabled=False,
+                dataRetentionDays=90,
+                lastUpdated=timezone.now()
+            )
+        try:
+            settings_obj = PrivacySettings.objects.get(user=user)
+            return PrivacySettingsType(
+                dataSharingEnabled=settings_obj.data_sharing_enabled,
+                aiAnalysisEnabled=settings_obj.ai_analysis_enabled,
+                mlPredictionsEnabled=settings_obj.ml_predictions_enabled,
+                analyticsEnabled=settings_obj.analytics_enabled,
+                sessionTrackingEnabled=settings_obj.session_tracking_enabled,
+                dataRetentionDays=settings_obj.data_retention_days,
+                lastUpdated=settings_obj.updated_at
+            )
+        except PrivacySettings.DoesNotExist:
+            return PrivacySettingsType(
+                dataSharingEnabled=True,
+                aiAnalysisEnabled=True,
+                mlPredictionsEnabled=True,
+                analyticsEnabled=True,
+                sessionTrackingEnabled=False,
+                dataRetentionDays=90,
+                lastUpdated=timezone.now()
+            )
 
 
 class PrivacySettingsInput(graphene.InputObjectType):
@@ -101,20 +110,33 @@ class PrivacyMutations(graphene.ObjectType):
                 success=False,
                 message="Authentication required"
             )
-        
-        # TODO: Replace with actual database update when PrivacySettings model is created
-        # For now, just return success
-        # In the future, this would be:
-        # privacy_settings, created = PrivacySettings.objects.get_or_create(user=user)
-        # privacy_settings.data_sharing_enabled = settings.get('dataSharingEnabled', privacy_settings.data_sharing_enabled)
-        # privacy_settings.ai_analysis_enabled = settings.get('aiAnalysisEnabled', privacy_settings.ai_analysis_enabled)
-        # privacy_settings.ml_predictions_enabled = settings.get('mlPredictionsEnabled', privacy_settings.ml_predictions_enabled)
-        # privacy_settings.analytics_enabled = settings.get('analyticsEnabled', privacy_settings.analytics_enabled)
-        # privacy_settings.session_tracking_enabled = settings.get('sessionTrackingEnabled', privacy_settings.session_tracking_enabled)
-        # privacy_settings.data_retention_days = settings.get('dataRetentionDays', privacy_settings.data_retention_days)
-        # privacy_settings.updated_at = timezone.now()
-        # privacy_settings.save()
-        
+        if PrivacySettings is None:
+            return UpdatePrivacySettingsResult(
+                success=True,
+                message="Privacy settings updated successfully"
+            )
+
+        def _get(key_camel, key_snake, default=None):
+            if isinstance(settings, dict):
+                return settings.get(key_camel, settings.get(key_snake, default))
+            return getattr(settings, key_snake, getattr(settings, key_camel, default))
+
+        settings_data = {
+            'data_sharing_enabled': _get('dataSharingEnabled', 'data_sharing_enabled', True),
+            'ai_analysis_enabled': _get('aiAnalysisEnabled', 'ai_analysis_enabled', True),
+            'ml_predictions_enabled': _get('mlPredictionsEnabled', 'ml_predictions_enabled', True),
+            'analytics_enabled': _get('analyticsEnabled', 'analytics_enabled', True),
+            'session_tracking_enabled': _get('sessionTrackingEnabled', 'session_tracking_enabled', False),
+            'data_retention_days': _get('dataRetentionDays', 'data_retention_days', 90),
+        }
+        privacy_settings, created = PrivacySettings.objects.get_or_create(
+            user=user,
+            defaults=settings_data
+        )
+        if not created:
+            for k, v in settings_data.items():
+                setattr(privacy_settings, k, v)
+            privacy_settings.save(update_fields=list(settings_data.keys()) + ['updated_at'])
         return UpdatePrivacySettingsResult(
             success=True,
             message="Privacy settings updated successfully"

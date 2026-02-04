@@ -115,3 +115,46 @@ class FundingType(graphene.ObjectType):
     status = graphene.String()
     estimatedCompletion = graphene.String()
 
+
+# Budget and spending analysis types (for budgetData / spendingAnalysis root fields)
+
+class BudgetCategoryType(graphene.ObjectType):
+    """GraphQL type for a budget category"""
+    name = graphene.String()
+    budgeted = graphene.Float()
+    spent = graphene.Float()
+    percentage = graphene.Float()
+
+
+class BudgetDataType(graphene.ObjectType):
+    """GraphQL type for budget summary"""
+    monthlyIncome = graphene.Float()
+    monthlyExpenses = graphene.Float()
+    categories = graphene.List(BudgetCategoryType)
+    remaining = graphene.Float()
+    savingsRate = graphene.Float()
+
+
+class SpendingCategoryType(graphene.ObjectType):
+    """GraphQL type for spending by category"""
+    name = graphene.String()
+    amount = graphene.Float()
+    percentage = graphene.Float()
+    transactions = graphene.Int()
+    trend = graphene.String()
+
+
+class TopMerchantType(graphene.ObjectType):
+    """GraphQL type for top merchant"""
+    name = graphene.String()
+    amount = graphene.Float()
+    count = graphene.Int()
+
+
+class SpendingAnalysisType(graphene.ObjectType):
+    """GraphQL type for spending analysis"""
+    totalSpent = graphene.Float()
+    categories = graphene.List(SpendingCategoryType)
+    topMerchants = graphene.List(TopMerchantType)
+    trends = graphene.List(graphene.String)
+

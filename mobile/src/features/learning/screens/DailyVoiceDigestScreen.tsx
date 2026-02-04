@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   View, 
   Text, 
@@ -39,23 +39,31 @@ function getRegimeLabel(regime: string): string {
 
 export default function DailyVoiceDigestScreen() {
   const navigation = useNavigation<any>();
-  const [userId] = useState('demo-user');
-  const [digest, setDigest] = useState<VoiceDigestResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [completedTodos, setCompletedTodos] = useState<Set<number>>(new Set());
-  
-  // Check user's premium status
-  const { data: userData } = useQuery(ME_QUERY, {
+  const isPlayingRef = useRef(false);
+  const hapticTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const { data: userData, loading: userLoading } = useQuery(ME_QUERY, {
     errorPolicy: 'all',
     fetchPolicy: 'cache-first'
   });
-  
+
+  const userId = userData?.me?.id || 'guest';
   const hasPremium = userData?.me?.hasPremiumAccess || false;
   const subscriptionTier = userData?.me?.subscriptionTier || 'free';
 
-  // Speech module availability check - no need to log
+  const [digest, setDigest] = useState<VoiceDigestResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [completedTodos, setCompletedTodos] = useState<Set<number>>(new Set());
+
+  // Stop speech on unmount to prevent background audio leaks; clear haptic timeouts
+  useEffect(() => {
+    return () => {
+      hapticTimeoutsRef.current.forEach(clearTimeout);
+      hapticTimeoutsRef.current = [];
+      Speech.stop();
+    };
+  }, []);
 
   const generateDigest = async () => {
     setLoading(true);
@@ -120,63 +128,84 @@ export default function DailyVoiceDigestScreen() {
     }
   };
 
+  const clearHapticTimeouts = () => {
+    hapticTimeoutsRef.current.forEach(clearTimeout);
+    hapticTimeoutsRef.current = [];
+  };
+
   const playVoiceDigest = async () => {
     if (!digest?.voice_script) return;
 
     try {
-      setIsPlaying(true);
-      
-      // Check if Speech is available
+      // Stop any current speech before starting new one (prevents double-play)
+      await Speech.stop();
+      clearHapticTimeouts();
+
       if (!Speech || typeof Speech.speak !== 'function') {
-        logger.error('Speech module not available');
-        Alert.alert('Voice Playback Unavailable', 'Text-to-speech is not available on this device. Please read the digest manually.');
-        setIsPlaying(false);
+        Alert.alert('Unavailable', 'TTS is not supported on this device.');
         return;
       }
-      
-      // Parse haptic cues from voice script
+
+      setIsPlaying(true);
+      isPlayingRef.current = true;
+
       const script = digest.voice_script;
-      const hapticCues: string[] = script.match(/\[HAPTIC: (gentle|strong)\]/g) || [];
-      
-      // Play voice with haptic feedback
-      await Speech.speak(script.replace(/\[HAPTIC: (gentle|strong)\]/g, ''), {
+      const cleanScript = script.replace(/\[HAPTIC: (gentle|strong)\]/g, '');
+
+      // Speak with callbacks; haptics tied to logical intervals (expo-speech onBoundary is limited on some platforms)
+      Speech.speak(cleanScript, {
         language: 'en-US',
         pitch: 1.0,
         rate: 0.9,
-        onDone: () => setIsPlaying(false),
-        onStopped: () => setIsPlaying(false),
+        onStart: () => {
+          Vibration.vibrate(50);
+        },
+        onDone: () => {
+          clearHapticTimeouts();
+          isPlayingRef.current = false;
+          setIsPlaying(false);
+        },
+        onStopped: () => {
+          clearHapticTimeouts();
+          isPlayingRef.current = false;
+          setIsPlaying(false);
+        },
         onError: (error) => {
           logger.error('Speech error:', error);
+          clearHapticTimeouts();
+          isPlayingRef.current = false;
           setIsPlaying(false);
         },
       });
 
-      // Trigger haptic feedback at appropriate times
+      const hapticCues = script.match(/\[HAPTIC: (gentle|strong)\]/g) || [];
       hapticCues.forEach((cue, index) => {
-        setTimeout(() => {
-          if (cue.includes('gentle')) {
-            Vibration.vibrate(100);
-          } else if (cue.includes('strong')) {
-            Vibration.vibrate(200);
+        const id = setTimeout(() => {
+          if (isPlayingRef.current) {
+            if (cue.includes('gentle')) Vibration.vibrate(100);
+            else if (cue.includes('strong')) Vibration.vibrate(200);
           }
-        }, index * 15000); // Every 15 seconds
+        }, (index + 1) * 8000);
+        hapticTimeoutsRef.current.push(id);
       });
-
     } catch (error) {
       logger.error('Error playing voice:', error);
-      Alert.alert('Playback Error', 'Unable to play voice digest. Please try again or read the text manually.');
+      clearHapticTimeouts();
+      isPlayingRef.current = false;
       setIsPlaying(false);
     }
   };
 
   const stopVoice = () => {
     try {
+      clearHapticTimeouts();
       if (Speech && typeof Speech.stop === 'function') {
         Speech.stop();
       }
     } catch (error) {
       logger.error('Error stopping speech:', error);
     } finally {
+      isPlayingRef.current = false;
       setIsPlaying(false);
     }
   };
@@ -235,9 +264,19 @@ export default function DailyVoiceDigestScreen() {
         Personalized 60-second market briefings that adapt to current conditions
       </Text>
 
-      <TouchableOpacity onPress={generateDigest} style={styles.button} disabled={loading}>
-        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Generate Today's Digest</Text>}
-      </TouchableOpacity>
+      {userLoading && !digest ? (
+        <View style={styles.button}>
+          <ActivityIndicator size="large" color="#3b82f6" />
+        </View>
+      ) : (
+        <TouchableOpacity
+          onPress={generateDigest}
+          style={[styles.button, loading && { opacity: 0.7 }]}
+          disabled={loading}
+        >
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Generate Today's Digest</Text>}
+        </TouchableOpacity>
+      )}
 
       {digest && (
         <View style={styles.digestContainer}>

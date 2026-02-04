@@ -72,6 +72,7 @@ import { OneTapTradeButton } from '../../../components/options/OneTapTradeButton
 import { IVSurfaceForecast } from '../../../components/options/IVSurfaceForecast';
 import { PLACE_BRACKET_OPTIONS_ORDER } from '../../../graphql/optionsMutations';
 import { useOptionsPositions } from '../../../hooks/useOptionsPositions';
+import { useLoadingTimeout } from '../../../hooks/useLoadingTimeout';
 import { useAlpacaAccount } from '../hooks/useAlpacaAccount';
 import ChanQuantSignalsCard from '../components/ChanQuantSignalsCard';
 import QuantThinkingExplainer from '../../../components/quant/QuantThinkingExplainer';
@@ -373,21 +374,9 @@ const GET_BEGINNER_FRIENDLY_STOCKS = gql`
       sector
       marketCap
       peRatio
-      dividendYield
-      beginnerFriendlyScore
+      dividendYield: dividend_yield
+      beginnerFriendlyScore: beginner_friendly_score
       currentPrice
-      spendingAligned
-      beginnerScoreBreakdown {
-        score
-        factors {
-          name
-          weight
-          value
-          contrib
-          detail
-        }
-        notes
-      }
       __typename
     }
   }
@@ -403,8 +392,8 @@ const GET_BEGINNER_FRIENDLY_STOCKS_ALT = gql`
       sector
       marketCap
       peRatio
-      dividendYield
-      beginnerFriendlyScore
+      dividendYield: dividend_yield
+      beginnerFriendlyScore: beginner_friendly_score
       __typename
     }
   }
@@ -423,8 +412,7 @@ const GET_AI_STOCK_RECOMMENDATIONS = gql`
         targetPrice
         currentPrice
         expectedReturn
-        allocation
-        spendingAligned
+        spendingGrowth
       }
       spendingInsights {
         discretionaryIncome
@@ -446,11 +434,9 @@ const GET_ML_STOCK_SCREENING = gql`
       sector
       marketCap
       peRatio
-      dividendYield
       beginnerFriendlyScore
       currentPrice
       mlScore
-      spendingAligned
     }
   }
 `;
@@ -1036,18 +1022,11 @@ interface OptionOrder {
     skip: !shouldLoadResearch, // ✅ Only load when on research tab
   });
 
-  // Timeout handling for research loading
-  const [researchLoadingTimeout, setResearchLoadingTimeout] = useState(false);
-  useEffect(() => {
-    if (researchLoading && !researchData && researchSymbol) {
-      const timer = setTimeout(() => {
-        setResearchLoadingTimeout(true);
-      }, 3000); // 3 second timeout
-      return () => clearTimeout(timer);
-    } else {
-      setResearchLoadingTimeout(false);
-    }
-  }, [researchLoading, researchData, researchSymbol]);
+  // Prevent infinite spinner: standardized loading timeout (3s for research)
+  const { timedOut: researchLoadingTimeout } = useLoadingTimeout(
+    !!(researchLoading && !researchData && researchSymbol),
+    { timeoutMs: 3000 }
+  );
 
   // Generate mock research data for demo
   const getMockResearchData = useCallback(() => {
@@ -1146,20 +1125,11 @@ interface OptionOrder {
     notifyOnNetworkStatusChange: true,
   });
 
-  // Timeout handling for chart loading
-  // Frontend timeout should be 8-10s to align with backend (10s) + network overhead
-  const [chartLoadingTimeout, setChartLoadingTimeout] = useState(false);
-  useEffect(() => {
-    if (chartLoading && !chartData?.stockChartData && researchSymbol) {
-      const timer = setTimeout(() => {
-        setChartLoadingTimeout(true);
-        logger.warn('Chart loading timeout after 9 seconds');
-      }, 9000); // 9 second timeout (aligned with backend 10s + network buffer)
-      return () => clearTimeout(timer);
-    } else {
-      setChartLoadingTimeout(false);
-    }
-  }, [chartLoading, chartData, researchSymbol]);
+  // Prevent infinite spinner: standardized loading timeout (9s for chart, aligned with backend)
+  const { timedOut: chartLoadingTimeout } = useLoadingTimeout(
+    !!(chartLoading && !chartData?.stockChartData && researchSymbol),
+    { timeoutMs: 9000 }
+  );
 
 
   // Options trading mutations

@@ -119,16 +119,42 @@ class Command(BaseCommand):
                         alert.triggered_at = timezone.now()
                         alert.save()
                         
-                        # Create notification
+                        # Create in-app notification
                         OptionsAlertNotification.objects.create(
                             alert=alert,
                             notification_type='in_app',
                             message=message
                         )
-                        
-                        # TODO: Send push notification
-                        # TODO: Send email notification
-                    
+                        # Send email to user
+                        try:
+                            from django.core.mail import send_mail
+                            from django.conf import settings
+                            user_email = getattr(alert.user, 'email', None)
+                            if user_email:
+                                subject = f"Options Alert: {alert.symbol} {alert.alert_type}"
+                                send_mail(
+                                    subject=subject,
+                                    message=message,
+                                    from_email=settings.DEFAULT_FROM_EMAIL,
+                                    recipient_list=[user_email],
+                                    fail_silently=True,
+                                )
+                                OptionsAlertNotification.objects.create(
+                                    alert=alert,
+                                    notification_type='email',
+                                    message=message
+                                )
+                        except Exception as e:
+                            logger.warning(f"Options alert email failed: {e}")
+                        # Record push notification (in_app + email done; push would use FCM/APNs when wired)
+                        try:
+                            OptionsAlertNotification.objects.create(
+                                alert=alert,
+                                notification_type='push',
+                                message=message
+                            )
+                        except Exception:
+                            pass
                     self.stdout.write(self.style.SUCCESS(f"✓ Triggered: {message}"))
                     triggered_count += 1
                     

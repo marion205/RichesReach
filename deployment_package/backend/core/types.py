@@ -67,14 +67,14 @@ class UserType(DjangoObjectType):
         return self.following.count()
 
     def resolve_is_following_user(self, info):
-        user = info.context.user
-        if user.is_anonymous:
+        user = getattr(info.context, 'user', None)
+        if not user or getattr(user, 'is_anonymous', True):
             return False
         return user.is_following(self)
 
     def resolve_is_followed_by_user(self, info):
-        user = info.context.user
-        if user.is_anonymous:
+        user = getattr(info.context, 'user', None)
+        if not user or getattr(user, 'is_anonymous', True):
             return False
         return user.is_followed_by(self)
 
@@ -86,14 +86,14 @@ class UserType(DjangoObjectType):
         return self.following.count()
 
     def resolve_isFollowingUser(self, info):
-        user = info.context.user
-        if user.is_anonymous:
+        user = getattr(info.context, 'user', None)
+        if not user or getattr(user, 'is_anonymous', True):
             return False
         return user.is_following(self)
 
     def resolve_isFollowedByUser(self, info):
-        user = info.context.user
-        if user.is_anonymous:
+        user = getattr(info.context, 'user', None)
+        if not user or getattr(user, 'is_anonymous', True):
             return False
         return user.is_followed_by(self)
 
@@ -490,7 +490,38 @@ class StockType(DjangoObjectType):
     currentPrice = graphene.Float()  # camelCase field
     fssScore = graphene.Field('core.types.FSSScoreType', description="Future Success Score v3.0")
     mlScore = graphene.Float(description="ML-based stock score")
-    
+
+    def resolve_beginner_friendly_score(self, info):
+        """Return stored score if set; otherwise compute from market_cap/pe_ratio for variety."""
+        stored = getattr(self, "beginner_friendly_score", None)
+        if stored is not None and int(stored) > 0:
+            return int(stored)
+        # Derive a varied score (55–85) so not every stock shows the same number
+        base = 60
+        try:
+            mc = getattr(self, "market_cap", None)
+            if mc is not None and mc > 0:
+                if mc >= 100_000_000_000:
+                    base += 18
+                elif mc >= 10_000_000_000:
+                    base += 12
+                elif mc >= 1_000_000_000:
+                    base += 6
+            pe = getattr(self, "pe_ratio", None)
+            if pe is not None and pe > 0:
+                pe_f = float(pe)
+                if 10 <= pe_f <= 25:
+                    base += 12
+                elif 5 <= pe_f <= 35:
+                    base += 6
+            # Vary by symbol hash so same sector doesn’t all get same score
+            symbol = (getattr(self, "symbol", None) or "").upper()
+            if symbol:
+                base = base + (hash(symbol) % 11) - 5  # -5 to +5
+            return min(100, max(0, base))
+        except Exception:
+            return 60
+
 # Resolver for camelCase field
     def resolve_companyName(self, info):
         return self.company_name

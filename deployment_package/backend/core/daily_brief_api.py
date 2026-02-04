@@ -38,21 +38,17 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/daily-brief", tags=["daily-brief"])
 
-# Initialize services
-_market_data_service = None
+# Initialize services (use market data facade for consistency)
 _portfolio_service = None
 
 def _get_market_data_service():
-    """Lazy load market data service"""
-    global _market_data_service
-    if _market_data_service is None:
-        try:
-            from .market_data_service import MarketDataService
-            _market_data_service = MarketDataService()
-        except Exception as e:
-            logger.warning(f"Market data service not available: {e}")
-            _market_data_service = None
-    return _market_data_service
+    """Return shared market data service via facade (MarketDataAPIService)."""
+    try:
+        from .market_data_manager import get_market_data_service
+        return get_market_data_service()
+    except Exception as e:
+        logger.warning(f"Market data service not available: {e}")
+        return None
 
 def _get_portfolio_service():
     """Lazy load portfolio service"""
@@ -178,30 +174,56 @@ async def generate_brief_content(user: User, target_date: date) -> Dict[str, Any
     }
 
 
+def _normalize_market_overview_for_brief(overview: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Normalize facade overview (indices/average_change) to brief shape (change_percent, change, etc.)."""
+    if not overview:
+        return None
+    # Facade (MarketDataAPIService) returns: indices, sentiment, average_change, timestamp
+    avg = overview.get("average_change")
+    if avg is not None:
+        # Use ^GSPC if present for price/change
+        indices = overview.get("indices") or {}
+        gspc = indices.get("^GSPC") or {}
+        change = gspc.get("change") if isinstance(gspc.get("change"), (int, float)) else None
+        current_price = gspc.get("price") or gspc.get("current_price")
+        return {
+            "change_percent": float(avg),
+            "change": change if change is not None else 0,
+            "current_price": current_price or 0,
+            "volatility": overview.get("volatility", 0.15),
+        }
+    # Legacy MarketDataService shape: change_percent, sp500_return, etc.
+    if overview.get("change_percent") is not None or overview.get("sp500_return") is not None:
+        return overview
+    return None
+
+
 async def _generate_real_market_summary() -> str:
-    """Generate market summary using real market data"""
+    """Generate market summary using real market data (via market data facade)."""
     try:
         market_service = _get_market_data_service()
         if market_service:
-            # MarketDataService.get_market_overview is synchronous
-            market_overview = await sync_to_async(market_service.get_market_overview)()
+            # MarketDataAPIService.get_market_overview is async (facade)
+            market_overview = await market_service.get_market_overview()
             logger.info(f"Market overview fetched: {market_overview}")
             
-            # Check if this is synthetic data (has 'method': 'synthetic')
-            if market_overview and market_overview.get('method') == 'synthetic':
+            # Normalize to brief shape (facade returns indices/average_change; legacy returns change_percent/sp500_return)
+            normalized = _normalize_market_overview_for_brief(market_overview)
+            if normalized:
+                market_overview = normalized
+            elif market_overview and market_overview.get("method") == "synthetic":
                 logger.warning("⚠️ Market data service returned synthetic data - using generic message")
                 return (
                     "Markets are active today. Check your portfolio to see how your investments "
                     "are performing. Remember: daily moves are normal—focus on your long-term goals."
                 )
             
-            # Handle both real data (change_percent) and synthetic data (sp500_return)
+            # Handle both normalized (change_percent) and legacy (sp500_return)
             change_pct = None
-            if market_overview and market_overview.get('change_percent') is not None:
-                change_pct = market_overview.get('change_percent', 0)
-            elif market_overview and market_overview.get('sp500_return') is not None:
-                # Synthetic data uses sp500_return (as decimal, e.g., 0.005 for 0.5%)
-                change_pct = market_overview.get('sp500_return', 0) * 100
+            if market_overview and market_overview.get("change_percent") is not None:
+                change_pct = market_overview.get("change_percent", 0)
+            elif market_overview and market_overview.get("sp500_return") is not None:
+                change_pct = market_overview.get("sp500_return", 0) * 100
             
             if change_pct is not None:
                 change = market_overview.get('change', 0)

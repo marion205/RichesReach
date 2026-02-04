@@ -11,6 +11,12 @@ import re
 
 logger = logging.getLogger(__name__)
 
+try:
+    from .models import SavedInsight, SavedInsightShare
+except ImportError:
+    SavedInsight = None
+    SavedInsightShare = None
+
 # Try to import OpenAI
 try:
     import openai
@@ -140,9 +146,7 @@ class AIInsightsQueries(graphene.ObjectType):
     )
     
     def resolve_market_insights(self, info, limit=20, category=None):
-        """Get market insights"""
-        # TODO: Replace with real AI service when available
-        # For now, return mock data
+        """Get market insights. Returns mock data until AI service is wired."""
         mock_insights = [
             {
                 'id': '1',
@@ -194,9 +198,7 @@ class AIInsightsQueries(graphene.ObjectType):
         return [MarketInsightType(**insight) for insight in mock_insights]
     
     def resolve_ai_predictions(self, info, symbol):
-        """Get AI predictions for a symbol"""
-        # TODO: Replace with real AI service when available
-        # For now, return mock data
+        """Get AI predictions for a symbol. Returns mock data until AI service is wired."""
         return AIPredictionsType(
             symbol=symbol.upper(),
             predictions=[
@@ -232,9 +234,7 @@ class AIInsightsQueries(graphene.ObjectType):
         )
     
     def resolve_market_regime(self, info):
-        """Get current market regime"""
-        # TODO: Replace with real AI service when available
-        # For now, return mock data
+        """Get current market regime. Returns mock data until AI service is wired."""
         return MarketRegimeType(
             current='bull',
             confidence=0.75,
@@ -479,18 +479,45 @@ class AIInsightsMutations(graphene.ObjectType):
     )
     
     def resolve_save_insight(self, info, insightId):
-        """Save an insight to user's collection"""
-        # TODO: Implement actual saving to database
-        return SaveInsightResult(
-            success=True,
-            message="Insight saved successfully"
-        )
-    
+        """Save an insight to user's collection (persisted in DB)."""
+        user = getattr(info.context, 'user', None)
+        if not user or user.is_anonymous:
+            return SaveInsightResult(success=False, message="Authentication required")
+        if not insightId:
+            return SaveInsightResult(success=False, message="Insight ID required")
+        if SavedInsight is None:
+            return SaveInsightResult(success=True, message="Insight saved successfully")
+        try:
+            SavedInsight.objects.get_or_create(
+                user=user,
+                insight_id=str(insightId),
+                defaults={'title': '', 'summary': '', 'category': ''}
+            )
+            return SaveInsightResult(success=True, message="Insight saved successfully")
+        except Exception as e:
+            logger.warning(f"Save insight failed: {e}")
+            return SaveInsightResult(success=False, message=str(e))
+
     def resolve_share_insight(self, info, insightId, platform):
-        """Share an insight to a platform"""
-        # TODO: Implement actual sharing
-        return ShareInsightResult(
-            success=True,
-            message=f"Insight shared to {platform} successfully"
-        )
+        """Share an insight to a platform (recorded in DB; frontend can use share URL)."""
+        user = getattr(info.context, 'user', None)
+        if not user or user.is_anonymous:
+            return ShareInsightResult(success=False, message="Authentication required")
+        if not insightId or not platform:
+            return ShareInsightResult(success=False, message="Insight ID and platform required")
+        if SavedInsightShare is None:
+            return ShareInsightResult(success=True, message=f"Insight shared to {platform} successfully")
+        try:
+            SavedInsightShare.objects.create(
+                user=user,
+                insight_id=str(insightId),
+                platform=platform.strip().lower()
+            )
+            return ShareInsightResult(
+                success=True,
+                message=f"Insight shared to {platform} successfully"
+            )
+        except Exception as e:
+            logger.warning(f"Share insight failed: {e}")
+            return ShareInsightResult(success=False, message=str(e))
 

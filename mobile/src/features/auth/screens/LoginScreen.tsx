@@ -6,6 +6,7 @@ import { TOKEN_AUTH } from '../../../graphql/auth';
 import RestAuthService from '../services/RestAuthService';
 import { API_GRAPHQL } from '../../../../config/api';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useLoadingTimeout } from '../../../hooks/useLoadingTimeout';
 import logger from '../../../utils/logger';
 
 // Three common JWT mutations
@@ -58,6 +59,19 @@ export default function LoginScreen({ onLogin, onNavigateToSignUp, onNavigateToF
 
   // REST Auth Service for fallback
   const restAuthService = RestAuthService.getInstance();
+
+  // Prevent infinite spinner: if login takes >15s, clear loading and alert user
+  useLoadingTimeout(loginLoading, {
+    timeoutMs: 15000,
+    onTimeout: () => {
+      setLoginLoading(false);
+      inFlight.current = false;
+      Alert.alert(
+        'Request timed out',
+        'Login is taking longer than expected. Please check your connection and try again.'
+      );
+    },
+  });
 
   // REST-based login function
   const loginWithRest = async () => {

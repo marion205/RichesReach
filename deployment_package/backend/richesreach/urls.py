@@ -8,7 +8,7 @@ from graphene_django.views import GraphQLView
 from core.daytrading_test_schema import schema as daytrading_test_schema
 from core.market_views import QuotesView
 from core.wealth_circles_views import WealthCirclePostsView
-from core.voices_views import VoicesListView
+from core.voices_views import VoicesListView, PollySynthesizeView, VoicePreviewView
 from core.ai_options_views import AIOptionsRecommendationsView
 from core.auth_views import LoginView
 from core.ai_async_views import chat_view, stream_chat_view, health_view
@@ -43,6 +43,9 @@ urlpatterns = [
     path('api/wealth-circles/<str:circle_id>/posts/', WealthCirclePostsView.as_view(), name='wealth_circle_posts'),
     # Voice/TTS endpoints
     path('api/voices/', VoicesListView.as_view(), name='voices_list'),
+    path('polly/synthesize', PollySynthesizeView.as_view(), name='polly_synthesize'),
+    path('api/preview/', VoicePreviewView.as_view(), name='voice_preview'),
+    path('api/preview', VoicePreviewView.as_view(), name='voice_preview_no_slash'),
     # AI Options endpoints
     path('api/ai-options/recommendations/', AIOptionsRecommendationsView.as_view(), name='ai_options_recommendations'),
     # Async AI Chat endpoints (requires ASGI)

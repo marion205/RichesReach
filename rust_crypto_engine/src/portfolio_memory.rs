@@ -451,6 +451,42 @@ impl PortfolioMemoryEngine {
             .fold(0.0, f64::max)
             .max(5.0);
 
+        // Detect IV-aware sizing: negative correlation between entry_iv and position size %
+        // (user tends to size down when IV is high)
+        let iv_aware_sizing = {
+            let n = user_trades.len();
+            if n < 3 {
+                false
+            } else {
+                let ivs: Vec<f64> = user_trades.iter().map(|t| t.entry_iv).collect();
+                let size_pcts: Vec<f64> = user_trades
+                    .iter()
+                    .map(|t| (t.position_size / 10000.0) * 100.0)
+                    .collect();
+                let mean_iv = ivs.iter().sum::<f64>() / n as f64;
+                let mean_size = size_pcts.iter().sum::<f64>() / n as f64;
+                let (cov, var_iv) = ivs.iter().zip(size_pcts.iter()).fold(
+                    (0.0_f64, 0.0_f64),
+                    |(cov, var_iv), (iv, sz)| {
+                        (
+                            cov + (iv - mean_iv) * (sz - mean_size),
+                            var_iv + (iv - mean_iv).powi(2),
+                        )
+                    },
+                );
+                let var_size = size_pcts
+                    .iter()
+                    .map(|s| (s - mean_size).powi(2))
+                    .sum::<f64>();
+                let correlation = if var_iv > 1e-10 && var_size > 1e-10 {
+                    cov / (var_iv * var_size).sqrt()
+                } else {
+                    0.0
+                };
+                !correlation.is_nan() && correlation < -0.2
+            }
+        };
+
         // Identify strengths and weaknesses
         let mut strengths = Vec::new();
         let mut weaknesses = Vec::new();
@@ -495,7 +531,7 @@ impl PortfolioMemoryEngine {
                 max_position_size_pct,
                 tends_to_oversize: avg_position_size_pct > 5.0,
                 tends_to_undersize: avg_position_size_pct < 1.0,
-                iv_aware_sizing: false, // TODO: detect from IV vs size correlation
+                iv_aware_sizing,
             },
             risk_warnings: Vec::new(),
             strengths,

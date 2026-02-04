@@ -27,7 +27,7 @@ except ImportError:
 
 from .banking_models import BankTransaction
 from .models import Stock
-from .market_data_api_service import MarketDataAPIService, DataProvider
+from .market_data_manager import get_market_data_service
 from asgiref.sync import sync_to_async
 
 logger = logging.getLogger(__name__)
@@ -312,7 +312,7 @@ class SpendingTrendPredictor:
         logger.info(f"Calculating forward returns for {len(ticker_dates)} ticker-date pairs")
         
         if not self.market_data_service:
-            self.market_data_service = MarketDataAPIService()
+            self.market_data_service = get_market_data_service()
         
         returns_data = []
         

@@ -3,28 +3,17 @@ import { useEffect, useState } from 'react';
 import logger from '../../utils/logger';
 
 const GET_STOCKS = gql`
-  query GetStocks($search: String, $limit: Int, $offset: Int) {
-    stocks(search: $search, limit: $limit, offset: $offset) {
+  query GetStocks($search: String) {
+    stocks(search: $search) {
       id
       symbol
       companyName
       sector
       marketCap
       peRatio
-      dividendYield
-      beginnerFriendlyScore
+      dividendYield: dividend_yield
+      beginnerFriendlyScore: beginner_friendly_score
       currentPrice
-      beginnerScoreBreakdown {
-        score
-        factors {
-          name
-          weight
-          value
-          contrib
-          detail
-        }
-        notes
-      }
       __typename
     }
   }
@@ -56,7 +45,6 @@ const GET_ADVANCED_STOCK_SCREENING = gql`
       sector
       marketCap
       peRatio
-      dividendYield
       beginnerFriendlyScore
       currentPrice
       volatility
@@ -311,9 +299,7 @@ export function useStockSearch(searchText: string, skip = false) {
 
   const stocks = useQuery(GET_STOCKS, {
     variables: { 
-      search: debounced || null,
-      limit: 10,
-      offset: 0
+      search: debounced || null
     },
     fetchPolicy: 'network-only', // Force network request to avoid cache issues
     errorPolicy: 'all',
@@ -322,7 +308,7 @@ export function useStockSearch(searchText: string, skip = false) {
     onCompleted: (data) => {
       if (data?.stocks && data.stocks.length > 0 && (!debounced || !debounced.trim())) {
         setAllStocks(data.stocks);
-        setHasMore(data.stocks.length === 10);
+        setHasMore(false); // Backend does not support pagination (no limit/offset)
         setRealTimeStocks([]); // Clear real-time results when database has results
       } else if (debounced && debounced.trim()) {
         // Force clear all results to ensure fresh search
@@ -371,34 +357,9 @@ export function useStockSearch(searchText: string, skip = false) {
   });
 
   const loadMoreStocks = async () => {
+    // Backend stocks(query) does not support limit/offset; pagination disabled
     if (loadingMore || !hasMore) return;
-    
-    setLoadingMore(true);
-    try {
-      const result = await stocks.fetchMore({
-        variables: {
-          search: debounced || null,
-          limit: 10,
-          offset: allStocks.length
-        },
-        updateQuery: (prev, { fetchMoreResult }) => {
-          if (!fetchMoreResult?.stocks) return prev;
-          
-          const newStocks = fetchMoreResult.stocks;
-          setAllStocks(prev => [...prev, ...newStocks]);
-          setHasMore(newStocks.length === 10);
-          
-          return {
-            ...prev,
-            stocks: [...(prev.stocks || []), ...newStocks]
-          };
-        }
-      });
-    } catch (error) {
-      logger.error('Error loading more stocks:', error);
-    } finally {
-      setLoadingMore(false);
-    }
+    setLoadingMore(false);
   };
 
   const screening = useQuery(GET_ADVANCED_STOCK_SCREENING, {

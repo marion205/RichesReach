@@ -68,6 +68,25 @@ function StockCard(props: StockCardProps) {
             <View style={[styles.recBadge, { backgroundColor: rec.backgroundColor, borderColor: rec.color }]}>
               <Text style={[styles.recText, { color: rec.color }]}>{rec.text}</Text>
             </View>
+            <View style={styles.budgetContainer}>
+              <TouchableOpacity 
+                style={styles.budgetBtn} 
+                onPress={props.onPressBudgetImpact} 
+                activeOpacity={0.85}
+              >
+                <Icon name="dollar-sign" size={14} color="#FF6B35" />
+              </TouchableOpacity>
+              {props.isGoodForIncomeProfile && affordability && (
+                <TouchableOpacity 
+                  style={[styles.affordabilityBadge, { backgroundColor: affordability.color }]}
+                  onPress={props.onPressBudgetImpact}
+                  activeOpacity={0.85}
+                >
+                  <Icon name={affordability.icon} size={10} color="#fff" />
+                  <Text style={styles.affordabilityText}>{affordability.label}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
             <TouchableOpacity 
               style={styles.watchlistBtnTop} 
               onPress={props.onPressAdd} 
@@ -75,27 +94,6 @@ function StockCard(props: StockCardProps) {
             >
               <Icon name="plus" size={16} color="#007AFF" />
             </TouchableOpacity>
-            {props.isGoodForIncomeProfile && (
-              <View style={styles.budgetContainer}>
-                <TouchableOpacity 
-                  style={styles.budgetBtn} 
-                  onPress={props.onPressBudgetImpact} 
-                  activeOpacity={0.85}
-                >
-                  <Icon name="dollar-sign" size={14} color="#FF6B35" />
-                </TouchableOpacity>
-                {affordability && (
-                  <TouchableOpacity 
-                    style={[styles.affordabilityBadge, { backgroundColor: affordability.color }]}
-                    onPress={props.onPressBudgetImpact}
-                    activeOpacity={0.85}
-                  >
-                    <Icon name={affordability.icon} size={10} color="#fff" />
-                    <Text style={styles.affordabilityText}>{affordability.label}</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
           </View>
         </View>
         <TouchableOpacity 

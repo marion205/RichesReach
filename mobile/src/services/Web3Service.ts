@@ -354,6 +354,37 @@ class Web3Service {
   }
 
   /**
+   * Transfer token (ETH or native) to a recipient address.
+   * For ETH: uses signer.sendTransaction. For ERC20 tokens, extend with contract calls.
+   */
+  async transferToken(
+    token: string,
+    recipient: string,
+    amount: string
+  ): Promise<string> {
+    try {
+      if (!this.signer || !this.walletInfo?.isConnected) {
+        throw new Error('Wallet not connected');
+      }
+      const upper = token.toUpperCase();
+      if (upper === 'ETH' || upper === 'WETH') {
+        const tx = await this.signer.sendTransaction({
+          to: recipient,
+          value: ethers.utils.parseEther(amount),
+        });
+        const receipt = await tx.wait();
+        return receipt.transactionHash;
+      }
+      // ERC20: would require token contract address and transfer() call
+      logger.warn('ERC20 transfer not implemented; only ETH supported');
+      throw new Error('Only ETH transfers are supported. ERC20 transfer not yet implemented.');
+    } catch (error) {
+      logger.error('Transfer failed:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get current gas price
    */
   async getGasPrice(): Promise<string> {

@@ -29,6 +29,7 @@ import { isMarketDataHealthy, MarketDataHealthStatus } from '../services/healthS
 import { mark, PerformanceMarkers } from '../utils/timing';
 import { API_BASE, API_HTTP } from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useDailyBriefProgress } from '../hooks/useDailyBriefProgress';
 import type { NavigateParams } from './types';
 // Create a safe logger that always works, even if the import fails
 // This prevents "Property 'logger' doesn't exist" errors
@@ -448,9 +449,8 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
     const [canQueryMetrics, setCanQueryMetrics] = useState(false);
     const [marketDataHealth, setMarketDataHealth] = useState<MarketDataHealthStatus | null>(null);
     
-    // Daily Brief streak state
-    const [dailyBriefStreak, setDailyBriefStreak] = useState<number | null>(null);
-    const [dailyBriefLoading, setDailyBriefLoading] = useState(false);
+    // Daily Brief streak (custom hook with cleanup)
+    const { streak: dailyBriefStreak, loading: dailyBriefLoading } = useDailyBriefProgress(token ?? null);
     const hasCheckedDailyBrief = useRef(false);
   
     // GraphQL
@@ -528,97 +528,59 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
       return () => {
         active = false;
         setCanQueryMetrics(false);
-      };
-    }, []); // Run once when component mounts
-  
-    // Fetch Daily Brief streak
-    useEffect(() => {
-      const fetchDailyBriefProgress = async () => {
-        if (!token) return;
-        
-        try {
-          setDailyBriefLoading(true);
-          const response = await fetch(`${API_HTTP}/api/daily-brief/progress`, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json',
-            },
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            setDailyBriefStreak(data.streak || 0);
-          } else {
-            // If API not available or user not found, set to 0
-            setDailyBriefStreak(0);
-          }
-        } catch (error) {
-          // Silently fail - don't show error, just don't display streak
-          setDailyBriefStreak(0);
-        } finally {
-          setDailyBriefLoading(false);
+        if (marketDataTimeoutRef.current) {
+          clearTimeout(marketDataTimeoutRef.current);
+          marketDataTimeoutRef.current = null;
         }
       };
-      
-      fetchDailyBriefProgress();
-    }, [token]);
+    }, []); // Run once when component mounts
 
     // Auto-navigate to Daily Brief if not completed today (only once per session)
     useEffect(() => {
+      let active = true;
       const checkAndNavigateToDailyBrief = async () => {
         if (!token || hasCheckedDailyBrief.current) return;
-        
         try {
-          // Add a small delay to prevent race conditions with brief completion
           await new Promise(resolve => setTimeout(resolve, 1000));
-          
+          if (!active) return;
           const response = await fetch(`${API_HTTP}/api/daily-brief/today`, {
             method: 'GET',
             headers: {
-              'Authorization': `Bearer ${token}`,
+              Authorization: `Bearer ${token}`,
               'Content-Type': 'application/json',
             },
           });
-          
+          if (!active) return;
           if (response.ok) {
             const data = await response.json();
-            // If brief exists but not completed, navigate to it
-            // Only navigate if we haven't checked yet and brief is truly not completed
             if (!data.is_completed && !hasCheckedDailyBrief.current) {
               hasCheckedDailyBrief.current = true;
-              // Additional delay to ensure home screen is fully rendered
-              if (dailyBriefTimeoutRef.current) {
-                clearTimeout(dailyBriefTimeoutRef.current);
-              }
+              if (dailyBriefTimeoutRef.current) clearTimeout(dailyBriefTimeoutRef.current);
               dailyBriefTimeoutRef.current = setTimeout(() => {
-                // Double-check that we still haven't navigated
-                if (hasCheckedDailyBrief.current) {
-                  if (navigateTo) {
-                    navigateTo('daily-brief');
-                  } else {
-                    navigation.navigate('daily-brief' as never);
-                  }
-                }
+                if (!active) return;
+                if (navigateTo) navigateTo('daily-brief');
+                else navigation.navigate('daily-brief' as never);
                 dailyBriefTimeoutRef.current = null;
               }, 500);
             } else if (data.is_completed) {
-              // Brief is completed, mark as checked so we don't navigate
               hasCheckedDailyBrief.current = true;
             }
           }
         } catch (error) {
-          // Silently fail - don't navigate if API is unavailable
           logger.log('Daily brief check failed:', error);
-          // Mark as checked on error to prevent retries
           hasCheckedDailyBrief.current = true;
         }
       };
-      
-      // Only check once when component mounts and token is available
       if (token && !hasCheckedDailyBrief.current) {
         checkAndNavigateToDailyBrief();
       }
+      return () => {
+        active = false;
+        if (dailyBriefTimeoutRef.current) {
+          clearTimeout(dailyBriefTimeoutRef.current);
+          dailyBriefTimeoutRef.current = null;
+        }
+      };
     }, [token, navigateTo, navigation]);
   
     // Profile

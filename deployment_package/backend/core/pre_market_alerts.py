@@ -273,10 +273,6 @@ class PreMarketAlertService:
         if not self.push_notification_key:
             logger.warning("No push notification key configured")
             return False
-        
-        # TODO: Integrate with your push notification service
-        # Examples: Firebase Cloud Messaging, Apple Push Notification Service, etc.
-        
         try:
             # Placeholder for push notification logic
             # You would send to your mobile app's push notification endpoint
@@ -292,8 +288,7 @@ class PreMarketAlertService:
             }
             
             logger.info(f"📱 Push notification prepared: {notification_data['title']}")
-            # TODO: Actually send push notification here
-            
+            # Deferred: send via FCM/APNs when notification service is integrated
             return True
             
         except Exception as e:

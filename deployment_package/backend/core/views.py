@@ -53,11 +53,15 @@ class AuthenticatedGraphQLView(GraphQLView):
         return result
     
     def get_context(self, request):
-        """Override to ensure user is in GraphQL context"""
+        """Override to ensure user and DataLoaders are in GraphQL context"""
         context = super().get_context(request)
-        # Ensure user is set in context from request
-        if hasattr(request, 'user') and request.user and not request.user.is_anonymous:
+        if hasattr(request, "user") and request.user and not request.user.is_anonymous:
             context.user = request.user
+        try:
+            from core.graphql.dataloaders import create_loaders_for_request
+            context.loaders = create_loaders_for_request()
+        except Exception:
+            context.loaders = None
         return context
 
 

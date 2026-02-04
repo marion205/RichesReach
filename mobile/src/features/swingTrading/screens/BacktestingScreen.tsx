@@ -10,12 +10,15 @@ import {
   ActivityIndicator,
   RefreshControl,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Icon from 'react-native-vector-icons/Feather';
 import { useQuery } from '@apollo/client';
+import { Linking } from 'react-native';
 import { GET_SWING_SIGNALS } from '../../../graphql/swingTradingQueries';
+import { getTransparencyUrl, getMethodologyUrl } from '../../../config/api';
 import logger from '../../../utils/logger';
 
 const { width } = Dimensions.get('window');
@@ -82,6 +85,7 @@ const BacktestingScreen: React.FC<BacktestingScreenProps> = ({ navigateTo: navig
   }, []);
   const [selectedStrategy, setSelectedStrategy] = useState('momentum');
   const [selectedTimeframe, setSelectedTimeframe] = useState('1Y');
+  const [selectedBacktestDetail, setSelectedBacktestDetail] = useState<BacktestResult | null>(null);
 
   // Mock backtest results - replace with actual GraphQL query
   const [backtestResults, setBacktestResults] = useState<BacktestResult[]>([
@@ -281,11 +285,17 @@ const BacktestingScreen: React.FC<BacktestingScreenProps> = ({ navigateTo: navig
           </View>
 
           <View style={styles.backtestActions}>
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => setSelectedBacktestDetail(result)}
+            >
               <Icon name="bar-chart-2" size={16} color="#3B82F6" />
               <Text style={styles.actionButtonText}>View Details</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.actionButton}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => Alert.alert('Export', 'Export to CSV coming soon.')}
+            >
               <Icon name="download" size={16} color="#3B82F6" />
               <Text style={styles.actionButtonText}>Export</Text>
             </TouchableOpacity>
@@ -411,6 +421,105 @@ const BacktestingScreen: React.FC<BacktestingScreenProps> = ({ navigateTo: navig
           )}
         </View>
       </ScrollView>
+
+      {/* Backtest detail modal */}
+      <Modal
+        visible={selectedBacktestDetail !== null}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSelectedBacktestDetail(null)}
+      >
+        <View style={styles.detailModalOverlay}>
+          <View style={styles.detailModalContent}>
+            <View style={styles.detailModalHeader}>
+              <Text style={styles.detailModalTitle}>
+                {selectedBacktestDetail?.strategy ?? 'Backtest Details'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setSelectedBacktestDetail(null)}
+                style={styles.detailModalClose}
+                hitSlop={12}
+              >
+                <Icon name="x" size={24} color="#6B7280" />
+              </TouchableOpacity>
+            </View>
+            {selectedBacktestDetail && (
+              <ScrollView style={styles.detailModalBody} showsVerticalScrollIndicator={false}>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Period</Text>
+                  <Text style={styles.detailValue}>
+                    {selectedBacktestDetail.startDate} – {selectedBacktestDetail.endDate}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Status</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedBacktestDetail.status) }]}>
+                    <Text style={styles.statusText}>{selectedBacktestDetail.status.toUpperCase()}</Text>
+                  </View>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Total Trades</Text>
+                  <Text style={styles.detailValue}>{selectedBacktestDetail.totalTrades}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Win Rate</Text>
+                  <Text style={[styles.detailValue, { color: selectedBacktestDetail.winRate >= 60 ? '#22C55E' : '#EF4444' }]}>
+                    {formatNumber(selectedBacktestDetail.winRate)}%
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Total Return</Text>
+                  <Text style={[styles.detailValue, { color: selectedBacktestDetail.totalReturn >= 0 ? '#22C55E' : '#EF4444' }]}>
+                    {formatPercentage(selectedBacktestDetail.totalReturn)}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Max Drawdown</Text>
+                  <Text style={[styles.detailValue, { color: '#EF4444' }]}>
+                    {formatPercentage(selectedBacktestDetail.maxDrawdown)}
+                  </Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Sharpe Ratio</Text>
+                  <Text style={styles.detailValue}>{formatNumber(selectedBacktestDetail.sharpeRatio, 2)}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Profit Factor</Text>
+                  <Text style={styles.detailValue}>{formatNumber(selectedBacktestDetail.profitFactor, 2)}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Avg Holding Period</Text>
+                  <Text style={styles.detailValue}>{formatNumber(selectedBacktestDetail.avgHoldingPeriod, 1)} days</Text>
+                </View>
+
+                {/* Same methodology as live signals */}
+                <View style={styles.methodologySection}>
+                  <Text style={styles.methodologySectionTitle}>Same methodology as live signals</Text>
+                  <Text style={styles.methodologySectionSubtext}>
+                    Backtests use the same net-of-cost rules and metrics as our transparency dashboard.
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.methodologyLink}
+                    onPress={() => Linking.openURL(getMethodologyUrl())}
+                  >
+                    <Icon name="file-text" size={16} color="#3B82F6" />
+                    <Text style={styles.methodologyLinkText}>View methodology</Text>
+                    <Icon name="external-link" size={14} color="#3B82F6" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.methodologyLink}
+                    onPress={() => Linking.openURL(getTransparencyUrl())}
+                  >
+                    <Icon name="bar-chart-2" size={16} color="#3B82F6" />
+                    <Text style={styles.methodologyLinkText}>View transparency dashboard</Text>
+                    <Icon name="external-link" size={14} color="#3B82F6" />
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -552,6 +661,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
   },
+  methodologyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 0,
+  },
+  methodologyBannerText: {
+    fontSize: 13,
+    color: '#3B82F6',
+    fontWeight: '500',
+  },
   backtestCard: {
     backgroundColor: 'white',
     borderRadius: 12,
@@ -669,6 +791,84 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     paddingHorizontal: 20,
+  },
+  detailModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  detailModalContent: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    maxHeight: '80%',
+  },
+  detailModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  detailModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  detailModalClose: {
+    padding: 4,
+  },
+  detailModalBody: {
+    padding: 16,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  detailValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  methodologySection: {
+    marginTop: 20,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  methodologySectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  methodologySectionSubtext: {
+    fontSize: 12,
+    color: '#6B7280',
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  methodologyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 0,
+    gap: 8,
+  },
+  methodologyLinkText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#3B82F6',
+    fontWeight: '500',
   },
 });
 

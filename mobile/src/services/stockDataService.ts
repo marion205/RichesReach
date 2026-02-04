@@ -1312,7 +1312,25 @@ export async function getStockComprehensive(symbol: string, timeframe?: string):
       avgVolume: avgVolume || 0,
       change: parseFloat(change.toFixed(2)),
       changePercent: parseFloat(changePercent.toFixed(2)),
-      chartData: await fetchChartData(symbol, currentPrice, timeframe),
+      // Fetch all data in parallel for faster load times
+      ...(await (async () => {
+        const [
+          chartData,
+          news,
+          analystRatings,
+          insiderTrades,
+          institutionalOwnership,
+          sentiment
+        ] = await Promise.all([
+          fetchChartData(symbol, currentPrice, timeframe),
+          fetchNews(symbol),
+          fetchAnalystRatings(symbol, currentPrice),
+          fetchInsiderTrades(symbol),
+          fetchInstitutionalOwnership(symbol),
+          fetchMarketSentiment(symbol)
+        ]);
+        return { chartData, news, analystRatings, insiderTrades, institutionalOwnership, sentiment };
+      })()),
       keyMetrics: (() => {
         const baseMetrics = generateKeyMetrics(symbol);
         return {
@@ -1324,12 +1342,7 @@ export async function getStockComprehensive(symbol: string, timeframe?: string):
           epsGrowth: epsGrowth || baseMetrics.epsGrowth,
         };
       })(),
-      news: await fetchNews(symbol),
-      analystRatings: await fetchAnalystRatings(symbol, currentPrice),
       earnings: generateEarnings(symbol),
-      insiderTrades: await fetchInsiderTrades(symbol),
-      institutionalOwnership: await fetchInstitutionalOwnership(symbol),
-      sentiment: await fetchMarketSentiment(symbol),
       technicals: generateTechnicals(currentPrice),
       peers: generatePeers(symbol, currentPrice)
     };

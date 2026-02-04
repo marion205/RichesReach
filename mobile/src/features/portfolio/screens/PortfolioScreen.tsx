@@ -13,8 +13,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@apollo/client';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
-import { SecureMarketDataService } from '../../stocks/services/SecureMarketDataService';
 import { GET_MY_PORTFOLIOS } from '../../../portfolioQueries';
+import { usePortfolioPriceFetch } from '../../../hooks/usePortfolioPriceFetch';
 import MilestonesTimeline, { Milestone } from '../../../components/MilestonesTimeline';
 import MilestoneUnlockOverlay from '../../../components/MilestoneUnlockOverlay';
 import { useNavigation } from '@react-navigation/native';
@@ -85,8 +85,6 @@ const insets = useSafeAreaInsets();
   
   // ALL HOOKS MUST BE AT THE TOP - before any conditional returns
   const [refreshing, setRefreshing] = useState(false);
-  const [realTimePrices, setRealTimePrices] = useState<{ [key: string]: number }>({});
-  const [loadingPrices, setLoadingPrices] = useState(false);
   const [celebrateTitle, setCelebrateTitle] = useState<string | null>(null);
   
   // Modal visibility states for gesture actions
@@ -109,10 +107,8 @@ const insets = useSafeAreaInsets();
   // Credit Quest state
   const [showCreditQuest, setShowCreditQuest] = useState(false);
   
-  // Refs for timeout management
   const debugLogTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const priceFetchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   const { data: portfolioData, loading: portfolioLoading, error: portfolioError, refetch } = useQuery(GET_MY_PORTFOLIOS, {
     errorPolicy: 'all', // Continue even if there are errors
     fetchPolicy: 'cache-and-network', // Use cache but also fetch fresh data
@@ -266,77 +262,10 @@ const insets = useSafeAreaInsets();
       logger.warn('PortfolioScreen: No navigation method available');
     }
   }, [navigation, navigateTo]);
-// Ref to track if we're currently fetching prices to prevent concurrent calls
-const fetchingPricesRef = useRef(false);
-
-// Fetch real-time prices for portfolio holdings - memoized to prevent recreation
-interface HoldingForPrice {
-  symbol?: string;
-  stock?: { symbol?: string };
-  [key: string]: unknown;
-}
-const fetchRealTimePrices = useCallback(async (holdings: HoldingForPrice[]) => {
-  if (holdings.length === 0) {
-    setLoadingPrices(false);
-    fetchingPricesRef.current = false;
-    return;
-  }
-  // Prevent concurrent calls
-  if (fetchingPricesRef.current) {
-    return;
-  }
-  fetchingPricesRef.current = true;
-  setLoadingPrices(true);
-  try {
-    const symbols = holdings.map(holding => holding.stock?.symbol || holding.symbol).filter(Boolean);
-    if (symbols.length === 0) {
-      setLoadingPrices(false);
-      fetchingPricesRef.current = false;
-      return;
-    }
-    const service = SecureMarketDataService.getInstance();
-    const quotes = await service.fetchQuotes(symbols);
-    const prices: { [key: string]: number } = {};
-    quotes.forEach((quote) => {
-      if (quote.price > 0) {
-        prices[quote.symbol] = quote.price;
-      }
-    });
-    setRealTimePrices(prices);
-  } catch (error) {
-    logger.error('Failed to fetch real-time prices for portfolio:', error);
-    // Use prices from mock portfolio data as fallback
-    const mockPrices: { [key: string]: number } = {};
-    interface HoldingWithPrice {
-      symbol?: string;
-      stock?: { symbol?: string };
-      [key: string]: unknown;
-    }
-    holdings.forEach((holding: HoldingWithPrice) => {
-      const symbol = holding.stock?.symbol || holding.symbol;
-      const price = (holding as any).currentPrice || ((holding.stock as any)?.currentPrice as number) || 0;
-      if (symbol && price > 0) {
-        mockPrices[symbol] = price;
-      }
-    });
-    setRealTimePrices(mockPrices);
-  } finally {
-    setLoadingPrices(false);
-    fetchingPricesRef.current = false;
-  }
-}, []);
-
-// Extract stable reference to portfolios to prevent infinite loops
-const portfoliosRef = useRef<string>('');
-// Create a stable string representation that only changes when actual data changes
-// The ref comparison in useEffect will prevent unnecessary fetches even if this recalculates
+// Stable key for price fetch (only changes when portfolio structure changes)
 const portfoliosDataString = useMemo(() => {
-  if (!portfolioData?.myPortfolios?.portfolios) {
-    return '';
-  }
+  if (!portfolioData?.myPortfolios?.portfolios) return '';
   try {
-    // Create a stable string representation of the portfolios data
-    // Only include fields that matter for price fetching to minimize recalculation overhead
     const stableData = portfolioData.myPortfolios.portfolios.map((p: Portfolio): StablePortfolioData => ({
       name: p.name,
       holdings: (p.holdings || []).map((h: PortfolioHolding) => ({
@@ -345,54 +274,26 @@ const portfoliosDataString = useMemo(() => {
       })),
     }));
     return JSON.stringify(stableData);
-  } catch (error) {
-    logger.error('[PortfolioScreen] Error creating stable portfolio string:', error);
+  } catch (err) {
+    logger.error('[PortfolioScreen] Error creating stable portfolio string:', err);
     return '';
   }
-  // Note: We depend on the array reference, but the ref comparison in useEffect
-  // will prevent infinite loops by only fetching when the actual data changes
 }, [portfolioData?.myPortfolios?.portfolios]);
 
-// Fetch real-time prices when portfolio data changes - using stable reference
+const holdingsForPrices = useMemo(
+  () => portfolioData?.myPortfolios?.portfolios?.flatMap((p: Portfolio) => p.holdings ?? []) ?? [],
+  [portfolioData?.myPortfolios?.portfolios]
+);
+
+const { loadingPrices, realTimePrices, error: priceFetchError } = usePortfolioPriceFetch(holdingsForPrices, {
+  portfolioDataKey: portfoliosDataString,
+  debounceMs: 100,
+});
+
 useEffect(() => {
-  // Only fetch if the data actually changed
-  if (portfoliosDataString !== portfoliosRef.current) {
-    portfoliosRef.current = portfoliosDataString;
-    
-    // Use a timeout to debounce and prevent blocking the main thread
-    if (priceFetchTimeoutRef.current) {
-      clearTimeout(priceFetchTimeoutRef.current);
-    }
-    priceFetchTimeoutRef.current = setTimeout(() => {
-      if (portfolioData?.myPortfolios?.portfolios) {
-        const allHoldings = portfolioData.myPortfolios.portfolios.flatMap((p: Portfolio) => p.holdings || []);
-        if (allHoldings.length > 0) {
-          // Fetch prices asynchronously to avoid blocking
-          fetchRealTimePrices(allHoldings).catch((error) => {
-            logger.error('[PortfolioScreen] Error fetching prices:', error);
-            setLoadingPrices(false);
-          });
-        } else {
-          // No holdings, ensure loading is false
-          setLoadingPrices(false);
-        }
-      } else {
-        // No portfolio data yet, but don't block rendering
-        setLoadingPrices(false);
-      }
-      priceFetchTimeoutRef.current = null;
-    }, 100); // Small delay to prevent blocking initial render
-  }
-  
-  return () => {
-    if (priceFetchTimeoutRef.current) {
-      clearTimeout(priceFetchTimeoutRef.current);
-      priceFetchTimeoutRef.current = null;
-    }
-  };
-  // Only depend on portfoliosDataString - fetchRealTimePrices is stable (empty deps)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [portfoliosDataString]);
+  if (priceFetchError) logger.warn('[PortfolioScreen] Price fetch error:', priceFetchError);
+}, [priceFetchError]);
+
   const onRefresh = async () => {
 setRefreshing(true);
 try {

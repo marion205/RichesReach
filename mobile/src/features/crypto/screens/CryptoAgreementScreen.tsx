@@ -19,6 +19,7 @@ import { useMutation, useQuery } from '@apollo/client';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../../../contexts/AuthContext';
 
 // GraphQL Queries and Mutations
 const GET_CRYPTO_AGREEMENT_STATUS = gql`
@@ -63,6 +64,8 @@ const CryptoAgreementScreen: React.FC<CryptoAgreementScreenProps> = ({
   onAgreementSigned,
   onClose,
 }) => {
+  const { user } = useAuth();
+  const userId = parseInt(user?.id ?? '0', 10);
   const [hasScrolledToBottom, setHasScrolledToBottom] = useState(false);
   const [isSigning, setIsSigning] = useState(false);
   const [userState, setUserState] = useState<string>(''); // Should come from user profile
@@ -71,7 +74,8 @@ const CryptoAgreementScreen: React.FC<CryptoAgreementScreenProps> = ({
   const { data: agreementData, loading: agreementLoading, refetch: refetchAgreement } = useQuery(
     GET_CRYPTO_AGREEMENT_STATUS,
     {
-      variables: { userId: 1 }, // TODO: Get from auth context
+      variables: { userId },
+      skip: userId <= 0,
       errorPolicy: 'all',
     }
   );
@@ -128,7 +132,7 @@ const CryptoAgreementScreen: React.FC<CryptoAgreementScreenProps> = ({
             setIsSigning(true);
             try {
               const result = await signAgreement({
-                variables: { userId: 1 }, // TODO: Get from auth context
+                variables: { userId },
               });
 
               if (result.data?.signCryptoAgreement?.success) {

@@ -28,6 +28,10 @@ interface PortfolioPerformanceCardProps {
   totalReturn?: number;
   totalReturnPercent?: number;
   benchmarkReturn?: number;
+  /** Initial benchmark symbol (e.g. SPY). Default SPY. */
+  benchmarkSymbol?: string;
+  /** When true, chart/alpha can use real benchmark data when available. */
+  useRealBenchmarkData?: boolean;
   navigateTo?: (screen: string, params?: any) => void;
 }
 
@@ -45,13 +49,15 @@ export default function PortfolioPerformanceCard({
   totalReturn: initialTotalReturn = 8430.50,
   totalReturnPercent: initialTotalReturnPercent,
   benchmarkReturn = 5.45,
+  benchmarkSymbol: benchmarkSymbolProp = 'SPY',
+  useRealBenchmarkData,
   navigateTo,
 }: PortfolioPerformanceCardProps = {}) {
   const navigation = useNavigation<any>();
   const [tab, setTab] = useState('1M');
   const [showBenchmark, setShowBenchmark] = useState(true);
   const [useAdvancedChart, setUseAdvancedChart] = useState(false);
-  const [selectedBenchmark, setSelectedBenchmark] = useState('SPY');
+  const [selectedBenchmark, setSelectedBenchmark] = useState(benchmarkSymbolProp);
   const [showBenchmarkSelector, setShowBenchmarkSelector] = useState(false);
   const [showTimeframeSelector, setShowTimeframeSelector] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);

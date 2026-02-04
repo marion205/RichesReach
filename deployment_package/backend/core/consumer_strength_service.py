@@ -24,6 +24,8 @@ class ConsumerStrengthService:
     """Service for tracking and analyzing Consumer Strength Scores"""
     
     CACHE_TTL = 3600  # 1 hour
+    HISTORY_CACHE_TTL = 86400 * 30  # 30 days
+    HISTORY_MAX_ENTRIES = 90
     
     def __init__(self):
         self.spending_service = SpendingHabitsService()
@@ -172,6 +174,8 @@ class ConsumerStrengthService:
             }
             
             cache.set(cache_key, result, self.CACHE_TTL)
+            # Append to cache-based history for trend and get_historical_scores
+            self._append_to_history(symbol, user_id, result)
             return result
             
         except Exception as e:
@@ -216,19 +220,63 @@ class ConsumerStrengthService:
             logger.warning(f"Error calculating sector score for {symbol}: {e}")
             return 50.0
     
+    def _history_key(self, symbol: str, user_id: Optional[int] = None) -> str:
+        return f"consumer_strength_history:{symbol}:{user_id or 'anon'}"
+
+    def _append_to_history(
+        self,
+        symbol: str,
+        user_id: Optional[int] = None,
+        result: Optional[Dict[str, Any]] = None
+    ) -> None:
+        """Append one result to cache-based history (cap at HISTORY_MAX_ENTRIES)."""
+        if not result:
+            return
+        key = self._history_key(symbol, user_id)
+        try:
+            history = list(cache.get(key) or [])
+            today = timezone.now().date().isoformat()
+            entry = {
+                'date': today,
+                'score': result.get('overall_score', 0),
+                'spending_score': result.get('spending_score', 0),
+                'options_score': result.get('options_score', 0),
+                'earnings_score': result.get('earnings_score', 0),
+                'insider_score': result.get('insider_score', 0),
+                'sector_score': result.get('sector_score', 0),
+            }
+            # Dedupe by date: keep latest for today
+            history = [e for e in history if e.get('date') != today]
+            history.append(entry)
+            history = history[-self.HISTORY_MAX_ENTRIES:]
+            cache.set(key, history, self.HISTORY_CACHE_TTL)
+        except Exception as e:
+            logger.debug(f"Consumer strength history append failed: {e}")
+
     def _get_historical_trend(
         self,
         symbol: str,
         user_id: Optional[int] = None
     ) -> str:
-        """Determine historical trend of Consumer Strength Score"""
-        # In a real implementation, this would query historical scores
-        # For now, we'll use a simple heuristic based on recent predictions
-        
-        # TODO: Implement historical tracking table
-        # For now, return 'stable' as default
-        return 'stable'
-    
+        """Determine historical trend from cache-based score history."""
+        key = self._history_key(symbol, user_id)
+        try:
+            history = cache.get(key) or []
+            if len(history) < 2:
+                return 'stable'
+            recent = history[-7:]
+            older = history[:-7] if len(history) > 7 else history[:1]
+            recent_avg = sum(e.get('score', 0) for e in recent) / len(recent)
+            older_avg = sum(e.get('score', 0) for e in older) / len(older)
+            if recent_avg > older_avg + 1.0:
+                return 'increasing'
+            if recent_avg < older_avg - 1.0:
+                return 'decreasing'
+            return 'stable'
+        except Exception as e:
+            logger.debug(f"Consumer strength trend failed: {e}")
+            return 'stable'
+
     def get_historical_scores(
         self,
         symbol: str,
@@ -236,26 +284,35 @@ class ConsumerStrengthService:
         days: int = 30
     ) -> List[Dict[str, Any]]:
         """
-        Get historical Consumer Strength Scores
-        
-        Returns list of scores over time:
-        [
-            {'date': '2024-01-01', 'score': 75.5, 'spending_score': 80, ...},
-            ...
-        ]
+        Get historical Consumer Strength Scores from cache-based history.
         """
-        # TODO: Implement historical tracking
-        # For now, return current score as single data point
-        current_score = self.calculate_consumer_strength(symbol, user_id=user_id)
-        return [{
-            'date': timezone.now().date().isoformat(),
-            'score': current_score['overall_score'],
-            'spending_score': current_score['spending_score'],
-            'options_score': current_score['options_score'],
-            'earnings_score': current_score['earnings_score'],
-            'insider_score': current_score['insider_score'],
-            'sector_score': current_score['sector_score'],
-        }]
+        key = self._history_key(symbol, user_id)
+        try:
+            history = cache.get(key) or []
+            if not history:
+                current = self.calculate_consumer_strength(symbol, user_id=user_id)
+                return [{
+                    'date': timezone.now().date().isoformat(),
+                    'score': current['overall_score'],
+                    'spending_score': current['spending_score'],
+                    'options_score': current['options_score'],
+                    'earnings_score': current['earnings_score'],
+                    'insider_score': current['insider_score'],
+                    'sector_score': current['sector_score'],
+                }]
+            return history[-days:]
+        except Exception as e:
+            logger.debug(f"Consumer strength history get failed: {e}")
+            current = self.calculate_consumer_strength(symbol, user_id=user_id)
+            return [{
+                'date': timezone.now().date().isoformat(),
+                'score': current['overall_score'],
+                'spending_score': current['spending_score'],
+                'options_score': current['options_score'],
+                'earnings_score': current['earnings_score'],
+                'insider_score': current['insider_score'],
+                'sector_score': current['sector_score'],
+            }]
     
     def get_sector_comparison(
         self,

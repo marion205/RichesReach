@@ -187,11 +187,14 @@ const useStockMoments = (symbol: string, chartRange: ChartRange) => {
   // Empty if query completed but no real or mock data
   const isEmpty = effectiveMoments.length === 0 && !loading && !hasError;
 
+  const isSampleData = realMoments.length === 0 && effectiveMoments.length > 0;
+
   return {
     effectiveMoments,
     loading: isLoading,
     error: hasError ? error as ApolloError : undefined,
     isEmpty,
+    isSampleData,
   };
 };
 
@@ -206,7 +209,7 @@ export const StockMomentsIntegration: React.FC<StockMomentsIntegrationProps> = (
   const [storyFromIndex, setStoryFromIndex] = useState(0);
   const [storyUseIntro, setStoryUseIntro] = useState(true);
 
-  const { effectiveMoments, loading, error, isEmpty } = useStockMoments(symbol, chartRange);
+  const { effectiveMoments, loading, error, isEmpty, isSampleData } = useStockMoments(symbol, chartRange);
 
   const currentIndex = useMemo(() => {
     if (!activeMomentId || !effectiveMoments.length) return 0;
@@ -299,6 +302,7 @@ export const StockMomentsIntegration: React.FC<StockMomentsIntegrationProps> = (
           moments={effectiveMoments}
           initialIndex={storyFromIndex}
           enableIntro={storyUseIntro}
+          isSampleData={isSampleData}
           onClose={() => setStoryVisible(false)}
           onMomentChange={(m) => setActiveMomentId(m?.id ?? null)}
           onAnalyticsEvent={handleAnalytics}

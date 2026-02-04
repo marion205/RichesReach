@@ -1,0 +1,44 @@
+{
+  "training_summary": {
+    "start_time": 1769972883.91932,
+    "elapsed_seconds": 2.448624849319458,
+    "phases_completed": [
+      "LSTM",
+      "XGBoost"
+    ]
+  },
+  "lstm_metrics": {
+    "final_train_loss": null,
+    "final_val_loss": null,
+    "total_epochs": 0,
+    "overfitting_detected": false
+  },
+  "net_costs_stats": {
+    "total_samples": 5628,
+    "wins_after_costs": "628",
+    "win_rate": 0.11158493248045487,
+    "avg_net_return": -0.00060404245639671
+  },
+  "xgboost_metrics": {
+    "train_accuracy": 0.8947134606841404,
+    "val_accuracy": 0.8632326820603907,
+    "cv_mean": NaN,
+    "cv_std": NaN,
+    "top_features": {
+      "options_flow": 0.0,
+      "earnings_surprise": 0.0,
+      "insider_buying": 0.0,
+      "social_sentiment": 0.0,
+      "lstm_temporal_momentum_score": 0.0
+    }
+  },
+  "reliability": {
+    "calibration_score": null,
+    "optimal_threshold": 0.78
+  },
+  "recommendations": [
+    "\u26a0\ufe0f Low win rate after costs: Review fee/slippage assumptions or data quality",
+    "\u26a0\ufe0f LSTM momentum score has low importance: May need more training data or different architecture",
+    "\u2705 Review recommendations above before deploying to production"
+  ]
+}

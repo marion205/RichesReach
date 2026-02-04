@@ -8,12 +8,13 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 import asyncio
 import aiohttp
-from .market_data_api_service import MarketDataAPIService
+from .market_data_manager import get_market_data_service
+
 logger = logging.getLogger(__name__)
 class RealtimeOptionsService:
 """Service for fetching real-time options data from multiple providers"""
 def __init__(self):
-self.market_data_service = MarketDataAPIService()
+self.market_data_service = get_market_data_service()
 self.cache_timeout = 60 # 1 minute cache
 self.cache = {}
 async def get_real_time_options_chain(self, symbol: str) -> Dict[str, Any]:

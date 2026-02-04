@@ -28,6 +28,7 @@ import { useAlpacaOrders } from '../hooks/useAlpacaOrders';
 import { usePlaceOrder } from '../hooks/usePlaceOrder';
 import { useOrderForm } from '../hooks/useOrderForm';
 import { useSignupReturnDetection } from '../hooks/useSignupReturnDetection';
+import { useLoadingTimeout } from '../../../hooks/useLoadingTimeout';
 import {
   GET_TRADING_ACCOUNT,
   GET_TRADING_POSITIONS,
@@ -236,27 +237,9 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     }
   }, [showOrderModal, orderForm.symbol, apolloClient]);
 
-  // Timeout handling for loading states
-  const [accountLoadingTimeout, setAccountLoadingTimeout] = useState(false);
-  const [positionsLoadingTimeout, setPositionsLoadingTimeout] = useState(false);
-
-  useEffect(() => {
-    if (accountLoading) {
-      const timer = setTimeout(() => setAccountLoadingTimeout(true), 5000);
-      return () => clearTimeout(timer);
-    } else {
-      setAccountLoadingTimeout(false);
-    }
-  }, [accountLoading]);
-
-  useEffect(() => {
-    if (positionsLoading) {
-      const timer = setTimeout(() => setPositionsLoadingTimeout(true), 5000);
-      return () => clearTimeout(timer);
-    } else {
-      setPositionsLoadingTimeout(false);
-    }
-  }, [positionsLoading]);
+  // Prevent infinite spinners: standardized loading timeout (5s for account/positions)
+  const { timedOut: accountLoadingTimeout } = useLoadingTimeout(accountLoading, { timeoutMs: 5000 });
+  const { timedOut: positionsLoadingTimeout } = useLoadingTimeout(positionsLoading, { timeoutMs: 5000 });
 
   // Optimized polling: only poll orders when Orders tab is visible, with longer interval
   useEffect(() => {

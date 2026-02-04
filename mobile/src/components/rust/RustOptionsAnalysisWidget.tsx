@@ -13,6 +13,7 @@ import {
 import { useQuery, gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import { API_RUST_BASE } from '../../config/api';
+import { useAuth } from '../../contexts/AuthContext';
 import QuantTerminalWidget from './QuantTerminalWidget';
 
 const GET_RUST_OPTIONS_ANALYSIS = gql`
@@ -118,6 +119,7 @@ async function getJson(path: string) {
 }
 
 export default function RustOptionsAnalysisWidget({ symbol }: RustOptionsAnalysisWidgetProps) {
+  const { user } = useAuth();
   const [showExplain, setShowExplain] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
@@ -588,7 +590,7 @@ export default function RustOptionsAnalysisWidget({ symbol }: RustOptionsAnalysi
       <QuantTerminalWidget
         symbol={symbol}
         strategyName="options_iron_condor"
-        userId="user_123" // TODO: Get from auth context
+        userId={user?.id ?? 'guest'}
       />
     </View>
   );

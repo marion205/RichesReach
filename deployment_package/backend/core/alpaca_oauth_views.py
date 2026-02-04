@@ -15,6 +15,11 @@ from .alpaca_trading_service import AlpacaTradingService
 
 logger = logging.getLogger(__name__)
 
+try:
+    from .models import AlpacaConnection
+except ImportError:
+    AlpacaConnection = None
+
 
 @csrf_exempt
 @require_http_methods(["GET"])
@@ -111,17 +116,18 @@ def alpaca_oauth_callback(request):
                 'error': 'Failed to fetch Alpaca account'
             }, status=500)
         
-        # Store connection (you'll need to create AlpacaConnection model)
-        # For now, we'll store in session or return to frontend
-        if hasattr(request, 'user') and request.user.is_authenticated:
-            # TODO: Create AlpacaConnection model and store tokens
-            # AlpacaConnection.objects.create_or_update(
-            #     user=request.user,
-            #     alpaca_account_id=account.get('id'),
-            #     access_token=encrypt(access_token),
-            #     refresh_token=encrypt(refresh_token),
-            #     token_expires_at=timezone.now() + timedelta(seconds=expires_in),
-            # )
+        # Store connection in DB
+        if AlpacaConnection and hasattr(request, 'user') and request.user.is_authenticated:
+            token_expires_at = timezone.now() + timedelta(seconds=int(expires_in or 3600))
+            AlpacaConnection.objects.update_or_create(
+                user=request.user,
+                defaults={
+                    'alpaca_account_id': account.get('id', ''),
+                    'access_token': access_token,
+                    'refresh_token': refresh_token or '',
+                    'token_expires_at': token_expires_at,
+                }
+            )
             logger.info(f"OAuth flow completed for user {request.user.id}, account {account.get('id')}")
         
         # Redirect to frontend with success
@@ -143,12 +149,19 @@ def alpaca_oauth_disconnect(request):
     POST /api/auth/alpaca/disconnect
     """
     try:
-        # TODO: Get stored tokens from AlpacaConnection model
-        # connection = AlpacaConnection.objects.get(user=request.user)
-        # oauth_service = get_oauth_service()
-        # oauth_service.revoke_token(connection.refresh_token, 'refresh_token')
-        # connection.delete()
-        
+        if AlpacaConnection:
+            try:
+                connection = AlpacaConnection.objects.get(user=request.user)
+                oauth_service = get_oauth_service()
+                refresh_token = connection.get_decrypted_refresh_token()
+                if refresh_token and getattr(oauth_service, 'revoke_token', None):
+                    try:
+                        oauth_service.revoke_token(refresh_token, 'refresh_token')
+                    except Exception as revoke_err:
+                        logger.warning(f"Alpaca revoke token failed: {revoke_err}")
+                connection.delete()
+            except AlpacaConnection.DoesNotExist:
+                pass
         return JsonResponse({
             'success': True,
             'message': 'Alpaca account disconnected'

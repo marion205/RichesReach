@@ -257,6 +257,9 @@ try:
 except ImportError:
     # graphql_jwt is optional - continue without it
     pass
+# Resolver timing + DB query count when GRAPHQL_PROFILING=1 or header X-GraphQL-Profiling: 1
+if os.getenv("GRAPHQL_PROFILING", "").lower() in ("1", "true", "yes"):
+    graphene_middleware.append("core.graphql.middleware.timing.GraphQLProfilingMiddleware")
 
 GRAPHENE = {
 "SCHEMA": "core.schema.schema",
@@ -403,6 +406,7 @@ LOGGING = {
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
 # Celery Beat Schedule
+from celery.schedules import crontab
 CELERY_BEAT_SCHEDULE = {
 'update-stock-data': {
 'task': 'core.stock_service.update_stock_data_periodic',
@@ -423,7 +427,7 @@ CELERY_BEAT_SCHEDULE = {
 },
 'generate-weekly-report': {
 'task': 'core.transparency_tasks.generate_weekly_report_task',
-'schedule': 604800.0, # Every week (7 days)
+'schedule': crontab(day_of_week=0, hour=20, minute=0),  # Sunday 8 PM (set CELERY_TIMEZONE to America/New_York for EST)
 },
 }
 # Channels Configuration

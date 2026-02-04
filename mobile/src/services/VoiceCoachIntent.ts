@@ -1,6 +1,5 @@
-// Minimal voice intent recognizer stub.
-// Integrates with existing voice UI later; for now, expose a function
-// that takes transcript text and yields a suggested plan.
+// Voice intent recognizer for calm/DCA goals.
+// Parses transcript text and returns a suggested plan (cadence, amount, startNow).
 
 export interface CalmGoalPlan {
   cadence: 'weekly' | 'biweekly' | 'monthly';

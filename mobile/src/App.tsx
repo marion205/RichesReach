@@ -159,55 +159,26 @@ const [showARPreview, setShowARPreview] = useState(false);
 // Global state for Calm Goal sheet (accessible from any screen)
 const [showCalmSheet, setShowCalmSheet] = useState(false);
 
-// Store setCurrentScreen in a ref to ensure it's always available
+// --- Navigation: ref + global exposure (single effect, cleanup on unmount) ---
 const setCurrentScreenRef = React.useRef(setCurrentScreen);
 React.useEffect(() => {
   setCurrentScreenRef.current = setCurrentScreen;
 }, [setCurrentScreen]);
-
-// Make setCurrentScreen available globally for direct navigation
-// Update the global function whenever setCurrentScreenRef changes
 React.useEffect(() => {
-  if (typeof window !== 'undefined') {
-    (window as any).__setCurrentScreen = (screen: string) => {
-      logger.log('🔵 __setCurrentScreen called with:', screen);
-      logger.log('🔵 Current screen before:', currentScreen);
-      logger.log('🔵 isAuthenticated:', isAuthenticated);
-      logger.log('🔵 setCurrentScreenRef.current type:', typeof setCurrentScreenRef.current);
-      
-      // Use React's startTransition to ensure state update is processed
-      if (setCurrentScreenRef.current && typeof setCurrentScreenRef.current === 'function') {
-        logger.log('🔵 Calling setCurrentScreenRef.current');
-        // Force synchronous state update
-        setCurrentScreenRef.current(screen);
-        logger.log('🔵 setCurrentScreen called via ref, new screen should be:', screen);
-        
-        // Force a re-render check
-        setTimeout(() => {
-          logger.log('🔵 After 100ms - checking if screen updated');
-          logger.log('🔵 If still not updated, there may be an auth gate blocking it');
-        }, 100);
-      } else {
-        logger.error('❌ setCurrentScreenRef.current is not a function!', setCurrentScreenRef.current);
-        // Try direct setCurrentScreen as last resort
-        if (typeof setCurrentScreen === 'function') {
-          logger.log('🔵 Trying direct setCurrentScreen');
-          setCurrentScreen(screen);
-        } else {
-          logger.error('❌ setCurrentScreen is also not a function!');
-        }
-      }
-    };
-    logger.log('✅ Exposed setCurrentScreen globally');
-  }
-  return () => {
-    if (typeof window !== 'undefined') {
-      delete (window as any).__setCurrentScreen;
+  if (typeof window === 'undefined') return;
+  (window as any).__setCurrentScreen = (screen: string) => {
+    if (setCurrentScreenRef.current && typeof setCurrentScreenRef.current === 'function') {
+      setCurrentScreenRef.current(screen);
+    } else if (typeof setCurrentScreen === 'function') {
+      setCurrentScreen(screen);
     }
   };
-}, [setCurrentScreenRef]); // Update when ref changes
+  return () => {
+    delete (window as any).__setCurrentScreen;
+  };
+}, [setCurrentScreen]);
 
-// Listen for force navigation requests (fallback when navigateTo prop fails)
+// --- Force navigation polling (fallback when navigateTo prop fails) ---
 // Use polling instead of window events (React Native doesn't support addEventListener)
 React.useEffect(() => {
   if (typeof window === 'undefined') return;

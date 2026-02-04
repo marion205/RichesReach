@@ -25,24 +25,14 @@ logger = logging.getLogger(__name__)
 
 
 
-# Try to import market data service
-
+# Use market data facade (singleton)
 try:
-
-    from .market_data_api_service import MarketDataAPIService, DataProvider
-
-
-
-    market_data_service = MarketDataAPIService()
-
+    from .market_data_manager import get_market_data_service
+    market_data_service = get_market_data_service()
     MARKET_DATA_AVAILABLE = True
-
 except Exception as e:
-
-    logger.warning(f"MarketDataAPIService not available: {e}")
-
+    logger.warning(f"MarketDataManager not available: {e}")
     MARKET_DATA_AVAILABLE = False
-
     market_data_service = None
 
 

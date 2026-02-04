@@ -24,7 +24,7 @@ except ImportError:
     logging.warning("ML libraries not available")
 
 from .spending_trend_predictor import spending_predictor, SPENDING_TO_STOCKS
-from .market_data_api_service import MarketDataAPIService
+from .market_data_manager import get_market_data_service
 from .data_sources.options_flow_service import OptionsFlowService
 from .options_service import OptionsAnalysisService
 from .deep_social_sentiment_service import get_deep_social_sentiment_service
@@ -38,7 +38,7 @@ class OptionsFlowFeatures:
     def __init__(self):
         self.options_service = OptionsFlowService()
         self.options_analysis = OptionsAnalysisService()
-        self.market_data_service = MarketDataAPIService()
+        self.market_data_service = get_market_data_service()
     
     async def get_options_features(self, symbol: str) -> Dict[str, float]:
         """
@@ -138,7 +138,7 @@ class EarningsInsiderFeatures:
     """Extract earnings surprise and insider trading features"""
     
     def __init__(self):
-        self.market_data_service = MarketDataAPIService()
+        self.market_data_service = get_market_data_service()
     
     async def get_earnings_features(self, symbol: str) -> Dict[str, float]:
         """
@@ -322,7 +322,7 @@ class HybridMLPredictor:
         
         self.options_features = OptionsFlowFeatures()
         self.earnings_insider = EarningsInsiderFeatures()
-        self.market_data_service = MarketDataAPIService()
+        self.market_data_service = get_market_data_service()
     
     async def prepare_hybrid_training_data(
         self,

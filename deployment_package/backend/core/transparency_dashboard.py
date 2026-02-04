@@ -203,20 +203,29 @@ class TransparencyDashboard:
                 'total_signals': 0,
                 'win_rate': 0.0,
                 'total_pnl': 0.0,
-                'sharpe_ratio': 0.0
+                'sharpe_ratio': 0.0,
+                'profit_factor': 0.0,
+                'max_drawdown': 0.0,
             }
         
         pnl_list = [s.pnl for s in signals if s.pnl is not None]
         wins = [p for p in pnl_list if p > 0]
-        
+        losses = [p for p in pnl_list if p <= 0]
+        avg_win = np.mean(wins) if wins else 0.0
+        avg_loss = abs(np.mean(losses)) if losses else 0.0
+        profit_factor = (avg_win / avg_loss) if avg_loss != 0 else (float('inf') if avg_win > 0 else 0.0)
+        if profit_factor == float('inf'):
+            profit_factor = 999.0  # Cap for serialization
+
         return {
             'period_days': days,
             'total_signals': signals.count(),
-            'win_rate': len(wins) / len(pnl_list) if pnl_list else 0.0,
+            'win_rate': (len(wins) / len(pnl_list) * 100.0) if pnl_list else 0.0,
             'total_pnl': sum(pnl_list),
             'avg_pnl': np.mean(pnl_list) if pnl_list else 0.0,
             'sharpe_ratio': self._calculate_sharpe(pnl_list) if len(pnl_list) > 1 else 0.0,
-            'max_drawdown': self._calculate_max_drawdown(pnl_list) if pnl_list else 0.0
+            'max_drawdown': self._calculate_max_drawdown(pnl_list) if pnl_list else 0.0,
+            'profit_factor': profit_factor,
         }
     
     def _calculate_sharpe(self, returns: List[float]) -> float:

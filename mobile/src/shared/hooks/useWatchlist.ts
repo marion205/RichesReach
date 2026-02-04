@@ -10,8 +10,6 @@ export const GET_MY_WATCHLIST = gql`
         symbol
         companyName
         currentPrice
-        change
-        changePercent
       }
       addedAt
       notes
@@ -63,8 +61,6 @@ export function useWatchlist(skip = false) {
               symbol: variables.symbol,
               companyName: variables.company_name || variables.symbol,
               currentPrice: null,
-              change: null,
-              changePercent: null,
             },
             addedAt: new Date().toISOString(),
             notes: variables.notes || '',

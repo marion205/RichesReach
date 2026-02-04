@@ -139,6 +139,10 @@ class UserProgress(models.Model):
     # Learning progress
     concepts_learned = models.IntegerField(default=0, help_text="Total concepts learned")
     lessons_completed = models.IntegerField(default=0, help_text="Total lessons completed")
+    completed_lesson_ids = models.JSONField(
+        default=list,
+        help_text="List of lesson IDs the user has completed (prevents double-counting)"
+    )
     current_level = models.CharField(
         max_length=20,
         choices=[
@@ -213,6 +217,7 @@ class UserAchievement(models.Model):
         ('early_bird', 'Early Bird'),
         ('consistent_learner', 'Consistent Learner'),
         ('first_investment', 'First Investment'),
+        ('first_lesson', 'First Lesson'),
         ('goal_setter', 'Goal Setter'),
         ('streak_3', '3 Day Streak'),
         ('streak_7', '7 Day Streak'),

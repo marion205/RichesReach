@@ -18,6 +18,7 @@ import StockTradingModal from '../../../components/forms/StockTradingModal';
 import EducationalTooltip from '../../../components/common/EducationalTooltip';
 import ChanQuantSignalsCard from '../components/ChanQuantSignalsCard';
 import QuantThinkingExplainer from '../../../components/quant/QuantThinkingExplainer';
+import { useLoadingTimeout } from '../../../hooks/useLoadingTimeout';
 import logger from '../../../utils/logger';
 
 const RECENTS_KEY = 'research_recent_symbols';
@@ -162,18 +163,11 @@ export default function ResearchScreen() {
     nextFetchPolicy: 'cache-first',
   });
 
-  // Timeout handling for research loading
-  const [researchLoadingTimeout, setResearchLoadingTimeout] = useState(false);
-  useEffect(() => {
-    if (researchLoading && !researchData) {
-      const timer = setTimeout(() => {
-        setResearchLoadingTimeout(true);
-      }, 3000); // 3 second timeout
-      return () => clearTimeout(timer);
-    } else {
-      setResearchLoadingTimeout(false);
-    }
-  }, [researchLoading, researchData]);
+  // Prevent infinite spinner: standardized loading timeout (3s for research)
+  const { timedOut: researchLoadingTimeout } = useLoadingTimeout(
+    !!(researchLoading && !researchData),
+    { timeoutMs: 3000 }
+  );
 
   // Generate mock research data for demo
   const getMockResearchData = () => {

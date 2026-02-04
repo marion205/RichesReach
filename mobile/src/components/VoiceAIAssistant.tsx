@@ -20,7 +20,19 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../theme/PersonalizedThemes';
 import { useVoice } from '../contexts/VoiceContext';
 import { useNavigation } from '@react-navigation/native';
+import { useMutation, gql } from '@apollo/client';
 import logger from '../utils/logger';
+
+const PLACE_ORDER = gql`
+  mutation PlaceOrder($order: OrderInput!) {
+    placeOrder(order: $order) {
+      success
+      message
+      orderId
+      order { id symbol side type quantity price status }
+    }
+  }
+`;
 
 const { width, height } = Dimensions.get('window');
 
@@ -38,6 +50,7 @@ interface VoiceAIAssistantProps {
 
 export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceAIAssistantProps) {
   const navigation = useNavigation();
+  const [placeOrderMutation] = useMutation(PLACE_ORDER);
   
   // Use navigation.goBack() if onClose is not provided (React Navigation screen)
   const handleClose = async () => {
@@ -1829,29 +1842,28 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
           
           finalResponseText = `Got it. I'm executing that trade now. Placing a limit buy order for ${unit} of ${assetType} at $${trade.price?.toLocaleString() || (isCrypto ? 'market' : '179.45')}. You'll receive a confirmation when the order fills.`;
           logger.log('🎤 Executing trade:', trade);
-          
-          // TODO: Actually call your trade execution API here
-          // For now, we'll just log it and speak the confirmation
-          // Example:
-          // try {
-          //   const { API_BASE } = await import('../config/api');
-          //   const executeResponse = await fetch(`${API_BASE}/api/broker/orders/`, {
-          //     method: 'POST',
-          //     headers: { 'Content-Type': 'application/json' },
-          //     body: JSON.stringify({
-          //       symbol: trade.symbol,
-          //       side: trade.side.toUpperCase(),
-          //       quantity: trade.quantity,
-          //       order_type: 'LIMIT',
-          //       limit_price: trade.price,
-          //     }),
-          //   });
-          //   const executeData = await executeResponse.json();
-          //   logger.log('✅ Trade executed:', executeData);
-          // } catch (executeError) {
-          //   logger.error('❌ Trade execution failed:', executeError);
-          //   finalResponseText = "I encountered an error executing the trade. Please try again or check your account status.";
-          // }
+          try {
+            const orderInput = {
+              symbol: (trade.symbol || '').toUpperCase(),
+              side: (trade.side || 'buy').toUpperCase(),
+              type: 'LIMIT',
+              quantity: trade.quantity || (isCrypto ? 1 : 100),
+              price: trade.price ?? (isCrypto ? undefined : 179.45),
+              timeInForce: 'DAY',
+            };
+            const executeResult = await placeOrderMutation({ variables: { order: orderInput } });
+            if (executeResult.data?.placeOrder?.success) {
+              logger.log('✅ Trade executed:', executeResult.data.placeOrder);
+              finalResponseText = `Order placed successfully. ${executeResult.data.placeOrder.orderId ? `Order ID: ${executeResult.data.placeOrder.orderId}.` : ''} You'll get a confirmation when it fills.`;
+            } else {
+              const msg = executeResult.data?.placeOrder?.message || 'Order was not placed.';
+              logger.warn('⚠️ Place order result:', msg);
+              finalResponseText = `I couldn't complete the order: ${msg}. Please try again or check your account.`;
+            }
+          } catch (executeError: any) {
+            logger.error('❌ Trade execution failed:', executeError);
+            finalResponseText = "I encountered an error executing the trade. Please try again or check your account status.";
+          }
         }
       }
       

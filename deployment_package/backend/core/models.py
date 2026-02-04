@@ -685,6 +685,92 @@ class ComplianceAutomation(models.Model):
         return f"{self.standard} - {self.check_name} ({self.status})"
 
 
+class PrivacySettings(models.Model):
+    """User privacy and data sharing preferences"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='privacy_settings')
+    data_sharing_enabled = models.BooleanField(default=True)
+    ai_analysis_enabled = models.BooleanField(default=True)
+    ml_predictions_enabled = models.BooleanField(default=True)
+    analytics_enabled = models.BooleanField(default=True)
+    session_tracking_enabled = models.BooleanField(default=False)
+    data_retention_days = models.IntegerField(default=90)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'core_privacy_settings'
+        verbose_name_plural = 'Privacy settings'
+    
+    def __str__(self):
+        return f"Privacy settings for {self.user.email}"
+
+
+class AlpacaConnection(models.Model):
+    """Stores Alpaca OAuth connection per user (one connection per user).
+    access_token and refresh_token are encrypted at rest; use get_decrypted_*
+    when passing tokens to Alpaca APIs."""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='alpaca_connection')
+    alpaca_account_id = models.CharField(max_length=64, db_index=True)
+    access_token = models.TextField()
+    refresh_token = models.TextField()
+    token_expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'core_alpaca_connection'
+
+    def __str__(self):
+        return f"Alpaca {self.alpaca_account_id} for user {self.user_id}"
+
+    def save(self, *args, **kwargs):
+        from .alpaca_token_encryption import encrypt_token, _looks_fernet
+        if self.access_token and not _looks_fernet(self.access_token):
+            self.access_token = encrypt_token(self.access_token)
+        if self.refresh_token and not _looks_fernet(self.refresh_token):
+            self.refresh_token = encrypt_token(self.refresh_token)
+        super().save(*args, **kwargs)
+
+    def get_decrypted_access_token(self):
+        from .alpaca_token_encryption import decrypt_token
+        return decrypt_token(self.access_token or '')
+
+    def get_decrypted_refresh_token(self):
+        from .alpaca_token_encryption import decrypt_token
+        return decrypt_token(self.refresh_token or '')
+
+
+class SavedInsight(models.Model):
+    """User's saved AI insight (from market insights / oracle)."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='saved_insights')
+    insight_id = models.CharField(max_length=64, db_index=True)
+    title = models.CharField(max_length=255, blank=True)
+    summary = models.TextField(blank=True)
+    category = models.CharField(max_length=64, blank=True)
+    snapshot = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'core_saved_insight'
+        unique_together = [['user', 'insight_id']]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Insight {self.insight_id} for user {self.user_id}"
+
+
+class SavedInsightShare(models.Model):
+    """Record of sharing an insight to a platform."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='insight_shares')
+    insight_id = models.CharField(max_length=64, db_index=True)
+    platform = models.CharField(max_length=32)
+    shared_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'core_saved_insight_share'
+        ordering = ['-shared_at']
+
+
 # Import signal performance models so Django can detect them for migrations
 from .signal_performance_models import (
     DayTradingSignal,
@@ -724,3 +810,7 @@ class SignalRecord(models.Model):
     
     def __str__(self):
         return f"{self.symbol} {self.action} @ {self.entry_price} ({self.status})"
+
+
+# Lesson library (lesson_api, daily brief)
+from core.lesson_models import Lesson  # noqa: E402, F401

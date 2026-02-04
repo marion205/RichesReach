@@ -42,71 +42,76 @@ class BrokerQueries(graphene.ObjectType):
     
     def resolve_broker_account(self, info):
         """Get user's broker account"""
-        user = info.context.user
-        if not user.is_authenticated:
+        user = getattr(info.context, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
             return None
         
         try:
-            return BrokerAccount.objects.get(user=user)
+            return BrokerAccount.objects.select_related("user").get(user=user)
         except BrokerAccount.DoesNotExist:
             return None
     
     def resolve_broker_orders(self, info, status=None, limit=50):
         """Get user's broker orders"""
-        user = info.context.user
-        if not user.is_authenticated:
+        user = getattr(info.context, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
             return []
         
         try:
-            broker_account = BrokerAccount.objects.get(user=user)
-            orders = BrokerOrder.objects.filter(broker_account=broker_account)
-            
+            broker_account = BrokerAccount.objects.select_related("user").get(user=user)
+            orders = (
+                BrokerOrder.objects.filter(broker_account=broker_account)
+                .select_related("broker_account", "broker_account__user")
+            )
             if status:
                 orders = orders.filter(status=status)
-            
-            return orders[:limit]
+            return list(orders[:limit])
         except BrokerAccount.DoesNotExist:
             return []
     
     def resolve_broker_positions(self, info):
         """Get user's broker positions"""
-        user = info.context.user
-        if not user.is_authenticated:
+        user = getattr(info.context, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
             return []
         
         try:
-            broker_account = BrokerAccount.objects.get(user=user)
-            return BrokerPosition.objects.filter(broker_account=broker_account)
+            broker_account = BrokerAccount.objects.select_related("user").get(user=user)
+            return list(
+                BrokerPosition.objects.filter(broker_account=broker_account)
+                .select_related("broker_account", "broker_account__user")
+            )
         except BrokerAccount.DoesNotExist:
             return []
     
     def resolve_broker_activities(self, info, activity_type=None, date=None):
         """Get user's broker activities"""
-        user = info.context.user
-        if not user.is_authenticated:
+        user = getattr(info.context, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
             return []
         
         try:
-            broker_account = BrokerAccount.objects.get(user=user)
-            activities = BrokerActivity.objects.filter(broker_account=broker_account)
-            
+            broker_account = BrokerAccount.objects.select_related("user").get(user=user)
+            activities = (
+                BrokerActivity.objects.filter(broker_account=broker_account)
+                .select_related("broker_account", "broker_account__user")
+            )
             if activity_type:
                 activities = activities.filter(activity_type=activity_type)
             if date:
                 activities = activities.filter(date=date)
-            
-            return activities
+            return list(activities)
         except BrokerAccount.DoesNotExist:
             return []
     
     def resolve_broker_account_info(self, info):
         """Get account info with buying power, daily limits, etc."""
-        user = info.context.user
-        if not user.is_authenticated:
+        user = getattr(info.context, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
             return None
         
         try:
-            broker_account = BrokerAccount.objects.get(user=user)
+            broker_account = BrokerAccount.objects.select_related("user").get(user=user)
             
             if not broker_account.alpaca_account_id:
                 return {
@@ -183,37 +188,29 @@ class BrokerQueries(graphene.ObjectType):
         bid_size = 100
         ask_size = 200
         
-        # Try to fetch real data in background (non-blocking)
-        # This doesn't block the response
+        # Try to fetch real data in background (non-blocking) via facade
         try:
-            from .market_data_api_service import MarketDataAPIService
+            from .market_data_manager import get_market_data_service
             import asyncio
             import threading
-            
+
             def fetch_real_data_async():
                 """Fetch real data in background thread"""
                 try:
                     async def fetch():
-                        service = MarketDataAPIService()
-                        try:
-                            return await service.get_stock_quote(symbol)
-                        finally:
-                            if service.session:
-                                await service.session.close()
-                    
-                    # Run in new event loop for background thread
+                        service = get_market_data_service()
+                        return await service.get_stock_quote(symbol)
+
                     loop = asyncio.new_event_loop()
                     asyncio.set_event_loop(loop)
                     result = loop.run_until_complete(fetch())
                     loop.close()
                     return result
-                except:
+                except Exception:
                     return None
-            
-            # Start background fetch (non-blocking)
+
             threading.Thread(target=fetch_real_data_async, daemon=True).start()
-        except Exception as e:
-            # Silently fail - we have mock data
+        except Exception:
             pass
         
         return TradingQuoteType(

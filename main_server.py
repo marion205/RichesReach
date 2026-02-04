@@ -4442,6 +4442,111 @@ async def methodology_api_route(request: Request):
 
 print("✅ Django transparency routes added to FastAPI")
 
+# ─────────────────────────────────────────────────────────────────────────────
+# AWS Polly TTS endpoint
+# ─────────────────────────────────────────────────────────────────────────────
+@app.post("/polly/synthesize")
+async def polly_synthesize(request: Request):
+    """
+    AWS Polly TTS endpoint for mobile app.
+    POST /polly/synthesize
+    Body: {"text": "...", "voiceId": "Joanna", "format": "mp3"}
+    Returns: Binary audio (audio/mpeg or audio/ogg)
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    text = body.get("text", "").strip()
+    if not text:
+        return JSONResponse({"error": "Missing 'text' field"}, status_code=400)
+
+    voice_id = body.get("voiceId", "Joanna")
+    fmt = body.get("format", "mp3").lower()
+
+    # Map format to Polly output format
+    output_format = "mp3" if fmt == "mp3" else "ogg_vorbis"
+    content_type = "audio/mpeg" if fmt == "mp3" else "audio/ogg"
+
+    try:
+        import boto3
+        polly = boto3.client("polly", region_name=os.getenv("AWS_REGION", "us-east-1"))
+        response = polly.synthesize_speech(
+            Text=text,
+            OutputFormat=output_format,
+            VoiceId=voice_id,
+            Engine="standard"  # Use standard engine for broader voice support
+        )
+        audio_stream = response.get("AudioStream")
+        if not audio_stream:
+            return JSONResponse({"error": "No audio returned from Polly"}, status_code=503)
+
+        audio_bytes = audio_stream.read()
+        return StreamingResponse(
+            iter([audio_bytes]),
+            media_type=content_type,
+            headers={"Content-Disposition": f"inline; filename=speech.{fmt}"}
+        )
+    except ImportError:
+        return JSONResponse({"error": "boto3 not installed"}, status_code=503)
+    except Exception as e:
+        print(f"Polly error: {e}")
+        return JSONResponse({"error": f"Polly synthesis failed: {str(e)}"}, status_code=503)
+
+print("✅ Polly TTS endpoint added")
+
+@app.post("/api/preview/")
+@app.post("/api/preview")
+async def voice_preview(request: Request):
+    """
+    Voice preview endpoint for mobile app.
+    POST /api/preview/
+    Body: {"voiceId": "Joanna", "text": "...", "speed": 1.0, "emotion": "neutral", "format": "mp3"}
+    Returns: {"success": true, "audio_url": "..."} with base64 audio data
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON", "success": False}, status_code=400)
+
+    text = body.get("text") or body.get("sample") or "This is a quick voice preview."
+    voice_id = body.get("voiceId") or body.get("voice") or "Joanna"
+    fmt = body.get("format", "mp3").lower()
+
+    # Map format to Polly output format
+    output_format = "mp3" if fmt == "mp3" else "ogg_vorbis"
+
+    try:
+        import boto3
+        import base64
+        polly = boto3.client("polly", region_name=os.getenv("AWS_REGION", "us-east-1"))
+        response = polly.synthesize_speech(
+            Text=text,
+            OutputFormat=output_format,
+            VoiceId=voice_id,
+            Engine="standard"
+        )
+        audio_stream = response.get("AudioStream")
+        if not audio_stream:
+            return JSONResponse({"error": "No audio returned from Polly", "success": False}, status_code=503)
+
+        audio_bytes = audio_stream.read()
+        audio_b64 = base64.b64encode(audio_bytes).decode('utf-8')
+
+        return JSONResponse({
+            "success": True,
+            "audio_url": f"data:audio/mpeg;base64,{audio_b64}",
+            "format": fmt
+        })
+    except ImportError:
+        return JSONResponse({"error": "boto3 not installed", "success": False}, status_code=503)
+    except Exception as e:
+        print(f"Voice preview error: {e}")
+        return JSONResponse({"error": f"Voice preview failed: {str(e)}", "success": False}, status_code=503)
+
+print("✅ Voice preview endpoint added")
+
 @app.post("/graphql/")
 async def graphql_endpoint(request: Request):
     """GraphQL endpoint for Apollo Client - Uses Django Graphene schema with PostgreSQL."""
@@ -4846,8 +4951,6 @@ async def graphql_endpoint(request: Request):
         # Handle removeFromWatchlist mutation FIRST (before queries)
         if is_remove_from_watchlist_mutation:
             symbol = variables.get("symbol", "").upper()
-            print(f"🗑️ MOCK RemoveFromWatchlist mutation: symbol={symbol}")
-            
             if not symbol:
                 return {
                     "data": {
@@ -4858,11 +4961,37 @@ async def graphql_endpoint(request: Request):
                         }
                     }
                 }
-            
-            # Remove from in-memory store
+            if user:
+                try:
+                    def _remove():
+                        from core.models import Watchlist
+                        deleted, _ = Watchlist.objects.filter(user=user, stock__symbol=symbol).delete()
+                        return deleted
+                    loop = asyncio.get_event_loop()
+                    deleted = await loop.run_in_executor(None, _remove)
+                    return {
+                        "data": {
+                            "removeFromWatchlist": {
+                                "success": bool(deleted),
+                                "message": f"Removed {symbol} from watchlist" if deleted else f"{symbol} not in watchlist",
+                                "__typename": "RemoveFromWatchlist"
+                            }
+                        }
+                    }
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).exception("RemoveFromWatchlist error: %s", e)
+                    return {
+                        "data": {
+                            "removeFromWatchlist": {
+                                "success": False,
+                                "message": str(e),
+                                "__typename": "RemoveFromWatchlist"
+                            }
+                        }
+                    }
             if symbol in _mock_watchlist_store:
                 del _mock_watchlist_store[symbol]
-                print(f"✅ MOCK: Removed {symbol} from watchlist (remaining items: {len(_mock_watchlist_store)})")
                 return {
                     "data": {
                         "removeFromWatchlist": {
@@ -4872,45 +5001,60 @@ async def graphql_endpoint(request: Request):
                         }
                     }
                 }
-            else:
-                print(f"⚠️ MOCK: {symbol} not found in watchlist")
-                return {
-                    "data": {
-                        "removeFromWatchlist": {
-                            "success": False,
-                            "message": f"{symbol} is not in your watchlist",
-                            "__typename": "RemoveFromWatchlist"
-                        }
+            return {
+                "data": {
+                    "removeFromWatchlist": {
+                        "success": False,
+                        "message": f"{symbol} is not in your watchlist",
+                        "__typename": "RemoveFromWatchlist"
                     }
                 }
+            }
         
         # Handle watchlist queries (before other mutations)
         elif is_my_watchlist_query:
-            # Return all items from the in-memory store
+            if user:
+                try:
+                    def _get_watchlist():
+                        from core.models import Watchlist
+                        from django.utils import timezone
+                        items = []
+                        for w in Watchlist.objects.filter(user=user).select_related("stock").order_by("-added_at"):
+                            s = w.stock
+                            items.append({
+                                "id": str(w.id),
+                                "stock": {
+                                    "symbol": s.symbol,
+                                    "companyName": getattr(s, "company_name", "") or f"{s.symbol} Inc.",
+                                    "currentPrice": float(s.current_price) if s.current_price else None,
+                                    "change": None,
+                                    "changePercent": None,
+                                    "__typename": "Stock",
+                                },
+                                "addedAt": w.added_at.isoformat() if w.added_at else timezone.now().isoformat(),
+                                "notes": w.notes or "",
+                                "targetPrice": float(w.target_price) if w.target_price else None,
+                                "__typename": "WatchlistItem",
+                            })
+                        return items
+                    loop = asyncio.get_event_loop()
+                    watchlist_items = await loop.run_in_executor(None, _get_watchlist)
+                    return {"data": {"myWatchlist": watchlist_items}}
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).exception("myWatchlist error: %s", e)
             watchlist_items = list(_mock_watchlist_store.values())
-            print(f"📋 myWatchlist query received. Store size: {len(_mock_watchlist_store)}, Items: {list(_mock_watchlist_store.keys())}")
-            print(f"📋 Returning {len(watchlist_items)} watchlist items from mock store")
-            return {
-                "data": {
-                    "myWatchlist": watchlist_items
-                }
-            }
+            return {"data": {"myWatchlist": watchlist_items}}
         
         # Handle addToWatchlist mutation (must come before "me" to prevent conflicts)
         elif is_add_to_watchlist_mutation:
             import re
             import django
             
-            # Ensure Django is initialized (only once at module load)
             _setup_django_once()
-            
-            # MOCK HANDLER: Bypass Django for now to test full success flow
-            # TODO: Replace with Django model logic once dependencies are installed
             symbol = variables.get("symbol", "").upper()
             company_name = variables.get("company_name") or variables.get("companyName") or f"{symbol} Inc."
             notes = variables.get("notes", "")
-            
-            print(f"🎯 MOCK AddToWatchlist mutation: symbol={symbol}, company_name={company_name}, notes={notes}")
             
             if not symbol:
                 return {
@@ -4923,8 +5067,49 @@ async def graphql_endpoint(request: Request):
                     }
                 }
             
-            # MOCK: Store the watchlist item in memory
-            # If item already exists, update it (don't create duplicate)
+            # Use Django Watchlist when user is authenticated
+            if user:
+                try:
+                    def _add_to_watchlist():
+                        from core.models import Stock, Watchlist
+                        stock, _ = Stock.objects.get_or_create(
+                            symbol=symbol,
+                            defaults={"company_name": company_name}
+                        )
+                        watchlist, created = Watchlist.objects.get_or_create(
+                            user=user,
+                            stock=stock,
+                            defaults={"notes": notes or ""}
+                        )
+                        if not created:
+                            watchlist.notes = notes or watchlist.notes or ""
+                            watchlist.save(update_fields=["notes", "updated_at"])
+                        return True
+                    loop = asyncio.get_event_loop()
+                    await loop.run_in_executor(None, _add_to_watchlist)
+                    return {
+                        "data": {
+                            "addToWatchlist": {
+                                "success": True,
+                                "message": f"Added {symbol} to watchlist",
+                                "__typename": "AddToWatchlist"
+                            }
+                        }
+                    }
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).exception("AddToWatchlist Django error: %s", e)
+                    return {
+                        "data": {
+                            "addToWatchlist": {
+                                "success": False,
+                                "message": str(e),
+                                "__typename": "AddToWatchlist"
+                            }
+                        }
+                    }
+            
+            # Fallback: in-memory store when not authenticated
             if symbol in _mock_watchlist_store:
                 # Update existing item (e.g., if notes changed)
                 existing_item = _mock_watchlist_store[symbol]
@@ -4980,43 +5165,6 @@ async def graphql_endpoint(request: Request):
                     }
                 }
             }
-            
-            # ========================================
-            # TODO: REAL DJANGO HANDLER (uncomment when deps installed)
-            # ========================================
-            # # Check if Django apps are ready (don't call setup() again - it's not reentrant)
-            # try:
-            #     import django.apps
-            #     if not django.apps.apps.ready:
-            #         return {
-            #             "data": {
-            #                 "addToWatchlist": {
-            #                     "success": False,
-            #                     "message": "Django apps not initialized. Please check server logs.",
-            #                     "__typename": "AddToWatchlist"
-            #                 }
-            #             }
-            #     }
-            # except:
-            #     pass
-            # 
-            # try:
-            #     from core.models import Stock, Watchlist, WatchlistItem
-            #     from django.contrib.auth import get_user_model
-            #     User = get_user_model()
-            #     # ... rest of Django logic ...
-            # except Exception as e:
-            #     print(f"❌ Error in addToWatchlist: {e}")
-            #     error_symbol = variables.get("symbol", "unknown")
-            #     return {
-            #         "data": {
-            #             "addToWatchlist": {
-            #                 "success": False,
-            #                 "message": f"Failed to add {error_symbol} to watchlist: {str(e)}",
-            #                 "__typename": "AddToWatchlist"
-            #             }
-            #         }
-            #     }
         
         # Handle researchHub query (comprehensive research data)
         elif is_research_hub_query:
@@ -7663,14 +7811,30 @@ try:
             'lastSeenEventId': last_seen_event_id,  # Echo back for client tracking
         }, room=sid)
         
-        # If client provided lastSeenEventId, send missed events
+        # If client provided lastSeenEventId, send missed events from DB
         if last_seen_event_id:
-            # TODO: Query SecurityEvent for events after lastSeenEventId
-            # For now, just trigger a refetch suggestion
-            await _sio.emit('security-events-catchup', {
-                'message': 'Please refetch events to catch up',
-                'correlationId': correlation_id
-            }, room=sid)
+            def _get_events_after():
+                from core.models import SecurityEvent
+                try:
+                    ref = SecurityEvent.objects.filter(user_id=user_id).filter(id=last_seen_event_id).first()
+                    if ref:
+                        qs = SecurityEvent.objects.filter(user_id=user_id, created_at__gt=ref.created_at).order_by('created_at')[:50]
+                    else:
+                        qs = SecurityEvent.objects.filter(user_id=user_id).order_by('-created_at')[:50]
+                    return [{'id': str(e.id), 'eventType': e.event_type, 'threatLevel': e.threat_level, 'description': e.description, 'resolved': e.resolved, 'createdAt': e.created_at.isoformat() if e.created_at else None} for e in qs]
+                except Exception:
+                    return []
+            try:
+                loop = asyncio.get_event_loop()
+                events = await loop.run_in_executor(None, _get_events_after)
+                await _sio.emit('security-events-catchup', {
+                    'events': events,
+                    'correlationId': correlation_id
+                }, room=sid)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning("Security events catchup error: %s", e)
+                await _sio.emit('security-events-catchup', {'events': [], 'correlationId': correlation_id}, room=sid)
     
     @_sio.on('unsubscribe-security-events')
     async def unsubscribe_security_events(sid, data):

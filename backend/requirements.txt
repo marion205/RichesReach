@@ -55,6 +55,9 @@ pytest-asyncio>=0.21.0
 # Security
 cryptography>=41.0.0
 
+# AWS (Polly TTS, Secrets Manager, KMS, etc.)
+boto3>=1.28.0
+
 # AI/ML - Hybrid Architecture
 openai>=1.0.0
 google-generativeai>=0.3.0

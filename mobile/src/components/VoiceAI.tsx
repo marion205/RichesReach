@@ -62,6 +62,8 @@ export default function VoiceAI({
   const [availableVoices, setAvailableVoices] = useState<Record<string, VoiceInfo>>({});
   const [pulseAnim] = useState(new Animated.Value(1));
   const [waveAnim] = useState(new Animated.Value(0));
+  const ttsErrorLoggedRef = useRef(false);
+  const previewErrorLoggedRef = useRef(false);
 
   useEffect(() => {
     loadAvailableVoices();
@@ -163,8 +165,13 @@ export default function VoiceAI({
       await FileSystem.writeAsStringAsync(path, b64, { encoding: 'base64' as any });
       return path;
     } catch (error: any) {
-      logger.error('TTS synthesis error:', error?.message || String(error));
-      onError?.(error?.message || 'Failed to generate speech');
+      const msg = error?.message || String(error);
+      if (!ttsErrorLoggedRef.current) {
+        ttsErrorLoggedRef.current = true;
+        logger.error('TTS synthesis error:', msg);
+      }
+      const is503 = /503|unavailable|invalid.*token|credentials/i.test(msg);
+      onError?.(is503 ? 'Voice unavailable. Check server AWS/Polly configuration.' : msg);
       return null;
     } finally {
       setIsLoading(false);
@@ -196,7 +203,10 @@ export default function VoiceAI({
       if (!response.ok) {
         try {
           const errText = await response.text();
-          logger.error('Voice preview server error:', errText.slice(0, 600));
+          if (!previewErrorLoggedRef.current) {
+            previewErrorLoggedRef.current = true;
+            logger.error('Voice preview server error:', errText.slice(0, 600));
+          }
         } catch {}
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -207,9 +217,13 @@ export default function VoiceAI({
         throw new Error(data.error || 'Failed to generate preview');
       }
 
-      return `${API_BASE_URL}${data.audio_url}`;
+      const url = data.audio_url;
+      return url && (url.startsWith('data:') || url.startsWith('http')) ? url : `${API_BASE_URL}${url}`;
     } catch (error) {
-      logger.error('Voice preview error:', error);
+      if (!previewErrorLoggedRef.current) {
+        previewErrorLoggedRef.current = true;
+        logger.error('Voice preview error:', error);
+      }
       return null;
     }
   };

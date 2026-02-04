@@ -11,9 +11,20 @@ Alert,
 SafeAreaView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
+import { useMutation, gql } from '@apollo/client';
 import UserProfileCard from '../../social/components/UserProfileCard';
 import { User } from '../../../types/social';
 import logger from '../../../utils/logger';
+
+const TOGGLE_FOLLOW = gql`
+  mutation ToggleFollow($userId: ID!) {
+    toggleFollow(userId: $userId) {
+      success
+      following
+      user { id name followersCount followingCount isFollowingUser }
+    }
+  }
+`;
 interface UserProfileScreenProps {
 userId: string;
 onNavigate: (screen: string, params?: any) => void;
@@ -24,6 +35,7 @@ const [user, setUser] = useState<User | null>(null);
 const [loading, setLoading] = useState(true);
 const [error, setError] = useState<string | null>(null);
 const [renderKey, setRenderKey] = useState(0);
+const [toggleFollow] = useMutation(TOGGLE_FOLLOW);
 
 // Load user profile from real API
 const loadUserProfile = () => {
@@ -59,18 +71,16 @@ setRefreshing(false);
 const handleFollowToggle = async () => {
 if (!user) return;
 try {
-// TODO: Replace with real API call
-const result = { success: false, message: 'Follow feature not yet implemented' };
-if (result.success) {
-// Reload user profile to reflect the change
+const result = await toggleFollow({ variables: { userId } });
+const success = result.data?.toggleFollow?.success ?? false;
+if (success) {
 loadUserProfile();
-// Force re-render of UserProfileCard
 setRenderKey(prev => prev + 1);
 } else {
-Alert.alert('Error', result.message);
+Alert.alert('Error', 'Failed to update follow status.');
 }
-} catch (error) {
-  logger.error('Error toggling follow:', error);
+} catch (err) {
+  logger.error('Error toggling follow:', err);
   Alert.alert('Error', 'Failed to update follow status. Please try again.');
 }
 };

@@ -1,9 +1,10 @@
 /**
  * Lesson Library Screen
- * Browse and access all available investing lessons
+ * Browse and access all available investing lessons.
+ * Uses paginated API (GET /api/lessons/?page=1&limit=10) with infinite scroll and search.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -14,13 +15,15 @@ import {
   SafeAreaView,
   TextInput,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { useNavigation, NavigationProp, CommonActions } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
-import { LinearGradient } from 'expo-linear-gradient';
 import { API_HTTP } from '../../../config/api';
 import { useAuth } from '../../../contexts/AuthContext';
 import logger from '../../../utils/logger';
+
+const PAGE_SIZE = 10;
 
 interface Lesson {
   id: string;
@@ -32,6 +35,13 @@ interface Lesson {
   concepts: string[];
   completed: boolean;
   progress_percent: number;
+}
+
+interface LessonListResponse {
+  items: Lesson[];
+  total: number;
+  page: number;
+  limit: number;
 }
 
 interface LessonCategory {
@@ -60,64 +70,107 @@ const difficultyColors: Record<string, string> = {
 export default function LessonLibraryScreen({ navigateTo }: { navigateTo?: (screen: string, params?: any) => void }) {
   const { token } = useAuth();
   const navigation = useNavigation<NavigationProp<any>>();
-  const [loading, setLoading] = useState(true);
   const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [filteredLessons, setFilteredLessons] = useState<Lesson[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    loadLessons();
-  }, [token, selectedCategory, searchQuery]); // Reload when filters change
+  const fetchLessons = useCallback(
+    async (pageNum: number, isRefreshing: boolean = false) => {
+      if (!token) {
+        setError('Authentication required');
+        setLoading(false);
+        return;
+      }
+      if (loading && !isRefreshing) return;
+      if (loadingMore && !isRefreshing && pageNum > 1) return;
+      if (!hasMore && !isRefreshing && pageNum > 1) return;
 
-  const loadLessons = async () => {
-    try {
-      setLoading(true);
+      if (pageNum === 1) {
+        if (isRefreshing) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
+      } else {
+        setLoadingMore(true);
+      }
       setError(null);
 
-      if (!token) {
-        throw new Error('Authentication required');
+      try {
+        const params = new URLSearchParams();
+        params.set('page', String(pageNum));
+        params.set('limit', String(PAGE_SIZE));
+        if (selectedCategory) params.set('category', selectedCategory);
+        if (searchQuery.trim()) params.set('search', searchQuery.trim());
+
+        const url = `${API_HTTP}/api/lessons/?${params.toString()}`;
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data: LessonListResponse = await response.json();
+        const newItems = data.items || [];
+
+        setLessons((prev) => (isRefreshing ? newItems : prev.concat(newItems)));
+        setTotal(data.total ?? 0);
+        setPage(data.page ?? pageNum);
+        setHasMore((data.page ?? pageNum) * (data.limit ?? PAGE_SIZE) < (data.total ?? 0));
+      } catch (err: any) {
+        logger.error('Error loading lessons:', err);
+        setError(err.message || 'Failed to load lessons');
+        if (pageNum === 1) setLessons([]);
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+        setRefreshing(false);
       }
+    },
+    [token, selectedCategory, searchQuery]
+  );
 
-      // Build query parameters
-      const params = new URLSearchParams();
-      if (selectedCategory) {
-        params.append('category', selectedCategory);
-      }
-      if (searchQuery.trim()) {
-        params.append('search', searchQuery.trim());
-      }
-
-      const url = `${API_HTTP}/api/lessons/${params.toString() ? '?' + params.toString() : ''}`;
-      
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-      setLessons(data);
-    } catch (error: any) {
-      logger.error('Error loading lessons:', error);
-      setError(error.message || 'Failed to load lessons');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Filtering is now done on the backend via API
-  // Just set filtered lessons to current lessons
   useEffect(() => {
-    setFilteredLessons(lessons);
-  }, [lessons]);
+    setPage(1);
+    setHasMore(true);
+    fetchLessons(1, true);
+  }, [token, selectedCategory, searchQuery, fetchLessons]);
+
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      setSearchQuery(searchInput.trim());
+    }, 400);
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, [searchInput]);
+
+  const handleRefresh = useCallback(() => {
+    setPage(1);
+    setHasMore(true);
+    fetchLessons(1, true);
+  }, [fetchLessons]);
+
+  const handleLoadMore = useCallback(() => {
+    if (!hasMore || loadingMore || loading) return;
+    fetchLessons(page + 1, false);
+  }, [hasMore, loadingMore, loading, page, fetchLessons]);
 
   const handleLessonPress = (lesson: Lesson) => {
     logger.log('[LessonLibrary] 🔵 Lesson pressed:', lesson.id, lesson.title);
@@ -192,8 +245,7 @@ export default function LessonLibraryScreen({ navigateTo }: { navigateTo?: (scre
 
   const renderCategory = ({ item }: { item: LessonCategory }) => {
     const isSelected = selectedCategory === item.id;
-    const categoryLessons = lessons.filter(l => l.category === item.id);
-    
+    const countLabel = isSelected ? `${total} lessons` : '—';
     return (
       <TouchableOpacity
         style={[
@@ -208,7 +260,7 @@ export default function LessonLibraryScreen({ navigateTo }: { navigateTo?: (scre
         <Text style={[styles.categoryName, isSelected && { color: item.color, fontWeight: '700' }]}>
           {item.name}
         </Text>
-        <Text style={styles.categoryCount}>{categoryLessons.length} lessons</Text>
+        <Text style={styles.categoryCount}>{countLabel}</Text>
       </TouchableOpacity>
     );
   };
@@ -263,7 +315,7 @@ export default function LessonLibraryScreen({ navigateTo }: { navigateTo?: (scre
     );
   };
 
-  if (loading) {
+  if (loading && lessons.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
@@ -274,13 +326,13 @@ export default function LessonLibraryScreen({ navigateTo }: { navigateTo?: (scre
     );
   }
 
-  if (error) {
+  if (error && lessons.length === 0) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.errorContainer}>
           <Icon name="alert-circle" size={48} color="#FF6B6B" />
           <Text style={styles.errorText}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={loadLessons}>
+          <TouchableOpacity style={styles.retryButton} onPress={handleRefresh}>
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
         </View>
@@ -308,18 +360,18 @@ export default function LessonLibraryScreen({ navigateTo }: { navigateTo?: (scre
         <View style={{ width: 24 }} />
       </View>
 
-      {/* Search Bar */}
+      {/* Search Bar — debounced; sends search query param to API */}
       <View style={styles.searchContainer}>
         <Icon name="search" size={20} color="#8E8E93" style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search lessons..."
           placeholderTextColor="#8E8E93"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
+          value={searchInput}
+          onChangeText={setSearchInput}
         />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery('')}>
+        {searchInput.length > 0 && (
+          <TouchableOpacity onPress={() => setSearchInput('')}>
             <Icon name="x" size={20} color="#8E8E93" />
           </TouchableOpacity>
         )}
@@ -337,16 +389,16 @@ export default function LessonLibraryScreen({ navigateTo }: { navigateTo?: (scre
         />
       </View>
 
-      {/* Lessons List */}
+      {/* Lessons List — infinite scroll + pull-to-refresh */}
       <View style={styles.lessonsContainer}>
         <Text style={styles.sectionTitle}>
-          {selectedCategory 
-            ? `${categories.find(c => c.id === selectedCategory)?.name} Lessons`
+          {selectedCategory
+            ? `${categories.find((c) => c.id === selectedCategory)?.name} Lessons`
             : 'All Lessons'}
-          {filteredLessons.length > 0 && ` (${filteredLessons.length})`}
+          {total > 0 && ` (${total})`}
         </Text>
-        
-        {filteredLessons.length === 0 ? (
+
+        {lessons.length === 0 && !loading ? (
           <View style={styles.emptyContainer}>
             <Icon name="book-open" size={48} color="#8E8E93" />
             <Text style={styles.emptyText}>No lessons found</Text>
@@ -356,11 +408,28 @@ export default function LessonLibraryScreen({ navigateTo }: { navigateTo?: (scre
           </View>
         ) : (
           <FlatList
-            data={filteredLessons}
+            data={lessons}
             renderItem={renderLesson}
             keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.lessonsList}
+            onEndReached={handleLoadMore}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={
+              loadingMore ? (
+                <View style={styles.footerLoader}>
+                  <ActivityIndicator size="small" color="#667eea" />
+                  <Text style={styles.footerLoaderText}>Loading more...</Text>
+                </View>
+              ) : null
+            }
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={handleRefresh}
+                colors={['#667eea']}
+              />
+            }
           />
         )}
       </View>
@@ -603,6 +672,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#8E8E93',
     textAlign: 'center',
+  },
+  footerLoader: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 20,
+    gap: 8,
+  },
+  footerLoaderText: {
+    fontSize: 14,
+    color: '#8E8E93',
   },
 });
 

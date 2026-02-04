@@ -78,6 +78,8 @@ class Command(BaseCommand):
             'DEFAULT_INFERENCE_ENDPOINT',
             'POLYGON_API_KEY',
             'FINNHUB_API_KEY',
+            'ALPACA_TOKEN_ENCRYPTION_KEY',
+            'FERNET_KEY',
         ]
         
         self.stdout.write("\n🔑 Required Environment Variables:")
@@ -147,6 +149,9 @@ DATABASE_URL=postgresql://user:password@localhost:5432/richesreach_prod
 SECRET_KEY=your-secret-key-here-generate-with-openssl-rand-hex-32
 DEBUG=False
 ALLOWED_HOSTS=richesreach.com,www.richesreach.com,api.richesreach.com
+# Encrypt Alpaca OAuth tokens at rest (generate: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+ALPACA_TOKEN_ENCRYPTION_KEY=
+# Or use FERNET_KEY for app-wide encryption (same format)
 
 # ============================================================================
 # REDIS / CACHE

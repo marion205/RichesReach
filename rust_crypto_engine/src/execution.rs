@@ -10,6 +10,19 @@ use uuid::Uuid;
 
 use crate::options_core::OneTapTrade;
 
+/// Alpaca API order request body (subset of fields we use)
+#[derive(Debug, Serialize)]
+struct AlpacaOrderRequest {
+    symbol: String,
+    qty: i32,
+    side: String,
+    #[serde(rename = "type")]
+    order_type: String,
+    time_in_force: String,
+    limit_price: f64,
+    extended_hours: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrderRequest {
     pub user_id: String,
@@ -150,9 +163,35 @@ impl ExecutionEngine {
         Ok(orders.get(order_id).cloned())
     }
 
-    /// Cancel an order
+    /// Cancel an order (local state + Alpaca API if we have alpaca_order_id)
     pub async fn cancel_order(&self, order_id: &str) -> anyhow::Result<()> {
-        // TODO: Implement Alpaca cancellation
+        let alpaca_id = {
+            let orders = self.orders.read().await;
+            orders.get(order_id).and_then(|r| r.alpaca_order_id.clone())
+        };
+        if let (Some(key), Some(secret), Some(ref id)) = (
+            self.config.alpaca_api_key.as_ref(),
+            self.config.alpaca_secret_key.as_ref(),
+            alpaca_id,
+        ) {
+            let url = format!("{}/v2/orders/{}", self.config.alpaca_base_url.trim_end_matches('/'), id);
+            let client = reqwest::Client::new();
+            let res = client
+                .delete(&url)
+                .header("APCA-API-KEY-ID", key)
+                .header("APCA-API-SECRET-KEY", secret)
+                .send()
+                .await;
+            match res {
+                Ok(r) if !r.status().is_success() => {
+                    tracing::warn!("Alpaca cancel returned {} - updating local state anyway", r.status());
+                }
+                Err(e) => {
+                    tracing::warn!("Alpaca cancel request failed: {} - updating local state anyway", e);
+                }
+                _ => {}
+            }
+        }
         let mut orders = self.orders.write().await;
         if let Some(receipt) = orders.get_mut(order_id) {
             receipt.status = OrderStatus::Cancelled;
@@ -241,12 +280,41 @@ impl ExecutionEngine {
             return Ok(());
         }
 
-        // TODO: Implement actual Alpaca API call
-        // Use reqwest or similar to POST to Alpaca API
-        // Handle authentication, rate limiting, error responses
-        // Update receipt with Alpaca order ID and status
-
-        tracing::info!("Alpaca order execution not yet implemented - API keys present");
+        let key = self.config.alpaca_api_key.as_ref().unwrap();
+        let secret = self.config.alpaca_secret_key.as_ref().unwrap();
+        let url = format!("{}/v2/orders", self.config.alpaca_base_url.trim_end_matches('/'));
+        let body = AlpacaOrderRequest {
+            symbol: alpaca_order.symbol.clone(),
+            qty: alpaca_order.qty,
+            side: alpaca_order.side.clone(),
+            order_type: alpaca_order.r#type.clone(),
+            time_in_force: alpaca_order.time_in_force.clone(),
+            limit_price: alpaca_order.limit_price,
+            extended_hours: alpaca_order.extended_hours,
+        };
+        let client = reqwest::Client::new();
+        let res = client
+            .post(&url)
+            .header("APCA-API-KEY-ID", key.as_str())
+            .header("APCA-API-SECRET-KEY", secret.as_str())
+            .json(&body)
+            .send()
+            .await?;
+        let status = res.status();
+        let text = res.text().await?;
+        if !status.is_success() {
+            anyhow::bail!("Alpaca API error {}: {}", status, text);
+        }
+        let parsed: serde_json::Value = serde_json::from_str(&text).unwrap_or(serde_json::Value::Null);
+        let alpaca_id = parsed.get("id").and_then(|v| v.as_str()).map(String::from);
+        {
+            let mut orders = self.orders.write().await;
+            if let Some(receipt) = orders.get_mut(&order_id) {
+                receipt.alpaca_order_id = alpaca_id.clone();
+                receipt.status = OrderStatus::Submitted;
+            }
+        }
+        tracing::info!("Alpaca order submitted for {} (Alpaca id: {:?})", order_id, alpaca_id);
         Ok(())
     }
 

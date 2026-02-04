@@ -173,17 +173,14 @@ export class VoiceWeb3Controller {
     }
 
     try {
-      // TODO: Implement transferToken method in Web3Service
-      // For now, return error as method doesn't exist
-      return { success: false, error: 'Transfer functionality not yet implemented' };
-      // const txHash = await this.web3Service.transferToken(
-      //   params.token || 'ETH',
-      //   params.recipient,
-      //   params.amount
-      // );
-      // return { success: true, txHash };
+      const txHash = await this.web3Service.transferToken(
+        params.token || 'ETH',
+        params.recipient,
+        String(params.amount)
+      );
+      return { success: true, txHash };
     } catch (error: any) {
-      return { success: false, error: error.message };
+      return { success: false, error: error?.message || 'Transfer failed' };
     }
   }
 

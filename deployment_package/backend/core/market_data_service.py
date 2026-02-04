@@ -14,7 +14,7 @@ from typing import Dict, Any, Optional
 
 
 
-from .market_data_api_service import MarketDataAPIService, DataProvider
+from .market_data_manager import get_market_data_service
 
 from .enhanced_api_service import enhanced_api_service  # kept for future use
 
@@ -294,7 +294,7 @@ class MarketDataService:
 
 
 
-        Currently uses MarketDataAPIService to fetch SPY data as a proxy for S&P 500.
+        Uses shared market data service (facade) to fetch SPY data as a proxy for S&P 500.
 
         """
 
@@ -302,63 +302,53 @@ class MarketDataService:
 
             async def get_market_data():
 
-                service = MarketDataAPIService()
+                service = get_market_data_service()
 
-                try:
+                spy_data = await service.get_stock_quote("SPY")
 
-                    spy_data = await service.get_stock_quote("SPY")
+                if not spy_data:
 
-                    if not spy_data:
-
-                        return None
+                    return None
 
 
 
-                    current_price = spy_data.get("price", 0)
+                current_price = spy_data.get("price", 0)
 
-                    change = spy_data.get("change", 0)
+                change = spy_data.get("change", 0)
 
-                    change_percent = spy_data.get("change_percent", 0)
-
-
-
-                    high = spy_data.get("high", current_price)
-
-                    low = spy_data.get("low", current_price)
-
-                    if current_price > 0:
-
-                        daily_range = (high - low) / current_price
-
-                    else:
-
-                        daily_range = 0.0
+                change_percent = spy_data.get("change_percent", 0)
 
 
 
-                    return {
+                high = spy_data.get("high", current_price)
 
-                        "sp500_return": change_percent / 100.0,  # Convert to decimal
+                low = spy_data.get("low", current_price)
 
-                        "volatility": min(daily_range * 2, 0.5),  # crude estimate
+                if current_price > 0:
 
-                        "current_price": current_price,
+                    daily_range = (high - low) / current_price
 
-                        "change": change,
+                else:
 
-                        "change_percent": change_percent,
+                    daily_range = 0.0
 
-                        "last_updated": datetime.now().isoformat(),
 
-                    }
 
-                finally:
+                return {
 
-                    # If MarketDataAPIService maintains a session, close it
+                    "sp500_return": change_percent / 100.0,  # Convert to decimal
 
-                    if getattr(service, "session", None) is not None:
+                    "volatility": min(daily_range * 2, 0.5),  # crude estimate
 
-                        await service.session.close()
+                    "current_price": current_price,
+
+                    "change": change,
+
+                    "change_percent": change_percent,
+
+                    "last_updated": datetime.now().isoformat(),
+
+                }
 
 
 
@@ -385,9 +375,6 @@ class MarketDataService:
         Placeholder: return None so we fall back to synthetic data.
 
         """
-
-        # TODO: implement real sector API if/when available
-
         return None
 
 
@@ -403,9 +390,6 @@ class MarketDataService:
         Placeholder: return None so we fall back to synthetic data.
 
         """
-
-        # TODO: implement economic data API if/when available
-
         return None
 
 

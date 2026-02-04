@@ -24,6 +24,8 @@ from dotenv import load_dotenv
 import aiohttp
 import time
 
+logger = logging.getLogger(__name__)
+
 # ✅ Price cache for fast repeated lookups
 class PriceCache:
     """Simple TTL cache for crypto/stock prices."""
@@ -118,7 +120,6 @@ except ImportError as e:
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 # Check for reportlab availability
 try:
@@ -3228,7 +3229,17 @@ async def graphql_endpoint(request: Request):
         
         # Execute GraphQL query in a thread pool to avoid blocking
         import asyncio
+        from django.conf import settings
         loop = asyncio.get_event_loop()
+        middleware_list = []
+        for mw_path in getattr(settings, "GRAPHENE", {}).get("MIDDLEWARE", []):
+            try:
+                mod_path, _, cls_name = mw_path.rpartition(".")
+                mod = __import__(mod_path, fromlist=[cls_name])
+                mw_cls = getattr(mod, cls_name)
+                middleware_list.append(mw_cls())
+            except Exception as e:
+                logger.debug(f"GraphQL middleware load skip {mw_path}: {e}")
         
         # Add logging for sblocBanks queries
         if 'sblocBanks' in query or 'sbloc_banks' in query:
@@ -3236,15 +3247,15 @@ async def graphql_endpoint(request: Request):
             logger.info(f"🔵 [GraphQL] Query: {query[:200]}...")
             logger.info(f"🔵 [GraphQL] Context user: {context.user if hasattr(context, 'user') else 'None'}")
         
-        result = await loop.run_in_executor(
-            None,
-            lambda: schema.execute(
+        def _execute():
+            return schema.execute(
                 query,
                 variables=variables,
                 operation_name=operation_name,
-                context_value=context
+                context_value=context,
+                middleware=middleware_list if middleware_list else None,
             )
-        )
+        result = await loop.run_in_executor(None, _execute)
         
         # Add logging for sblocBanks results
         if 'sblocBanks' in query or 'sbloc_banks' in query:

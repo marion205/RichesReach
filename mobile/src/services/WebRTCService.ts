@@ -8,12 +8,11 @@ export interface SignalingClient {
   on(event: string, handler: (payload: any) => void): void;
 }
 
-export class WebRTCServiceStub {
-  constructor(private signaling?: SignalingClient, private config?: RTCConfig) {}
-  async joinRoom(_roomId: string) {
-    // no-op stub for now
-  }
-  async leaveRoom() {}
+/** No-op WebRTC implementation when native WebRTC is unavailable (e.g. Expo Go). */
+export class WebRTCServiceNoOp {
+  constructor(private _signaling?: SignalingClient, private _config?: RTCConfig) {}
+  async joinRoom(_roomId: string): Promise<void> {}
+  async leaveRoom(): Promise<void> {}
 }
 
 import io, { Socket } from 'socket.io-client';

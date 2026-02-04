@@ -146,10 +146,17 @@ export default function LessonDetailScreen({ navigateTo }: { navigateTo?: (scree
       // Update lesson state
       setLesson({ ...lesson, completed: true, progress_percent: 100 });
 
-      // Show achievement if any unlocked
+      // Show achievement celebration if any unlocked
       if (data.achievements_unlocked && data.achievements_unlocked.length > 0) {
-        // TODO: Show achievement celebration
         logger.log('Achievements unlocked:', data.achievements_unlocked);
+        const labels: Record<string, string> = {
+          first_lesson: 'First Lesson',
+          lessons_10: '10 Lessons Learned',
+        };
+        const list = data.achievements_unlocked
+          .map((key: string) => labels[key] || key)
+          .join(', ');
+        Alert.alert('Achievement Unlocked!', `You earned: ${list}. Keep learning!`);
       }
 
       // Navigate back after a short delay

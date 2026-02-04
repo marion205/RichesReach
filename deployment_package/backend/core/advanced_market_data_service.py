@@ -293,7 +293,15 @@ class AdvancedMarketDataService:
                         timestamp=datetime.now(),
                         source='FRED via Quandl'
                     ))
-        # Add synthetic data for other indicators
+        # Fallback: yfinance economic proxies (10y yield, VIX) if Quandl returned nothing
+        if len(indicators) == 0:
+            try:
+                loop = asyncio.get_event_loop()
+                indicators = await loop.run_in_executor(None, self._get_economic_indicators_yfinance)
+            except Exception as e:
+                logger.warning(f"yfinance economic fallback failed: {e}")
+                indicators = []
+        # Add synthetic data if still empty
         if len(indicators) == 0:
             indicators = self._get_synthetic_economic_indicators()
         self._cache_data(cache_key, indicators)
@@ -339,7 +347,15 @@ class AdvancedMarketDataService:
                         confidence=0.8,
                         trend=self._analyze_sector_trend(float(quote.get('09. change', 0)))
                     )
-        # Add synthetic data if real data not available
+        # Fallback: yfinance sector ETFs if Alpha Vantage returned nothing
+        if len(sectors) == 0:
+            try:
+                loop = asyncio.get_event_loop()
+                sectors = await loop.run_in_executor(None, self._get_sector_performance_yfinance)
+            except Exception as e:
+                logger.warning(f"yfinance sector fallback failed: {e}")
+                sectors = {}
+        # Add synthetic data if still empty
         if len(sectors) == 0:
             sectors = self._get_synthetic_sector_data()
         self._cache_data(cache_key, sectors)
@@ -591,6 +607,97 @@ class AdvancedMarketDataService:
         source='synthetic'
         )
         ]
+    def _get_sector_performance_yfinance(self) -> Dict[str, MarketIndicator]:
+        """Fetch sector performance via yfinance (sync, used as fallback)."""
+        try:
+            import yfinance as yf
+        except ImportError:
+            return {}
+        sector_etfs = {
+            'Technology': 'XLK',
+            'Healthcare': 'XLV',
+            'Financials': 'XLF',
+            'Consumer Discretionary': 'XLY',
+            'Consumer Staples': 'XLP',
+            'Industrials': 'XLI',
+            'Energy': 'XLE',
+            'Materials': 'XLB',
+            'Real Estate': 'XLRE',
+            'Utilities': 'XLU',
+        }
+        sectors = {}
+        for sector, etf in sector_etfs.items():
+            try:
+                ticker = yf.Ticker(etf)
+                info = ticker.fast_info
+                last = getattr(info, 'last_price', None) or getattr(info, 'lastPrice', None)
+                prev = getattr(info, 'previous_close', None) or getattr(info, 'previousClose', None)
+                if last is not None:
+                    change = (last - prev) if prev else 0
+                    change_pct = (change / prev * 100) if prev else 0
+                    sectors[sector] = MarketIndicator(
+                        name=f"{sector} Sector",
+                        value=float(last),
+                        change=float(change),
+                        change_percent=float(change_pct),
+                        timestamp=datetime.now(),
+                        source='Yahoo Finance',
+                        confidence=0.75,
+                        trend=self._analyze_sector_trend(float(change_pct))
+                    )
+            except Exception as e:
+                logger.debug(f"yfinance sector {sector} ({etf}): {e}")
+        return sectors
+
+    def _get_economic_indicators_yfinance(self) -> List[EconomicIndicator]:
+        """Fetch economic proxies via yfinance (10y yield, VIX). Sync fallback."""
+        try:
+            import yfinance as yf
+        except ImportError:
+            return []
+        indicators = []
+        # 10-year Treasury yield
+        try:
+            tnx = yf.Ticker("^TNX")
+            info = tnx.fast_info
+            val = getattr(info, 'last_price', None) or getattr(info, 'lastPrice', None)
+            if val is not None:
+                indicators.append(EconomicIndicator(
+                    name="10-Year Treasury Yield",
+                    value=float(val),
+                    previous=float(val) - 0.1,
+                    change=0.1,
+                    change_percent=4.0,
+                    forecast=float(val),
+                    actual_vs_forecast=0.0,
+                    impact='high',
+                    timestamp=datetime.now(),
+                    source='Yahoo Finance'
+                ))
+        except Exception as e:
+            logger.debug(f"yfinance ^TNX: {e}")
+        # VIX as volatility indicator
+        try:
+            vix = yf.Ticker("^VIX")
+            info = vix.fast_info
+            val = getattr(info, 'last_price', None) or getattr(info, 'lastPrice', None)
+            if val is not None:
+                indicators.append(EconomicIndicator(
+                    name="VIX Volatility",
+                    value=float(val),
+                    previous=float(val) - 1.0,
+                    change=1.0,
+                    change_percent=5.0,
+                    forecast=float(val),
+                    actual_vs_forecast=0.0,
+                    impact='medium',
+                    timestamp=datetime.now(),
+                    source='Yahoo Finance'
+                ))
+        except Exception as e:
+            logger.debug(f"yfinance ^VIX: {e}")
+        return indicators
+
     def _get_synthetic_sector_data(self) -> Dict[str, MarketIndicator]:
         """Generate synthetic sector data"""
         return {

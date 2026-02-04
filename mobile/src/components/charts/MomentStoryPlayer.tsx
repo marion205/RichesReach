@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import {
   View,
   Text,
@@ -9,14 +9,36 @@ import {
   ListRenderItemInfo,
   Dimensions,
   Animated,
-  StatusBar, // For status bar styling
+  StatusBar,
   ActivityIndicator,
+  PanResponder,
 } from "react-native";
+import { Audio } from "expo-av";
 import * as Speech from "expo-speech";
 import * as Haptics from "expo-haptics";
 import type { StockMoment, MomentCategory } from "./ChartWithMoments";
-import { LinearGradient } from "expo-linear-gradient"; // For gradient backgrounds
+import { LinearGradient } from "expo-linear-gradient";
 import logger from "../../utils/logger";
+
+// Optional: Share moment as image (requires react-native-view-shot + expo-sharing)
+let captureRef: ((view: React.Component | null, options?: { format?: string; quality?: number; result?: string }) => Promise<string>) | null = null;
+let Sharing: typeof import("expo-sharing") | null = null;
+try {
+  const v = require("react-native-view-shot");
+  captureRef = v.captureRef ?? v.default?.captureRef ?? null;
+} catch {
+  captureRef = null;
+}
+try {
+  const Sh = require("expo-sharing");
+  Sharing = Sh.default ?? Sh;
+} catch {
+  Sharing = null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
 
 export type MomentAnalyticsEvent = {
   type:
@@ -47,41 +69,290 @@ interface MomentStoryPlayerProps {
   onClose?: () => void;
   onMomentChange?: (moment: StockMoment | null) => void;
   onAnalyticsEvent?: (event: MomentAnalyticsEvent) => void;
-  /**
-   * Use a custom TTS service (e.g. Wealth Oracle microservice).
-   * If provided, expo-speech is not used.
-   */
+  /** Custom TTS service. If provided, expo-speech is not used. */
   speakFn?: (text: string, moment: StockMoment, onComplete?: () => void) => Promise<void>;
   stopFn?: () => void;
-  /**
-   * Cinematic intro slide before first moment.
-   */
+  /** Cinematic intro slide before first moment. */
   enableIntro?: boolean;
   introText?: string;
+  /** When true, show a "Sample" badge so users know moments are placeholder, not symbol-specific. */
+  isSampleData?: boolean;
 }
 
+interface CategoryStyle {
+  color: string;
+  gradient: readonly [string, string];
+  icon: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Constants
-const CARD_WIDTH = Math.min(340, Dimensions.get("window").width * 0.9); // Slightly wider for polish
+// ─────────────────────────────────────────────────────────────────────────────
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const CARD_WIDTH = Math.min(340, SCREEN_WIDTH * 0.9);
 const CARD_MARGIN = 20;
 const ITEM_LAYOUT_LENGTH = CARD_WIDTH + CARD_MARGIN;
+
+// TTS timing
 const SPEECH_TIMEOUT_BASE_MS = 200;
 const SPEECH_MIN_DURATION_MS = 5000;
 const SPEECH_MAX_DURATION_MS = 25000;
+const TTS_LOADING_TIMEOUT_MS = 1500;
+const TTS_ERROR_FALLBACK_MS = 2000;
+
 const WEALTH_ORACLE_VOICE_OPTIONS: Speech.SpeechOptions = {
   language: "en-US",
   rate: 0.9,
   pitch: 1.05,
 };
 
-// Enhanced category styles with gradients/icons
-const CATEGORY_STYLES = {
-  EARNINGS: { color: "#10B981", gradient: ["#10B981", "#059669"], icon: "💰" },
-  NEWS: { color: "#3B82F6", gradient: ["#3B82F6", "#2563EB"], icon: "📰" },
-  INSIDER: { color: "#F59E0B", gradient: ["#F59E0B", "#D97706"], icon: "👤" },
-  MACRO: { color: "#8B5CF6", gradient: ["#8B5CF6", "#7C3AED"], icon: "🌍" },
-  SENTIMENT: { color: "#EF4444", gradient: ["#EF4444", "#DC2626"], icon: "😊" },
-  OTHER: { color: "#6B7280", gradient: ["#6B7280", "#4B5563"], icon: "•" },
+const CATEGORY_STYLES: Record<string, CategoryStyle> = {
+  EARNINGS: { color: "#10B981", gradient: ["#10B981", "#059669"] as const, icon: "💰" },
+  NEWS: { color: "#3B82F6", gradient: ["#3B82F6", "#2563EB"] as const, icon: "📰" },
+  INSIDER: { color: "#F59E0B", gradient: ["#F59E0B", "#D97706"] as const, icon: "👤" },
+  MACRO: { color: "#8B5CF6", gradient: ["#8B5CF6", "#7C3AED"] as const, icon: "🌍" },
+  SENTIMENT: { color: "#EF4444", gradient: ["#EF4444", "#DC2626"] as const, icon: "😊" },
+  OTHER: { color: "#6B7280", gradient: ["#6B7280", "#4B5563"] as const, icon: "•" },
 } as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Utility functions
+// ─────────────────────────────────────────────────────────────────────────────
+
+const getCategoryStyle = (category: string, isIntro: boolean): CategoryStyle => {
+  if (isIntro) return CATEGORY_STYLES.OTHER;
+  return CATEGORY_STYLES[category] ?? CATEGORY_STYLES.OTHER;
+};
+
+const calculateSpeechDuration = (text: string): number => {
+  const wordCount = text.split(/\s+/).length;
+  return Math.min(
+    SPEECH_MAX_DURATION_MS,
+    Math.max(SPEECH_MIN_DURATION_MS, wordCount * SPEECH_TIMEOUT_BASE_MS)
+  );
+};
+
+const clampIndex = (index: number, length: number): number => {
+  if (length === 0) return 0;
+  return Math.max(0, Math.min(index, length - 1));
+};
+
+const triggerHaptic = (style: Haptics.ImpactFeedbackStyle = Haptics.ImpactFeedbackStyle.Light) => {
+  Haptics.impactAsync(style).catch(() => {});
+};
+
+const triggerSuccessHaptic = () => {
+  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Memoized Card Component
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface MomentCardProps {
+  item: ExtendedMoment;
+  isActive: boolean;
+  listened: boolean;
+  isSampleData?: boolean;
+}
+
+const MomentCard = memo(React.forwardRef<View, MomentCardProps>(function MomentCardInner({ item, isActive, listened, isSampleData }, ref) {
+  const catStyle = getCategoryStyle(item.category, !!item.isIntro);
+
+  return (
+    <View ref={ref} collapsable={false} style={styles.cardWrapper}>
+      <Animated.View
+        style={[
+          styles.card,
+          isActive && styles.cardActive,
+          item.isIntro && styles.cardIntro,
+        ]}
+        accessible
+        accessibilityRole="text"
+        accessibilityLabel={`${item.category} moment: ${item.title}. ${item.deepSummary.substring(0, 100)}...`}
+      >
+        <View style={styles.cardHeaderRow}>
+          <LinearGradient
+            colors={catStyle.gradient as [string, string]}
+            style={styles.categoryIconContainer}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <Text style={styles.categoryIcon}>{catStyle.icon}</Text>
+          </LinearGradient>
+          <View style={styles.cardCategoryContainer}>
+            <Text
+              style={[styles.cardCategory, { color: catStyle.color }]}
+              aria-label={`${item.category} category`}
+            >
+              {item.isIntro ? "INTRO" : item.category}
+            </Text>
+          </View>
+          {listened && (
+            <View style={styles.listenedIndicator}>
+              <Text style={styles.cardListenedDot} aria-hidden>✓</Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
+        <Text style={styles.cardSummary} numberOfLines={6}>{item.deepSummary}</Text>
+        <View style={styles.shareFooter}>
+          <Text style={styles.brandText}>Wealth Oracle</Text>
+          {isSampleData && <Text style={styles.sampleStamp}>SAMPLE DATA</Text>}
+          <Text style={styles.symbolStamp}>{item.symbol?.toUpperCase() ?? ""}</Text>
+        </View>
+      </Animated.View>
+    </View>
+  );
+}));
+
+MomentCard.displayName = "MomentCard";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Custom Hooks
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Stable key for mock→real rehydration (title + timestamp) */
+const getStableKey = (m: StockMoment | ExtendedMoment): string =>
+  `${m.title}_${m.timestamp}`;
+
+/**
+ * Hook to manage story moments with optional intro.
+ * Returns getStableKey so caller can rehydrate listenedIds when data swaps (mock→real).
+ */
+const useStoryMoments = (
+  moments: StockMoment[],
+  symbol: string,
+  enableIntro: boolean,
+  introText?: string
+) => {
+  const sortedMoments = useMemo(
+    () => [...moments].sort((a, b) =>
+      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    ),
+    [moments]
+  );
+
+  const introMoment = useMemo<ExtendedMoment | null>(() => {
+    if (!enableIntro || !sortedMoments.length) return null;
+
+    const text = introText ||
+      `Here's the story behind ${symbol.toUpperCase()}'s recent moves. I'll walk you through each key moment on the chart.`;
+
+    return {
+      id: `INTRO_${symbol}`,
+      symbol,
+      timestamp: sortedMoments[0]?.timestamp ?? new Date().toISOString(),
+      category: "OTHER" as MomentCategory,
+      title: `The story behind ${symbol.toUpperCase()}`,
+      quickSummary: text,
+      deepSummary: text,
+      isIntro: true,
+    };
+  }, [enableIntro, sortedMoments, symbol, introText]);
+
+  const storyMoments = useMemo<ExtendedMoment[]>(() => {
+    if (introMoment) return [introMoment, ...sortedMoments];
+    return sortedMoments;
+  }, [introMoment, sortedMoments]);
+
+  return { sortedMoments, introMoment, storyMoments, getStableKey };
+};
+
+/**
+ * Hook to manage TTS speech
+ */
+const useSpeech = (
+  speakFn?: MomentStoryPlayerProps["speakFn"],
+  stopFn?: MomentStoryPlayerProps["stopFn"]
+) => {
+  const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const clearTimeouts = useCallback(() => {
+    if (speechTimeoutRef.current) {
+      clearTimeout(speechTimeoutRef.current);
+      speechTimeoutRef.current = null;
+    }
+    if (loadingTimeoutRef.current) {
+      clearTimeout(loadingTimeoutRef.current);
+      loadingTimeoutRef.current = null;
+    }
+  }, []);
+
+  const stopSpeech = useCallback(() => {
+    clearTimeouts();
+    if (stopFn) {
+      stopFn();
+    } else {
+      Speech.stop();
+    }
+  }, [stopFn, clearTimeouts]);
+
+  const speak = useCallback(async (
+    text: string,
+    moment: StockMoment,
+    onComplete: () => void,
+    setLoading: (loading: boolean) => void
+  ) => {
+    if (!isMountedRef.current) return;
+    setLoading(true);
+
+    const safeComplete = () => {
+      if (isMountedRef.current) onComplete();
+    };
+    const safeSetLoading = (v: boolean) => {
+      if (isMountedRef.current) setLoading(v);
+    };
+
+    loadingTimeoutRef.current = setTimeout(() => {
+      safeSetLoading(false);
+    }, TTS_LOADING_TIMEOUT_MS);
+
+    try {
+      if (speakFn) {
+        speakFn(text, moment, safeComplete)
+          .catch((error) => {
+            logger.warn('[MomentStoryPlayer] TTS error:', error);
+            setTimeout(safeComplete, TTS_ERROR_FALLBACK_MS);
+          })
+          .finally(() => {
+            clearTimeouts();
+            safeSetLoading(false);
+          });
+        return;
+      }
+
+      clearTimeouts();
+      safeSetLoading(false);
+      Speech.speak(text, {
+        ...WEALTH_ORACLE_VOICE_OPTIONS,
+        onDone: () => isMountedRef.current && onComplete(),
+        onError: () => isMountedRef.current && onComplete(),
+      });
+    } catch (error) {
+      logger.warn('[MomentStoryPlayer] Speech error:', error);
+      clearTimeouts();
+      safeSetLoading(false);
+      if (isMountedRef.current) onComplete();
+    }
+  }, [speakFn, clearTimeouts]);
+
+  return { speak, stopSpeech, speechTimeoutRef, clearTimeouts };
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Component
+// ─────────────────────────────────────────────────────────────────────────────
 
 const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
   visible,
@@ -95,111 +366,126 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
   stopFn,
   enableIntro = true,
   introText,
+  isSampleData = false,
 }) => {
+  // State
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isTTSLoading, setIsTTSLoading] = useState(false);
-  const [listenedIds, setListenedIds] = useState<string[]>([]);
+  const [listenedIds, setListenedIds] = useState<Set<string>>(new Set());
+
+  // Refs
   const listRef = useRef<FlatList<ExtendedMoment>>(null);
-  const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const slideAnim = useRef(new Animated.Value(0)).current;
+  const panY = useRef(new Animated.Value(0)).current;
+  const previousIndexRef = useRef(0);
+  const cardRefs = useRef<Record<number, View | null>>({});
+  const listenedStableKeysRef = useRef<Set<string>>(new Set());
 
-  const sortedMoments: StockMoment[] = useMemo(
-    () =>
-      [...moments].sort(
-        (a, b) =>
-          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
-      ),
-    [moments],
+  // Custom hooks
+  const { sortedMoments, introMoment, storyMoments, getStableKey } = useStoryMoments(
+    moments, symbol, enableIntro, introText
   );
+  const { speak, stopSpeech, speechTimeoutRef, clearTimeouts } = useSpeech(speakFn, stopFn);
 
-  const introMoment: ExtendedMoment | null = useMemo(() => {
-    if (!enableIntro || !sortedMoments.length) return null;
+  // Derived values
+  const totalRealMoments = sortedMoments.length;
+  const safeCurrentIndex = clampIndex(currentIndex, storyMoments.length);
+  const currentExtended = storyMoments[safeCurrentIndex] ?? null;
+  const currentMomentForChart = currentExtended?.isIntro ? null : currentExtended;
+  const listenedCount = listenedIds.size;
 
-    const text =
-      introText ||
-      `Here's the story behind ${symbol.toUpperCase()}'s recent moves. I'll walk you through each key moment on the chart.`;
+  // Correct initial scroll when modal opens so list doesn't flash then jump
+  const initialScrollIndexWhenVisible = useMemo(() => {
+    if (!visible || !storyMoments.length) return 0;
+    return enableIntro ? 0 : clampIndex(initialIndex, storyMoments.length);
+  }, [visible, storyMoments.length, enableIntro, initialIndex]);
 
-    const nowIso =
-      sortedMoments.length > 0 ? sortedMoments[0].timestamp : new Date().toISOString();
-
-    return {
-      id: "INTRO",
-      symbol,
-      timestamp: nowIso,
-      category: "OTHER",
-      title: `The story behind ${symbol.toUpperCase()}`,
-      quickSummary: text,
-      deepSummary: text,
-      isIntro: true,
-    } as ExtendedMoment;
-  }, [enableIntro, sortedMoments, symbol, introText]);
-
-  const storyMoments: ExtendedMoment[] = useMemo(() => {
-    if (introMoment) return [introMoment, ...sortedMoments];
-    return [...sortedMoments];
-  }, [introMoment, sortedMoments]);
-
-  // Clamp currentIndex to valid range when storyMoments change
-  useEffect(() => {
-    if (!storyMoments.length) {
-      setCurrentIndex(0);
-      return;
-    }
-    const clampedIndex = Math.max(0, Math.min(currentIndex, storyMoments.length - 1));
-    if (clampedIndex !== currentIndex) {
-      setCurrentIndex(clampedIndex);
-    }
-  }, [storyMoments.length, currentIndex]);
-
-  const safeCurrentIndex = storyMoments.length > 0
-    ? Math.max(0, Math.min(currentIndex, storyMoments.length - 1))
-    : 0;
-  const currentExtended: ExtendedMoment | null =
-    storyMoments.length > 0 ? storyMoments[safeCurrentIndex] : null;
-
-  // "Real" StockMoment for chart/analytics (ignore intro as a data point)
-  const currentMomentForChart: StockMoment | null =
-    currentExtended && !currentExtended.isIntro ? currentExtended : null;
-
-  const total = sortedMoments.length; // only real moments for analytics
+  // ─────────────────────────────────────────────────────────────────────────
+  // Analytics helper
+  // ─────────────────────────────────────────────────────────────────────────
 
   const fireAnalytics = useCallback((event: MomentAnalyticsEvent) => {
     onAnalyticsEvent?.(event);
   }, [onAnalyticsEvent]);
 
-  // Instant open - no animation delay for better UX
+  const getAnalyticsIndex = useCallback((index: number): number => {
+    return introMoment && index > 0 ? index - 1 : index;
+  }, [introMoment]);
+
+  // Audio ducking: lower background music/podcasts while Oracle speaks
+  const configureAudioSession = useCallback(async (active: boolean) => {
+    try {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: active,
+        staysActiveInBackground: false,
+        shouldDuckAndroid: active,
+        playThroughEarpieceAndroid: false,
+      });
+    } catch (error) {
+      logger.warn('[MomentStoryPlayer] Audio session error:', error);
+    }
+  }, []);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Effects
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // Clamp currentIndex when storyMoments changes
+  useEffect(() => {
+    if (!storyMoments.length) {
+      setCurrentIndex(0);
+      return;
+    }
+    const clamped = clampIndex(currentIndex, storyMoments.length);
+    if (clamped !== currentIndex) {
+      setCurrentIndex(clamped);
+    }
+  }, [storyMoments.length, currentIndex]);
+
+  // Modal animation (reset pan when opening so swipe-to-dismiss starts clean)
   useEffect(() => {
     if (visible) {
-      // Set to final position immediately - no animation delay
       slideAnim.setValue(0);
+      panY.setValue(0);
     } else {
-      // Quick close animation (optional)
       Animated.timing(slideAnim, {
         toValue: 400,
-        duration: 150, // Faster close
+        duration: 150,
         useNativeDriver: true,
       }).start();
     }
-  }, [visible, slideAnim]);
+  }, [visible, slideAnim, panY]);
 
-  // Status bar adjustment
+  // Status bar
   useEffect(() => {
     if (visible) {
       StatusBar.setBarStyle("dark-content");
-      StatusBar.setBackgroundColor("transparent", false);
+      StatusBar.setBackgroundColor?.("transparent", false);
     }
     return () => {
       StatusBar.setBarStyle("default");
     };
   }, [visible]);
 
-  // Scroll + notify when current index changes (unchanged logic)
+  // Audio ducking when story mode opens/closes
+  useEffect(() => {
+    if (visible) {
+      configureAudioSession(true);
+    } else {
+      configureAudioSession(false);
+    }
+  }, [visible, configureAudioSession]);
+
+  // Scroll and notify on index change (with previousIndex for accurate analytics)
   useEffect(() => {
     if (!visible || !storyMoments.length) return;
 
-    const safeIndex = Math.max(0, Math.min(currentIndex, storyMoments.length - 1));
-    
+    const safeIndex = clampIndex(currentIndex, storyMoments.length);
+    const fromIndex = previousIndexRef.current;
+
+    // Scroll to current card
     requestAnimationFrame(() => {
       try {
         listRef.current?.scrollToIndex({
@@ -207,152 +493,107 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
           animated: true,
           viewPosition: 0.5,
         });
-      } catch (error) {
-        logger.warn('[MomentStoryPlayer] scrollToIndex error:', error);
-        listRef.current?.scrollToOffset({ 
-          offset: safeIndex * ITEM_LAYOUT_LENGTH, 
-          animated: true 
+      } catch {
+        listRef.current?.scrollToOffset({
+          offset: safeIndex * ITEM_LAYOUT_LENGTH,
+          animated: true,
         });
       }
     });
 
-    if (currentMomentForChart && onMomentChange) {
-      onMomentChange(currentMomentForChart);
+    onMomentChange?.(currentMomentForChart);
+
+    if (currentMomentForChart && fromIndex !== safeIndex) {
       fireAnalytics({
         type: "moment_change",
         symbol,
         momentId: currentMomentForChart.id,
-        index: introMoment ? currentIndex - 1 : currentIndex,
-        totalMoments: total,
+        index: getAnalyticsIndex(currentIndex),
+        fromIndex: getAnalyticsIndex(fromIndex),
+        toIndex: getAnalyticsIndex(safeIndex),
+        totalMoments: totalRealMoments,
       });
-    } else if (!currentMomentForChart && onMomentChange) {
-      onMomentChange(null);
     }
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch((e) => logger.warn('Haptic error:', e));
-  }, [
-    visible,
-    currentIndex,
-    storyMoments,
-    currentMomentForChart,
-    onMomentChange,
-    symbol,
-    total,
-    introMoment,
-    fireAnalytics,
-  ]);
+    previousIndexRef.current = safeIndex;
+    triggerHaptic();
+  }, [visible, currentIndex, storyMoments.length, currentMomentForChart, onMomentChange, symbol, totalRealMoments, fireAnalytics, getAnalyticsIndex]);
 
-  // Reset state when opening/closing - make this instant
+  // Rehydrate listenedIds when moments change (mock→real) so checkmarks persist
+  useEffect(() => {
+    if (listenedStableKeysRef.current.size === 0) return;
+    setListenedIds((prev) => {
+      const next = new Set(prev);
+      storyMoments.forEach((m) => {
+        if (!m.isIntro && listenedStableKeysRef.current.has(getStableKey(m)))
+          next.add(m.id);
+      });
+      return next;
+    });
+  }, [moments, storyMoments, getStableKey]);
+
+  // Reset state on visibility change
   useEffect(() => {
     if (!visible) {
       stopSpeech();
       setIsPlaying(false);
-      setListenedIds([]);
+      setListenedIds(new Set());
+      listenedStableKeysRef.current = new Set();
       setCurrentIndex(0);
       setIsTTSLoading(false);
-      return () => stopSpeech();
+      return;
     }
 
-    // Set state immediately - don't wait for anything
+    // Initialize on open
     const maxIndex = storyMoments.length - 1;
-    const clampedInitialIndex = Math.max(0, Math.min(initialIndex, maxIndex));
-    const baseIndex = introMoment ? 0 : clampedInitialIndex;
-    
-    // Set all state synchronously for instant UI
-    setCurrentIndex(baseIndex);
-    setListenedIds([]);
-    setIsPlaying(true);
-    setIsTTSLoading(false); // Start with loading false, will set true when TTS starts
+    const startIndex = introMoment ? 0 : clampIndex(initialIndex, maxIndex + 1);
 
-    // Fire analytics asynchronously (don't block)
-    setTimeout(() => {
+    setCurrentIndex(startIndex);
+    setListenedIds(new Set());
+    setIsPlaying(true);
+    setIsTTSLoading(false);
+    previousIndexRef.current = startIndex;
+
+    // Fire analytics asynchronously
+    queueMicrotask(() => {
       fireAnalytics({
         type: "story_open",
         symbol,
-        totalMoments: total,
+        totalMoments: totalRealMoments,
       });
-    }, 0);
+    });
 
     return () => stopSpeech();
-  }, [visible, initialIndex, symbol, total, introMoment, storyMoments.length, fireAnalytics]);
+  }, [visible, initialIndex, symbol, totalRealMoments, introMoment, storyMoments.length, stopSpeech, fireAnalytics]);
 
-  // TTS helpers (unchanged)
-  const stopSpeech = useCallback(() => {
-    if (speechTimeoutRef.current) {
-      clearTimeout(speechTimeoutRef.current);
-      speechTimeoutRef.current = null;
-    }
-    if (stopFn) {
-      stopFn();
-    } else {
-      Speech.stop();
-    }
-  }, [stopFn]);
+  // ─────────────────────────────────────────────────────────────────────────
+  // Speech handlers
+  // ─────────────────────────────────────────────────────────────────────────
 
   const handleSpeechComplete = useCallback(() => {
     if (!visible || !currentExtended) return;
 
+    // Mark as listened (if not intro); store stable key for mock→real rehydration
     if (!currentExtended.isIntro) {
-      setListenedIds((prev) =>
-        prev.includes(currentExtended.id) ? prev : [...prev, currentExtended.id],
-      );
+      listenedStableKeysRef.current.add(getStableKey(currentExtended));
+      setListenedIds(prev => new Set(prev).add(currentExtended.id));
     }
 
     if (!isPlaying) return;
 
-    setCurrentIndex((prev) => {
+    // Advance to next or stop
+    setCurrentIndex(prev => {
       const next = prev + 1;
       if (next >= storyMoments.length) {
         setIsPlaying(false);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(console.warn);
+        triggerSuccessHaptic();
         return prev;
       }
       return next;
     });
-  }, [visible, currentExtended, isPlaying, storyMoments.length]);
+  }, [visible, currentExtended, isPlaying, storyMoments.length, getStableKey]);
 
-  const speakText = useCallback(async (text: string, moment: StockMoment) => {
-    // Start TTS immediately without blocking
-    setIsTTSLoading(true);
-    
-    // Set loading to false quickly (max 1.5s) so UI doesn't feel stuck
-    const loadingTimeout = setTimeout(() => {
-      setIsTTSLoading(false);
-    }, 1500);
-    
-    try {
-      if (speakFn) {
-        // Pass completion callback so story advances when audio finishes
-        speakFn(text, moment, handleSpeechComplete)
-          .catch((error) => {
-            console.warn('[MomentStoryPlayer] TTS error (non-blocking):', error);
-            // On error, still advance story after a delay
-            setTimeout(handleSpeechComplete, 2000);
-          })
-          .finally(() => {
-            clearTimeout(loadingTimeout);
-            setIsTTSLoading(false);
-          });
-        // Return immediately - don't wait, but completion will be handled by callback
-        return;
-      }
-
-      clearTimeout(loadingTimeout);
-      setIsTTSLoading(false);
-      Speech.speak(text, {
-        ...WEALTH_ORACLE_VOICE_OPTIONS,
-        onDone: handleSpeechComplete,
-        onError: handleSpeechComplete,
-      });
-    } catch (error) {
-      clearTimeout(loadingTimeout);
-      console.warn('[MomentStoryPlayer] Speech error:', error);
-      setIsTTSLoading(false);
-      handleSpeechComplete();
-    }
-  }, [speakFn, handleSpeechComplete]);
-
-  // TTS for current slide (unchanged)
+  // TTS for current slide
   useEffect(() => {
     if (!visible || !currentExtended || !isPlaying) {
       stopSpeech();
@@ -362,44 +603,36 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
     stopSpeech();
 
     const text = currentExtended.deepSummary;
-    const estimatedWords = text.split(/\s+/).length;
-    const estimatedDurationMs = Math.min(
-      SPEECH_MAX_DURATION_MS,
-      Math.max(SPEECH_MIN_DURATION_MS, estimatedWords * SPEECH_TIMEOUT_BASE_MS),
-    );
+    const forMoment: StockMoment = currentMomentForChart ?? {
+      ...currentExtended,
+      category: "OTHER" as MomentCategory,
+    };
 
-    const forMoment: StockMoment =
-      currentMomentForChart ?? {
-        ...currentExtended,
-        category: "OTHER" as MomentCategory,
-      };
-
-    // Start TTS immediately without waiting - fire and forget
-    // Use setTimeout(0) to ensure this doesn't block rendering
-    setTimeout(() => {
-      speakText(text, forMoment).catch(() => {
-        // If TTS fails, just continue - don't block
-        console.warn('[MomentStoryPlayer] TTS failed, continuing without voice');
+    // Start TTS asynchronously
+    queueMicrotask(() => {
+      speak(text, forMoment, handleSpeechComplete, setIsTTSLoading).catch(() => {
+        logger.warn('[MomentStoryPlayer] TTS failed, continuing');
       });
-    }, 0);
+    });
 
-    // Set timeout as fallback ONLY if using expo-speech (not TTS service)
-    // TTS service will call handleSpeechComplete via callback
+    // Fallback timeout for expo-speech only
     if (!speakFn) {
+      const duration = calculateSpeechDuration(text);
       speechTimeoutRef.current = setTimeout(() => {
         stopSpeech();
         handleSpeechComplete();
-      }, estimatedDurationMs);
+      }, duration);
     }
 
     return () => {
       stopSpeech();
-      if (speechTimeoutRef.current) {
-        clearTimeout(speechTimeoutRef.current);
-        speechTimeoutRef.current = null;
-      }
+      clearTimeouts();
     };
-  }, [visible, isPlaying, currentExtended, currentMomentForChart, speakText, stopSpeech, handleSpeechComplete]);
+  }, [visible, isPlaying, currentExtended, currentMomentForChart, speak, stopSpeech, handleSpeechComplete, speakFn, speechTimeoutRef, clearTimeouts]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // User interaction handlers
+  // ─────────────────────────────────────────────────────────────────────────
 
   const handleClose = useCallback(() => {
     stopSpeech();
@@ -408,16 +641,59 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
     fireAnalytics({
       type: "story_close",
       symbol,
-      totalMoments: total,
-      listenedCount: listenedIds.length,
+      totalMoments: totalRealMoments,
+      listenedCount,
     });
 
     onMomentChange?.(null);
     onClose?.();
-  }, [stopSpeech, fireAnalytics, symbol, total, listenedIds.length, onMomentChange, onClose]);
+  }, [stopSpeech, fireAnalytics, symbol, totalRealMoments, listenedCount, onMomentChange, onClose]);
+
+  // When user starts swiping cards manually, stop TTS so voice doesn't overlap
+  const handleScrollBeginDrag = useCallback(() => {
+    if (isPlaying) {
+      setIsPlaying(false);
+      stopSpeech();
+      triggerHaptic(Haptics.ImpactFeedbackStyle.Light);
+    }
+  }, [isPlaying, stopSpeech]);
+
+  // Ref for swipe-to-dismiss so PanResponder always calls latest handleClose
+  const closeHandlerRef = useRef(handleClose);
+  useEffect(() => {
+    closeHandlerRef.current = handleClose;
+  }, [handleClose]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 5,
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) panY.setValue(gestureState.dy);
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 120 || gestureState.vy > 0.5) {
+          closeHandlerRef.current?.();
+        } else {
+          Animated.spring(panY, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 40,
+            friction: 8,
+          }).start();
+        }
+      },
+    })
+  ).current;
+
+  const combinedTranslateY = useMemo(
+    () => Animated.add(slideAnim, panY),
+    [slideAnim, panY]
+  );
 
   const handleTogglePlay = useCallback(() => {
     if (!currentExtended) return;
+
     const nextPlaying = !isPlaying;
     setIsPlaying(nextPlaying);
 
@@ -426,18 +702,17 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
         type: "moment_play_toggle",
         symbol,
         momentId: currentMomentForChart.id,
-        index: introMoment ? currentIndex - 1 : currentIndex,
-        totalMoments: total,
+        index: getAnalyticsIndex(currentIndex),
+        totalMoments: totalRealMoments,
       });
     }
 
-    Haptics.impactAsync(
-      nextPlaying ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light,
-    ).catch(console.warn);
-  }, [currentExtended, isPlaying, currentMomentForChart, fireAnalytics, symbol, total, introMoment, currentIndex]);
+    triggerHaptic(nextPlaying ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light);
+  }, [currentExtended, isPlaying, currentMomentForChart, fireAnalytics, symbol, totalRealMoments, currentIndex, getAnalyticsIndex]);
 
   const handleNext = useCallback(() => {
-    if (!storyMoments.length || currentIndex === storyMoments.length - 1) return;
+    if (!storyMoments.length || currentIndex >= storyMoments.length - 1) return;
+
     const fromIndex = currentIndex;
     const toIndex = currentIndex + 1;
 
@@ -448,16 +723,17 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
     fireAnalytics({
       type: "moment_skip_next",
       symbol,
-      fromIndex: introMoment && fromIndex > 0 ? fromIndex - 1 : fromIndex,
-      toIndex: introMoment && toIndex > 0 ? toIndex - 1 : toIndex,
-      totalMoments: total,
+      fromIndex: getAnalyticsIndex(fromIndex),
+      toIndex: getAnalyticsIndex(toIndex),
+      totalMoments: totalRealMoments,
     });
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch((e) => logger.warn('Haptic error:', e));
-  }, [storyMoments.length, currentIndex, stopSpeech, fireAnalytics, symbol, total, introMoment]);
+    triggerHaptic();
+  }, [storyMoments.length, currentIndex, stopSpeech, fireAnalytics, symbol, totalRealMoments, getAnalyticsIndex]);
 
   const handlePrevious = useCallback(() => {
-    if (!storyMoments.length || currentIndex === 0) return;
+    if (!storyMoments.length || currentIndex <= 0) return;
+
     const fromIndex = currentIndex;
     const toIndex = currentIndex - 1;
 
@@ -468,99 +744,110 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
     fireAnalytics({
       type: "moment_skip_prev",
       symbol,
-      fromIndex: introMoment && fromIndex > 0 ? fromIndex - 1 : fromIndex,
-      toIndex: introMoment && toIndex > 0 ? toIndex - 1 : toIndex,
-      totalMoments: total,
+      fromIndex: getAnalyticsIndex(fromIndex),
+      toIndex: getAnalyticsIndex(toIndex),
+      totalMoments: totalRealMoments,
     });
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch((e) => logger.warn('Haptic error:', e));
-  }, [storyMoments.length, currentIndex, stopSpeech, fireAnalytics, symbol, total, introMoment]);
+    triggerHaptic();
+  }, [storyMoments.length, currentIndex, stopSpeech, fireAnalytics, symbol, totalRealMoments, getAnalyticsIndex]);
+
+  const handleShare = useCallback(async () => {
+    if (!captureRef || !Sharing) {
+      logger.warn("[MomentStoryPlayer] Share requires react-native-view-shot and expo-sharing");
+      return;
+    }
+    const currentRef = cardRefs.current[safeCurrentIndex];
+    if (!currentRef) return;
+    try {
+      const uri = await captureRef(currentRef as any, {
+        format: "png",
+        quality: 1,
+        result: "tmpfile",
+      });
+      if (await Sharing!.isAvailableAsync()) {
+        await Sharing!.shareAsync(uri, {
+          mimeType: "image/png",
+          dialogTitle: `Share this ${symbol} moment`,
+        });
+      }
+    } catch (error) {
+      logger.error("[MomentStoryPlayer] Share failed", error);
+    }
+  }, [safeCurrentIndex, symbol]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // FlatList helpers
+  // ─────────────────────────────────────────────────────────────────────────
 
   const renderItem = useCallback(
-    ({ item, index }: ListRenderItemInfo<ExtendedMoment>) => {
-      const isActive = index === currentIndex;
-      const listened = !item.isIntro && listenedIds.includes(item.id);
-      const catStyle = item.isIntro ? CATEGORY_STYLES.OTHER : CATEGORY_STYLES[item.category as keyof typeof CATEGORY_STYLES];
-
-      return (
-        <Animated.View
-          style={[
-            styles.card,
-            isActive && styles.cardActive,
-            item.isIntro && styles.cardIntro,
-          ]}
-          accessible={true}
-          accessibilityRole="text"
-          accessibilityLabel={`${item.category} moment: ${item.title}. ${item.deepSummary.substring(0, 100)}...`}
-        >
-          <View style={styles.cardHeaderRow}>
-            <LinearGradient
-              colors={catStyle.gradient}
-              style={styles.categoryIconContainer}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-            >
-              <Text style={[styles.categoryIcon, { color: "#FFFFFF" }]}>{catStyle.icon}</Text>
-            </LinearGradient>
-            <View style={styles.cardCategoryContainer}>
-              <Text style={[styles.cardCategory, { color: catStyle.color }]} aria-label={`${item.category} category`}>
-                {item.isIntro ? "INTRO" : item.category}
-              </Text>
-            </View>
-            {listened && (
-              <View style={styles.listenedIndicator}>
-                <Text style={styles.cardListenedDot} aria-hidden={true}>✓</Text>
-              </View>
-            )}
-          </View>
-          <Text style={styles.cardTitle} numberOfLines={2}>{item.title}</Text>
-          <Text style={styles.cardSummary} numberOfLines={6}>
-            {item.deepSummary}
-          </Text>
-        </Animated.View>
-      );
-    },
-    [currentIndex, listenedIds],
+    ({ item, index }: ListRenderItemInfo<ExtendedMoment>) => (
+      <MomentCard
+        ref={(el) => {
+          cardRefs.current[index] = el;
+        }}
+        item={item}
+        isActive={index === currentIndex}
+        listened={!item.isIntro && listenedIds.has(item.id)}
+        isSampleData={isSampleData}
+      />
+    ),
+    [currentIndex, listenedIds, isSampleData]
   );
 
-  // All hooks must be called before any conditional returns
   const getItemLayout = useCallback(
-    (data: ExtendedMoment[] | null, index: number) => ({
+    (_data: ExtendedMoment[] | null, index: number) => ({
       length: ITEM_LAYOUT_LENGTH,
       offset: ITEM_LAYOUT_LENGTH * index,
       index,
     }),
-    [],
+    []
   );
 
-  // Early return after all hooks
+  const handleScrollToIndexFailed = useCallback((info: { index: number }) => {
+    const safeIndex = clampIndex(info.index, storyMoments.length);
+    logger.warn('[MomentStoryPlayer] scrollToIndexFailed, retrying:', safeIndex);
+    setTimeout(() => {
+      listRef.current?.scrollToOffset({
+        offset: safeIndex * ITEM_LAYOUT_LENGTH,
+        animated: true,
+      });
+    }, 100);
+  }, [storyMoments.length]);
+
+  const keyExtractor = useCallback((m: ExtendedMoment) => m.id, []);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────────────
+
   if (!visible) return null;
 
-  const realTotal = total;
-  const listenedCount = listenedIds.length;
+  const isAtStart = currentIndex === 0;
+  const isAtEnd = currentIndex === storyMoments.length - 1;
+  const progressPercent = totalRealMoments > 0
+    ? (listenedCount / totalRealMoments) * 100
+    : 0;
 
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="fade" // Faster than slide
+      animationType="fade"
       onRequestClose={handleClose}
-      statusBarTranslucent={true}
-      presentationStyle="overFullScreen" // Faster rendering
+      statusBarTranslucent
+      presentationStyle="overFullScreen"
     >
       <View style={styles.backdrop}>
         <Animated.View
+          {...panResponder.panHandlers}
           style={[
             styles.sheet,
-            {
-              transform: [
-                {
-                  translateY: slideAnim,
-                },
-              ],
-            },
+            { transform: [{ translateY: combinedTranslateY }] },
           ]}
         >
+          <View style={styles.dragHandle} />
+          {/* Header */}
           <LinearGradient
             colors={["#FFFFFF", "#F0F9FF", "#F8FAFC"]}
             style={styles.gradientHeader}
@@ -572,6 +859,11 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
                 <Text style={styles.headerSymbol}>{symbol.toUpperCase()}</Text>
                 <View style={styles.headerTitleRow}>
                   <Text style={styles.headerTitle}>Story Mode</Text>
+                  {isSampleData && (
+                    <View style={styles.sampleBadge}>
+                      <Text style={styles.sampleBadgeText}>Sample</Text>
+                    </View>
+                  )}
                   {isTTSLoading && (
                     <View style={styles.loadingIndicator}>
                       <ActivityIndicator size="small" color="#3B82F6" />
@@ -580,66 +872,66 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
                   )}
                 </View>
               </View>
-              <Pressable 
-                onPress={handleClose}
-                accessible={true}
-                accessibilityRole="button"
-                accessibilityLabel="Close story mode"
-                style={styles.closeButton}
-              >
-                <Text style={styles.closeText}>✕</Text>
-              </Pressable>
+              <View style={styles.headerActions}>
+                <Pressable
+                  onPress={handleShare}
+                  accessible
+                  accessibilityRole="button"
+                  accessibilityLabel="Share this moment"
+                  style={styles.shareIconButton}
+                  hitSlop={10}
+                >
+                  <Text style={styles.shareIconText}>📤</Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleClose}
+                  accessible
+                  accessibilityRole="button"
+                  accessibilityLabel="Close story mode"
+                  style={styles.closeButton}
+                  hitSlop={12}
+                >
+                  <Text style={styles.closeText}>✕</Text>
+                </Pressable>
+              </View>
             </View>
           </LinearGradient>
 
+          {/* Story Cards */}
           <FlatList
             ref={listRef}
             data={storyMoments}
-            keyExtractor={(m) => m.id}
+            keyExtractor={keyExtractor}
             renderItem={renderItem}
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.listContent}
             getItemLayout={getItemLayout}
-            initialScrollIndex={safeCurrentIndex}
-            onScrollToIndexFailed={(info) => {
-              const safeIndex = Math.max(0, Math.min(info.index, storyMoments.length - 1));
-              console.warn('[MomentStoryPlayer] scrollToIndexFailed, retrying with safe index:', safeIndex);
-              setTimeout(() => {
-                try {
-                  listRef.current?.scrollToOffset({ 
-                    offset: safeIndex * ITEM_LAYOUT_LENGTH, 
-                    animated: true 
-                  });
-                } catch (error) {
-                  console.warn('[MomentStoryPlayer] scrollToOffset failed:', error);
-                }
-              }, 100);
-            }}
-            removeClippedSubviews={true}
+            initialScrollIndex={initialScrollIndexWhenVisible}
+            onScrollToIndexFailed={handleScrollToIndexFailed}
+            onScrollBeginDrag={handleScrollBeginDrag}
+            scrollEventThrottle={16}
+            removeClippedSubviews
             maxToRenderPerBatch={3}
             windowSize={5}
             bounces={false}
             decelerationRate="fast"
           />
 
+          {/* Controls */}
           <View style={styles.controlsRow}>
             <Pressable
-              style={[styles.controlButton, currentIndex === 0 && styles.controlButtonDisabled]}
+              style={[styles.controlButton, isAtStart && styles.controlButtonDisabled]}
               onPress={handlePrevious}
-              disabled={currentIndex === 0}
-              accessible={true}
+              disabled={isAtStart}
+              accessible
               accessibilityRole="button"
               accessibilityLabel="Previous moment"
-              accessibilityState={{ disabled: currentIndex === 0 }}
+              accessibilityState={{ disabled: isAtStart }}
+              hitSlop={8}
             >
-              <Text
-                style={[
-                  styles.controlButtonText,
-                  currentIndex === 0 && styles.controlButtonTextDisabled,
-                ]}
-              >
+              <Text style={[styles.controlButtonText, isAtStart && styles.controlButtonTextDisabled]}>
                 Previous
               </Text>
             </Pressable>
@@ -648,10 +940,11 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
               style={[styles.controlButton, styles.playButton, !currentExtended && styles.controlButtonDisabled]}
               onPress={handleTogglePlay}
               disabled={!currentExtended}
-              accessible={true}
+              accessible
               accessibilityRole="button"
               accessibilityLabel={isPlaying ? "Pause story" : "Play story"}
               accessibilityState={{ disabled: !currentExtended }}
+              hitSlop={8}
             >
               <Text style={styles.playButtonText}>
                 {isPlaying ? "⏸️ Pause" : "▶️ Play"}
@@ -659,41 +952,30 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
             </Pressable>
 
             <Pressable
-              style={[styles.controlButton, currentIndex === storyMoments.length - 1 && styles.controlButtonDisabled]}
+              style={[styles.controlButton, isAtEnd && styles.controlButtonDisabled]}
               onPress={handleNext}
-              disabled={currentIndex === storyMoments.length - 1}
-              accessible={true}
+              disabled={isAtEnd}
+              accessible
               accessibilityRole="button"
               accessibilityLabel="Next moment"
-              accessibilityState={{ disabled: currentIndex === storyMoments.length - 1 }}
+              accessibilityState={{ disabled: isAtEnd }}
+              hitSlop={8}
             >
-              <Text
-                style={[
-                  styles.controlButtonText,
-                  currentIndex === storyMoments.length - 1 &&
-                    styles.controlButtonTextDisabled,
-                ]}
-              >
+              <Text style={[styles.controlButtonText, isAtEnd && styles.controlButtonTextDisabled]}>
                 Next
               </Text>
             </Pressable>
           </View>
 
+          {/* Progress */}
           <View style={styles.progressRow}>
             <View style={styles.progressBarContainer}>
-              <View 
-                style={[
-                  styles.progressBar,
-                  { 
-                    width: `${(listenedCount / Math.max(realTotal, 1)) * 100}%` 
-                  }
-                ]} 
-              />
+              <View style={[styles.progressBar, { width: `${progressPercent}%` }]} />
             </View>
             <Text style={styles.progressText}>
-              {realTotal === 0
+              {totalRealMoments === 0
                 ? "No moments available"
-                : `${listenedCount}/${realTotal} moments listened • ${symbol.toUpperCase()}`}
+                : `${listenedCount}/${totalRealMoments} moments listened • ${symbol.toUpperCase()}`}
             </Text>
           </View>
         </Animated.View>
@@ -702,10 +984,14 @@ const MomentStoryPlayer: React.FC<MomentStoryPlayerProps> = ({
   );
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Styles
+// ─────────────────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)", // Deeper blur for immersion
+    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
   },
   sheet: {
@@ -713,12 +999,22 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 36,
     borderTopRightRadius: 36,
     paddingBottom: 40,
-    maxWidth: Dimensions.get("window").width,
+    maxWidth: SCREEN_WIDTH,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -8 },
     shadowOpacity: 0.12,
     shadowRadius: 24,
     elevation: 16,
+  },
+  dragHandle: {
+    width: 40,
+    height: 5,
+    backgroundColor: "rgba(0,0,0,0.1)",
+    borderRadius: 3,
+    alignSelf: "center",
+    marginTop: 10,
+    marginBottom: -10,
+    zIndex: 10,
   },
   gradientHeader: {
     borderTopLeftRadius: 36,
@@ -752,6 +1048,18 @@ const styles = StyleSheet.create({
     color: "#111827",
     letterSpacing: -0.5,
   },
+  sampleBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: "rgba(107, 114, 128, 0.2)",
+  },
+  sampleBadgeText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#6B7280",
+    textTransform: "uppercase",
+  },
   loadingIndicator: {
     flexDirection: "row",
     alignItems: "center",
@@ -765,6 +1073,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "500",
     color: "#3B82F6",
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  shareIconButton: {
+    padding: 8,
+    borderRadius: 16,
+    backgroundColor: "rgba(0,0,0,0.05)",
+  },
+  shareIconText: {
+    fontSize: 20,
   },
   closeButton: {
     padding: 8,
@@ -780,6 +1101,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 20,
   },
+  cardWrapper: {},
   card: {
     width: CARD_WIDTH,
     marginRight: CARD_MARGIN,
@@ -823,6 +1145,7 @@ const styles = StyleSheet.create({
   categoryIcon: {
     fontSize: 14,
     fontWeight: "bold",
+    color: "#FFFFFF",
   },
   cardCategoryContainer: {
     flex: 1,
@@ -858,6 +1181,35 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#374151",
     lineHeight: 22,
+  },
+  shareFooter: {
+    marginTop: "auto",
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(0,0,0,0.05)",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  brandText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#3B82F6",
+    letterSpacing: 1,
+    textTransform: "uppercase",
+  },
+  sampleStamp: {
+    fontSize: 8,
+    color: "#9CA3AF",
+    fontWeight: "600",
+    backgroundColor: "#F3F4F6",
+    paddingHorizontal: 4,
+    borderRadius: 2,
+  },
+  symbolStamp: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#111827",
   },
   controlsRow: {
     marginTop: 24,
@@ -934,4 +1286,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default MomentStoryPlayer;
+export default memo(MomentStoryPlayer);

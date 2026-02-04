@@ -222,6 +222,11 @@ export const getApiBaseUrl = (): string => API_BASE;
 export const getGraphQLUrl = (): string => API_GRAPHQL;
 export const getWebSocketUrl = (): string => API_WS;
 
+// Transparency & methodology (same host as API; backtests use same methodology as live signals)
+const base = (API_BASE || '').replace(/\/$/, '');
+export const getTransparencyUrl = (): string => `${base}/transparency`;
+export const getMethodologyUrl = (): string => `${base}/methodology`;
+
 // Runtime override function - can be called to force LAN IP if device detection failed
 export function forceLANIPForPhysicalDevice(): void {
   if (isDev && (API_BASE.includes('127.0.0.1') || API_BASE.includes('localhost'))) {

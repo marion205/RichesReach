@@ -9,6 +9,9 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
+  Modal,
+  FlatList,
+  Pressable,
 } from "react-native";
 import Icon from "react-native-vector-icons/Feather";
 import { useQuery, useMutation } from "@apollo/client";
@@ -59,6 +62,7 @@ export default function MLTrainingScreen({
     "confidence_predictor" | "win_probability" | "pnl_predictor"
   >("confidence_predictor");
   const [isTraining, setIsTraining] = useState(false);
+  const [strategyModalVisible, setStrategyModalVisible] = useState(false);
 
   const { strategies, loading: strategiesLoading } = useStrategies();
   
@@ -186,25 +190,7 @@ export default function MLTrainingScreen({
             <View style={styles.pickerContainer}>
               <TouchableOpacity
                 style={styles.picker}
-                onPress={() => {
-                  // Simple picker - in production, use a proper picker component
-                  Alert.alert(
-                    "Select Strategy",
-                    "Choose a strategy or leave blank for all strategies",
-                    [
-                      {
-                        text: "All Strategies",
-                        onPress: () => setSelectedStrategy(""),
-                      },
-                      ...strategies.map((s) => ({
-                        text: s.name,
-                        onPress: () =>
-                          setSelectedStrategy(s.defaultVersion?.id || ""),
-                      })),
-                      { text: "Cancel", style: "cancel" },
-                    ],
-                  );
-                }}
+                onPress={() => setStrategyModalVisible(true)}
               >
                 <Text style={styles.pickerText}>
                   {selectedStrategy
@@ -218,6 +204,67 @@ export default function MLTrainingScreen({
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Strategy picker modal - scrollable list */}
+          <Modal
+            visible={strategyModalVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setStrategyModalVisible(false)}
+          >
+            <Pressable
+              style={styles.modalOverlay}
+              onPress={() => setStrategyModalVisible(false)}
+            >
+              <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+                <Text style={styles.modalTitle}>Select Strategy</Text>
+                <Text style={styles.modalSubtitle}>
+                  Choose a strategy or leave blank for all strategies
+                </Text>
+                {(strategies || []).length === 0 && (
+                  <Text style={styles.modalEmpty}>
+                    No strategies in the catalog yet. Use &quot;All Strategies&quot; below to train on all data.
+                  </Text>
+                )}
+                <FlatList
+                  data={[
+                    { id: "__all__", name: "All Strategies", versionId: "" },
+                    ...(strategies || []).map((s) => ({
+                      id: s.defaultVersion?.id || s.id,
+                      name: s.name,
+                      versionId: s.defaultVersion?.id || "",
+                    })),
+                  ]}
+                  keyExtractor={(item) => item.id}
+                  style={styles.strategyList}
+                  ListEmptyComponent={null}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={[
+                        styles.strategyRow,
+                        selectedStrategy === item.versionId && styles.strategyRowSelected,
+                      ]}
+                      onPress={() => {
+                        setSelectedStrategy(item.versionId);
+                        setStrategyModalVisible(false);
+                      }}
+                    >
+                      <Text style={styles.strategyRowText}>{item.name}</Text>
+                      {selectedStrategy === item.versionId && (
+                        <Icon name="check" size={20} color="#3B82F6" />
+                      )}
+                    </TouchableOpacity>
+                  )}
+                />
+                <TouchableOpacity
+                  style={styles.modalCancelButton}
+                  onPress={() => setStrategyModalVisible(false)}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </Pressable>
+            </Pressable>
+          </Modal>
 
           {/* Symbol Selection */}
           <View style={styles.inputGroup}>
@@ -650,5 +697,71 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: "#E5E7EB",
+  },
+  // Strategy picker modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    padding: 20,
+    width: "100%",
+    maxWidth: 340,
+    maxHeight: "80%",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#111827",
+    marginBottom: 8,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: "#6B7280",
+    marginBottom: 16,
+  },
+  strategyList: {
+    maxHeight: 280,
+    marginBottom: 16,
+  },
+  strategyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 4,
+    backgroundColor: "#F9FAFB",
+  },
+  strategyRowSelected: {
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#3B82F6",
+  },
+  strategyRowText: {
+    fontSize: 16,
+    color: "#111827",
+    flex: 1,
+  },
+  modalEmpty: {
+    fontSize: 14,
+    color: "#6B7280",
+    textAlign: "center",
+    paddingVertical: 16,
+  },
+  modalCancelButton: {
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  modalCancelText: {
+    fontSize: 16,
+    color: "#3B82F6",
+    fontWeight: "500",
   },
 });

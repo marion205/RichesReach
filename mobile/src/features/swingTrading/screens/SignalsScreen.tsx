@@ -30,6 +30,7 @@ import {
   getMLScoreColor,
   getMLScoreLabel,
 } from '../../../graphql/swingTradingQueries';
+import TradeThisModal, { TradeThisSignal } from '../../trading/components/TradeThisModal';
 
 const { width } = Dimensions.get('window');
 
@@ -140,6 +141,8 @@ const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigateTo: navigateToPro
   const [selectedSignal, setSelectedSignal] = useState<Signal | null>(null);
   const [commentModalVisible, setCommentModalVisible] = useState(false);
   const [commentText, setCommentText] = useState('');
+  const [tradeModalVisible, setTradeModalVisible] = useState(false);
+  const [signalForTrade, setSignalForTrade] = useState<Signal | null>(null);
   const [loadingTimeout, setLoadingTimeout] = useState(false);
   const [filters, setFilters] = useState({
     symbol: '',
@@ -381,6 +384,16 @@ const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigateTo: navigateToPro
             <Icon name="message-circle" size={16} color="#6B7280" />
             <Text style={styles.actionText}>Comment</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionButton, styles.tradeThisButton]}
+            onPress={() => {
+              setSignalForTrade(item);
+              setTradeModalVisible(true);
+            }}
+          >
+            <Icon name="zap" size={16} color="#3B82F6" />
+            <Text style={[styles.actionText, styles.tradeThisText]}>Trade this</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </TouchableOpacity>
@@ -501,6 +514,22 @@ const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigateTo: navigateToPro
           </View>
         </View>
       </Modal>
+
+      <TradeThisModal
+        visible={tradeModalVisible}
+        onClose={() => {
+          setTradeModalVisible(false);
+          setSignalForTrade(null);
+        }}
+        signal={signalForTrade ? {
+          symbol: signalForTrade.symbol,
+          signalType: signalForTrade.signalType,
+          entryPrice: signalForTrade.entryPrice,
+          stopPrice: signalForTrade.stopPrice,
+          mlScore: signalForTrade.mlScore,
+        } as TradeThisSignal : null}
+        onSuccess={() => handleRefresh()}
+      />
     </SafeAreaView>
   );
 };
@@ -653,6 +682,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6B7280',
     marginLeft: 4,
+  },
+  tradeThisButton: {
+    marginLeft: 12,
+  },
+  tradeThisText: {
+    color: '#3B82F6',
+    fontWeight: '600',
   },
   emptyState: {
     flex: 1,
