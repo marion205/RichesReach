@@ -4,10 +4,15 @@ beginner_friendly_stocks, current_stock_prices.
 """
 import asyncio
 import logging
+from datetime import datetime, timedelta
+from typing import List
 
 import django.db.models as models
 import graphene
 from django.utils import timezone
+from django.core.cache import cache
+import requests
+import numpy as np
 
 from core.models import Stock
 
@@ -37,6 +42,114 @@ class MarketDataQuery(graphene.ObjectType):
         "core.types.StockPriceType",
         symbols=graphene.List(graphene.String),
     )
+
+    def _enrich_stocks_with_fundamentals(self, stocks: List[Stock]) -> None:
+        """
+        Enrich stock models with real fundamental data from Polygon API.
+        Updates the database with P/E ratios, volatility, market cap, and sector.
+        """
+        import os
+        polygon_key = os.getenv("POLYGON_API_KEY", "")
+        if not polygon_key:
+            logger.warning("No Polygon API key, skipping fundamental data enrichment")
+            return
+        
+        for stock in stocks:
+            symbol = stock.symbol
+            
+            # 1. Fetch ticker details for P/E ratio and market data
+            try:
+                details_cache_key = f"polygon:details:{symbol}:v1"
+                cached_details = cache.get(details_cache_key)
+                
+                if cached_details:
+                    stock.pe_ratio = cached_details.get('pe_ratio')
+                    stock.sector = cached_details.get('sector', stock.sector)
+                    stock.market_cap = cached_details.get('market_cap', stock.market_cap)
+                else:
+                    details_url = f"https://api.polygon.io/v3/reference/tickers/{symbol}"
+                    details_params = {'apiKey': polygon_key}
+                    details_resp = requests.get(details_url, params=details_params, timeout=2.0)
+                    
+                    if details_resp.status_code == 200:
+                        details_data = details_resp.json().get('results', {})
+                        
+                        # Extract P/E ratio
+                        market_data = details_data.get('market_data', {})
+                        pe_ratio = market_data.get('pe_ratio', 0.0) or 0.0
+                        
+                        # Get market cap
+                        market_cap = details_data.get('market_cap', stock.market_cap or 0)
+                        
+                        # Get better sector classification
+                        sector = details_data.get('sector', stock.sector or 'Unknown')
+                        if sector == 'Unknown':
+                            sector = details_data.get('industry', 'Unknown')
+                        
+                        # Update stock model
+                        stock.pe_ratio = float(pe_ratio) if pe_ratio else 0.0
+                        stock.sector = sector
+                        if market_cap:
+                            stock.market_cap = int(market_cap)
+                        
+                        updates = {
+                            'pe_ratio': stock.pe_ratio,
+                            'sector': sector,
+                            'market_cap': stock.market_cap,
+                        }
+                        
+                        # Save to database
+                        stock.save(update_fields=['pe_ratio', 'sector', 'market_cap'])
+                        
+                        # Cache for 1 hour
+                        cache.set(details_cache_key, updates, 3600)
+                        logger.debug(f"Enriched {symbol}: P/E={pe_ratio:.2f}, Cap=${market_cap:,}, Sector={sector}")
+                    elif details_resp.status_code == 429:
+                        logger.debug(f"Rate limit hit for {symbol} details")
+                        break
+            except Exception as e:
+                logger.debug(f"Error fetching details for {symbol}: {e}")
+            
+            # 2. Calculate volatility from historical data (30-day)
+            try:
+                volatility_cache_key = f"polygon:volatility:{symbol}:v1"
+                cached_volatility = cache.get(volatility_cache_key)
+                
+                if cached_volatility is not None:
+                    stock.volatility = cached_volatility
+                else:
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=30)
+                    
+                    agg_url = f"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/{start_date.strftime('%Y-%m-%d')}/{end_date.strftime('%Y-%m-%d')}"
+                    agg_params = {'apiKey': polygon_key}
+                    agg_resp = requests.get(agg_url, params=agg_params, timeout=2.0)
+                    
+                    if agg_resp.status_code == 200:
+                        agg_data = agg_resp.json()
+                        results = agg_data.get('results', [])
+                        
+                        if len(results) >= 10:  # Need at least 10 days of data
+                            # Calculate daily returns
+                            closes = [r['c'] for r in results]
+                            returns = [(closes[i] - closes[i-1]) / closes[i-1] for i in range(1, len(closes))]
+                            
+                            # Annualized volatility
+                            volatility = float(np.std(returns) * np.sqrt(252) * 100)  # Annualized %
+                            stock.volatility = round(volatility, 2)
+                            
+                            # Save to database
+                            stock.save(update_fields=['volatility'])
+                            
+                            # Cache for 1 hour
+                            cache.set(volatility_cache_key, volatility, 3600)
+                            logger.debug(f"Calculated {symbol} volatility: {volatility:.1f}%")
+                    elif agg_resp.status_code == 429:
+                        logger.debug(f"Rate limit hit for {symbol} volatility")
+                        break
+            except Exception as e:
+                logger.debug(f"Error calculating volatility for {symbol}: {e}")
+
 
     def resolve_stock(self, info, symbol):
         symbol = (symbol or "").strip().upper()
@@ -153,6 +266,13 @@ class MarketDataQuery(graphene.ObjectType):
                 sector = getattr(stock, "sector", "Unknown")
                 return base + (sector_weights.get(sector, 0) * 20)
             stocks_list.sort(key=score, reverse=True)
+        
+        # Enrich with fundamental data from Polygon and update database
+        try:
+            self._enrich_stocks_with_fundamentals(stocks_list[:20])
+        except Exception as e:
+            logger.warning("Could not enrich stocks with fundamental data: %s", e)
+        
         try:
             from core.enhanced_stock_service import enhanced_stock_service
             symbols = [s.symbol for s in stocks_list[:20]]

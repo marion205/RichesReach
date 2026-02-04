@@ -488,8 +488,26 @@ class StockType(DjangoObjectType):
 # Add camelCase fields for frontend compatibility
     companyName = graphene.String()  # camelCase field
     currentPrice = graphene.Float()  # camelCase field
+    recommendation = graphene.String(description="Investment recommendation: BUY, HOLD, or AVOID")
     fssScore = graphene.Field('core.types.FSSScoreType', description="Future Success Score v3.0")
     mlScore = graphene.Float(description="ML-based stock score")
+
+    def resolve_recommendation(self, info):
+        """Calculate recommendation based on beginner-friendly score.
+        
+        - BUY: Score >= 60 (good for beginners)
+        - HOLD: Score 40-59 (neutral)
+        - AVOID: Score < 40 (too risky for beginners)
+        """
+        # Get the personalized beginner score
+        score = self.resolve_beginner_friendly_score(info)
+        
+        if score >= 60:
+            return "BUY"
+        elif score >= 40:
+            return "HOLD"
+        else:
+            return "AVOID"
 
     def resolve_beginner_friendly_score(self, info):
         """Calculate beginner-friendly score personalized for the user.
