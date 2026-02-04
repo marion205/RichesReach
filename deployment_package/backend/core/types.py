@@ -499,8 +499,9 @@ class StockType(DjangoObjectType):
         - HOLD: Score 40-59 (neutral)
         - AVOID: Score < 40 (too risky for beginners)
         """
-        # Get the personalized beginner score
-        score = self.resolve_beginner_friendly_score(info)
+        # Create a new StockType instance to access the resolver
+        stock_type = StockType(self)
+        score = stock_type.resolve_beginner_friendly_score(info)
         
         if score >= 60:
             return "BUY"

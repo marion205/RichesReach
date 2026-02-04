@@ -374,8 +374,9 @@ const GET_BEGINNER_FRIENDLY_STOCKS = gql`
       sector
       marketCap
       peRatio
-      dividendYield: dividend_yield
-      beginnerFriendlyScore: beginner_friendly_score
+      dividendYield
+      beginnerFriendlyScore
+      recommendation
       currentPrice
       __typename
     }
@@ -392,8 +393,9 @@ const GET_BEGINNER_FRIENDLY_STOCKS_ALT = gql`
       sector
       marketCap
       peRatio
-      dividendYield: dividend_yield
-      beginnerFriendlyScore: beginner_friendly_score
+      dividendYield
+      beginnerFriendlyScore
+      recommendation
       __typename
     }
   }

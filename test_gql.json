@@ -1,0 +1,1 @@
+{"query":"query { beginnerFriendlyStocks { symbol recommendation beginnerFriendlyScore marketCap peRatio } }"}

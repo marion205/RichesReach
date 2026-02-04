@@ -43,7 +43,8 @@ class MarketDataQuery(graphene.ObjectType):
         symbols=graphene.List(graphene.String),
     )
 
-    def _enrich_stocks_with_fundamentals(self, stocks: List[Stock]) -> None:
+    @staticmethod
+    def _enrich_stocks_with_fundamentals(stocks: List[Stock]) -> None:
         """
         Enrich stock models with real fundamental data from Polygon API.
         Updates the database with P/E ratios, volatility, market cap, and sector.
@@ -252,42 +253,45 @@ class MarketDataQuery(graphene.ObjectType):
         except Exception as e:
             logger.warning("Could not get spending analysis for beginner stocks: %s", e)
         
-        # Get all stocks and sort by beginner_friendly_score
-        # The score is now personalized per user in the resolver
+        # Get all stocks and compute personalized beginner scores
         stocks = Stock.objects.all()
         stocks_list = list(stocks[:100])
-        
-        # Sort by beginner_friendly_score (will be calculated per-user in resolver)
-        # Note: This is a simple sort on DB value, actual score calculated in GraphQL type
-        stocks_list.sort(key=lambda s: getattr(s, 'beginner_friendly_score', 0), reverse=True)
+
+        from core.types import StockType
+
+        scored_stocks = []
+        for stock in stocks_list:
+            try:
+                stock_type = StockType(stock)
+                score = stock_type.resolve_beginner_friendly_score(info)
+            except Exception:
+                score = getattr(stock, "beginner_friendly_score", 0)
+            scored_stocks.append((stock, score))
+
         if sector_weights:
-            def score(stock):
-                base = getattr(stock, "beginner_friendly_score", 65)
+            def adjusted_score(item):
+                stock, base = item
                 sector = getattr(stock, "sector", "Unknown")
                 return base + (sector_weights.get(sector, 0) * 20)
-            stocks_list.sort(key=score, reverse=True)
+            scored_stocks.sort(key=adjusted_score, reverse=True)
+        else:
+            scored_stocks.sort(key=lambda item: item[1], reverse=True)
+
+        # Beginner Friendly should show only BUY-tier stocks
+        scored_stocks = [item for item in scored_stocks if item[1] >= 60]
+        stocks_list = [item[0] for item in scored_stocks]
         
         # Enrich with fundamental data from Polygon and update database
         try:
-            self._enrich_stocks_with_fundamentals(stocks_list[:20])
+            MarketDataQuery._enrich_stocks_with_fundamentals(stocks_list[:20])
         except Exception as e:
             logger.warning("Could not enrich stocks with fundamental data: %s", e)
         
-        try:
-            from core.enhanced_stock_service import enhanced_stock_service
-            symbols = [s.symbol for s in stocks_list[:20]]
-            if symbols:
-                try:
-                    prices_data = asyncio.run(enhanced_stock_service.get_multiple_prices(symbols))
-                    for stock in stocks_list[:20]:
-                        pd = prices_data.get(stock.symbol)
-                        if pd and pd.get("price", 0) > 0:
-                            stock.current_price = pd["price"]
-                            enhanced_stock_service.update_stock_price_in_database(stock.symbol, pd)
-                except Exception as e:
-                    logger.warning("Could not fetch real-time prices for beginner stocks: %s", e)
-        except Exception as e:
-            logger.warning("Error updating prices for beginner stocks: %s", e)
+        # NOTE: Skip async price fetching in async context
+        # The enhanced_stock_service.get_multiple_prices() is async and cannot be called
+        # with asyncio.run() from within an async GraphQL resolver context
+        # Prices are cached separately and will be updated by background tasks
+        
         return stocks_list[:20]
 
     def resolve_current_stock_prices(self, info, symbols=None):
