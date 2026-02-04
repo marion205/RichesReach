@@ -65,7 +65,28 @@ class MarketDataQuery(graphene.ObjectType):
             except Exception as e:
                 logger.error("API search error: %s", e)
                 return []
-        return list(Stock.objects.all()[:100])
+        
+        # Get all stocks and update prices for top ones
+        stocks_list = list(Stock.objects.all().order_by('-market_cap')[:100])
+        
+        # Fetch real-time prices for stocks
+        try:
+            from core.enhanced_stock_service import enhanced_stock_service
+            symbols = [s.symbol for s in stocks_list[:20]]
+            if symbols:
+                try:
+                    prices_data = asyncio.run(enhanced_stock_service.get_multiple_prices(symbols))
+                    for stock in stocks_list[:20]:
+                        pd = prices_data.get(stock.symbol)
+                        if pd and pd.get("price", 0) > 0:
+                            stock.current_price = pd["price"]
+                            enhanced_stock_service.update_stock_price_in_database(stock.symbol, pd)
+                except Exception as e:
+                    logger.warning("Could not fetch real-time prices for stocks: %s", e)
+        except Exception as e:
+            logger.warning("Error updating prices for stocks: %s", e)
+        
+        return stocks_list
 
     def resolve_fss_scores(self, info, symbols):
         try:
@@ -117,11 +138,15 @@ class MarketDataQuery(graphene.ObjectType):
             sector_weights = spending_service.get_spending_based_stock_preferences(spending_analysis)
         except Exception as e:
             logger.warning("Could not get spending analysis for beginner stocks: %s", e)
-        stocks = Stock.objects.filter(
-            beginner_friendly_score__gte=65,
-            market_cap__gte=10000000000,
-        )
-        stocks_list = list(stocks[:50])
+        
+        # Get all stocks and sort by beginner_friendly_score
+        # The score is now personalized per user in the resolver
+        stocks = Stock.objects.all()
+        stocks_list = list(stocks[:100])
+        
+        # Sort by beginner_friendly_score (will be calculated per-user in resolver)
+        # Note: This is a simple sort on DB value, actual score calculated in GraphQL type
+        stocks_list.sort(key=lambda s: getattr(s, 'beginner_friendly_score', 0), reverse=True)
         if sector_weights:
             def score(stock):
                 base = getattr(stock, "beginner_friendly_score", 65)
