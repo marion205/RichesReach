@@ -561,52 +561,78 @@ class PremiumAnalyticsService:
         
         stocks = []
         try:
-            # Get tickers list from Polygon
-            url = "https://api.polygon.io/v3/reference/tickers"
+            # Use a curated list of major stocks instead of Polygon tickers endpoint
+            # Polygon's v3/tickers doesn't include market_cap, so we'll use snapshot/all
+            # For speed, use a pre-defined list of major tickers
+            major_tickers = [
+                'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK.B',
+                'JPM', 'V', 'UNH', 'XOM', 'JNJ', 'WMT', 'PG', 'MA', 'HD', 'CVX',
+                'LLY', 'ABBV', 'MRK', 'KO', 'PEP', 'COST', 'AVGO', 'NFLX',
+                'SPY', 'QQQ', 'DIA', 'IWM', 'VOO'  # Include major ETFs
+            ]
+            
+            # Get snapshot data for these tickers (includes market cap, price, etc.)
+            ticker_str = ','.join(major_tickers[:limit])
+            url = f"https://api.polygon.io/v2/snapshot/locale/us/markets/stocks/tickers"
             params = {
-                'market': 'stocks',
-                'active': 'true',
-                'limit': min(limit * 2, 1000),  # Get more to filter by market cap
+                'tickers': ticker_str,
                 'apiKey': polygon_key
             }
             
             # Layer 3: Add timeout
-            response = requests.get(url, params=params, timeout=3.0)
+            response = requests.get(url, params=params, timeout=5.0)
             
             if response.status_code == 200:
                 data = response.json()
-                results = data.get('results', [])
-                logger.info("[AI RECS] ✅ Got %s Polygon tickers before filtering", len(results))
+                tickers_data = data.get('tickers', [])
+                logger.info("[AI RECS] ✅ Got %s Polygon snapshot tickers", len(tickers_data))
                 
-                # Filter and sort by market cap, take top MAX_TICKERS
+                # Process ticker snapshots
                 valid_stocks = []
-                for ticker in results:
+                for ticker_snap in tickers_data:
                     try:
-                        market_cap = float(ticker.get('market_cap', 0) or 0)
-                        if market_cap > 0:  # Only include stocks with market cap
-                            symbol = ticker.get('ticker', '')
+                        ticker_info = ticker_snap.get('ticker', '')
+                        day_data = ticker_snap.get('day', {})
+                        prev_day = ticker_snap.get('prevDay', {})
+                        
+                        # Calculate market cap if available
+                        market_cap = 0.0
+                        current_price = day_data.get('c', 0) or prev_day.get('c', 0)  # Close price
+                        
+                        # Estimate market cap from known values or set defaults based on ticker
+                        # For major stocks, use rough market cap tiers
+                        if ticker_info in ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA']:
+                            market_cap = 2_000_000_000_000  # $2T+ mega caps
+                        elif ticker_info in ['META', 'TSLA', 'BRK.B', 'V', 'JPM', 'UNH']:
+                            market_cap = 500_000_000_000  # $500B+ large caps
+                        elif ticker_info in ['XOM', 'JNJ', 'WMT', 'PG', 'MA', 'HD']:
+                            market_cap = 300_000_000_000  # $300B+ large caps
+                        elif ticker_info in ['SPY', 'QQQ', 'VOO']:
+                            market_cap = 1_000_000_000_000  # ETFs - treat as large
+                        else:
+                            market_cap = 100_000_000_000  # $100B default for others
+                        
+                        if current_price > 0:
                             stock_data = {
-                                'symbol': symbol,
-                                'company_name': ticker.get('name', ticker.get('ticker', '')),
-                                'sector': ticker.get('sic_description', 'Unknown'),
+                                'symbol': ticker_info,
+                                'company_name': ticker_info,  # Will get real name from details
+                                'sector': 'Unknown',  # Will fetch from details
                                 'market_cap': market_cap,
-                                'current_price': 0.0,  # Will be fetched separately
+                                'current_price': float(current_price),
                                 'pe_ratio': 0.0,  # Will be fetched from details
                                 'volatility': 20.0,  # Will be calculated from history
                                 'beginner_friendly_score': 50,  # Will be calculated
                             }
-                            if stock_data['symbol']:
-                                valid_stocks.append(stock_data)
+                            valid_stocks.append(stock_data)
                     except Exception as e:
-                        logger.debug(f"[AI RECS] Error processing ticker {ticker.get('ticker')}: {e}")
+                        logger.debug(f"[AI RECS] Error processing ticker {ticker_snap.get('ticker')}: {e}")
                         continue
                 
-                # Sort by market cap descending, take top MAX_TICKERS
+                # Sort by market cap descending
                 valid_stocks.sort(key=lambda x: x['market_cap'], reverse=True)
-                stocks = valid_stocks[:MAX_TICKERS]
+                stocks = valid_stocks[:limit]
                 
-                logger.info("[AI RECS] ✅ Processed %s valid stocks from Polygon (top %s by market cap)", 
-                           len(valid_stocks), len(stocks))
+                logger.info("[AI RECS] ✅ Processed %s valid stocks from Polygon snapshots", len(stocks))
             elif response.status_code == 429:
                 logger.warning("[AI RECS] ⚠️ Polygon API rate limit (429), using empty cache")
                 cache.set(POLYGON_UNIVERSE_CACHE_KEY, [], POLYGON_UNIVERSE_TTL)
@@ -628,21 +654,22 @@ class PremiumAnalyticsService:
             logger.error("[AI RECS] ❌ Error fetching stocks from Polygon: %s", e)
             return []
         
-        # Layer 2: Fetch prices in parallel (batch)
+        # Layer 2: Prices already fetched from snapshot, but update any missing
         if stocks:
-            logger.info("[AI RECS] 📊 Fetching real-time prices for %s stocks (parallel)...", len(stocks))
-            symbols = [s['symbol'] for s in stocks]
-            prices = self._fetch_prices_batch_async(symbols)
+            missing_prices = [s for s in stocks if s.get('current_price', 0) <= 0]
+            if missing_prices:
+                logger.info("[AI RECS] 📊 Fetching real-time prices for %s stocks missing prices...", len(missing_prices))
+                symbols = [s['symbol'] for s in missing_prices]
+                prices = self._fetch_prices_batch_async(symbols)
+                
+                # Update stock dicts with prices
+                for stock in missing_prices:
+                    symbol = stock['symbol']
+                    if symbol in prices and prices[symbol] > 0:
+                        stock['current_price'] = prices[symbol]
             
-            # Update stock dicts with prices
-            priced_count = 0
-            for stock in stocks:
-                symbol = stock['symbol']
-                if symbol in prices and prices[symbol] > 0:
-                    stock['current_price'] = prices[symbol]
-                    priced_count += 1
-            
-            logger.info("[AI RECS] ✅ Got prices for %s/%s stocks", priced_count, len(stocks))
+            priced_stocks = [s for s in stocks if s.get('current_price', 0) > 0]
+            logger.info("[AI RECS] ✅ Have prices for %s/%s stocks", len(priced_stocks), len(stocks))
         
         # Layer 3: Fetch real fundamental data (P/E ratio and volatility)
         if stocks:
