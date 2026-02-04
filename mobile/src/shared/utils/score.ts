@@ -6,9 +6,9 @@ export const getScoreColor = (score: number) => {
 };
 
 export const getBuyRecommendation = (score: number) => {
-  if (score >= 90) return { text: 'STRONG BUY', color: '#4CAF50', backgroundColor: '#E8F5E8' };
-  if (score >= 80) return { text: 'BUY',         color: '#8BC34A', backgroundColor: '#F1F8E9' };
-  if (score >= 70) return { text: 'HOLD',        color: '#FFC107', backgroundColor: '#FFF8E1' };
+  if (score >= 80) return { text: 'STRONG BUY', color: '#4CAF50', backgroundColor: '#E8F5E8' };
+  if (score >= 60) return { text: 'BUY',         color: '#8BC34A', backgroundColor: '#F1F8E9' };
+  if (score >= 40) return { text: 'HOLD',        color: '#FFC107', backgroundColor: '#FFF8E1' };
   return                { text: 'AVOID',       color: '#FF5722', backgroundColor: '#FFEBEE' };
 };
 
