@@ -534,14 +534,17 @@ class PremiumAnalyticsService:
 
     def _fetch_stocks_from_polygon(self, limit: int = MAX_TICKERS) -> List[Dict[str, Any]]:
         """
-        Fetch stocks from Polygon API with caching.
+        Fetch stocks from Polygon API with caching and real fundamental data.
         Layer 0: Limited to MAX_TICKERS (80)
         Layer 1: Cached for 60 seconds
         Layer 2: Parallel price fetching
+        Layer 3: Fetch real P/E ratios and volatility
         """
         import os
         import requests
         from typing import List, Dict, Any
+        from datetime import datetime, timedelta
+        import numpy as np
         
         # Layer 1: Check cache first
         cached = cache.get(POLYGON_UNIVERSE_CACHE_KEY)
@@ -581,14 +584,16 @@ class PremiumAnalyticsService:
                     try:
                         market_cap = float(ticker.get('market_cap', 0) or 0)
                         if market_cap > 0:  # Only include stocks with market cap
+                            symbol = ticker.get('ticker', '')
                             stock_data = {
-                                'symbol': ticker.get('ticker', ''),
+                                'symbol': symbol,
                                 'company_name': ticker.get('name', ticker.get('ticker', '')),
                                 'sector': ticker.get('sic_description', 'Unknown'),
                                 'market_cap': market_cap,
                                 'current_price': 0.0,  # Will be fetched separately
-                                'pe_ratio': 0.0,
-                                'beginner_friendly_score': 50,
+                                'pe_ratio': 0.0,  # Will be fetched from details
+                                'volatility': 20.0,  # Will be calculated from history
+                                'beginner_friendly_score': 50,  # Will be calculated
                             }
                             if stock_data['symbol']:
                                 valid_stocks.append(stock_data)
@@ -639,12 +644,123 @@ class PremiumAnalyticsService:
             
             logger.info("[AI RECS] ✅ Got prices for %s/%s stocks", priced_count, len(stocks))
         
+        # Layer 3: Fetch real fundamental data (P/E ratio and volatility)
+        if stocks:
+            logger.info("[AI RECS] 📊 Fetching fundamentals (P/E, volatility) for top stocks...")
+            self._enrich_with_fundamentals(stocks, polygon_key)
+        
         # Layer 1: Cache the result
         if stocks:
             cache.set(POLYGON_UNIVERSE_CACHE_KEY, stocks, POLYGON_UNIVERSE_TTL)
             logger.info("[AI RECS] 💾 Cached Polygon universe for %s seconds", POLYGON_UNIVERSE_TTL)
         
         return stocks
+    
+    def _enrich_with_fundamentals(self, stocks: List[Dict[str, Any]], polygon_key: str) -> None:
+        """
+        Enrich stock data with real P/E ratios and calculated volatility.
+        This fetches ticker details and historical data from Polygon.
+        """
+        import requests
+        from datetime import datetime, timedelta
+        import numpy as np
+        
+        # Limit to top stocks to avoid rate limits
+        top_stocks = stocks[:20]  # Only enrich top 20 by market cap
+        
+        for stock in top_stocks:
+            symbol = stock['symbol']
+            
+            # 1. Fetch ticker details for P/E ratio and better sector info
+            try:
+                details_cache_key = f"polygon:details:{symbol}:v1"
+                cached_details = cache.get(details_cache_key)
+                
+                if cached_details:
+                    stock.update(cached_details)
+                else:
+                    details_url = f"https://api.polygon.io/v3/reference/tickers/{symbol}"
+                    details_params = {'apiKey': polygon_key}
+                    details_resp = requests.get(details_url, params=details_params, timeout=2.0)
+                    
+                    if details_resp.status_code == 200:
+                        details_data = details_resp.json().get('results', {})
+                        
+                        # Extract P/E ratio and better sector
+                        market_data = details_data.get('market_data', {})
+                        pe_ratio = market_data.get('pe_ratio', 0.0) or 0.0
+                        
+                        # Get better sector classification
+                        sector = details_data.get('sector', stock.get('sector', 'Unknown'))
+                        if sector == 'Unknown':
+                            sector = details_data.get('industry', 'Unknown')
+                        
+                        updates = {
+                            'pe_ratio': float(pe_ratio) if pe_ratio else 0.0,
+                            'sector': sector,
+                        }
+                        stock.update(updates)
+                        
+                        # Cache for 1 hour
+                        cache.set(details_cache_key, updates, 3600)
+                        logger.debug(f"[AI RECS] {symbol}: P/E={pe_ratio:.2f}, Sector={sector}")
+                    elif details_resp.status_code == 429:
+                        logger.debug(f"[AI RECS] Rate limit hit for {symbol} details, using defaults")
+                        break  # Stop fetching to avoid more rate limits
+            except Exception as e:
+                logger.debug(f"[AI RECS] Error fetching details for {symbol}: {e}")
+            
+            # 2. Calculate volatility from historical data (30-day)
+            try:
+                volatility_cache_key = f"polygon:volatility:{symbol}:v1"
+                cached_volatility = cache.get(volatility_cache_key)
+                
+                if cached_volatility:
+                    stock['volatility'] = cached_volatility
+                else:
+                    end_date = datetime.now()
+                    start_date = end_date - timedelta(days=30)
+                    
+                    agg_url = f"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/{start_date.strftime('%Y-%m-%d')}/{end_date.strftime('%Y-%m-%d')}"
+                    agg_params = {'apiKey': polygon_key}
+                    agg_resp = requests.get(agg_url, params=agg_params, timeout=2.0)
+                    
+                    if agg_resp.status_code == 200:
+                        agg_data = agg_resp.json()
+                        results = agg_data.get('results', [])
+                        
+                        if len(results) >= 10:  # Need at least 10 days of data
+                            # Calculate daily returns
+                            closes = [r['c'] for r in results]
+                            returns = [(closes[i] - closes[i-1]) / closes[i-1] for i in range(1, len(closes))]
+                            
+                            # Annualized volatility
+                            volatility = np.std(returns) * np.sqrt(252) * 100  # Annualized %
+                            stock['volatility'] = round(volatility, 2)
+                            
+                            # Calculate beginner-friendly score based on volatility and market cap
+                            market_cap = stock.get('market_cap', 0)
+                            if market_cap > 100_000_000_000 and volatility < 20:
+                                stock['beginner_friendly_score'] = 90
+                            elif market_cap > 50_000_000_000 and volatility < 25:
+                                stock['beginner_friendly_score'] = 80
+                            elif market_cap > 10_000_000_000 and volatility < 30:
+                                stock['beginner_friendly_score'] = 70
+                            elif volatility < 20:
+                                stock['beginner_friendly_score'] = 65
+                            elif volatility < 30:
+                                stock['beginner_friendly_score'] = 55
+                            else:
+                                stock['beginner_friendly_score'] = 40
+                            
+                            # Cache for 1 hour
+                            cache.set(volatility_cache_key, volatility, 3600)
+                            logger.debug(f"[AI RECS] {symbol}: Volatility={volatility:.1f}%, Beginner={stock['beginner_friendly_score']}")
+                    elif agg_resp.status_code == 429:
+                        logger.debug(f"[AI RECS] Rate limit hit for {symbol} volatility, using defaults")
+                        break  # Stop fetching to avoid more rate limits
+            except Exception as e:
+                logger.debug(f"[AI RECS] Error calculating volatility for {symbol}: {e}")
 
     def _profile_cache_key(self, user_id: int, risk_tolerance: str, profile: Optional[Dict[str, Any]]) -> str:
         """
