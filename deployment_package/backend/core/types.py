@@ -492,67 +492,69 @@ class StockType(DjangoObjectType):
     mlScore = graphene.Float(description="ML-based stock score")
 
     def resolve_beginner_friendly_score(self, info):
-        """Calculate beginner-friendly score based on stock fundamentals.
+        """Calculate beginner-friendly score personalized for the user.
         
         Score considers:
-        - Market cap (larger = more stable for beginners)
-        - Volatility (lower = better)
-        - P/E ratio (reasonable range = better)
-        - Sector stability
+        - Stock fundamentals: market cap, volatility, P/E ratio, sector stability
+        - User financial profile: portfolio size, income, risk tolerance
+        - User investment goals and experience level
         """
         # First check if we have a meaningful stored value
         stored = getattr(self, "beginner_friendly_score", None)
         if stored is not None and int(stored) >= 40:  # Only use if >= 40 (meaningful)
             return int(stored)
         
-        # Calculate dynamically from stock fundamentals
         score = 50  # Base score
+        user = getattr(info.context, 'user', None) if info and info.context else None
         
         try:
+            # ========== STOCK FUNDAMENTALS (50% weight) ==========
+            fundamentals_score = 50
+            
             # 1. Market Cap (Large caps are safer)
             market_cap = getattr(self, "market_cap", None)
             if market_cap:
                 mc = float(market_cap) if market_cap else 0
                 if mc >= 500_000_000_000:  # $500B+
-                    score += 20
+                    fundamentals_score += 20
                 elif mc >= 100_000_000_000:  # $100B+
-                    score += 18
+                    fundamentals_score += 18
                 elif mc >= 50_000_000_000:  # $50B+
-                    score += 16
+                    fundamentals_score += 16
                 elif mc >= 10_000_000_000:  # $10B+
-                    score += 12
+                    fundamentals_score += 12
                 elif mc >= 2_000_000_000:  # $2B+
-                    score += 8
+                    fundamentals_score += 8
                 elif mc >= 1_000_000_000:  # $1B+
-                    score += 5
+                    fundamentals_score += 5
             
             # 2. Volatility (Lower volatility = more beginner-friendly)
             volatility = getattr(self, "volatility", None)
             if volatility:
                 vol = float(volatility) if volatility else 0
                 if vol < 15:
-                    score += 15  # Very stable
+                    fundamentals_score += 15  # Very stable
                 elif vol < 20:
-                    score += 12  # Stable
+                    fundamentals_score += 12  # Stable
                 elif vol < 25:
-                    score += 8   # Moderate
+                    fundamentals_score += 8   # Moderate
                 elif vol < 35:
-                    score += 3   # Volatile
+                    fundamentals_score += 3   # Volatile
                 else:
-                    score -= 5   # Very volatile
+                    fundamentals_score -= 5   # Very volatile
             
             # 3. P/E Ratio (Reasonable P/E = more beginner-friendly)
             pe_ratio = getattr(self, "pe_ratio", None)
             if pe_ratio:
                 pe = float(pe_ratio) if pe_ratio else 0
                 if 10 <= pe <= 20:
-                    score += 10  # Sweet spot
+                    fundamentals_score += 10  # Sweet spot
                 elif 8 <= pe < 25:
-                    score += 8   # Good range
+                    fundamentals_score += 8   # Good range
                 elif 5 <= pe < 30:
-                    score += 5   # Acceptable
+                    fundamentals_score += 5   # Acceptable
                 elif pe > 50 or pe < 0:
-                    score -= 5   # Extreme/negative
+                    fundamentals_score -= 5   # Extreme/negative
             
             # 4. Sector stability
             sector = getattr(self, "sector", None)
@@ -576,7 +578,68 @@ class StockType(DjangoObjectType):
                 sector_boost = sector_stability.get(sector, 60)
                 # Normalize to 0-20 point bonus
                 sector_score = (sector_boost - 50) / 3.5
-                score += sector_score
+                fundamentals_score += sector_score
+            
+            fundamentals_score = max(0, min(100, fundamentals_score))
+            
+            # ========== USER PROFILE ADJUSTMENT (50% weight) ==========
+            user_adjustment = 0
+            
+            if user and not user.is_anonymous:
+                try:
+                    # Get user's portfolio and financial profile
+                    from core.models import Portfolio, UserProfile
+                    
+                    # Get portfolio size
+                    portfolio_qs = Portfolio.objects.filter(user=user)
+                    portfolio_value = 0
+                    if portfolio_qs.exists():
+                        portfolio = portfolio_qs.first()
+                        portfolio_value = float(getattr(portfolio, 'total_value', 0) or 0)
+                    
+                    # Smaller portfolios = prefer safer stocks (higher bonus for safe stocks)
+                    if portfolio_value > 0:
+                        if portfolio_value < 5_000:
+                            user_adjustment += 15  # Very small portfolio, need safe stocks
+                        elif portfolio_value < 25_000:
+                            user_adjustment += 12  # Small portfolio
+                        elif portfolio_value < 100_000:
+                            user_adjustment += 8   # Medium portfolio
+                        elif portfolio_value < 500_000:
+                            user_adjustment += 3   # Large portfolio
+                        # else: >= $500k, no bonus (can handle risk)
+                    else:
+                        # New investor, prefer safe stocks
+                        user_adjustment += 10
+                    
+                    # Get user profile for risk tolerance
+                    try:
+                        profile = UserProfile.objects.get(user=user)
+                        risk_tolerance = getattr(profile, 'risk_tolerance', 'medium').lower()
+                        income_bracket = getattr(profile, 'income_bracket', 'Unknown').lower()
+                        
+                        # Conservative users benefit more from stable stocks
+                        if risk_tolerance in ['conservative', 'low']:
+                            user_adjustment += 12
+                        elif risk_tolerance in ['moderate', 'medium']:
+                            user_adjustment += 5
+                        # aggressive/high = less bonus
+                        
+                        # Lower income brackets = prefer safer stocks
+                        if 'under' in income_bracket or income_bracket == '<50k':
+                            user_adjustment += 8
+                        elif '50k' in income_bracket or '100k' in income_bracket:
+                            user_adjustment += 5
+                        elif '250k' in income_bracket or '500k' in income_bracket:
+                            user_adjustment += 2
+                    except:
+                        pass
+                    
+                except Exception:
+                    pass
+            
+            # Combine fundamentals + user adjustment
+            score = (fundamentals_score * 0.5) + (50 + user_adjustment) * 0.5
             
             # Clamp to 0-100
             return max(0, min(100, int(round(score))))
