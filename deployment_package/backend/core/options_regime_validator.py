@@ -19,12 +19,21 @@ Historical test periods:
 
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import logging
+import argparse
+from datetime import timedelta
 
 from .options_regime_detector import RegimeDetector
 
 logger = logging.getLogger(__name__)
+
+# Optional yfinance import for historical validation
+try:
+    import yfinance as yf
+    YFINANCE_AVAILABLE = True
+except Exception:
+    YFINANCE_AVAILABLE = False
 
 
 class RegimeDetectorValidator:
@@ -90,8 +99,10 @@ class RegimeDetectorValidator:
         self.detector = RegimeDetector()
         self.test_results: List[Dict] = []
     
-    def validate_on_historical_data(self, df: pd.DataFrame, 
-                                   expected_regime: str) -> Tuple[bool, Dict]:
+    def validate_on_historical_data(self, df: pd.DataFrame,
+                                   expected_regime: str,
+                                   eval_start: Optional[str] = None,
+                                   eval_end: Optional[str] = None) -> Tuple[bool, Dict]:
         """
         Validate regime detection on a historical period.
         
@@ -104,9 +115,35 @@ class RegimeDetectorValidator:
         """
         # Calculate indicators
         df = self.detector.calculate_indicators(df)
-        
-        # Run detector
-        detected_regime, _, description = self.detector.detect_regime(df)
+
+        # Reset detector state for clean evaluation
+        self.detector.reset_regime()
+
+        # Run detector across the series to allow hysteresis to settle
+        detected_regime = "NEUTRAL"
+        description = self.detector.REGIME_DESCRIPTIONS["NEUTRAL"]
+        regime_series: List[str] = []
+        eval_start_dt = pd.to_datetime(eval_start) if eval_start else None
+        eval_end_dt = pd.to_datetime(eval_end) if eval_end else None
+        start_idx = max(self.detector.MIN_DATA_POINTS, 1)
+        for i in range(start_idx, len(df) + 1):
+            window_df = df.iloc[:i]
+            detected_regime, _, description = self.detector.detect_regime(window_df)
+            if eval_start_dt is None and eval_end_dt is None:
+                regime_series.append(detected_regime)
+            else:
+                current_dt = window_df.index[-1]
+                if ((eval_start_dt is None or current_dt >= eval_start_dt) and
+                        (eval_end_dt is None or current_dt <= eval_end_dt)):
+                    regime_series.append(detected_regime)
+
+        # Use the most frequent regime in the last 5 bars (prefer non-neutral)
+        if regime_series:
+            recent_series = regime_series[-5:] if len(regime_series) >= 5 else regime_series
+            counts = pd.Series(recent_series).value_counts()
+            if len(counts) > 1 and "NEUTRAL" in counts.index:
+                counts = counts.drop("NEUTRAL")
+            detected_regime = counts.idxmax() if not counts.empty else "NEUTRAL"
         
         # Check correctness (exact match OR "close call")
         is_exact_match = detected_regime == expected_regime
@@ -119,7 +156,7 @@ class RegimeDetectorValidator:
             "exact_match": is_exact_match,
             "close_call": is_close_call,
             "correct": is_correct,
-            "bars_analyzed": len(df),
+            "bars_analyzed": len(regime_series),
             "detector_state": self.detector.get_regime_state(),
         }
         
@@ -188,42 +225,181 @@ class RegimeDetectorValidator:
             }
         
         return report
-    
+
     @staticmethod
     def _analyze_failure_patterns(failures: List[Dict]) -> List[str]:
         """
         Analyze failure patterns and suggest improvements.
         """
         recommendations = []
-        
+
         # Count failure types
         missed_crashes = sum(1 for f in failures if f["expected"] == "CRASH_PANIC")
         missed_trends = sum(1 for f in failures if "TREND" in f["expected"])
-        false_positives = sum(1 for f in failures if f["detected"] != "NEUTRAL" 
+        false_positives = sum(1 for f in failures if f["detected"] != "NEUTRAL"
                              and f["expected"] == "NEUTRAL")
-        
+
         if missed_crashes > 0:
             recommendations.append(
                 f"⚠️  Missed {missed_crashes} crash detections—lower RV_SPIKE_THRESHOLD "
                 "or add price acceleration as primary signal"
             )
-        
+
         if missed_trends > 0:
             recommendations.append(
                 f"⚠️  Missed {missed_trends} trend detections—verify SMA slope logic "
                 "and price distance thresholds"
             )
-        
+
         if false_positives > 0:
             recommendations.append(
                 f"⚠️  {false_positives} false positives—regime candidates may need "
                 "longer confirmation period (increase CONFIRMATION_BARS)"
             )
-        
+
         if not recommendations:
             recommendations.append("✅ No systemic patterns detected—detector is performing well")
-        
+
         return recommendations
+
+
+def _compute_realized_volatility(close_prices: pd.Series, window: int = 20) -> pd.Series:
+    """Compute rolling annualized realized volatility from close prices."""
+    log_returns = np.log(close_prices / close_prices.shift(1))
+    daily_vol = log_returns.rolling(window).std()
+    return daily_vol * np.sqrt(252)
+
+
+def fetch_historical_market_data(
+    ticker: str,
+    start_date: str,
+    end_date: str,
+    padding_days: int = 90
+) -> Optional[pd.DataFrame]:
+    """
+    Fetch historical OHLCV data and attach IV/RV proxies.
+
+    - Price data: {ticker}
+    - IV proxy: VIX (converted to decimal)
+    - RV: 20-day realized volatility
+    """
+    if not YFINANCE_AVAILABLE:
+        logger.error("yfinance not available. Install with: pip install yfinance")
+        return None
+
+    start_dt = pd.to_datetime(start_date) - timedelta(days=padding_days)
+    end_dt = pd.to_datetime(end_date)
+
+    try:
+        price = yf.Ticker(ticker).history(start=start_dt, end=end_dt, auto_adjust=True)
+        vix = yf.Ticker("^VIX").history(start=start_dt, end=end_dt, auto_adjust=True)
+        skew = yf.Ticker("^SKEW").history(start=start_dt, end=end_dt, auto_adjust=True)
+    except Exception as e:
+        logger.error(f"Failed to fetch historical data: {e}")
+        return None
+
+    if price.empty:
+        logger.error(f"No price data returned for {ticker}")
+        return None
+
+    # Normalize index
+    if price.index.tz is not None:
+        price.index = price.index.tz_localize(None)
+    if not vix.empty and vix.index.tz is not None:
+        vix.index = vix.index.tz_localize(None)
+    if not skew.empty and skew.index.tz is not None:
+        skew.index = skew.index.tz_localize(None)
+
+    # Build dataframe
+    df = pd.DataFrame({
+        "date": price.index,
+        "open": price["Open"],
+        "high": price["High"],
+        "low": price["Low"],
+        "close": price["Close"],
+        "volume": price["Volume"],
+    }).set_index("date")
+
+    # IV proxy: VIX / 100 (if available), else fallback to rolling RV
+    if not vix.empty and "Close" in vix.columns:
+        iv = (vix["Close"] / 100.0).reindex(df.index).ffill()
+    else:
+        iv = pd.Series(index=df.index, dtype=float)
+
+    # Skew proxy: CBOE SKEW / 100 (if available)
+    if not skew.empty and "Close" in skew.columns:
+        skew_series = (skew["Close"] / 100.0).reindex(df.index).ffill()
+    else:
+        skew_series = pd.Series(index=df.index, dtype=float)
+
+    rv = _compute_realized_volatility(df["close"]).reindex(df.index)
+
+    if iv.isna().all():
+        iv = rv.copy()
+
+    df["iv"] = iv.ffill().fillna(0.2)
+    df["rv"] = rv.ffill().fillna(0.15)
+    df["skew"] = skew_series.ffill().fillna(0.0)
+
+    return df
+
+
+def run_historical_stress_validation(ticker: str = "SPY") -> Dict:
+    """Run regime detection against the 10 historical stress periods."""
+    validator = RegimeDetectorValidator()
+
+    for key, case in validator.HISTORICAL_TEST_CASES.items():
+        start_date, end_date = case["period"]
+        expected = case["expected_regime"]
+        description = case["description"]
+
+        logger.info(f"Testing {key}: {description} ({start_date} → {end_date})")
+        df = fetch_historical_market_data(ticker, start_date, end_date)
+        if df is None or df.empty:
+            validator.test_results.append({
+                "test_case": key,
+                "expected": expected,
+                "detected": "NO_DATA",
+                "exact_match": False,
+                "close_call": False,
+                "correct": False,
+                "bars_analyzed": 0,
+                "detector_state": {},
+            })
+            continue
+
+        # Use padding + target window to satisfy indicator history
+        window_df = df.loc[:end_date].copy().tail(180)
+        if window_df.empty:
+            validator.test_results.append({
+                "test_case": key,
+                "expected": expected,
+                "detected": "NO_DATA",
+                "exact_match": False,
+                "close_call": False,
+                "correct": False,
+                "bars_analyzed": 0,
+                "detector_state": {},
+            })
+            continue
+
+        is_correct, result = validator.validate_on_historical_data(
+            window_df,
+            expected_regime=expected,
+            eval_start=start_date,
+            eval_end=end_date
+        )
+        validator.test_results.append({
+            "test_case": key,
+            **result
+        })
+
+        logger.info(
+            f"{key}: detected={result['detected']} expected={expected} "
+            f"→ {'PASS' if is_correct else 'FAIL'}"
+        )
+
+    return validator.generate_validation_report()
 
 
 # --- Helper function for external validation ---
@@ -313,34 +489,52 @@ def generate_mock_market_data(
 
 # --- Example usage ---
 if __name__ == "__main__":
-    # Example: Test detector on mock data
-    validator = RegimeDetectorValidator()
-    
-    for regime_type in ["CRASH_PANIC", "TREND_UP", "MEAN_REVERSION"]:
-        print(f"\n📊 Testing {regime_type}...")
-        df = generate_mock_market_data(regime_type, num_days=30)
-        
-        is_correct, result = validator.validate_on_historical_data(
-            df, 
-            expected_regime=regime_type
-        )
-        
-        validator.test_results.append({
-            "test_case": regime_type,
-            **result
-        })
-        
-        print(f"  Detected: {result['detected']} (expected: {result['expected']})")
-        print(f"  Result: {'✅ PASS' if is_correct else '❌ FAIL'}")
-    
-    # Print report
-    report = validator.generate_validation_report()
-    print("\n📋 VALIDATION REPORT:")
-    print(f"  Accuracy: {report['overall_accuracy']}")
-    print(f"  Exact matches: {report['exact_matches']} / {report['total_tests']}")
-    print(f"  Close calls: {report['close_calls']} / {report['total_tests']}")
-    
-    if "failure_analysis" in report:
-        print("\n⚠️  FAILURE ANALYSIS:")
-        for rec in report["failure_analysis"]["recommendations"]:
-            print(f"  {rec}")
+    parser = argparse.ArgumentParser(description="RegimeDetector validation suite")
+    parser.add_argument("--historical", action="store_true", help="Run historical stress-period validation")
+    parser.add_argument("--ticker", default="SPY", help="Ticker to validate (default: SPY)")
+    args = parser.parse_args()
+
+    if args.historical:
+        report = run_historical_stress_validation(ticker=args.ticker)
+        print("\n📋 HISTORICAL VALIDATION REPORT:")
+        print(f"  Accuracy: {report['overall_accuracy']}")
+        print(f"  Exact matches: {report['exact_matches']} / {report['total_tests']}")
+        print(f"  Close calls: {report['close_calls']} / {report['total_tests']}")
+        print(f"  Failures: {report['failures']} / {report['total_tests']}")
+
+        if "failure_analysis" in report:
+            print("\n⚠️  FAILURE ANALYSIS:")
+            for rec in report["failure_analysis"]["recommendations"]:
+                print(f"  {rec}")
+    else:
+        # Example: Test detector on mock data
+        validator = RegimeDetectorValidator()
+
+        for regime_type in ["CRASH_PANIC", "TREND_UP", "MEAN_REVERSION"]:
+            print(f"\n📊 Testing {regime_type}...")
+            df = generate_mock_market_data(regime_type, num_days=30)
+
+            is_correct, result = validator.validate_on_historical_data(
+                df,
+                expected_regime=regime_type
+            )
+
+            validator.test_results.append({
+                "test_case": regime_type,
+                **result
+            })
+
+            print(f"  Detected: {result['detected']} (expected: {result['expected']})")
+            print(f"  Result: {'✅ PASS' if is_correct else '❌ FAIL'}")
+
+        # Print report
+        report = validator.generate_validation_report()
+        print("\n📋 VALIDATION REPORT:")
+        print(f"  Accuracy: {report['overall_accuracy']}")
+        print(f"  Exact matches: {report['exact_matches']} / {report['total_tests']}")
+        print(f"  Close calls: {report['close_calls']} / {report['total_tests']}")
+
+        if "failure_analysis" in report:
+            print("\n⚠️  FAILURE ANALYSIS:")
+            for rec in report["failure_analysis"]["recommendations"]:
+                print(f"  {rec}")

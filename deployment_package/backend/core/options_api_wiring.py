@@ -77,6 +77,7 @@ class MarketDataSnapshot:
     current_price: float
     iv_rank: float
     realized_vol: float
+    skew: float
 
 
 @dataclass
@@ -122,6 +123,7 @@ class PolygonDataFetcher:
         self.api_key = api_key
         self.cache_ttl = cache_ttl_seconds
         self._regime_cache: Dict[str, Tuple[str, datetime]] = {}
+        self._skew_last_update: Dict[str, datetime] = {}
 
     def fetch_market_data(self, ticker: str) -> Optional[MarketDataSnapshot]:
         """
@@ -149,9 +151,11 @@ class PolygonDataFetcher:
                 logger.warning(f"No option chain for {ticker}")
                 return None
 
-            # 4. Calculate IV Rank + RV (needed by Regime Detector)
+            # 4. Calculate IV Rank + RV + Skew (needed by Regime Detector)
             iv_rank = self._calculate_iv_rank(option_chain, ticker)
             realized_vol = self._calculate_realized_volatility(ohlcv_history)
+            skew = self._calculate_skew_from_chain(option_chain, current_price)
+            self._skew_last_update[ticker] = datetime.utcnow()
 
             return MarketDataSnapshot(
                 ticker=ticker,
@@ -161,6 +165,7 @@ class PolygonDataFetcher:
                 current_price=current_price,
                 iv_rank=iv_rank,
                 realized_vol=realized_vol,
+                skew=skew,
             )
 
         except Exception as e:
@@ -387,6 +392,45 @@ class PolygonDataFetcher:
             logger.error(f"Error calculating IV Rank for {ticker}: {e}")
             return 0.5
 
+    def _calculate_skew_from_chain(self, option_chain: Dict, current_price: float) -> float:
+        """Estimate skew using nearest ATM call/put IVs (put IV - call IV)."""
+        try:
+            if not option_chain:
+                return 0.0
+
+            # Pick earliest expiry
+            expiries = sorted(option_chain.keys())
+            if not expiries:
+                return 0.0
+            expiry = expiries[0]
+            strikes = sorted(option_chain[expiry].keys())
+            if not strikes:
+                return 0.0
+
+            # Find nearest strike to spot
+            nearest_strike = min(strikes, key=lambda s: abs(float(s) - current_price))
+            atm_data = option_chain[expiry].get(nearest_strike, {})
+
+            call_iv = atm_data.get("call", {}).get("iv")
+            put_iv = atm_data.get("put", {}).get("iv")
+
+            if call_iv is not None and put_iv is not None:
+                return float(put_iv) - float(call_iv)
+
+            # Fallback: use mid prices if IV missing
+            call_mid = atm_data.get("call", {}).get("mid")
+            put_mid = atm_data.get("put", {}).get("mid")
+            if call_mid is not None and put_mid is not None and current_price:
+                return float(put_mid - call_mid) / float(current_price)
+
+            return 0.0
+        except Exception as e:
+            logger.error(f"Error calculating skew from chain: {e}")
+            return 0.0
+
+    def get_skew_last_update(self, ticker: str) -> Optional[datetime]:
+        return self._skew_last_update.get(ticker)
+
     def _calculate_realized_volatility(self, ohlcv_history: List[Dict]) -> float:
         """Calculate 30-day realized volatility from returns."""
         import math
@@ -500,6 +544,12 @@ class OptionsAnalysisPipeline:
         """
         self.fetcher = PolygonDataFetcher(api_key=polygon_api_key)
         self.regime_detector = RegimeDetector()
+        from .options_health_monitor import EdgeFactoryHealthMonitor
+        self.health_monitor = EdgeFactoryHealthMonitor(
+            data_fetcher=self.fetcher,
+            regime_detector=self.regime_detector,
+        )
+        self._regime_shift_cache: Dict[str, datetime] = {}
         self.router = StrategyRouter(playbooks=playbooks_config or {})
         self.sizer = OptionsRiskSizer(caps=risk_caps, kelly=kelly_config)
         self.flight_manual_engine = FlightManualEngine(playbooks_config=playbooks_config)
@@ -523,6 +573,7 @@ class OptionsAnalysisPipeline:
         """
 
         warnings = []
+        confidence_override = None
 
         # PHASE 0: Fetch live market data
         market_data = self.fetcher.fetch_market_data(ticker)
@@ -532,13 +583,48 @@ class OptionsAnalysisPipeline:
 
         # PHASE 1: Detect regime
         try:
-            regime_result = self.regime_detector.detect_regime(market_data.ohlcv_history)
+            import pandas as pd
+
+            ohlcv_df = pd.DataFrame(market_data.ohlcv_history)
+            if "date" in ohlcv_df.columns:
+                ohlcv_df["date"] = pd.to_datetime(ohlcv_df["date"])
+                ohlcv_df = ohlcv_df.set_index("date")
+
+            # Proxy IV series from current IV rank + realized vol
+            iv_proxy = max(0.05, market_data.realized_vol * (1 + market_data.iv_rank * 0.5))
+            ohlcv_df["iv"] = iv_proxy
+            ohlcv_df["rv"] = market_data.realized_vol
+            ohlcv_df["skew"] = market_data.skew
+
+            ohlcv_df = self.regime_detector.calculate_indicators(ohlcv_df)
+            regime_result = self.regime_detector.detect_regime(ohlcv_df)
             regime, is_shift, description = regime_result
         except Exception as e:
             logger.error(f"Regime detection failed for {ticker}: {e}")
             warnings.append(f"Regime detection failed: {e}")
             regime = "UNKNOWN"
             description = "Unable to determine market regime"
+            is_shift = False
+
+        # PHASE 1.5: Health & integrity pre-flight check
+        try:
+            if is_shift:
+                self._regime_shift_cache[ticker] = datetime.utcnow()
+            last_regime_change = self._regime_shift_cache.get(ticker)
+
+            health = self.health_monitor.run_pre_flight_check(
+                ticker=ticker,
+                market_data=market_data,
+                regime_state=self.regime_detector.get_regime_state(),
+                last_regime_change=last_regime_change,
+            )
+            if not health.is_healthy:
+                warnings.extend(health.active_alerts)
+                confidence_override = "CAUTION"
+        except Exception as e:
+            logger.error(f"Health monitor failed for {ticker}: {e}")
+            warnings.append(f"Health monitor error: {e}")
+            confidence_override = "CAUTION"
 
         # PHASE 2: Generate strategy candidates (Route)
         try:
@@ -639,6 +725,8 @@ class OptionsAnalysisPipeline:
         # Determine confidence + cache expiry
         confidence = "HOT" if any(m.confidence == "HOT" for m in flight_manuals) else \
                     "WARM" if any(m.confidence == "WARM" for m in flight_manuals) else "MONITOR"
+        if confidence_override == "CAUTION":
+            confidence = "CAUTION"
 
         cache_expires = datetime.utcnow() + timedelta(seconds=self.fetcher.cache_ttl)
 

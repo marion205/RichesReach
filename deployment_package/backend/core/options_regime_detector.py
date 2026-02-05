@@ -38,13 +38,13 @@ class RegimeDetector:
     MIN_DATA_POINTS = 60  # Minimum bars needed for reliable indicators
     
     # Regime-specific thresholds
-    RV_SPIKE_THRESHOLD = 1.5  # RV increase multiplier to trigger CRASH_PANIC
-    PRICE_CRASH_THRESHOLD = -0.05  # Price distance from SMA20 (5% below)
-    TREND_STRENGTH_THRESHOLD = 0.03  # Price distance from SMA (3% above/below)
+    RV_SPIKE_THRESHOLD = 1.2  # RV increase multiplier to trigger CRASH_PANIC
+    PRICE_CRASH_THRESHOLD = -0.03  # Price distance from SMA20 (3% below)
+    TREND_STRENGTH_THRESHOLD = 0.02  # Price distance from SMA (2% above/below)
     IV_EXPANSION_THRESHOLD = 1.1  # IV daily change multiplier
     IV_RANK_HIGH = 0.7  # IV rank percentile for mean reversion signal
     IV_RANK_LOW = 0.3  # IV rank percentile for low-IV signals
-    PRICE_FLAT_THRESHOLD = 0.02  # Distance from SMA for choppy/range-bound
+    PRICE_FLAT_THRESHOLD = 0.015  # Distance from SMA for choppy/range-bound
     
     # Flight Manual descriptions (why this regime matters to traders)
     REGIME_DESCRIPTIONS = {
@@ -91,6 +91,9 @@ class RegimeDetector:
         - iv_rv_spread: IV minus RV (volatility premium)
         - rv_acceleration: Change in realized vol
         - atr: Average True Range (volatility measure)
+        - returns: Daily returns
+        - adx: Average Directional Index (trend strength)
+        - skew_z: Skew z-score (if skew data available)
         """
         df = df.copy()
         
@@ -106,13 +109,37 @@ class RegimeDetector:
         df['sma_50'] = df['close'].rolling(50).mean()
         df['price_dist_sma20'] = (df['close'] - df['sma_20']) / df['close']
         df['price_dist_sma50'] = (df['close'] - df['sma_50']) / df['close']
+        df['sma20_slope'] = df['sma_20'] / df['sma_20'].shift(5) - 1.0
+
+        # 1b. Daily returns
+        df['returns'] = df['close'].pct_change()
+        df['returns_3d'] = df['close'].pct_change(3)
+        df['returns_5d'] = df['close'].pct_change(5)
+        df['returns_60d'] = df['close'].pct_change(60)
         
         # 2. IV Rank (IV percentile over 252-day window)
-        iv_high_252 = df['iv'].rolling(252).max()
-        iv_low_252 = df['iv'].rolling(252).min()
+        iv_high_252 = df['iv'].rolling(252, min_periods=20).max()
+        iv_low_252 = df['iv'].rolling(252, min_periods=20).min()
         iv_range = iv_high_252 - iv_low_252
         df['iv_rank'] = (df['iv'] - iv_low_252) / iv_range.replace(0, 1)
-        df['iv_rank'] = df['iv_rank'].clip(0, 1)
+        df['iv_rank'] = df['iv_rank'].clip(0, 1).fillna(0.5)
+
+        # 2b. IV acceleration and z-score
+        iv_mean_5 = df['iv'].rolling(5).mean()
+        df['iv_accel'] = (df['iv'] / iv_mean_5).replace([np.inf, -np.inf], 1.0).fillna(1.0)
+        iv_mean_20 = df['iv'].rolling(20).mean()
+        iv_std_20 = df['iv'].rolling(20).std().replace(0, np.nan)
+        df['iv_z'] = ((df['iv'] - iv_mean_20) / iv_std_20).replace([np.inf, -np.inf], 0.0).fillna(0.0)
+
+        # 2c. Skew dynamics (optional)
+        if 'skew' in df.columns:
+            skew_mean_20 = df['skew'].rolling(20).mean()
+            skew_std_20 = df['skew'].rolling(20).std().replace(0, np.nan)
+            df['skew_z'] = ((df['skew'] - skew_mean_20) / skew_std_20).replace([np.inf, -np.inf], 0.0).fillna(0.0)
+            df['skew_change'] = (df['skew'] / df['skew'].shift(1)).replace([np.inf, -np.inf], 1.0).fillna(1.0)
+        else:
+            df['skew_z'] = 0.0
+            df['skew_change'] = 1.0
         
         # 3. Volatility Premium (IV - Realized Vol)
         df['iv_rv_spread'] = df['iv'] - df['rv']
@@ -120,6 +147,9 @@ class RegimeDetector:
         # 4. Realized Vol Acceleration (change over last 5 days)
         df['rv_acceleration'] = df['rv'] / df['rv'].shift(5)
         df['rv_acceleration'] = df['rv_acceleration'].replace([np.inf, -np.inf], 1.0)
+        rv_mean_20 = df['rv'].rolling(20).mean()
+        rv_std_20 = df['rv'].rolling(20).std().replace(0, np.nan)
+        df['rv_z'] = ((df['rv'] - rv_mean_20) / rv_std_20).replace([np.inf, -np.inf], 0.0).fillna(0.0)
         
         # 5. Average True Range (volatility measure)
         df['tr'] = np.maximum(
@@ -130,6 +160,16 @@ class RegimeDetector:
             )
         )
         df['atr'] = df['tr'].rolling(14).mean()
+
+        # 5b. ADX (trend strength)
+        up_move = df['high'].diff()
+        down_move = -df['low'].diff()
+        plus_dm = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
+        minus_dm = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
+        plus_di = 100 * (pd.Series(plus_dm, index=df.index).rolling(14).mean() / df['atr'])
+        minus_di = 100 * (pd.Series(minus_dm, index=df.index).rolling(14).mean() / df['atr'])
+        dx = (np.abs(plus_di - minus_di) / (plus_di + minus_di)).replace([np.inf, -np.inf], np.nan) * 100
+        df['adx'] = dx.rolling(14).mean().fillna(0.0)
         
         # 6. Daily IV change
         df['iv_change'] = df['iv'] / df['iv'].shift(1)
@@ -192,40 +232,62 @@ class RegimeDetector:
         sma_20 = latest['sma_20']
         sma_50 = latest['sma_50']
         close = latest['close']
+        returns = latest.get('returns', 0.0)
+        returns_3d = latest.get('returns_3d', 0.0)
+        returns_5d = latest.get('returns_5d', 0.0)
+        returns_60d = latest.get('returns_60d', 0.0)
+        adx = latest.get('adx', 0.0)
+        sma20_slope = latest.get('sma20_slope', 0.0)
+        iv_accel = latest.get('iv_accel', 1.0)
+        iv_z = latest.get('iv_z', 0.0)
+        rv_z = latest.get('rv_z', 0.0)
+        skew_z = latest.get('skew_z', 0.0)
+        skew_change = latest.get('skew_change', 1.0)
         
-        # --- CRASH_PANIC: Massive RV spike + Negative Price Action ---
-        # Realized vol spiking 50%+ AND price crashing below SMA20
-        if rv_accel > self.RV_SPIKE_THRESHOLD and price_dist < self.PRICE_CRASH_THRESHOLD:
-            return "CRASH_PANIC"
-        
-        # --- BREAKOUT_EXPANSION: IV expanding + Strong directional move ---
-        # IV jumping + price moving decisively away from MAs
-        if iv_change > self.IV_EXPANSION_THRESHOLD and abs(price_dist) > self.TREND_STRENGTH_THRESHOLD:
-            return "BREAKOUT_EXPANSION"
-        
-        # --- TREND_UP: Price above both MAs + IV stable or low ---
-        # Confirmed uptrend: price above SMA20, SMA20 > SMA50, IV not elevated
-        if (sma_20 > sma_50 and price_dist > 0 and 
-            close > sma_20 and iv_rank < self.IV_RANK_HIGH):
+        # Recovery override: V-bottom rebound despite high IV
+        if returns_3d > 0.04 and returns_5d > 0.08 and iv_accel < 1.05 and price_dist > -0.05:
             return "TREND_UP"
-        
-        # --- TREND_DOWN: Price below both MAs + Downtrend confirmed ---
-        # Confirmed downtrend: price below SMA20, SMA20 < SMA50
-        if (sma_20 < sma_50 and price_dist < -self.TREND_STRENGTH_THRESHOLD and
-            close < sma_20):
-            return "TREND_DOWN"
-        
-        # --- MEAN_REVERSION: Choppy + High IV Rank ---
-        # Price flat relative to SMA + IV elevated (mean reversion signals coming)
-        if (abs(price_dist) < self.PRICE_FLAT_THRESHOLD and 
-            iv_rank > self.IV_RANK_HIGH):
-            return "MEAN_REVERSION"
-        
-        # --- POST_EVENT_CRUSH: IV declining from elevated levels ---
-        # IV was high (>0.7 rank) and is now declining, implying crush has started
-        if (iv_rank > 0.5 and iv_change < 0.95 and 
-            iv_rv_spread > 0):  # Still positive spread but compressing
+
+        # --- CRASH_PANIC: Aggressive detection ---
+        # Price significantly below SMA20 WITH stress signals
+        crash_stress = (
+            (returns_3d < -0.03 and iv_accel > 1.1 and rv_z > 0.5) or
+            (price_dist < -0.06 and rv_z > 1.2) or
+            (iv_z > 1.2 and rv_z > 0.7 and returns_5d < 0.02) or
+            (iv_z > 1.8 and returns < -0.02) or
+            (skew_z > 1.0 and skew_change > 1.05 and iv_accel > 1.05 and returns_3d < 0.01)
+        )
+        if crash_stress:
+            return "CRASH_PANIC"
+
+        # Recovery override: strong rebound after crash conditions
+        if returns_5d > 0.10 and iv_accel < 1.05:
+            return "TREND_UP"
+
+        if returns_5d > 0.03 and price_dist > 0.02:
+            return "TREND_UP"
+
+        # --- BREAKOUT_EXPANSION: IV expanding + Strong directional move ---
+        if (rv_z > 1.0 and abs(returns_5d) > 0.04) or (rv_z > 0.8 and abs(returns_3d) > 0.02) or (iv_accel > 1.08 and (abs(returns_5d) > 0.04 or abs(price_dist) > 0.012)):
+            return "BREAKOUT_EXPANSION"
+
+        # --- POST_EVENT_CRUSH: IV dropping sharply from elevated highs ---
+        if iv_rank < 0.20 and iv_accel < 1.0 and abs(returns_5d) < 0.02:
             return "POST_EVENT_CRUSH"
+
+        # --- MEAN_REVERSION: Low trend + low vol ---
+        if iv_rank < 0.20 and abs(returns_5d) < 0.01:
+            return "MEAN_REVERSION"
+
+        if adx < 25 and abs(returns_5d) < 0.02 and abs(price_dist) < 0.02:
+            return "MEAN_REVERSION"
+
+        # --- TREND_UP / TREND_DOWN: Persistent moves (ADX) ---
+        if adx > 18:
+            if (returns_60d < -0.02 or (sma20_slope < -0.003 and returns_5d < -0.01)) and price_dist < 0.05:
+                return "TREND_DOWN"
+            if (returns_60d > 0.03 or sma20_slope > 0.003) and price_dist > -0.015:
+                return "TREND_UP"
         
         # Default
         return "NEUTRAL"
@@ -254,27 +316,60 @@ class RegimeDetector:
         
         # Classify candidate for this bar
         candidate = self._classify_regime_candidate(df)
+
+        # V-bottom recovery override: fast reversal out of crash
+        latest = df.iloc[-1]
+        if (
+            self.current_regime == "CRASH_PANIC"
+            and candidate == "TREND_UP"
+            and latest.get("returns_3d", 0.0) > 0.04
+            and latest.get("returns_5d", 0.0) > 0.08
+            and latest.get("iv_accel", 1.0) < 1.05
+            and latest.get("price_dist_sma20", 0.0) > -0.05
+        ):
+            self.previous_regime = self.current_regime
+            self.current_regime = "TREND_UP"
+            self.regime_candidate = "TREND_UP"
+            self.candidate_bar_count = self.confirmation_bars
+            logger.info("✓ REGIME SHIFT: CRASH_PANIC → TREND_UP (V-bottom override)")
+            description = self.REGIME_DESCRIPTIONS.get(
+                self.current_regime,
+                self.REGIME_DESCRIPTIONS["NEUTRAL"]
+            )
+            return self.current_regime, True, description
         
         is_regime_shift = False
         
+        # Hysteresis override for crash panic
+        confirmation_bars = 1 if candidate == "CRASH_PANIC" else self.confirmation_bars
+
         # Hysteresis logic: track candidate stability
         if candidate == self.regime_candidate:
             # Same candidate as previous bar—increment counter
             self.candidate_bar_count += 1
             
             # If confirmed (N bars stable), activate the regime
-            if self.candidate_bar_count >= self.confirmation_bars:
+            if self.candidate_bar_count >= confirmation_bars:
                 if candidate != self.current_regime:
                     self.previous_regime = self.current_regime
                     self.current_regime = candidate
                     is_regime_shift = True
                     logger.info(f"✓ REGIME SHIFT: {self.previous_regime} → {self.current_regime} "
-                               f"(confirmed after {self.confirmation_bars} bars)")
+                               f"(confirmed after {confirmation_bars} bars)")
         else:
             # Different candidate—reset counter
             self.regime_candidate = candidate
             self.candidate_bar_count = 1
-            logger.debug(f"Regime candidate changed to {candidate} (bar 1 of {self.confirmation_bars})")
+
+            # Immediate shift for crash panic
+            if candidate == "CRASH_PANIC" and self.current_regime != candidate:
+                self.previous_regime = self.current_regime
+                self.current_regime = candidate
+                is_regime_shift = True
+                logger.info(f"✓ REGIME SHIFT: {self.previous_regime} → {self.current_regime} "
+                           "(immediate crash override)")
+
+            logger.debug(f"Regime candidate changed to {candidate} (bar 1 of {confirmation_bars})")
         
         description = self.REGIME_DESCRIPTIONS.get(
             self.current_regime,
