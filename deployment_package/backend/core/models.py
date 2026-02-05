@@ -814,3 +814,10 @@ class SignalRecord(models.Model):
 
 # Lesson library (lesson_api, daily brief)
 from core.lesson_models import Lesson  # noqa: E402, F401
+
+# Options Edge Factory models
+from core.options_models import (  # noqa: E402, F401
+    OptionsPortfolio,
+    OptionsPosition,
+    OptionsRegimeSnapshot
+)

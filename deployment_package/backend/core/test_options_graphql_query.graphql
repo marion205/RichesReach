@@ -1,0 +1,257 @@
+# ============================================================================
+# OPTIONS EDGE FACTORY: GraphQL Query Examples
+# ============================================================================
+# Use these queries in your mobile app or GraphQL Playground
+# GraphQL endpoint: http://localhost:8000/graphql/
+# ============================================================================
+
+# Query 1: Get Options Analysis (Main Pipeline)
+# Returns top 3 trade plans (Flight Manuals) for a ticker
+# ============================================================================
+query GetOptionsAnalysis($ticker: String!, $experienceLevel: String) {
+  optionsAnalysis(ticker: $ticker, experienceLevel: $experienceLevel) {
+    ticker
+    regime
+    regimeConfidence
+    marketContext
+    ivRank
+    
+    # Flight Manuals (top 3 strategies)
+    flightManuals {
+      # Header
+      headline
+      thesisBullets
+      
+      # Trade Setup
+      setupDescription
+      entryMechanics
+      contracts
+      riskDollars
+      riskPctEquity
+      
+      # Greeks Impact
+      deltaImpact
+      vegaImpact
+      thetaImpact
+      gammaImpact
+      
+      # Management Rules
+      profitRule
+      stopRule
+      timeRule
+      fireDrill
+      
+      # Metrics
+      maxProfitDollars
+      maxLossDollars
+      probabilityOfProfit
+      edgeScore
+      confidence
+      
+      # UI Hints
+      actionRecommended
+      warnings
+      colorScheme
+      
+      # Raw Data (for storage)
+      strategyName
+      ticker
+      legs
+    }
+    
+    # Current Portfolio State
+    currentPortfolioDelta
+    currentPortfolioVega
+    currentPortfolioRiskPct
+    
+    # Metadata
+    warnings
+    timestamp
+  }
+}
+
+# Variables for Query 1:
+# {
+#   "ticker": "AAPL",
+#   "experienceLevel": "basic"
+# }
+
+
+# Query 2: Get User's Options Portfolio
+# ============================================================================
+query GetMyOptionsPortfolio {
+  myOptionsPortfolio {
+    id
+    accountEquity
+    totalDelta
+    totalVega
+    totalTheta
+    totalGamma
+    totalRiskDollars
+    totalPositionsCount
+    experienceLevel
+    riskAppetite
+    createdAt
+    updatedAt
+  }
+}
+
+
+# Query 3: Get Open Positions
+# ============================================================================
+query GetOptionsPositions($ticker: String, $isClosed: Boolean) {
+  optionsPositions(ticker: $ticker, isClosed: $isClosed) {
+    id
+    ticker
+    sector
+    strategyType
+    contracts
+    entryPrice
+    currentPrice
+    
+    # Greeks
+    positionDelta
+    positionVega
+    positionTheta
+    positionGamma
+    
+    # Risk Metrics
+    maxProfit
+    maxLoss
+    probabilityOfProfit
+    
+    # P&L
+    realizedPnl
+    unrealizedPnl
+    
+    # Metadata
+    regimeAtEntry
+    edgeScore
+    isClosed
+    openedAt
+    closedAt
+    
+    # Legs Detail
+    legsParsed {
+      type
+      strike
+      expiry
+      contracts
+      side
+      premium
+    }
+  }
+}
+
+# Variables for Query 3:
+# {
+#   "ticker": "AAPL",
+#   "isClosed": false
+# }
+
+
+# Query 4: Get Cached Market Regime
+# ============================================================================
+query GetOptionsRegime($ticker: String!) {
+  optionsRegime(ticker: $ticker) {
+    ticker
+    regime
+    regimeConfidence
+    ivRank
+    regimeDescription
+    lastUpdated
+  }
+}
+
+# Variables for Query 4:
+# {
+#   "ticker": "AAPL"
+# }
+
+
+# ============================================================================
+# MOBILE APP INTEGRATION EXAMPLE (React Native / Swift / Kotlin)
+# ============================================================================
+
+# Example: Fetch trade plans on "Analyze" button tap
+# 
+# JavaScript (React Native):
+# ```javascript
+# const GET_OPTIONS_ANALYSIS = gql`
+#   query GetOptionsAnalysis($ticker: String!, $experienceLevel: String) {
+#     optionsAnalysis(ticker: $ticker, experienceLevel: $experienceLevel) {
+#       ticker
+#       regime
+#       flightManuals {
+#         headline
+#         thesisBullets
+#         setupDescription
+#         contracts
+#         riskDollars
+#         maxLossDollars
+#         probabilityOfProfit
+#         actionRecommended
+#         colorScheme
+#         warnings
+#       }
+#       warnings
+#     }
+#   }
+# `;
+#
+# const { data, loading, error } = useQuery(GET_OPTIONS_ANALYSIS, {
+#   variables: {
+#     ticker: 'AAPL',
+#     experienceLevel: 'basic'
+#   }
+# });
+#
+# // Render Flight Manuals
+# data.optionsAnalysis.flightManuals.map(fm => (
+#   <FlightManualCard
+#     headline={fm.headline}
+#     thesisBullets={fm.thesisBullets}
+#     riskDollars={fm.riskDollars}
+#     probabilityOfProfit={fm.probabilityOfProfit}
+#     colorScheme={fm.colorScheme}
+#     actionRecommended={fm.actionRecommended}
+#   />
+# ));
+# ```
+#
+# Swift (iOS):
+# ```swift
+# struct OptionsAnalysisQuery: GraphQLQuery {
+#     let ticker: String
+#     let experienceLevel: String
+#     
+#     var query: String {
+#         """
+#         query($ticker: String!, $experienceLevel: String) {
+#             optionsAnalysis(ticker: $ticker, experienceLevel: $experienceLevel) {
+#                 flightManuals {
+#                     headline
+#                     riskDollars
+#                     probabilityOfProfit
+#                     colorScheme
+#                 }
+#             }
+#         }
+#         """
+#     }
+# }
+# ```
+
+# ============================================================================
+# TESTING IN GRAPHQL PLAYGROUND
+# ============================================================================
+# 1. Start backend: cd deployment_package/backend && python manage.py runserver
+# 2. Open: http://localhost:8000/graphql/
+# 3. Paste query above
+# 4. Add variables in bottom-left panel:
+#    {
+#      "ticker": "AAPL",
+#      "experienceLevel": "basic"
+#    }
+# 5. Click "Play" button
+# 6. Expected response: Top 3 Flight Manuals with headlines, risk metrics, Greeks

@@ -80,56 +80,87 @@ def router_candidate_to_trade_candidate(
 
 def build_portfolio_snapshot_from_db(
     user_id: int,
-    equity: float,
+    equity: float = None,
     db_session=None
 ) -> PortfolioSnapshot:
     """
-    Convert user portfolio from database to PortfolioSnapshot.
-
-    This is a placeholder. In your real implementation, you would:
-      1. Query Portfolio model for this user
-      2. Query PortfolioPosition for all open trades
-      3. Aggregate Greeks across all positions
-      4. Calculate sector/ticker exposure percentages
+    Query user's portfolio from database and build PortfolioSnapshot.
 
     Args:
         user_id: User ID
-        equity: Current account equity in $
-        db_session: ORM session (Django/SQLAlchemy)
+        equity: Account equity (optional, will fetch from DB if not provided)
+        db_session: Django ORM session (unused, kept for compatibility)
 
     Returns:
-        PortfolioSnapshot ready for OptionsRiskSizer.size_trade()
+        PortfolioSnapshot with aggregate Greeks and exposures
     """
-
-    # PLACEHOLDER: This would be replaced with real DB queries
-    # Example implementation outline:
-    #
-    # portfolio = Portfolio.objects.get(user_id=user_id)
-    # positions = PortfolioPosition.objects.filter(portfolio=portfolio, is_closed=False)
-    #
-    # greeks_total = Greeks()
-    # sector_exposure = {}
-    # ticker_exposure = {}
-    #
-    # for pos in positions:
-    #     greeks_total.delta += pos.delta * pos.quantity
-    #     greeks_total.vega += pos.vega * pos.quantity
-    #     ... (aggregate sector/ticker exposure)
-    #
-    # return PortfolioSnapshot(
-    #     equity=equity,
-    #     greeks_total=greeks_total,
-    #     sector_exposure_pct=sector_exposure,
-    #     ticker_exposure_pct=ticker_exposure,
-    # )
-
-    # For now, return a default empty portfolio
-    return PortfolioSnapshot(
-        equity=equity,
-        greeks_total=Greeks(delta=0, vega=0, theta=0, gamma=0),
-        sector_exposure_pct={},
-        ticker_exposure_pct={},
-    )
+    try:
+        from .options_models import OptionsPortfolio
+        from collections import defaultdict
+        
+        # Get user's options portfolio
+        try:
+            portfolio = OptionsPortfolio.objects.get(user_id=user_id)
+        except OptionsPortfolio.DoesNotExist:
+            # Return empty portfolio if user doesn't have one yet
+            return PortfolioSnapshot(
+                equity=equity or 25000.0,  # Default starting equity
+                greeks_total=Greeks(delta=0.0, vega=0.0, theta=0.0, gamma=0.0),
+                sector_exposure_pct={},
+                ticker_exposure_pct={},
+            )
+        
+        # Use portfolio equity if not provided
+        if equity is None:
+            equity = float(portfolio.account_equity)
+        
+        # Get all open positions
+        positions = portfolio.positions.filter(is_closed=False)
+        
+        # Aggregate Greeks
+        total_delta = sum(float(p.position_delta) for p in positions)
+        total_vega = sum(float(p.position_vega) for p in positions)
+        total_theta = sum(float(p.position_theta) for p in positions)
+        total_gamma = sum(float(p.position_gamma) for p in positions)
+        
+        # Calculate sector/ticker exposure
+        sector_risk = defaultdict(float)
+        ticker_risk = defaultdict(float)
+        
+        for p in positions:
+            sector_risk[p.sector] += float(p.max_loss)
+            ticker_risk[p.ticker] += float(p.max_loss)
+        
+        # Convert to percentages
+        sector_exposure_pct = {
+            sector: risk / equity if equity > 0 else 0.0
+            for sector, risk in sector_risk.items()
+        }
+        ticker_exposure_pct = {
+            ticker: risk / equity if equity > 0 else 0.0
+            for ticker, risk in ticker_risk.items()
+        }
+        
+        return PortfolioSnapshot(
+            equity=equity,
+            greeks_total=Greeks(
+                delta=total_delta,
+                vega=total_vega,
+                theta=total_theta,
+                gamma=total_gamma
+            ),
+            sector_exposure_pct=sector_exposure_pct,
+            ticker_exposure_pct=ticker_exposure_pct,
+        )
+    
+    except ImportError:
+        # Models not available yet, return empty portfolio
+        return PortfolioSnapshot(
+            equity=equity or 25000.0,
+            greeks_total=Greeks(delta=0.0, vega=0.0, theta=0.0, gamma=0.0),
+            sector_exposure_pct={},
+            ticker_exposure_pct={},
+        )
 
 
 # ============================================================================
