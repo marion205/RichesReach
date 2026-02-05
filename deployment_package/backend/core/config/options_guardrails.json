@@ -1,0 +1,8 @@
+{
+  "risk_per_trade_min_pct": 0.0025,
+  "risk_per_trade_max_pct": 0.01,
+  "max_risk_per_underlying_pct": 0.03,
+  "max_portfolio_theta": 0.5,
+  "max_portfolio_vega": 0.5,
+  "min_liquidity_score": 0.4
+}

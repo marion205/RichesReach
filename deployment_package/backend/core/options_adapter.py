@@ -9,8 +9,8 @@ Converts:
 """
 
 from typing import Dict, List, Optional
-from options_risk_sizer import TradeCandidate, Greeks, PortfolioSnapshot, PortfolioImpact
-from options_flight_manual import SizerOutput, PortfolioImpact
+from .options_risk_sizer import TradeCandidate, Greeks, PortfolioSnapshot
+from .options_flight_manual import SizerOutput, PortfolioImpact
 
 
 # ============================================================================

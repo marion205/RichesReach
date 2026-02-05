@@ -1,0 +1,52 @@
+{
+  "IRON_CONDOR": {
+    "complexity_tier": "intermediate",
+    "greek_profile": {"delta": 0.0, "theta": 1.0, "vega": -1.0, "gamma": -0.5},
+    "label": "Iron Condor"
+  },
+  "CASH_SECURED_PUT": {
+    "complexity_tier": "beginner",
+    "greek_profile": {"delta": 0.3, "theta": 0.5, "vega": -0.2, "gamma": -0.2},
+    "label": "Cash-Secured Put"
+  },
+  "COVERED_CALL": {
+    "complexity_tier": "beginner",
+    "greek_profile": {"delta": 0.2, "theta": 0.4, "vega": -0.2, "gamma": -0.2},
+    "label": "Covered Call"
+  },
+  "BULL_CALL_SPREAD": {
+    "complexity_tier": "intermediate",
+    "greek_profile": {"delta": 0.4, "theta": -0.1, "vega": 0.2, "gamma": 0.4},
+    "label": "Bull Call Spread"
+  },
+  "BEAR_CALL_SPREAD": {
+    "complexity_tier": "intermediate",
+    "greek_profile": {"delta": -0.3, "theta": 0.3, "vega": -0.2, "gamma": -0.2},
+    "label": "Bear Call Spread"
+  },
+  "PROTECTIVE_PUT": {
+    "complexity_tier": "beginner",
+    "greek_profile": {"delta": 0.2, "theta": -0.3, "vega": 0.3, "gamma": 0.2},
+    "label": "Protective Put"
+  },
+  "LONG_STRADDLE": {
+    "complexity_tier": "advanced",
+    "greek_profile": {"delta": 0.0, "theta": -0.6, "vega": 0.8, "gamma": 0.9},
+    "label": "Long Straddle"
+  },
+  "PUT_DEBIT_SPREAD": {
+    "complexity_tier": "intermediate",
+    "greek_profile": {"delta": -0.4, "theta": -0.1, "vega": 0.2, "gamma": 0.4},
+    "label": "Put Debit Spread"
+  },
+  "DIAGONAL": {
+    "complexity_tier": "advanced",
+    "greek_profile": {"delta": 0.2, "theta": 0.1, "vega": 0.2, "gamma": 0.2},
+    "label": "Diagonal"
+  },
+  "BUTTERFLY": {
+    "complexity_tier": "advanced",
+    "greek_profile": {"delta": 0.0, "theta": 0.1, "vega": -0.2, "gamma": 0.4},
+    "label": "Butterfly"
+  }
+}

@@ -1,0 +1,104 @@
+{
+  "regimes": {
+    "MEAN_REVERSION": {
+      "id": "MR_01",
+      "label": "Range Bound / Mean Reversion",
+      "description": "Price is oscillating; IV is rich.",
+      "eligible_strategies": [
+        "IRON_CONDOR",
+        "CASH_SECURED_PUT",
+        "COVERED_CALL",
+        "BULL_CALL_SPREAD",
+        "BEAR_CALL_SPREAD",
+        "BUTTERFLY"
+      ],
+      "target_greeks": {
+        "delta": {"min": -0.1, "max": 0.1},
+        "theta": {"type": "positive"},
+        "vega": {"type": "negative"}
+      },
+      "weights": {"ev": 0.4, "efficiency": 0.3, "risk_fit": 0.2, "liquidity": 0.1}
+    },
+    "TREND_UP": {
+      "id": "TR_UP_01",
+      "label": "Trend Up",
+      "description": "Persistent upside trend.",
+      "eligible_strategies": [
+        "BULL_CALL_SPREAD",
+        "CASH_SECURED_PUT",
+        "COVERED_CALL",
+        "PROTECTIVE_PUT"
+      ],
+      "target_greeks": {
+        "delta": {"min": 0.2, "max": 0.6},
+        "theta": {"type": "neutral_to_positive"},
+        "vega": {"type": "neutral"}
+      },
+      "weights": {"ev": 0.45, "efficiency": 0.25, "risk_fit": 0.2, "liquidity": 0.1}
+    },
+    "TREND_DOWN": {
+      "id": "TR_DN_01",
+      "label": "Trend Down",
+      "description": "Persistent downside trend.",
+      "eligible_strategies": [
+        "BEAR_CALL_SPREAD",
+        "PROTECTIVE_PUT",
+        "PUT_DEBIT_SPREAD"
+      ],
+      "target_greeks": {
+        "delta": {"min": -0.6, "max": -0.2},
+        "theta": {"type": "neutral"},
+        "vega": {"type": "neutral_to_positive"}
+      },
+      "weights": {"ev": 0.45, "efficiency": 0.25, "risk_fit": 0.2, "liquidity": 0.1}
+    },
+    "BREAKOUT_EXPANSION": {
+      "id": "BRK_02",
+      "label": "Volatility Expansion",
+      "description": "Momentum is surging; IV is rising.",
+      "eligible_strategies": [
+        "LONG_STRADDLE",
+        "BULL_CALL_SPREAD",
+        "PUT_DEBIT_SPREAD",
+        "DIAGONAL"
+      ],
+      "target_greeks": {
+        "delta": {"min": 0.2, "max": 0.7},
+        "gamma": {"type": "positive"},
+        "vega": {"type": "positive"}
+      },
+      "weights": {"ev": 0.5, "efficiency": 0.2, "risk_fit": 0.2, "liquidity": 0.1}
+    },
+    "CRASH_PANIC": {
+      "id": "CRS_01",
+      "label": "Crash / Panic",
+      "description": "Gap risk and correlation spike.",
+      "eligible_strategies": [
+        "PROTECTIVE_PUT",
+        "PUT_DEBIT_SPREAD"
+      ],
+      "target_greeks": {
+        "delta": {"min": -0.8, "max": -0.2},
+        "gamma": {"type": "positive"},
+        "vega": {"type": "positive"}
+      },
+      "weights": {"ev": 0.35, "efficiency": 0.2, "risk_fit": 0.35, "liquidity": 0.1}
+    },
+    "POST_EVENT_CRUSH": {
+      "id": "PEC_01",
+      "label": "Post-Event Vol Crush",
+      "description": "IV collapsing after catalyst.",
+      "eligible_strategies": [
+        "IRON_CONDOR",
+        "COVERED_CALL",
+        "CASH_SECURED_PUT"
+      ],
+      "target_greeks": {
+        "delta": {"min": -0.1, "max": 0.1},
+        "theta": {"type": "positive"},
+        "vega": {"type": "negative"}
+      },
+      "weights": {"ev": 0.4, "efficiency": 0.3, "risk_fit": 0.2, "liquidity": 0.1}
+    }
+  }
+}

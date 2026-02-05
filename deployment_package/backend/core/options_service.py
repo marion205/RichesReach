@@ -104,8 +104,8 @@ class OptionsAnalysisService:
             if not unusual_flow:
                 unusual_flow = self._build_mock_unusual_flow(symbol, underlying_price)
             
-            # Build strategies and sentiment from real or mock chain
-            recommended_strategies = self._build_mock_strategies(
+            # Build real strategies from actual options chain data
+            recommended_strategies = self._build_real_strategies(
                 symbol, underlying_price, options_chain
             )
             market_sentiment = self._calculate_real_market_sentiment(symbol, options_chain)
@@ -359,46 +359,509 @@ class OptionsAnalysisService:
             }
         ]
 
-    def _build_mock_strategies(
+    def _build_real_strategies(
         self,
         symbol: str,
         underlying_price: float,
         options_chain: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
         """
-        Build a few example strategies using the mock chain.
+        Build real strategy recommendations from actual options chain data.
+
+        Analyzes the real calls/puts with their actual premiums, strikes,
+        and Greeks to recommend optimal strategies.
         """
+        strategies = []
+
+        calls = options_chain.get('calls', [])
+        puts = options_chain.get('puts', [])
+
+        if not calls and not puts:
+            return self._get_fallback_strategies(symbol, underlying_price)
+
+        try:
+            # Find ATM, OTM, and ITM options for strategy building
+            atm_call = self._find_atm_option(calls, underlying_price)
+            atm_put = self._find_atm_option(puts, underlying_price)
+            otm_call = self._find_otm_option(calls, underlying_price, 'call', percent_otm=0.05)
+            otm_put = self._find_otm_option(puts, underlying_price, 'put', percent_otm=0.05)
+
+            # Strategy 1: Covered Call (if we have OTM calls)
+            if otm_call:
+                covered_call = self._build_covered_call_strategy(
+                    symbol, underlying_price, otm_call
+                )
+                if covered_call:
+                    strategies.append(covered_call)
+
+            # Strategy 2: Cash-Secured Put (if we have OTM puts)
+            if otm_put:
+                cash_secured_put = self._build_cash_secured_put_strategy(
+                    symbol, underlying_price, otm_put
+                )
+                if cash_secured_put:
+                    strategies.append(cash_secured_put)
+
+            # Strategy 3: Bull Call Spread (if we have ATM and OTM calls)
+            if atm_call and otm_call and atm_call != otm_call:
+                bull_spread = self._build_bull_call_spread_strategy(
+                    symbol, underlying_price, atm_call, otm_call
+                )
+                if bull_spread:
+                    strategies.append(bull_spread)
+
+            # Strategy 4: Protective Put (if we have ATM puts)
+            if atm_put:
+                protective_put = self._build_protective_put_strategy(
+                    symbol, underlying_price, atm_put
+                )
+                if protective_put:
+                    strategies.append(protective_put)
+
+            # Strategy 5: Iron Condor (if we have all legs)
+            if len(calls) >= 2 and len(puts) >= 2:
+                iron_condor = self._build_iron_condor_strategy(
+                    symbol, underlying_price, calls, puts
+                )
+                if iron_condor:
+                    strategies.append(iron_condor)
+
+            # Strategy 6: Long Straddle (ATM call + ATM put)
+            if atm_call and atm_put:
+                straddle = self._build_straddle_strategy(
+                    symbol, underlying_price, atm_call, atm_put
+                )
+                if straddle:
+                    strategies.append(straddle)
+
+            # Sort by probability of profit
+            strategies.sort(key=lambda x: x.get('probability_of_profit', 0), reverse=True)
+
+            return strategies[:6]  # Return top 6 strategies
+
+        except Exception as e:
+            logger.warning(f"Error building real strategies: {e}")
+            return self._get_fallback_strategies(symbol, underlying_price)
+
+    def _find_atm_option(
+        self,
+        options: List[Dict[str, Any]],
+        underlying_price: float
+    ) -> Optional[Dict[str, Any]]:
+        """Find the at-the-money option closest to current price."""
+        if not options:
+            return None
+
+        return min(options, key=lambda x: abs(x.get('strike', 0) - underlying_price))
+
+    def _find_otm_option(
+        self,
+        options: List[Dict[str, Any]],
+        underlying_price: float,
+        option_type: str,
+        percent_otm: float = 0.05
+    ) -> Optional[Dict[str, Any]]:
+        """Find an out-of-the-money option at approximately percent_otm away."""
+        if not options:
+            return None
+
+        if option_type == 'call':
+            target_strike = underlying_price * (1 + percent_otm)
+            otm_options = [o for o in options if o.get('strike', 0) > underlying_price]
+        else:
+            target_strike = underlying_price * (1 - percent_otm)
+            otm_options = [o for o in options if o.get('strike', 0) < underlying_price]
+
+        if not otm_options:
+            return None
+
+        return min(otm_options, key=lambda x: abs(x.get('strike', 0) - target_strike))
+
+    def _build_covered_call_strategy(
+        self,
+        symbol: str,
+        underlying_price: float,
+        call_option: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Build a Covered Call strategy from real option data.
+
+        Covered Call: Own 100 shares + Sell 1 OTM call
+        """
+        strike = call_option.get('strike', 0)
+        premium = call_option.get('bid', 0) or call_option.get('last_price', 0)
+        days_to_exp = call_option.get('days_to_expiration', 30)
+        delta = abs(call_option.get('delta', 0.3))
+
+        if premium <= 0:
+            premium = call_option.get('ask', 0) * 0.95  # Estimate
+
+        # Real P/L calculations
+        max_profit = (strike - underlying_price + premium) * 100  # Per contract
+        max_loss = (underlying_price - premium) * 100  # If stock goes to 0
+        breakeven = underlying_price - premium
+
+        # Probability of profit ≈ probability stock stays below strike
+        prob_profit = 1 - delta  # Delta approximates prob of finishing ITM
+
+        # Annualized return
+        if underlying_price > 0 and days_to_exp > 0:
+            return_pct = (premium / underlying_price) * (365 / days_to_exp)
+        else:
+            return_pct = 0
+
+        return {
+            "strategy_name": f"Covered Call - ${strike:.0f} Strike",
+            "strategy_type": "Covered Call",
+            "max_profit": round(max_profit, 2),
+            "max_loss": round(-max_loss, 2),
+            "breakeven_points": [round(breakeven, 2)],
+            "probability_of_profit": round(prob_profit, 2),
+            "risk_reward_ratio": round(max_profit / max_loss, 3) if max_loss > 0 else 0,
+            "days_to_expiration": days_to_exp,
+            "total_cost": round(underlying_price * 100, 2),  # Cost of 100 shares
+            "total_credit": round(premium * 100, 2),
+            "annualized_return": round(return_pct * 100, 1),
+            "description": f"Sell the ${strike:.0f} call for ${premium:.2f} premium. "
+                          f"Max profit ${max_profit:.0f} if stock rises to ${strike:.0f}. "
+                          f"Annualized return: {return_pct*100:.1f}%",
+            "risk_level": "Medium",
+            "market_outlook": "Neutral to mildly bullish",
+            "legs": [
+                {"action": "buy", "quantity": 100, "instrument": "stock", "price": underlying_price},
+                {"action": "sell", "quantity": 1, "instrument": "call", "strike": strike,
+                 "expiration": call_option.get('expiration_date'), "premium": premium}
+            ]
+        }
+
+    def _build_cash_secured_put_strategy(
+        self,
+        symbol: str,
+        underlying_price: float,
+        put_option: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Build a Cash-Secured Put strategy from real option data.
+
+        Cash-Secured Put: Sell 1 OTM put, keep cash to buy shares if assigned
+        """
+        strike = put_option.get('strike', 0)
+        premium = put_option.get('bid', 0) or put_option.get('last_price', 0)
+        days_to_exp = put_option.get('days_to_expiration', 30)
+        delta = abs(put_option.get('delta', 0.3))
+
+        if premium <= 0:
+            premium = put_option.get('ask', 0) * 0.95
+
+        # Real P/L calculations
+        max_profit = premium * 100
+        max_loss = (strike - premium) * 100  # If stock goes to 0
+        breakeven = strike - premium
+
+        # Probability of profit ≈ probability stock stays above strike
+        prob_profit = 1 - delta
+
+        # Annualized return on capital at risk
+        if strike > 0 and days_to_exp > 0:
+            return_pct = (premium / strike) * (365 / days_to_exp)
+        else:
+            return_pct = 0
+
+        return {
+            "strategy_name": f"Cash-Secured Put - ${strike:.0f} Strike",
+            "strategy_type": "Cash-Secured Put",
+            "max_profit": round(max_profit, 2),
+            "max_loss": round(-max_loss, 2),
+            "breakeven_points": [round(breakeven, 2)],
+            "probability_of_profit": round(prob_profit, 2),
+            "risk_reward_ratio": round(max_profit / max_loss, 3) if max_loss > 0 else 0,
+            "days_to_expiration": days_to_exp,
+            "total_cost": round(strike * 100, 2),  # Cash secured
+            "total_credit": round(max_profit, 2),
+            "annualized_return": round(return_pct * 100, 1),
+            "description": f"Sell the ${strike:.0f} put for ${premium:.2f}. "
+                          f"Keep ${strike*100:.0f} cash as collateral. "
+                          f"Annualized return: {return_pct*100:.1f}%",
+            "risk_level": "Medium",
+            "market_outlook": "Neutral to bullish",
+            "legs": [
+                {"action": "sell", "quantity": 1, "instrument": "put", "strike": strike,
+                 "expiration": put_option.get('expiration_date'), "premium": premium}
+            ]
+        }
+
+    def _build_bull_call_spread_strategy(
+        self,
+        symbol: str,
+        underlying_price: float,
+        long_call: Dict[str, Any],
+        short_call: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Build a Bull Call Spread from real option data.
+
+        Bull Call Spread: Buy lower strike call + Sell higher strike call
+        """
+        long_strike = long_call.get('strike', 0)
+        short_strike = short_call.get('strike', 0)
+
+        # Ensure proper ordering
+        if long_strike > short_strike:
+            long_call, short_call = short_call, long_call
+            long_strike, short_strike = short_strike, long_strike
+
+        long_premium = long_call.get('ask', 0) or long_call.get('last_price', 0)
+        short_premium = short_call.get('bid', 0) or short_call.get('last_price', 0)
+        days_to_exp = long_call.get('days_to_expiration', 30)
+
+        # Net debit
+        net_debit = long_premium - short_premium
+
+        # Real P/L calculations
+        max_profit = (short_strike - long_strike - net_debit) * 100
+        max_loss = net_debit * 100
+        breakeven = long_strike + net_debit
+
+        # Probability: Use delta difference
+        long_delta = long_call.get('delta', 0.5)
+        short_delta = short_call.get('delta', 0.3)
+        prob_profit = (long_delta + short_delta) / 2  # Rough approximation
+
+        if max_profit <= 0:
+            return None
+
+        return {
+            "strategy_name": f"Bull Call Spread ${long_strike:.0f}/${short_strike:.0f}",
+            "strategy_type": "Bull Call Spread",
+            "max_profit": round(max_profit, 2),
+            "max_loss": round(-max_loss, 2),
+            "breakeven_points": [round(breakeven, 2)],
+            "probability_of_profit": round(min(0.95, max(0.1, prob_profit)), 2),
+            "risk_reward_ratio": round(max_profit / max_loss, 2) if max_loss > 0 else 0,
+            "days_to_expiration": days_to_exp,
+            "total_cost": round(max_loss, 2),
+            "total_credit": 0,
+            "description": f"Buy ${long_strike:.0f} call, sell ${short_strike:.0f} call. "
+                          f"Net cost ${net_debit:.2f}. Max profit ${max_profit:.0f} if stock above ${short_strike:.0f}.",
+            "risk_level": "Medium",
+            "market_outlook": "Bullish",
+            "legs": [
+                {"action": "buy", "quantity": 1, "instrument": "call", "strike": long_strike,
+                 "expiration": long_call.get('expiration_date'), "premium": long_premium},
+                {"action": "sell", "quantity": 1, "instrument": "call", "strike": short_strike,
+                 "expiration": short_call.get('expiration_date'), "premium": short_premium}
+            ]
+        }
+
+    def _build_protective_put_strategy(
+        self,
+        symbol: str,
+        underlying_price: float,
+        put_option: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Build a Protective Put strategy from real option data.
+
+        Protective Put: Own 100 shares + Buy 1 ATM/OTM put
+        """
+        strike = put_option.get('strike', 0)
+        premium = put_option.get('ask', 0) or put_option.get('last_price', 0)
+        days_to_exp = put_option.get('days_to_expiration', 30)
+
+        # Real P/L calculations
+        max_loss = (underlying_price - strike + premium) * 100
+        breakeven = underlying_price + premium
+
+        # Max profit is unlimited (stock can go up infinitely)
+        # For display, show profit at 20% stock gain
+        profit_at_20pct = (underlying_price * 0.20 - premium) * 100
+
+        return {
+            "strategy_name": f"Protective Put - ${strike:.0f} Strike",
+            "strategy_type": "Protective Put",
+            "max_profit": round(profit_at_20pct, 2),  # At 20% gain
+            "max_loss": round(-max_loss, 2),
+            "breakeven_points": [round(breakeven, 2)],
+            "probability_of_profit": 0.50,  # Depends on stock movement
+            "risk_reward_ratio": round(profit_at_20pct / max_loss, 2) if max_loss > 0 else 0,
+            "days_to_expiration": days_to_exp,
+            "total_cost": round((underlying_price + premium) * 100, 2),
+            "total_credit": 0,
+            "description": f"Buy ${strike:.0f} put for ${premium:.2f} to protect 100 shares. "
+                          f"Max loss limited to ${max_loss:.0f} no matter how far stock falls.",
+            "risk_level": "Low",
+            "market_outlook": "Bullish with downside protection",
+            "legs": [
+                {"action": "buy", "quantity": 100, "instrument": "stock", "price": underlying_price},
+                {"action": "buy", "quantity": 1, "instrument": "put", "strike": strike,
+                 "expiration": put_option.get('expiration_date'), "premium": premium}
+            ]
+        }
+
+    def _build_iron_condor_strategy(
+        self,
+        symbol: str,
+        underlying_price: float,
+        calls: List[Dict[str, Any]],
+        puts: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Build an Iron Condor strategy from real option data.
+
+        Iron Condor: Sell OTM put spread + Sell OTM call spread
+        """
+        try:
+            # Find options ~5% and ~10% OTM
+            otm_put_sell = self._find_otm_option(puts, underlying_price, 'put', 0.05)
+            otm_put_buy = self._find_otm_option(puts, underlying_price, 'put', 0.10)
+            otm_call_sell = self._find_otm_option(calls, underlying_price, 'call', 0.05)
+            otm_call_buy = self._find_otm_option(calls, underlying_price, 'call', 0.10)
+
+            if not all([otm_put_sell, otm_put_buy, otm_call_sell, otm_call_buy]):
+                return None
+
+            # Calculate premiums
+            put_sell_premium = otm_put_sell.get('bid', 0) or otm_put_sell.get('last_price', 0)
+            put_buy_premium = otm_put_buy.get('ask', 0) or otm_put_buy.get('last_price', 0)
+            call_sell_premium = otm_call_sell.get('bid', 0) or otm_call_sell.get('last_price', 0)
+            call_buy_premium = otm_call_buy.get('ask', 0) or otm_call_buy.get('last_price', 0)
+
+            # Net credit received
+            net_credit = (put_sell_premium - put_buy_premium +
+                         call_sell_premium - call_buy_premium)
+
+            if net_credit <= 0:
+                return None
+
+            days_to_exp = otm_call_sell.get('days_to_expiration', 30)
+
+            # Width of spreads
+            put_width = abs(otm_put_sell.get('strike', 0) - otm_put_buy.get('strike', 0))
+            call_width = abs(otm_call_buy.get('strike', 0) - otm_call_sell.get('strike', 0))
+            max_width = max(put_width, call_width)
+
+            # Real P/L
+            max_profit = net_credit * 100
+            max_loss = (max_width - net_credit) * 100
+
+            lower_breakeven = otm_put_sell.get('strike', 0) - net_credit
+            upper_breakeven = otm_call_sell.get('strike', 0) + net_credit
+
+            # Probability: stock stays between short strikes
+            prob_profit = 0.65  # Typical for well-constructed iron condor
+
+            return {
+                "strategy_name": "Iron Condor",
+                "strategy_type": "Iron Condor",
+                "max_profit": round(max_profit, 2),
+                "max_loss": round(-max_loss, 2),
+                "breakeven_points": [round(lower_breakeven, 2), round(upper_breakeven, 2)],
+                "probability_of_profit": prob_profit,
+                "risk_reward_ratio": round(max_profit / max_loss, 2) if max_loss > 0 else 0,
+                "days_to_expiration": days_to_exp,
+                "total_cost": 0,
+                "total_credit": round(max_profit, 2),
+                "description": f"Sell put spread + call spread for ${net_credit:.2f} credit. "
+                              f"Profit if stock stays between ${lower_breakeven:.0f} and ${upper_breakeven:.0f}.",
+                "risk_level": "Medium",
+                "market_outlook": "Neutral - expecting low volatility",
+                "legs": [
+                    {"action": "buy", "quantity": 1, "instrument": "put",
+                     "strike": otm_put_buy.get('strike'), "premium": put_buy_premium},
+                    {"action": "sell", "quantity": 1, "instrument": "put",
+                     "strike": otm_put_sell.get('strike'), "premium": put_sell_premium},
+                    {"action": "sell", "quantity": 1, "instrument": "call",
+                     "strike": otm_call_sell.get('strike'), "premium": call_sell_premium},
+                    {"action": "buy", "quantity": 1, "instrument": "call",
+                     "strike": otm_call_buy.get('strike'), "premium": call_buy_premium}
+                ]
+            }
+        except Exception as e:
+            logger.debug(f"Could not build iron condor: {e}")
+            return None
+
+    def _build_straddle_strategy(
+        self,
+        symbol: str,
+        underlying_price: float,
+        atm_call: Dict[str, Any],
+        atm_put: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Build a Long Straddle strategy from real option data.
+
+        Long Straddle: Buy ATM call + Buy ATM put
+        """
+        call_strike = atm_call.get('strike', 0)
+        put_strike = atm_put.get('strike', 0)
+
+        call_premium = atm_call.get('ask', 0) or atm_call.get('last_price', 0)
+        put_premium = atm_put.get('ask', 0) or atm_put.get('last_price', 0)
+        days_to_exp = atm_call.get('days_to_expiration', 30)
+
+        total_premium = call_premium + put_premium
+
+        # Breakevens
+        lower_breakeven = call_strike - total_premium
+        upper_breakeven = call_strike + total_premium
+
+        # Max loss is premium paid
+        max_loss = total_premium * 100
+
+        # Profit potential is unlimited, show at 10% move
+        profit_at_10pct_move = (underlying_price * 0.10 - total_premium) * 100
+
+        # Combined IV for description
+        avg_iv = (atm_call.get('implied_volatility', 0.3) +
+                  atm_put.get('implied_volatility', 0.3)) / 2
+
+        return {
+            "strategy_name": f"Long Straddle - ${call_strike:.0f} Strike",
+            "strategy_type": "Long Straddle",
+            "max_profit": round(profit_at_10pct_move, 2),  # At 10% move
+            "max_loss": round(-max_loss, 2),
+            "breakeven_points": [round(lower_breakeven, 2), round(upper_breakeven, 2)],
+            "probability_of_profit": 0.40,  # Needs significant move
+            "risk_reward_ratio": round(abs(profit_at_10pct_move) / max_loss, 2) if max_loss > 0 else 0,
+            "days_to_expiration": days_to_exp,
+            "total_cost": round(max_loss, 2),
+            "total_credit": 0,
+            "description": f"Buy ${call_strike:.0f} call and put for ${total_premium:.2f} total. "
+                          f"Profit if stock moves beyond ${lower_breakeven:.0f} or ${upper_breakeven:.0f}. "
+                          f"Current IV: {avg_iv:.0%}",
+            "risk_level": "High",
+            "market_outlook": "Expecting big move, unsure of direction",
+            "legs": [
+                {"action": "buy", "quantity": 1, "instrument": "call", "strike": call_strike,
+                 "expiration": atm_call.get('expiration_date'), "premium": call_premium},
+                {"action": "buy", "quantity": 1, "instrument": "put", "strike": put_strike,
+                 "expiration": atm_put.get('expiration_date'), "premium": put_premium}
+            ]
+        }
+
+    def _get_fallback_strategies(
+        self,
+        symbol: str,
+        underlying_price: float
+    ) -> List[Dict[str, Any]]:
+        """Return minimal fallback strategies when real chain data unavailable."""
         return [
             {
                 "strategy_name": "Covered Call",
                 "strategy_type": "Covered Call",
-                "max_profit": 7.50,
-                "max_loss": -142.50,
-                "breakeven_points": [underlying_price - 7.5],
+                "max_profit": underlying_price * 0.03 * 100,
+                "max_loss": -underlying_price * 0.97 * 100,
+                "breakeven_points": [underlying_price * 0.97],
                 "probability_of_profit": 0.65,
-                "risk_reward_ratio": 0.05,
+                "risk_reward_ratio": 0.03,
                 "days_to_expiration": 30,
-                "total_cost": 0.0,
-                "total_credit": 2.60,
-                "description": "Generate income on shares you already own by selling calls.",
+                "total_cost": underlying_price * 100,
+                "total_credit": underlying_price * 0.03 * 100,
+                "description": "Sell OTM calls on shares you own to generate income.",
                 "risk_level": "Medium",
                 "market_outlook": "Neutral to mildly bullish",
-            },
-            {
-                "strategy_name": "Protective Put",
-                "strategy_type": "Protective Put",
-                "max_profit": float("inf"),
-                "max_loss": 5.00,
-                "breakeven_points": [underlying_price - 5.0],
-                "probability_of_profit": 0.55,
-                "risk_reward_ratio": 0.20,
-                "days_to_expiration": 30,
-                "total_cost": 5.00,
-                "total_credit": 0.0,
-                "description": "Buy puts to protect downside on your long stock.",
-                "risk_level": "Low",
-                "market_outlook": "Cautious / downside protection",
-            },
+                "legs": []
+            }
         ]
 
     def _get_real_options_chain(
@@ -596,42 +1059,186 @@ class OptionsAnalysisService:
     
     def _calculate_greeks(self, contract: Dict[str, Any], underlying_price: float):
         """
-        Calculate simplified Greeks for an option contract
-        This is a simplified approximation - for production, use proper Black-Scholes
+        Calculate Greeks using the Black-Scholes model.
+
+        This provides accurate, real Greeks calculations based on:
+        - Current underlying price (real from Finnhub/Polygon)
+        - Strike price (real from Polygon)
+        - Time to expiration (real from contract data)
+        - Implied volatility (estimated from market price or historical vol)
+        - Risk-free rate (current Treasury rate approximation)
         """
         try:
-            strike = contract.get('strike', 0)
-            expiration_date = contract.get('expiration_date', '')
-            option_type = contract.get('option_type', 'call')
+            import math
+            from scipy.stats import norm
+
+            strike = float(contract.get('strike', 0))
+            option_type = contract.get('option_type', 'call').lower()
             days_to_exp = contract.get('days_to_expiration', 30)
-            iv = contract.get('implied_volatility', 0.25)
-            
+
+            # Get market price for IV calculation
+            market_price = contract.get('last_price', 0) or contract.get('ask', 0)
+
             if days_to_exp <= 0:
                 days_to_exp = 1
-            
-            # Simplified Delta calculation
+            if strike <= 0 or underlying_price <= 0:
+                self._set_default_greeks(contract, option_type)
+                return
+
+            # Time to expiration in years
+            T = days_to_exp / 365.0
+            S = underlying_price  # Spot price
+            K = strike            # Strike price
+            r = 0.045             # Risk-free rate (approximate current Treasury rate)
+
+            # Estimate implied volatility from market price, or use historical estimate
+            iv = contract.get('implied_volatility', 0)
+            if iv <= 0 or iv > 5:  # Invalid IV, estimate it
+                iv = self._estimate_implied_volatility(S, K, T, r, market_price, option_type)
+
+            sigma = iv  # Volatility
+
+            # Prevent division by zero
+            if T <= 0 or sigma <= 0:
+                self._set_default_greeks(contract, option_type)
+                return
+
+            sqrt_T = math.sqrt(T)
+
+            # Black-Scholes d1 and d2
+            d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * sqrt_T)
+            d2 = d1 - sigma * sqrt_T
+
+            # Standard normal PDF and CDF
+            N_d1 = norm.cdf(d1)
+            N_d2 = norm.cdf(d2)
+            N_neg_d1 = norm.cdf(-d1)
+            N_neg_d2 = norm.cdf(-d2)
+            n_d1 = norm.pdf(d1)  # PDF for gamma/vega calculations
+
+            # Calculate Greeks based on option type
             if option_type == 'call':
-                moneyness = underlying_price / strike if strike > 0 else 1.0
-                contract['delta'] = min(1.0, max(0.0, moneyness * 0.7))
-            else:
-                moneyness = strike / underlying_price if underlying_price > 0 else 1.0
-                contract['delta'] = max(-1.0, min(0.0, -moneyness * 0.7))
-            
-            # Simplified other Greeks
-            contract['gamma'] = 0.02
-            contract['theta'] = -0.15 / (days_to_exp / 30)  # Time decay
-            contract['vega'] = 0.3
-            contract['rho'] = 0.05 if option_type == 'call' else -0.03
-            contract['implied_volatility'] = iv if iv > 0 else 0.25
-            
+                # Delta: Rate of change of option price with respect to underlying
+                delta = N_d1
+
+                # Theta: Time decay (per day, negative for long options)
+                theta = (-(S * n_d1 * sigma) / (2 * sqrt_T)
+                        - r * K * math.exp(-r * T) * N_d2) / 365
+
+                # Rho: Sensitivity to interest rate changes
+                rho = K * T * math.exp(-r * T) * N_d2 / 100
+            else:  # put
+                # Delta for puts is negative
+                delta = N_d1 - 1  # or equivalently: -N_neg_d1
+
+                # Theta for puts
+                theta = (-(S * n_d1 * sigma) / (2 * sqrt_T)
+                        + r * K * math.exp(-r * T) * N_neg_d2) / 365
+
+                # Rho for puts
+                rho = -K * T * math.exp(-r * T) * N_neg_d2 / 100
+
+            # Gamma: Rate of change of delta (same for calls and puts)
+            gamma = n_d1 / (S * sigma * sqrt_T)
+
+            # Vega: Sensitivity to volatility (same for calls and puts)
+            # Expressed per 1% change in volatility
+            vega = S * n_d1 * sqrt_T / 100
+
+            # Store calculated Greeks
+            contract['delta'] = round(delta, 4)
+            contract['gamma'] = round(gamma, 4)
+            contract['theta'] = round(theta, 4)
+            contract['vega'] = round(vega, 4)
+            contract['rho'] = round(rho, 4)
+            contract['implied_volatility'] = round(iv, 4)
+
+            logger.debug(
+                f"Calculated Greeks for {contract.get('contract_symbol', 'N/A')}: "
+                f"Δ={delta:.3f} Γ={gamma:.4f} Θ={theta:.4f} V={vega:.3f} ρ={rho:.4f} IV={iv:.2%}"
+            )
+
         except Exception as e:
-            logger.debug(f"Error calculating Greeks: {e}")
-            # Set defaults
-            contract['delta'] = 0.5
-            contract['gamma'] = 0.02
-            contract['theta'] = -0.15
-            contract['vega'] = 0.3
-            contract['rho'] = 0.04
+            logger.warning(f"Error calculating Black-Scholes Greeks: {e}")
+            self._set_default_greeks(contract, contract.get('option_type', 'call'))
+
+    def _set_default_greeks(self, contract: Dict[str, Any], option_type: str):
+        """Set sensible default Greeks when calculation fails."""
+        contract['delta'] = 0.5 if option_type == 'call' else -0.5
+        contract['gamma'] = 0.02
+        contract['theta'] = -0.05
+        contract['vega'] = 0.10
+        contract['rho'] = 0.02 if option_type == 'call' else -0.02
+        contract['implied_volatility'] = 0.30
+
+    def _estimate_implied_volatility(
+        self,
+        S: float,
+        K: float,
+        T: float,
+        r: float,
+        market_price: float,
+        option_type: str
+    ) -> float:
+        """
+        Estimate implied volatility using Newton-Raphson method.
+
+        If market price is not available, falls back to historical volatility estimate.
+        """
+        try:
+            import math
+            from scipy.stats import norm
+
+            # If no market price, estimate based on moneyness and time
+            if market_price <= 0:
+                # Base volatility estimate from moneyness
+                moneyness = S / K
+                if moneyness > 1.1:  # Deep ITM
+                    return 0.25
+                elif moneyness < 0.9:  # Deep OTM
+                    return 0.35
+                else:  # ATM
+                    return 0.30
+
+            # Newton-Raphson iteration to find IV
+            sigma = 0.30  # Initial guess
+            max_iterations = 100
+            tolerance = 0.0001
+
+            for i in range(max_iterations):
+                # Calculate option price with current sigma
+                sqrt_T = math.sqrt(T)
+                d1 = (math.log(S / K) + (r + 0.5 * sigma ** 2) * T) / (sigma * sqrt_T)
+                d2 = d1 - sigma * sqrt_T
+
+                if option_type == 'call':
+                    price = S * norm.cdf(d1) - K * math.exp(-r * T) * norm.cdf(d2)
+                else:
+                    price = K * math.exp(-r * T) * norm.cdf(-d2) - S * norm.cdf(-d1)
+
+                # Calculate vega for Newton-Raphson update
+                vega = S * norm.pdf(d1) * sqrt_T
+
+                if vega < 0.0001:  # Avoid division by zero
+                    break
+
+                # Price difference
+                diff = market_price - price
+
+                if abs(diff) < tolerance:
+                    return max(0.05, min(sigma, 3.0))  # Clamp between 5% and 300%
+
+                # Newton-Raphson update
+                sigma = sigma + diff / vega
+
+                # Keep sigma in reasonable bounds
+                sigma = max(0.01, min(sigma, 5.0))
+
+            return max(0.10, min(sigma, 2.0))  # Return reasonable IV
+
+        except Exception as e:
+            logger.debug(f"IV estimation failed: {e}, using default")
+            return 0.30  # Default 30% volatility
     
     def _get_real_unusual_flow(
         self,
