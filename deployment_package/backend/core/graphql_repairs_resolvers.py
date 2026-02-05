@@ -13,7 +13,6 @@ from deployment_package.backend.core.options_repair_engine import (
     RepairPlan,
 )
 from deployment_package.backend.core.options_health_monitor import HealthStatus
-from deployment_package.backend.core.options_api_wiring import OptionsAPIWiring
 
 
 # GraphQL Types
