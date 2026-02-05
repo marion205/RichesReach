@@ -3620,7 +3620,7 @@ def yodlee_fastlink_start(request: Request):
         from django.db import connections
         connections.close_all()
         
-        from deployment_package.backend.core.banking_views import StartFastlinkView
+        from core.banking_views import StartFastlinkView
         from django.http import HttpRequest
         
         # Convert FastAPI request to Django request
@@ -3665,7 +3665,7 @@ async def yodlee_callback(request: Request):
         def _process_callback_sync(body_bytes, headers):
             """Process callback in sync context"""
             close_old_connections()
-            from deployment_package.backend.core.banking_views import YodleeCallbackView
+            from core.banking_views import YodleeCallbackView
             from django.http import HttpRequest
             
             view = YodleeCallbackView()
@@ -3692,7 +3692,7 @@ def yodlee_accounts(request: Request):
     """Get user's bank accounts"""
     try:
         _setup_django_once()
-        from deployment_package.backend.core.banking_views import AccountsView
+        from core.banking_views import AccountsView
         from django.http import HttpRequest
         
         view = AccountsView()
@@ -3718,7 +3718,7 @@ def yodlee_transactions(request: Request):
     """Get bank transactions"""
     try:
         _setup_django_once()
-        from deployment_package.backend.core.banking_views import TransactionsView
+        from core.banking_views import TransactionsView
         from django.http import HttpRequest
         
         view = TransactionsView()
@@ -3755,7 +3755,7 @@ async def yodlee_refresh(request: Request):
         def _refresh_account_sync(body_bytes, headers):
             """Refresh account in sync context"""
             close_old_connections()
-            from deployment_package.backend.core.banking_views import RefreshAccountView
+            from core.banking_views import RefreshAccountView
             from django.http import HttpRequest
             
             view = RefreshAccountView()
@@ -3782,7 +3782,7 @@ def yodlee_delete_bank_link(request: Request, bank_link_id: int):
     """Delete bank link"""
     try:
         _setup_django_once()
-        from deployment_package.backend.core.banking_views import DeleteBankLinkView
+        from core.banking_views import DeleteBankLinkView
         from django.http import HttpRequest
         
         view = DeleteBankLinkView()
@@ -3818,7 +3818,7 @@ async def yodlee_webhook(request: Request):
         def _process_webhook_sync(body_bytes, headers):
             """Process webhook in sync context"""
             close_old_connections()
-            from deployment_package.backend.core.banking_views import WebhookView
+            from core.banking_views import WebhookView
             from django.http import HttpRequest
             
             view = WebhookView()
@@ -3897,7 +3897,7 @@ async def money_snapshot(request: Request):
             raise HTTPException(status_code=401, detail="Authentication required")
         
         # Import models
-        from deployment_package.backend.core.banking_models import BankAccount, BankTransaction
+        from core.banking_models import BankAccount, BankTransaction
         from deployment_package.backend.core.models import Portfolio
         
         # Calculate date range (last 30 days)

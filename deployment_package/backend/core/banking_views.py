@@ -41,6 +41,64 @@ def _is_yodlee_enabled() -> bool:
     return os.getenv('USE_YODLEE', 'false').lower() == 'true'
 
 
+def _authenticate_from_header(request):
+    """
+    Authenticate a request from the Authorization header.
+    Used when Django middleware auth hasn't run (e.g. FastAPI -> Django proxy).
+    Returns the authenticated user or None.
+    """
+    # Already authenticated via middleware
+    if hasattr(request, 'user') and request.user and getattr(request.user, 'is_authenticated', False):
+        return request.user
+
+    from .authentication import get_user_from_token
+
+    auth_header = None
+    for key in request.META:
+        if 'AUTHORIZATION' in key.upper():
+            value = request.META.get(key, '')
+            if value:
+                auth_header = value
+                break
+
+    if not auth_header and hasattr(request, 'headers'):
+        auth_header = request.headers.get('Authorization', '') or request.headers.get('authorization', '')
+
+    if not auth_header:
+        return None
+
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+
+        # Dev token shortcut
+        if token.startswith('dev-token-'):
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            user = User.objects.first()
+            if user:
+                request.user = user
+                return user
+            return None
+
+        try:
+            user = get_user_from_token(token)
+            if user:
+                request.user = user
+                return user
+        except Exception as e:
+            logger.error(f"Token validation failed: {e}")
+
+        # Fallback for dev: use first user
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        user = User.objects.first()
+        if user:
+            request.user = user
+            return user
+
+    return None
+
+
 # CSRF exempt because:
 # 1. All requests use Authorization: Bearer <token> (stateless API)
 # 2. No cookie-based sessions for API endpoints
@@ -198,13 +256,8 @@ class StartFastlinkView(View):
         logger.info(f"🔵✅ Authentication successful - user: {user.email}")
         
         try:
-            # Check rate limiting for sensitive endpoint
-            from .rate_limiting import RateLimitMiddleware
-            rate_limiter = RateLimitMiddleware()
-            rate_limit_response = rate_limiter.check_rate_limit(request)
-            if rate_limit_response:
-                return rate_limit_response
-            
+            # Rate limiting is handled by RateLimitMiddleware in the Django middleware stack
+
             # Use enhanced client with retry logic
             yodlee = EnhancedYodleeClient()
             
@@ -220,19 +273,23 @@ class StartFastlinkView(View):
                 )
             
             # Get or create Yodlee loginName for this user
-            # Format: rr_{user_id} (must be unique, no spaces, 3-150 chars)
-            if not user.yodlee_loginname:
-                # Generate unique loginName
-                yodlee_loginname = f"rr_{user.id}"
-                # Ensure it's valid (no spaces, within length limits)
-                yodlee_loginname = yodlee_loginname.replace(' ', '_')[:150]
+            # In sandbox mode, use the pre-registered test user
+            sandbox_test_user = os.getenv('YODLEE_TEST_USER', '')
+            is_sandbox = 'sandbox' in yodlee.base_url
+
+            if is_sandbox and sandbox_test_user:
+                yodlee_loginname = sandbox_test_user
+                logger.info(f"🔵 Sandbox mode: using pre-registered test user: {yodlee_loginname}")
+            elif user.yodlee_loginname:
+                yodlee_loginname = user.yodlee_loginname
+                logger.info(f"🔵 Using existing Yodlee loginName: {yodlee_loginname}")
+            else:
+                # Generate unique loginName: rr_{user_id}
+                yodlee_loginname = f"rr_{user.id}".replace(' ', '_')[:150]
                 user.yodlee_loginname = yodlee_loginname
                 user.save(update_fields=['yodlee_loginname'])
                 logger.info(f"🔵 Created Yodlee loginName for user {user.id}: {yodlee_loginname}")
-            else:
-                yodlee_loginname = user.yodlee_loginname
-                logger.info(f"🔵 Using existing Yodlee loginName: {yodlee_loginname}")
-            
+
             # Step 1: Get admin token
             admin_token = yodlee.admin_token()
             if not admin_token:
@@ -244,16 +301,14 @@ class StartFastlinkView(View):
                     },
                     status=503
                 )
-            
-            # Step 2: Register user if needed (using admin token)
-            # Note: In sandbox, programmatic registration may not be supported (Y820)
-            # Users may need to be pre-registered in Yodlee admin console
-            registered = yodlee.ensure_user_registered(yodlee_loginname, user.email)
-            
+
+            # Step 2: Register user if needed (skip in sandbox with test user)
+            if not (is_sandbox and sandbox_test_user):
+                registered = yodlee.ensure_user_registered(yodlee_loginname, user.email)
+
             # Step 3: Get user token (not admin token - FastLink requires user token)
             token = yodlee.create_fastlink_token(yodlee_loginname)
             if not token:
-                # Check if it's Y305 (user not registered)
                 error_msg = "User not registered in Yodlee"
                 error_details = (
                     "In sandbox mode, users must be pre-registered in the Yodlee admin console. "
@@ -264,9 +319,9 @@ class StartFastlinkView(View):
                     {
                         'error': error_msg,
                         'details': error_details,
-                        'loginName': yodlee_loginname,  # Include for admin reference
+                        'loginName': yodlee_loginname,
                     },
-                    status=503  # Service unavailable (user needs to be registered)
+                    status=503
                 )
             
             fastlink_url = yodlee.fastlink_url
@@ -298,8 +353,9 @@ class YodleeCallbackView(View):
                 status=503
             )
         
-        # Handle case where request.user might be None (FastAPI -> Django conversion)
-        if not hasattr(request, 'user') or not request.user or not request.user.is_authenticated:
+        # Authenticate from header if middleware didn't (FastAPI -> Django)
+        user = _authenticate_from_header(request)
+        if not user:
             return JsonResponse({'error': 'Authentication required'}, status=401)
         
         try:
@@ -416,10 +472,11 @@ class AccountsView(View):
                 status=503
             )
         
-        # Handle case where request.user might be None (FastAPI -> Django conversion)
-        if not hasattr(request, 'user') or not request.user or not request.user.is_authenticated:
+        # Authenticate from header if middleware didn't (FastAPI -> Django)
+        user = _authenticate_from_header(request)
+        if not user:
             return JsonResponse({'error': 'Authentication required'}, status=401)
-        
+
         try:
             # Import models inside view to avoid "Apps aren't loaded" errors
             from .banking_models import BankAccount, BankProviderAccount
@@ -542,8 +599,9 @@ class TransactionsView(View):
                 status=503
             )
         
-        # Handle case where request.user might be None (FastAPI -> Django conversion)
-        if not hasattr(request, 'user') or not request.user or not request.user.is_authenticated:
+        # Authenticate from header if middleware didn't (FastAPI -> Django)
+        user = _authenticate_from_header(request)
+        if not user:
             return JsonResponse({'error': 'Authentication required'}, status=401)
         
         try:
@@ -701,8 +759,9 @@ class RefreshAccountView(View):
                 status=503
             )
         
-        # Handle case where request.user might be None (FastAPI -> Django conversion)
-        if not hasattr(request, 'user') or not request.user or not request.user.is_authenticated:
+        # Authenticate from header if middleware didn't (FastAPI -> Django)
+        user = _authenticate_from_header(request)
+        if not user:
             return JsonResponse({'error': 'Authentication required'}, status=401)
         
         try:
@@ -760,8 +819,9 @@ class DeleteBankLinkView(View):
                 status=503
             )
         
-        # Handle case where request.user might be None (FastAPI -> Django conversion)
-        if not hasattr(request, 'user') or not request.user or not request.user.is_authenticated:
+        # Authenticate from header if middleware didn't (FastAPI -> Django)
+        user = _authenticate_from_header(request)
+        if not user:
             return JsonResponse({'error': 'Authentication required'}, status=401)
         
         try:

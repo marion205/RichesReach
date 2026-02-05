@@ -654,30 +654,28 @@ const BankAccountScreen = ({ navigateTo }: { navigateTo?: (screen: string, param
               <Icon name="credit-card" size={48} color="#C7C7CC" />
               <Text style={styles.emptyTitle}>No Bank Accounts</Text>
               <Text style={styles.emptySubtitle}>Link a bank to start funding your account.</Text>
-              <TouchableOpacity 
-                style={styles.primaryBtn} 
-                onPress={() => {
-                  setShowLinkModal(true);
-                  setUseManualLink(false);
-                }}
-                disabled={yodleeLoading}
-              >
-                <Text style={styles.primaryBtnText}>
-                  {yodleeLoading ? 'Loading...' : 'Link Bank'}
-                </Text>
-              </TouchableOpacity>
-              {yodleeError && (
-                <Text style={styles.errorText}>{yodleeError}</Text>
-              )}
-              {!yodleeAvailable && (
-                <TouchableOpacity 
-                  style={[styles.primaryBtn, { marginTop: 8, backgroundColor: '#6B7280' }]} 
+              {yodleeAvailable ? (
+                <TouchableOpacity
+                  style={styles.primaryBtn}
+                  onPress={() => {
+                    setShowLinkModal(true);
+                    setUseManualLink(false);
+                  }}
+                  disabled={yodleeLoading}
+                >
+                  <Text style={styles.primaryBtnText}>
+                    {yodleeLoading ? 'Loading...' : 'Link Bank'}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={styles.primaryBtn}
                   onPress={() => {
                     setUseManualLink(true);
                     setShowLinkModal(true);
                   }}
                 >
-                  <Text style={styles.primaryBtnText}>Use Manual Entry</Text>
+                  <Text style={styles.primaryBtnText}>Link Bank</Text>
                 </TouchableOpacity>
               )}
             </View>
