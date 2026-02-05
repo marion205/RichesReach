@@ -101,6 +101,8 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
   const [successMessage, setSuccessMessage] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [repairAccepted, setRepairAccepted] = useState<RepairPlan | null>(null);
+  const [showFlightManual, setShowFlightManual] = useState(false);
+  const [flightManualContent, setFlightManualContent] = useState<any>(null);
 
   // GraphQL Queries
   const { data: portfolioData, loading: portfolioLoading, error: portfolioError, refetch: refetchPortfolio } = useQuery(
@@ -194,6 +196,48 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
   const handleRejectRepair = () => {
     setSelectedRepair(null);
     setShowRepairModal(false);
+  };
+
+  const handleShowFlightManual = async () => {
+    if (!selectedRepair) return;
+    
+    // Get demo flight manual content
+    const manualContent = {
+      title: `${selectedRepair.repairType} Repair Guide`,
+      strategy: selectedRepair.originalStrategy,
+      overview: `Learn how to execute a ${selectedRepair.repairType} repair on your ${selectedRepair.originalStrategy} position.`,
+      steps: [
+        {
+          number: 1,
+          title: 'Understand the Problem',
+          description: `Your ${selectedRepair.originalStrategy} has drifted from your original delta target by ${(selectedRepair.deltaDriftPct * 100).toFixed(1)}%.`,
+        },
+        {
+          number: 2,
+          title: 'The Repair Solution',
+          description: `A ${selectedRepair.repairType} will add ${selectedRepair.repairStrikes} strikes to realign your position and collect ${selectedRepair.repairCredit.toFixed(2)} in premium.`,
+        },
+        {
+          number: 3,
+          title: 'Risk Management',
+          description: `Your max loss will change from $${selectedRepair.currentMaxLoss.toFixed(0)} to $${selectedRepair.newMaxLoss.toFixed(0)}, while improving your statistical edge by ${(selectedRepair.confidenceBoost * 100).toFixed(0)}%.`,
+        },
+        {
+          number: 4,
+          title: 'Execution',
+          description: `Place the ${selectedRepair.repairType} order to execute this repair. You can monitor your position in real-time.`,
+        },
+      ],
+      keyMetrics: {
+        currentDelta: selectedRepair.currentDelta,
+        newBreakeven: selectedRepair.newBreakEven,
+        creditReceived: selectedRepair.repairCredit,
+        maxLossReduction: selectedRepair.currentMaxLoss - selectedRepair.newMaxLoss,
+      },
+    };
+    
+    setFlightManualContent(manualContent);
+    setShowFlightManual(true);
   };
 
   // Get portfolio health status
@@ -443,7 +487,7 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
                 </View>
 
                 {/* Flight Manual Link */}
-                <TouchableOpacity style={styles.flightManualButton}>
+                <TouchableOpacity style={styles.flightManualButton} onPress={handleShowFlightManual}>
                   <Text style={styles.flightManualButtonText}>📖 Read Flight Manual for {selectedRepair.repairType}</Text>
                 </TouchableOpacity>
               </>
@@ -492,6 +536,90 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
               Your repair plan has been executed. Position is now delta-neutral.
             </Text>
           </View>
+        </View>
+      </Modal>
+
+      {/* Flight Manual Modal */}
+      <Modal
+        visible={showFlightManual}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setShowFlightManual(false)}
+      >
+        <View style={[styles.flightManualContainer, { paddingTop: insets.top }]}>
+          {/* Flight Manual Header */}
+          <View style={styles.flightManualHeader}>
+            <TouchableOpacity onPress={() => setShowFlightManual(false)}>
+              <Text style={styles.flightManualCloseButton}>← Back</Text>
+            </TouchableOpacity>
+            <Text style={styles.flightManualTitle}>📖 Flight Manual</Text>
+            <View style={{ width: 60 }} />
+          </View>
+
+          <ScrollView style={styles.flightManualScroll} contentContainerStyle={styles.flightManualContent}>
+            {flightManualContent && (
+              <>
+                {/* Manual Title */}
+                <Text style={styles.manualMainTitle}>{flightManualContent.title}</Text>
+                <Text style={styles.manualSubtitle}>Strategy: {flightManualContent.strategy}</Text>
+
+                {/* Overview */}
+                <View style={styles.manualSection}>
+                  <Text style={styles.manualSectionTitle}>Overview</Text>
+                  <Text style={styles.manualText}>{flightManualContent.overview}</Text>
+                </View>
+
+                {/* Step-by-step Guide */}
+                <View style={styles.manualSection}>
+                  <Text style={styles.manualSectionTitle}>How It Works</Text>
+                  {flightManualContent.steps.map((step: any) => (
+                    <View key={step.number} style={styles.manualStep}>
+                      <View style={styles.manualStepNumber}>
+                        <Text style={styles.manualStepNumberText}>{step.number}</Text>
+                      </View>
+                      <View style={styles.manualStepContent}>
+                        <Text style={styles.manualStepTitle}>{step.title}</Text>
+                        <Text style={styles.manualStepText}>{step.description}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Key Metrics */}
+                <View style={styles.manualSection}>
+                  <Text style={styles.manualSectionTitle}>Key Metrics</Text>
+                  <View style={styles.metricsGrid}>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Current Delta</Text>
+                      <Text style={styles.metricValue}>{flightManualContent.keyMetrics.currentDelta.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>New Breakeven</Text>
+                      <Text style={styles.metricValue}>${flightManualContent.keyMetrics.newBreakeven.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Credit</Text>
+                      <Text style={styles.metricValue}>${flightManualContent.keyMetrics.creditReceived.toFixed(2)}</Text>
+                    </View>
+                    <View style={styles.metricCard}>
+                      <Text style={styles.metricLabel}>Loss Reduction</Text>
+                      <Text style={styles.metricValue}>${flightManualContent.keyMetrics.maxLossReduction.toFixed(0)}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={{ height: 40 }} />
+              </>
+            )}
+          </ScrollView>
+
+          {/* Close Button */}
+          <TouchableOpacity 
+            style={styles.manualCloseButton}
+            onPress={() => setShowFlightManual(false)}
+          >
+            <Text style={styles.manualCloseButtonText}>Got It</Text>
+          </TouchableOpacity>
         </View>
       </Modal>
     </View>
@@ -884,6 +1012,132 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     textAlign: 'center',
     lineHeight: 20,
+  },
+
+  // Flight Manual Modal
+  flightManualContainer: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  flightManualHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: 'white',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  flightManualCloseButton: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3B82F6',
+  },
+  flightManualTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1F2937',
+  },
+  flightManualScroll: {
+    flex: 1,
+  },
+  flightManualContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 24,
+  },
+  manualMainTitle: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  manualSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 20,
+  },
+  manualSection: {
+    marginBottom: 28,
+  },
+  manualSectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+  manualText: {
+    fontSize: 16,
+    color: '#4B5563',
+    lineHeight: 24,
+  },
+  manualStep: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  manualStepNumber: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 2,
+    borderColor: '#3B82F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  manualStepNumberText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#3B82F6',
+  },
+  manualStepContent: {
+    flex: 1,
+  },
+  manualStepTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  manualStepText: {
+    fontSize: 14,
+    color: '#4B5563',
+    lineHeight: 20,
+  },
+  metricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -6,
+  },
+  metricCard: {
+    width: '50%',
+    paddingHorizontal: 6,
+    marginBottom: 12,
+  },
+  metricLabel: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  metricValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#3B82F6',
+  },
+  manualCloseButton: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 14,
+    marginHorizontal: 16,
+    marginBottom: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  manualCloseButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: 'white',
   },
 });
 
