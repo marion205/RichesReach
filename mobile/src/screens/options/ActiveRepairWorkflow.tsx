@@ -135,6 +135,15 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
     }
   );
 
+  // Debug: Log modal state changes
+  useEffect(() => {
+    console.log('[ActiveRepairWorkflow] Flight Manual modal state changed:', {
+      showFlightManual,
+      hasContent: !!flightManualContent,
+      selectedRepair: selectedRepair?.repairType || 'none',
+    });
+  }, [showFlightManual, flightManualContent]);
+
   if (portfolioLoading) {
     return (
       <View style={styles.loadingContainer}>
