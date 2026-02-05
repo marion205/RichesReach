@@ -28,13 +28,50 @@ interface UnusualActivity {
 
 export default function OptionsFlowWidget({ symbol }: OptionsFlowWidgetProps) {
   const [filter, setFilter] = useState<'all' | 'calls' | 'puts' | 'sweeps' | 'blocks'>('all');
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
+  const [delayed, setDelayed] = useState(false);
+
   const { data, loading, error } = useQuery(GET_OPTIONS_FLOW, {
     variables: { symbol },
     skip: !symbol,
-    fetchPolicy: 'cache-and-network',
-    pollInterval: 30000, // Poll every 30 seconds for updates
+    fetchPolicy: 'cache-first', // Use cache first to avoid long loading
     errorPolicy: 'all',
   });
+
+  // Timeout after 12 seconds - show delayed state if still loading
+  useEffect(() => {
+    if (loading && !loadingTimeout) {
+      const timer = setTimeout(() => {
+        setLoadingTimeout(true);
+        setDelayed(true);
+      }, 12000);
+      return () => clearTimeout(timer);
+    }
+    if (!loading) {
+      setLoadingTimeout(false);
+      setDelayed(false);
+    }
+  }, [loading, loadingTimeout]);
+
+  const showDelayedState = delayed || loadingTimeout || error;
+
+  if (showDelayedState) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Icon name="activity" size={18} color="#007AFF" />
+          <Text style={styles.title}>Options Flow & Unusual Activity</Text>
+          <View style={styles.demoBadge}>
+            <Text style={styles.demoText}>DELAYED</Text>
+          </View>
+        </View>
+        <View style={styles.delayedState}>
+          <ActivityIndicator size="small" color="#007AFF" />
+          <Text style={styles.delayedText}>Real data is delayed. Please wait…</Text>
+        </View>
+      </View>
+    );
+  }
 
   if (loading) {
     return (
@@ -45,9 +82,21 @@ export default function OptionsFlowWidget({ symbol }: OptionsFlowWidgetProps) {
     );
   }
 
-  if (error || !data?.optionsFlow) {
-    // Fallback to mock data for demo
-    return <OptionsFlowWidgetMock symbol={symbol} filter={filter} setFilter={setFilter} />;
+  if (!data?.optionsFlow) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Icon name="activity" size={18} color="#007AFF" />
+          <Text style={styles.title}>Options Flow & Unusual Activity</Text>
+          <View style={styles.demoBadge}>
+            <Text style={styles.demoText}>DELAYED</Text>
+          </View>
+        </View>
+        <View style={styles.delayedState}>
+          <Text style={styles.delayedText}>Real data is delayed. Please wait…</Text>
+        </View>
+      </View>
+    );
   }
 
   const flow = data.optionsFlow;
@@ -373,6 +422,17 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#111827',
+  },
+  delayedState: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 8,
+  },
+  delayedText: {
+    fontSize: 13,
+    color: '#6B7280',
   },
   callVolume: {
     color: '#059669',

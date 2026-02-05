@@ -622,7 +622,7 @@ const MemeQuestScreen: React.FC = () => {
       style={styles.container}
       onScroll={Animated.event(
         [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-        { useNativeDriver: true }
+        { useNativeDriver: false }
       )}
       scrollEventThrottle={16}
     >

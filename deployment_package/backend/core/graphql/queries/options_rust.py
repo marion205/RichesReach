@@ -228,60 +228,78 @@ class OptionsRustQuery(graphene.ObjectType):
         return result
 
     def resolve_options_flow(self, info, symbol):
-        """Resolve options flow and unusual activity data."""
+        """
+        Resolve options flow and unusual activity data using REAL Polygon data.
+
+        Uses PolygonOptionsFlowService to detect unusual activity based on:
+        - Volume vs Open Interest ratios
+        - Large trades (blocks)
+        - High volume relative to average
+        - Unusual IV levels
+        """
         from core.options_flow_types import LargestTradeType, OptionsFlowType, UnusualActivityType
-        from core.real_options_service import RealOptionsService
+        from core.polygon_options_flow_service import get_polygon_flow_service
 
         try:
             symbol_upper = symbol.upper()
-            options_service = RealOptionsService()
-            options_data = options_service.get_real_options_chain(symbol_upper)
-            flow_data = options_data.get("unusual_flow", [])
-            call_volume = sum(i.get("volume", 0) for i in flow_data if (i.get("option_type") or "").lower() == "call")
-            put_volume = sum(i.get("volume", 0) for i in flow_data if (i.get("option_type") or "").lower() == "put")
-            put_call_ratio = put_volume / call_volume if call_volume > 0 else 0.0
+            logger.info(f"Fetching real options flow for {symbol_upper}")
+
+            # Use the new Polygon-based flow service
+            flow_service = get_polygon_flow_service()
+            flow_data = flow_service.get_unusual_options_flow(symbol_upper, limit=20)
+
+            # Convert to GraphQL types
             unusual_activity = []
-            for item in flow_data[:20]:
-                vol, oi = item.get("volume", 0), item.get("open_interest", 10000)
-                uvp = (vol / max(oi * 0.1, 1)) * 100 if oi > 0 else 150
+            for item in flow_data.get('unusual_activity', []):
+                vol = item.get('volume', 0)
+                oi = item.get('open_interest', 1)
+                vol_oi_ratio = item.get('volume_oi_ratio', 0)
+
                 unusual_activity.append(UnusualActivityType(
-                    contractSymbol=item.get("contract_symbol", ""),
-                    strike=float(item.get("strike", 0)),
-                    expiration=item.get("expiration_date", ""),
-                    optionType=(item.get("option_type") or "").lower(),
+                    contractSymbol=item.get('contract_symbol', ''),
+                    strike=float(item.get('strike', 0)),
+                    expiration=item.get('expiration_date', ''),
+                    optionType=item.get('option_type', 'call'),
                     volume=int(vol),
                     openInterest=int(oi),
-                    volumeVsOI=float(vol / max(oi, 1)),
-                    lastPrice=float(item.get("premium", 0)),
-                    bid=float(item.get("premium", 0) * 0.98),
-                    ask=float(item.get("premium", 0) * 1.02),
-                    impliedVolatility=float(item.get("implied_volatility", 0.25)),
-                    unusualVolumePercent=float(uvp),
-                    sweepCount=1 if "Sweep" in (item.get("activity_type") or "") else 0,
-                    blockSize=vol if "Block" in (item.get("activity_type") or "") else 0,
-                    isDarkPool=bool(item.get("is_dark_pool", False)),
+                    volumeVsOI=float(vol_oi_ratio),
+                    lastPrice=float(item.get('last_price', 0)),
+                    bid=float(item.get('bid', 0)),
+                    ask=float(item.get('ask', 0)),
+                    impliedVolatility=float(item.get('implied_volatility', 0.25)),
+                    unusualVolumePercent=float(item.get('unusual_score', 0)),
+                    sweepCount=int(item.get('sweep_count', 0)),
+                    blockSize=int(item.get('block_size', 0)),
+                    isDarkPool=bool(item.get('is_dark_pool', False)),
                 ))
+
+            # Convert largest trades
             largest_trades = [
                 LargestTradeType(
-                    contractSymbol=i.get("contract_symbol", ""),
-                    size=int(i.get("volume", 0)),
-                    price=float(i.get("premium", 0)),
-                    time=i.get("timestamp", datetime.now().isoformat()),
-                    isCall=(i.get("option_type") or "").lower() == "call",
-                    isSweep=bool(i.get("sweep_count", 0) > 0),
-                    isBlock=bool(i.get("block_size", 0) > 0),
+                    contractSymbol=trade.get('contract_symbol', ''),
+                    size=int(trade.get('size', 0)),
+                    price=float(trade.get('price', 0)),
+                    time=trade.get('time', datetime.now().isoformat()),
+                    isCall=bool(trade.get('is_call', True)),
+                    isSweep=bool(trade.get('is_sweep', False)),
+                    isBlock=bool(trade.get('is_block', False)),
                 )
-                for i in sorted(flow_data, key=lambda x: x.get("volume", 0), reverse=True)[:10]
+                for trade in flow_data.get('largest_trades', [])
             ]
+
+            is_real = flow_data.get('is_real_data', False)
+            logger.info(f"Options flow for {symbol_upper}: {len(unusual_activity)} unusual activities, real_data={is_real}")
+
             return OptionsFlowType(
                 symbol=symbol_upper,
-                timestamp=datetime.now().isoformat(),
+                timestamp=flow_data.get('timestamp', datetime.now().isoformat()),
                 unusualActivity=unusual_activity,
-                putCallRatio=float(put_call_ratio),
-                totalCallVolume=int(call_volume),
-                totalPutVolume=int(put_volume),
+                putCallRatio=float(flow_data.get('put_call_ratio', 0)),
+                totalCallVolume=int(flow_data.get('total_call_volume', 0)),
+                totalPutVolume=int(flow_data.get('total_put_volume', 0)),
                 largestTrades=largest_trades,
             )
+
         except Exception as e:
             logger.error("Error resolving options flow: %s", e, exc_info=True)
             return OptionsFlowType(

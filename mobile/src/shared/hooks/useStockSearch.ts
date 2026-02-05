@@ -11,8 +11,8 @@ const GET_STOCKS = gql`
       sector
       marketCap
       peRatio
-      dividendYield: dividend_yield
-      beginnerFriendlyScore: beginner_friendly_score
+      dividendYield
+      beginnerFriendlyScore
       currentPrice
       __typename
     }

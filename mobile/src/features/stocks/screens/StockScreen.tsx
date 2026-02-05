@@ -429,8 +429,8 @@ const GET_AI_STOCK_RECOMMENDATIONS = gql`
 
 // ML-powered stock screening (now personalized with spending habits)
 const GET_ML_STOCK_SCREENING = gql`
-  query GetMLStockScreening($limit: Int) {
-    advancedStockScreening(limit: $limit, sortBy: "ml_score") {
+  query GetMLStockScreening($limit: Int, $minBeginnerScore: Int) {
+    advancedStockScreening(limit: $limit, sortBy: "ml_score", minBeginnerScore: $minBeginnerScore) {
       symbol
       companyName
       sector
@@ -1010,7 +1010,7 @@ interface OptionOrder {
   // ML-powered screening for Beginner Friendly tab
   const { data: mlScreeningData, loading: mlScreeningLoading, error: mlScreeningError } =
     useQuery(GET_ML_STOCK_SCREENING, {
-      variables: { limit: 50 },
+      variables: { limit: 50, minBeginnerScore: 60 },
       fetchPolicy: 'cache-first', // Use cache first for faster loads
       nextFetchPolicy: 'cache-first', // Keep using cache for subsequent loads
       errorPolicy: 'all'
@@ -2510,8 +2510,11 @@ interface OptionOrder {
         }
       }));
       
+      const filteredMlData = transformedMlData.filter(stock => (stock.beginnerFriendlyScore ?? 0) >= 60);
+      const filteredBeginnerStocks = beginnerStocks.filter(stock => (stock.beginnerFriendlyScore ?? 0) >= 60);
+
       // Ensure we always have at least 5 stocks for Beginner Friendly
-      let data = transformedMlData.length > 0 ? transformedMlData : beginnerStocks;
+      let data = filteredMlData.length > 0 ? filteredMlData : filteredBeginnerStocks;
       
       // If we still don't have enough stocks, add beginner-friendly stocks to reach minimum of 5
       if (data.length < 5) {

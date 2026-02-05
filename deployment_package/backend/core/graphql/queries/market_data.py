@@ -38,6 +38,11 @@ class MarketDataQuery(graphene.ObjectType):
         description="Get top stocks ranked by FSS v3.0 score",
     )
     beginner_friendly_stocks = graphene.List("core.types.StockType")
+    ml_beginner_recommendations = graphene.List(
+        "core.types.MLRecommendationType",
+        limit=graphene.Int(default_value=20),
+        description="Get ML-based personalized stock recommendations for beginner investors",
+    )
     current_stock_prices = graphene.List(
         "core.types.StockPriceType",
         symbols=graphene.List(graphene.String),
@@ -301,16 +306,22 @@ class MarketDataQuery(graphene.ObjectType):
 
     def resolve_beginner_friendly_stocks(self, info):
         user = getattr(info.context, "user", None)
-        user_id = getattr(user, "id", 1) if user and not getattr(user, "is_anonymous", True) else 1
+        is_authenticated = user and not getattr(user, "is_anonymous", True)
+        user_id = getattr(user, "id", 1) if is_authenticated else 1
+
+        logger.info(f"Resolving beginner_friendly_stocks for user_id={user_id}, authenticated={is_authenticated}")
+
         sector_weights = {}
         try:
             from core.spending_habits_service import SpendingHabitsService
             spending_service = SpendingHabitsService()
             spending_analysis = spending_service.analyze_spending_habits(user_id, months=3)
             sector_weights = spending_service.get_spending_based_stock_preferences(spending_analysis)
+            if sector_weights:
+                logger.debug(f"User {user_id} sector preferences: {sector_weights}")
         except Exception as e:
             logger.warning("Could not get spending analysis for beginner stocks: %s", e)
-        
+
         # Get all stocks and compute personalized beginner scores
         stocks = Stock.objects.all()
         stocks_list = list(stocks[:100])
@@ -322,23 +333,30 @@ class MarketDataQuery(graphene.ObjectType):
             try:
                 stock_type = StockType(stock)
                 score = stock_type.resolve_beginner_friendly_score(info)
-            except Exception:
-                score = getattr(stock, "beginner_friendly_score", 0)
+            except Exception as e:
+                logger.debug(f"Error scoring {stock.symbol}: {e}")
+                score = getattr(stock, "beginner_friendly_score", 0) or 50
             scored_stocks.append((stock, score))
 
         if sector_weights:
             def adjusted_score(item):
                 stock, base = item
                 sector = getattr(stock, "sector", "Unknown")
-                return base + (sector_weights.get(sector, 0) * 20)
+                boost = sector_weights.get(sector, 0) * 20
+                return base + boost
             scored_stocks.sort(key=adjusted_score, reverse=True)
         else:
             scored_stocks.sort(key=lambda item: item[1], reverse=True)
 
-        # Beginner Friendly should show only BUY-tier stocks (score >= 60)
-        # Temporarily allow >= 50 to debug why scores aren't reaching 60
-        scored_stocks = [item for item in scored_stocks if item[1] >= 50]
+        # Log top scores for debugging
+        top_5 = scored_stocks[:5]
+        logger.debug(f"Top 5 beginner scores for user {user_id}: {[(s.symbol, score) for s, score in top_5]}")
+
+        # Beginner Friendly shows stocks with score >= 60 (BUY recommendation)
+        scored_stocks = [item for item in scored_stocks if item[1] >= 60]
         stocks_list = [item[0] for item in scored_stocks]
+
+        logger.info(f"Found {len(stocks_list)} beginner-friendly stocks (score >= 60) for user {user_id}")
         
         # Enrich with fundamental data from Polygon and update database
         try:
@@ -354,8 +372,49 @@ class MarketDataQuery(graphene.ObjectType):
         # The enhanced_stock_service.get_multiple_prices() is async and cannot be called
         # with asyncio.run() from within an async GraphQL resolver context
         # Prices are cached separately and will be updated by background tasks
-        
+
         return stocks_list[:20]
+
+    def resolve_ml_beginner_recommendations(self, info, limit=20):
+        """
+        Get ML-based personalized stock recommendations for beginner investors.
+
+        Uses the ML recommendation engine which combines:
+        - User persona classification
+        - Collaborative filtering
+        - Content-based filtering
+        - Stock fundamentals analysis
+        """
+        user = getattr(info.context, "user", None)
+        user_id = getattr(user, "id", 1) if user and not getattr(user, "is_anonymous", True) else 1
+
+        try:
+            from core.ml_beginner_recommendations import get_ml_recommender
+
+            recommender = get_ml_recommender()
+            recommendations = recommender.get_personalized_recommendations(user_id, limit=limit)
+
+            # Convert to GraphQL-compatible format
+            result = []
+            for rec in recommendations:
+                result.append({
+                    'symbol': rec.symbol,
+                    'company_name': rec.company_name,
+                    'ml_score': rec.ml_score,
+                    'confidence': rec.confidence,
+                    'recommendation': rec.recommendation,
+                    'reasons': rec.reasons,
+                    'persona_match': rec.persona_match,
+                    'similar_user_score': rec.similar_user_score,
+                    'fundamentals_score': rec.fundamentals_score,
+                })
+
+            logger.info(f"Returned {len(result)} ML recommendations for user {user_id}")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error getting ML recommendations: {e}", exc_info=True)
+            return []
 
     def resolve_current_stock_prices(self, info, symbols=None):
         if not symbols:
