@@ -189,7 +189,7 @@ class Query(graphene.ObjectType):
         if cached:
             return cached
 
-        from deployment_package.backend.models import Portfolio
+        from core.models import Portfolio
 
         portfolio = Portfolio.objects.get(user_id=user_id, account_id=account_id)
         positions = portfolio.positions.all()
@@ -228,7 +228,7 @@ class Query(graphene.ObjectType):
         """
         Get all open positions for user
         """
-        from deployment_package.backend.models import Position
+        from core.models import Position
 
         positions = Position.objects.filter(user_id=user_id, account_id=account_id, is_open=True)
 
@@ -263,7 +263,7 @@ class Query(graphene.ObjectType):
         """
         Get all active repair plans for user
         """
-        from deployment_package.backend.models import Position
+        from core.models import Position
 
         positions = Position.objects.filter(user_id=user_id, account_id=account_id, is_open=True)
         repair_engine = OptionsRepairEngine(router=None)
@@ -308,7 +308,7 @@ class Query(graphene.ObjectType):
 
     def resolve_position(self, info, position_id: str, user_id: str) -> PositionType:
         """Get details for a single position"""
-        from deployment_package.backend.models import Position
+        from core.models import Position
 
         pos = Position.objects.get(id=position_id, user_id=user_id)
 
@@ -336,7 +336,7 @@ class Query(graphene.ObjectType):
 
     def resolve_repair_plan(self, info, position_id: str) -> RepairPlanType:
         """Get repair plan for a position"""
-        from deployment_package.backend.models import Position
+        from core.models import Position
 
         pos = Position.objects.get(id=position_id)
         repair_engine = OptionsRepairEngine(router=None)
@@ -408,7 +408,7 @@ class Query(graphene.ObjectType):
 
     def resolve_repair_history(self, info, user_id: str, limit: int = 50, offset: int = 0) -> list:
         """Get historical repairs"""
-        from deployment_package.backend.models import RepairHistory
+        from core.models import RepairHistory
 
         repairs = RepairHistory.objects.filter(user_id=user_id).order_by("-accepted_at")[offset : offset + limit]
 
@@ -444,7 +444,7 @@ class AcceptRepairPlan(graphene.Mutation):
     repair_execution = graphene.Field(RepairExecutionType)
 
     def mutate(self, info, position_id: str, repair_plan_id: str, user_id: str):
-        from deployment_package.backend.models import Position, RepairHistory
+        from core.models import Position, RepairHistory
         from deployment_package.backend.core.broker_api import BrokerAPI
         import datetime
 
@@ -517,7 +517,7 @@ class ExecuteBulkRepairs(graphene.Mutation):
     bulk_execution = graphene.Field(BulkRepairExecutionType)
 
     def mutate(self, info, user_id: str, position_ids: list):
-        from deployment_package.backend.models import Position
+        from core.models import Position
 
         try:
             positions = Position.objects.filter(id__in=position_ids, user_id=user_id)
