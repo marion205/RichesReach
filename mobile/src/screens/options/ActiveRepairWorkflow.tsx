@@ -90,8 +90,8 @@ interface ActiveRepairWorkflowProps {
  * 6. Success: Show trade execution confirmation
  */
 export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
-  userId,
-  accountId,
+  userId = 'default-user',
+  accountId = 'default-account',
   onRefresh,
 }) => {
   const insets = useSafeAreaInsets();
@@ -103,11 +103,12 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
   const [repairAccepted, setRepairAccepted] = useState<RepairPlan | null>(null);
 
   // GraphQL Queries
-  const { data: portfolioData, loading: portfolioLoading, refetch: refetchPortfolio } = useQuery(
+  const { data: portfolioData, loading: portfolioLoading, error: portfolioError, refetch: refetchPortfolio } = useQuery(
     GET_PORTFOLIO_WITH_REPAIRS,
     {
       variables: { user_id: userId, account_id: accountId },
       pollInterval: 30000, // Poll every 30 seconds
+      errorPolicy: 'all', // Continue even if there are errors
     }
   );
 
@@ -137,6 +138,21 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3B82F6" />
         <Text style={styles.loadingText}>Loading your portfolio...</Text>
+      </View>
+    );
+  }
+
+  if (portfolioError) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.errorText}>Unable to load portfolio</Text>
+        <Text style={styles.errorSubtext}>{portfolioError.message}</Text>
+        <TouchableOpacity 
+          style={styles.retryButton}
+          onPress={() => refetchPortfolio()}
+        >
+          <Text style={styles.retryText}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -521,6 +537,29 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
     color: '#6B7280',
+  },
+  errorText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#EF4444',
+    marginBottom: 8,
+  },
+  errorSubtext: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 14,
   },
 
   // Scroll Content
