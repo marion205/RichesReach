@@ -1,0 +1,16 @@
+[package]
+name = "edge_physics"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "edge_physics"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.20", features = ["extension-module"] }
+ndarray = "0.15"
+statrs = "0.16"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rayon = "1.7"  # For parallel position processing
