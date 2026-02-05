@@ -55,6 +55,8 @@ try:
         PortfolioImpact,
         FlightManual,
     )
+    from options_health_alerting import EdgeFactoryAlerter
+    from options_repair_engine import OptionsRepairEngine, RepairPlanAcceptor
 except ImportError as e:
     logger = logging.getLogger(__name__)
     logger.warning(f"Import error (expected in module test): {e}")
@@ -549,6 +551,9 @@ class OptionsAnalysisPipeline:
             data_fetcher=self.fetcher,
             regime_detector=self.regime_detector,
         )
+        self.alerter = EdgeFactoryAlerter()
+        self.repair_engine = OptionsRepairEngine(router=self.router)
+        self.repair_acceptor = RepairPlanAcceptor()
         self._regime_shift_cache: Dict[str, datetime] = {}
         self.router = StrategyRouter(playbooks=playbooks_config or {})
         self.sizer = OptionsRiskSizer(caps=risk_caps, kelly=kelly_config)
@@ -618,6 +623,15 @@ class OptionsAnalysisPipeline:
                 regime_state=self.regime_detector.get_regime_state(),
                 last_regime_change=last_regime_change,
             )
+            
+            # NEW: Trigger alerts if unhealthy
+            self.alerter.process_health_status(
+                ticker=ticker,
+                health=health,
+                timestamp=datetime.utcnow(),
+                user_count_affected=0,  # TODO: Query active user count for this ticker
+            )
+            
             if not health.is_healthy:
                 warnings.extend(health.active_alerts)
                 confidence_override = "CAUTION"
@@ -814,6 +828,72 @@ class OptionsAnalysisPipeline:
             sector_concentration_pct=portfolio.sector_exposure_pct.get(trade.sector, 0.0),
             ticker_concentration_pct=portfolio.ticker_exposure_pct.get(trade.ticker, 0.0) if portfolio.ticker_exposure_pct else 0.0,
         )
+
+    def check_portfolio_repairs(
+        self,
+        user_id: int,
+        positions: List,
+        account_equity: float,
+        current_prices: Dict[str, float],
+    ) -> Dict:
+        """
+        Hourly background task to check all open positions for repair needs.
+        
+        This is the "Auto-Defend" workflow: identify positions leaking Delta
+        and suggest defensive adjustments to reduce max loss.
+        
+        Args:
+            user_id: User ID
+            positions: List of OptionsPosition objects
+            account_equity: User's total account equity
+            current_prices: Dict mapping ticker → current price
+        
+        Returns:
+            Dict with:
+            - repair_plans: List of RepairPlan objects (sorted by priority)
+            - notifications_sent: Count of user notifications
+            - timestamp: When check was run
+        """
+        try:
+            logger.info(f"🔍 Starting repair check for user {user_id} ({len(positions)} positions)")
+            
+            # Batch analyze all positions
+            repair_plans = self.repair_engine.batch_analyze_portfolio(
+                positions=positions,
+                current_underlying_prices=current_prices,
+                account_equity=account_equity,
+            )
+            
+            notifications_sent = 0
+            
+            # Execute workflow for each repair plan
+            for repair_plan in repair_plans:
+                result = self.repair_engine.execute_repair_suggestion_workflow(
+                    repair_plan=repair_plan,
+                    user_id=user_id,
+                )
+                if result.get("success", False):
+                    notifications_sent += 1
+                    logger.info(f"✅ Repair notification sent for {repair_plan.ticker}")
+            
+            return {
+                "user_id": user_id,
+                "repair_plans": repair_plans,
+                "repairs_needed": len(repair_plans),
+                "notifications_sent": notifications_sent,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in portfolio repair check: {e}")
+            return {
+                "user_id": user_id,
+                "repair_plans": [],
+                "repairs_needed": 0,
+                "notifications_sent": 0,
+                "timestamp": datetime.utcnow().isoformat(),
+                "error": str(e),
+            }
 
 
 # ============================================================================
