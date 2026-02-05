@@ -11,24 +11,24 @@ import { gql } from '@apollo/client';
 export const GET_PORTFOLIO_WITH_REPAIRS = gql`
   query GetPortfolioWithRepairs($user_id: String!, $account_id: String!) {
     portfolio(userId: $user_id, accountId: $account_id) {
-      total_delta
-      total_gamma
-      total_theta
-      total_vega
-      portfolio_health_status
-      repairs_available
-      total_max_loss
+      totalDelta
+      totalGamma
+      totalTheta
+      totalVega
+      portfolioHealthStatus
+      repairsAvailable
+      totalMaxLoss
     }
     positions(userId: $user_id, accountId: $account_id) {
       id
       ticker
-      strategy_type
-      entry_price
-      current_price
+      strategyType
+      entryPrice
+      currentPrice
       quantity
-      unrealized_pnl
-      days_to_expiration
-      expiration_date
+      unrealizedPnl
+      daysToExpiration
+      expirationDate
       greeks {
         delta
         gamma
@@ -36,26 +36,26 @@ export const GET_PORTFOLIO_WITH_REPAIRS = gql`
         vega
         rho
       }
-      max_loss
-      probability_of_profit
+      maxLoss
+      probabilityOfProfit
       status
     }
     repair_plans: activeRepairPlans(userId: $user_id, accountId: $account_id) {
-      position_id
+      positionId
       ticker
-      original_strategy
-      current_delta
-      delta_drift_pct
-      current_max_loss
-      repair_type
-      repair_strikes
-      repair_credit
-      new_max_loss
-      new_break_even
-      confidence_boost
+      originalStrategy
+      currentDelta
+      deltaDriftPct
+      currentMaxLoss
+      repairType
+      repairStrikes
+      repairCredit
+      newMaxLoss
+      newBreakEven
+      confidenceBoost
       headline
       reason
-      action_description
+      actionDescription
       priority
     }
   }
@@ -69,12 +69,12 @@ export const GET_POSITION_WITH_REPAIR = gql`
     position(positionId: $position_id, userId: $user_id) {
       id
       ticker
-      strategy_type
-      entry_price
-      current_price
+      strategyType
+      entryPrice
+      currentPrice
       quantity
-      unrealized_pnl
-      days_to_expiration
+      unrealizedPnl
+      daysToExpiration
       greeks {
         delta
         gamma
@@ -82,25 +82,25 @@ export const GET_POSITION_WITH_REPAIR = gql`
         vega
         rho
       }
-      max_loss
-      probability_of_profit
+      maxLoss
+      probabilityOfProfit
     }
     repair_plan: repairPlan(positionId: $position_id) {
-      position_id
+      positionId
       ticker
-      original_strategy
-      current_delta
-      delta_drift_pct
-      current_max_loss
-      repair_type
-      repair_strikes
-      repair_credit
-      new_max_loss
-      new_break_even
-      confidence_boost
+      originalStrategy
+      currentDelta
+      deltaDriftPct
+      currentMaxLoss
+      repairType
+      repairStrikes
+      repairCredit
+      newMaxLoss
+      newBreakEven
+      confidenceBoost
       headline
       reason
-      action_description
+      actionDescription
       priority
     }
   }
@@ -129,13 +129,13 @@ export const ACCEPT_REPAIR_PLAN = gql`
       userId: $user_id
     ) {
       success
-      position_id
-      repair_type
-      execution_price
-      execution_credit
-      estimated_fees
-      execution_message
-      new_position_status
+      positionId
+      repairType
+      executionPrice
+      executionCredit
+      estimatedFees
+      executionMessage
+      newPositionStatus
       timestamp
     }
   }
@@ -158,7 +158,7 @@ export const REJECT_REPAIR_PLAN = gql`
       reason: $reason
     ) {
       success
-      rejection_logged
+      rejectionLogged: rejection_logged
       timestamp
     }
   }
@@ -172,12 +172,12 @@ export const REJECT_REPAIR_PLAN = gql`
 export const REPAIR_PLAN_UPDATES = gql`
   subscription RepairPlanUpdates($user_id: String!) {
     repairPlanUpdate(userId: $user_id) {
-      position_id
+      positionId
       ticker
       priority
       headline
-      action_description
-      repair_credit
+      actionDescription
+      repairCredit
     }
   }
 `;
@@ -195,25 +195,25 @@ export const GET_FLIGHT_MANUAL_FOR_REPAIR = gql`
   query GetFlightManualForRepair($repair_type: String!) {
     flight_manual: flightManualByRepairType(repairType: $repair_type) {
       id
-      repair_type
+      repairType
       title
       description
-      mathematical_explanation
-      example_setup {
+      mathematicalExplanation
+      exampleSetup {
         ticker
         strikes
         expiration
       }
-      historical_success_rate
-      edge_percentage
-      avg_credit_collected
-      risk_metrics {
+      historicalSuccessRate
+      edgePercentage
+      avgCreditCollected
+      riskMetrics {
         max_loss
         break_even_points
         probability_of_profit
       }
-      related_videos
-      related_articles
+      relatedVideos
+      relatedArticles
     }
   }
 `;
@@ -227,8 +227,8 @@ export const GET_PORTFOLIO_HEALTH = gql`
   query GetPortfolioHealth($user_id: String!, $account_id: String!) {
     portfolio_health: portfolioHealth(userId: $user_id, accountId: $account_id) {
       status
-      health_score
-      last_check_timestamp
+      healthScore
+      lastCheckTimestamp
       checks {
         name
         status
@@ -239,8 +239,8 @@ export const GET_PORTFOLIO_HEALTH = gql`
         severity
         message
       }
-      repairs_needed
-      estimated_improvement
+      repairsNeeded
+      estimatedImprovement
     }
   }
 `;
@@ -254,15 +254,15 @@ export const GET_REPAIR_HISTORY = gql`
   query GetRepairHistory($user_id: String!, $limit: Int, $offset: Int) {
     repair_history: repairHistory(userId: $user_id, limit: $limit, offset: $offset) {
       id
-      position_id
+      positionId
       ticker
-      repair_type
+      repairType
       status
-      accepted_at
-      executed_at
-      credit_collected
+      acceptedAt
+      executedAt
+      creditCollected
       result
-      pnl_impact
+      pnlImpact
     }
   }
 `;
@@ -279,11 +279,11 @@ export const EXECUTE_BULK_REPAIRS = gql`
   ) {
     executeBulkRepairs(userId: $user_id, positionIds: $position_ids) {
       success
-      repairs_executed
-      total_credit_collected
-      execution_summary
+      repairsExecuted
+      totalCreditCollected
+      executionSummary
       failures {
-        position_id
+        positionId
         error
       }
     }
