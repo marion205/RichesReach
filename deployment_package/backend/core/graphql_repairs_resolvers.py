@@ -358,14 +358,6 @@ class Query(graphene.ObjectType):
         """
         Get all active repair plans for user
         """
-        from core.models import Position
-
-        positions = Position.objects.filter(user_id=user_id, account_id=account_id, is_open=True)
-        repair_engine = OptionsRepairEngine(router=None)
-
-        result = []
-        for pos in positions:
-            # Analyze position for repairs
         try:
             from core.models import Position
 
@@ -396,13 +388,12 @@ class Query(graphene.ObjectType):
                 )
                 repair_plans.append(repair_plan)
 
+            priority_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+            repair_plans.sort(key=lambda r: priority_order.get(r.priority, 4))
+
             return repair_plans
         except Exception:
             return _mock_repairs()
-        priority_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
-        result.sort(key=lambda r: priority_order.get(r.priority, 4))
-
-        return result
 
     def resolve_position(self, info, position_id: str, user_id: str) -> PositionType:
         """Get details for a single position"""
