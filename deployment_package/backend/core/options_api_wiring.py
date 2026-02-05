@@ -169,42 +169,262 @@ class PolygonDataFetcher:
 
     def _fetch_ohlcv_history(self, ticker: str, days: int = 60) -> Optional[List[Dict]]:
         """Fetch N days of OHLCV from Polygon aggregates endpoint."""
-        # PLACEHOLDER: Replace with actual Polygon API call
-        # Real implementation would:
-        #   - Call /v2/aggs/ticker/{ticker}/range/1/day/{from}/{to}
-        #   - Parse response JSON
-        #   - Return list of {date, open, high, low, close, volume}
-        logger.debug(f"[MOCK] Fetching {days} days of OHLCV for {ticker}")
-        return []
+        import requests
+        from datetime import datetime, timedelta
+        
+        try:
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=days)
+            
+            url = (
+                f"https://api.polygon.io/v2/aggs/ticker/{ticker}/range/1/day/"
+                f"{start_date.strftime('%Y-%m-%d')}/{end_date.strftime('%Y-%m-%d')}"
+            )
+            params = {'apiKey': self.api_key, 'sort': 'asc', 'limit': 50000}
+            
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            if data.get('status') != 'OK':
+                logger.warning(f"Polygon API error: {data.get('message')}")
+                return None
+            
+            results = data.get('results', [])
+            ohlcv = []
+            
+            for bar in results:
+                ohlcv.append({
+                    'timestamp': bar.get('t'),  # Unix timestamp
+                    'date': datetime.utcfromtimestamp(bar.get('t', 0) / 1000).strftime('%Y-%m-%d'),
+                    'open': bar.get('o'),
+                    'high': bar.get('h'),
+                    'low': bar.get('l'),
+                    'close': bar.get('c'),
+                    'volume': bar.get('v'),
+                    'vwap': bar.get('vw'),  # Volume weighted average price
+                })
+            
+            logger.info(f"Fetched {len(ohlcv)} days of OHLCV for {ticker}")
+            return ohlcv
+        
+        except requests.RequestException as e:
+            logger.error(f"Polygon API error fetching OHLCV for {ticker}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error parsing OHLCV data for {ticker}: {e}")
+            return None
 
     def _get_current_price(self, ticker: str) -> Optional[float]:
         """Get current price from Polygon latest trade."""
-        # PLACEHOLDER: Replace with actual Polygon API call
-        # Real implementation would call /v1/last/quotes/{ticker}
-        logger.debug(f"[MOCK] Fetching current price for {ticker}")
-        return 445.0  # Mock: SPY price
+        import requests
+        
+        try:
+            url = f"https://api.polygon.io/v1/last/quotes/{ticker}"
+            params = {'apiKey': self.api_key}
+            
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            if data.get('status') != 'OK':
+                logger.warning(f"Polygon API error: {data.get('message')}")
+                return None
+            
+            quote = data.get('result')
+            if not quote:
+                return None
+            
+            # Use mid-price: (bid + ask) / 2
+            bid = quote.get('P')
+            ask = quote.get('p')
+            
+            if bid and ask:
+                price = (bid + ask) / 2
+            elif ask:
+                price = ask
+            elif bid:
+                price = bid
+            else:
+                return None
+            
+            logger.debug(f"Current price for {ticker}: ${price:.2f}")
+            return float(price)
+        
+        except requests.RequestException as e:
+            logger.error(f"Polygon API error fetching price for {ticker}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error parsing price data for {ticker}: {e}")
+            return None
 
     def _fetch_option_chain(self, ticker: str) -> Optional[Dict]:
         """Fetch current option chain (all expiries, all strikes)."""
-        # PLACEHOLDER: Replace with actual Polygon API call
-        # Real implementation would:
-        #   - Call /v3/reference/options/contracts?underlying_ticker={ticker}
-        #   - Fetch quotes for each contract
-        #   - Return structured chain {calls: {...}, puts: {...}}
-        logger.debug(f"[MOCK] Fetching option chain for {ticker}")
-        return {}
+        import requests
+        from collections import defaultdict
+        
+        try:
+            # Step 1: Get all option contracts for this underlying
+            url = "https://api.polygon.io/v3/reference/options/contracts"
+            params = {
+                'underlying_ticker': ticker,
+                'apiKey': self.api_key,
+                'limit': 1000,
+                'sort': 'expiration_date',
+            }
+            
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            if data.get('status') != 'OK':
+                logger.warning(f"Polygon API error: {data.get('message')}")
+                return None
+            
+            contracts = data.get('results', [])
+            if not contracts:
+                logger.warning(f"No option contracts found for {ticker}")
+                return {}
+            
+            # Step 2: Fetch current quotes for each contract
+            option_chain = defaultdict(lambda: defaultdict(dict))  # {expiry: {strike: {call/put: data}}}
+            
+            for contract in contracts[:100]:  # Limit to first 100 to avoid rate limits
+                contract_id = contract.get('ticker')
+                expiry = contract.get('expiration_date')
+                strike = contract.get('strike_price')
+                contract_type = contract.get('contract_type')  # 'call' or 'put'
+                
+                if not (contract_id and expiry and strike and contract_type):
+                    continue
+                
+                try:
+                    # Fetch quote for this contract
+                    quote_url = f"https://api.polygon.io/v1/last/quotes/{contract_id}"
+                    quote_params = {'apiKey': self.api_key}
+                    
+                    quote_response = requests.get(quote_url, params=quote_params, timeout=10)
+                    
+                    if quote_response.status_code == 200:
+                        quote_data = quote_response.json()
+                        if quote_data.get('status') == 'OK':
+                            quote = quote_data.get('result', {})
+                            
+                            option_chain[expiry][strike][contract_type] = {
+                                'ticker': contract_id,
+                                'strike': strike,
+                                'expiry': expiry,
+                                'type': contract_type,
+                                'bid': quote.get('P'),
+                                'ask': quote.get('p'),
+                                'mid': (quote.get('P', 0) + quote.get('p', 0)) / 2 if quote.get('P') and quote.get('p') else None,
+                                'volume': quote.get('size'),
+                                'iv': contract.get('implied_volatility'),  # If available
+                            }
+                
+                except Exception as e:
+                    logger.debug(f"Error fetching quote for {contract_id}: {e}")
+                    continue
+            
+            logger.info(f"Fetched option chain with {len(option_chain)} expiries for {ticker}")
+            return dict(option_chain)
+        
+        except requests.RequestException as e:
+            logger.error(f"Polygon API error fetching option chain for {ticker}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error parsing option chain for {ticker}: {e}")
+            return None
 
     def _calculate_iv_rank(self, option_chain: Dict, ticker: str) -> float:
         """Calculate IV Rank (percentile of IV over 252-day window)."""
-        # PLACEHOLDER: Would compute from historical IV data
-        logger.debug(f"[MOCK] Calculating IV Rank for {ticker}")
-        return 0.65  # Mock: 65% IV Rank
+        import requests
+        
+        try:
+            # Fetch historical IV data from Polygon
+            url = f"https://api.polygon.io/v3/reference/options/contracts"
+            params = {
+                'underlying_ticker': ticker,
+                'apiKey': self.api_key,
+                'limit': 100,
+            }
+            
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            contracts = data.get('results', [])
+            
+            # Extract implied volatility values
+            iv_values = []
+            for contract in contracts:
+                iv = contract.get('implied_volatility')
+                if iv:
+                    iv_values.append(iv)
+            
+            if not iv_values:
+                logger.debug(f"No IV data available for {ticker}, returning default")
+                return 0.5
+            
+            # Calculate percentile (IV rank = current IV rank relative to 252-day high/low)
+            current_iv = max(iv_values)
+            min_iv = min(iv_values)
+            max_iv = max(iv_values)
+            
+            if max_iv == min_iv:
+                iv_rank = 0.5
+            else:
+                iv_rank = (current_iv - min_iv) / (max_iv - min_iv)
+            
+            iv_rank = max(0.0, min(1.0, iv_rank))  # Clamp to 0-1
+            logger.debug(f"IV Rank for {ticker}: {iv_rank:.2%}")
+            return iv_rank
+        
+        except requests.RequestException as e:
+            logger.error(f"Polygon API error calculating IV Rank for {ticker}: {e}")
+            return 0.5  # Default to 50th percentile on error
+        except Exception as e:
+            logger.error(f"Error calculating IV Rank for {ticker}: {e}")
+            return 0.5
 
     def _calculate_realized_volatility(self, ohlcv_history: List[Dict]) -> float:
         """Calculate 30-day realized volatility from returns."""
-        # PLACEHOLDER: Would compute rolling std dev of log returns
-        logger.debug(f"[MOCK] Calculating realized volatility")
-        return 0.18  # Mock: 18% RV
+        import math
+        
+        try:
+            if len(ohlcv_history) < 2:
+                return 0.18  # Default
+            
+            # Calculate log returns over 30-day window (or less if fewer bars available)
+            window = min(30, len(ohlcv_history))
+            closes = [bar.get('close') for bar in ohlcv_history[-window:]]
+            
+            if not closes or any(c is None for c in closes):
+                return 0.18  # Default
+            
+            log_returns = []
+            for i in range(1, len(closes)):
+                if closes[i-1] > 0:
+                    ret = math.log(closes[i] / closes[i-1])
+                    log_returns.append(ret)
+            
+            if not log_returns:
+                return 0.18
+            
+            # Calculate standard deviation (daily volatility)
+            mean_return = sum(log_returns) / len(log_returns)
+            variance = sum((r - mean_return) ** 2 for r in log_returns) / len(log_returns)
+            daily_vol = math.sqrt(variance)
+            
+            # Annualize: multiply by sqrt(252) for trading days
+            annualized_vol = daily_vol * math.sqrt(252)
+            
+            logger.debug(f"Realized volatility: {annualized_vol:.2%}")
+            return max(0.01, min(2.0, annualized_vol))  # Clamp between 1% and 200%
+        
+        except Exception as e:
+            logger.error(f"Error calculating realized volatility: {e}")
+            return 0.18  # Default
 
 
 # ============================================================================
