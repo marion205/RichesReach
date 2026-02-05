@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useMutation } from '@apollo/client';
 import LottieView from 'lottie-react-native';
 
-import { RepairShield, GreeksRadarChart, PositionCardWithRepair, ShieldStatusBar } from './RepairShield';
+import { RepairShield, GreeksRadarChart, PositionCardWithRepair, ShieldStatusBar } from '../../components/options/RepairShield';
 import { GraphQL_QUERIES, GraphQL_MUTATIONS } from '../../graphql';
 
 interface Position {
