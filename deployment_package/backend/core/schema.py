@@ -18,6 +18,14 @@ from .benchmark_types import BenchmarkSeriesType, BenchmarkDataPointType
 from .portfolio_history_types import PortfolioHistoryDataPointType
 from .broker_types import BrokerAccountType, BrokerOrderType, BrokerPositionType
 
+try:
+    from .graphql_repairs_resolvers import (
+        PortfolioType, PositionType, RepairPlanType, PortfolioHealthType,
+        FlightManualType, RepairHistoryType
+    )
+except (ImportError, SyntaxError):
+    pass
+
 # Import premium queries and mutations
 try:
     from .premium_types import PremiumQueries, PremiumMutations, ProfileInput, AIRecommendationsType
@@ -244,6 +252,79 @@ class ExtendedQuery(PremiumQueries, BrokerQueries, TradingQuery, BudgetSpendingQ
     - Adds Broker, Banking, and SBLOC queries
     - The base Query class has resolve_me which will be available here
     """
+    
+    # Explicitly expose Phase 8 repairs queries to ensure they're available
+    # This helps with MRO (Method Resolution Order) issues in multiple inheritance
+    portfolio = graphene.Field(
+        PortfolioType,
+        user_id=graphene.String(required=True),
+        account_id=graphene.String(required=True),
+        description="Get portfolio summary with total Greeks and health status"
+    )
+    
+    positions = graphene.List(
+        PositionType,
+        user_id=graphene.String(required=True),
+        account_id=graphene.String(required=True),
+        description="Get all open positions for user"
+    )
+    
+    active_repair_plans = graphene.List(
+        RepairPlanType,
+        user_id=graphene.String(required=True),
+        account_id=graphene.String(required=True),
+        description="Get active repair plans available"
+    )
+    
+    portfolio_health = graphene.Field(
+        PortfolioHealthType,
+        user_id=graphene.String(required=True),
+        account_id=graphene.String(required=True),
+        description="Get portfolio health snapshot"
+    )
+    
+    repair_history = graphene.List(
+        RepairHistoryType,
+        user_id=graphene.String(required=True),
+        limit=graphene.Int(default_value=50),
+        offset=graphene.Int(default_value=0),
+        description="Get historical repairs"
+    )
+    
+    def resolve_portfolio(self, info, user_id: str, account_id: str):
+        """Delegate to RepairQueries resolver"""
+        resolver = getattr(RepairQueries, 'resolve_portfolio', None)
+        if resolver:
+            return resolver(self, info, user_id, account_id)
+        return None
+    
+    def resolve_positions(self, info, user_id: str, account_id: str):
+        """Delegate to RepairQueries resolver"""
+        resolver = getattr(RepairQueries, 'resolve_positions', None)
+        if resolver:
+            return resolver(self, info, user_id, account_id)
+        return None
+    
+    def resolve_active_repair_plans(self, info, user_id: str, account_id: str):
+        """Delegate to RepairQueries resolver"""
+        resolver = getattr(RepairQueries, 'resolve_active_repair_plans', None)
+        if resolver:
+            return resolver(self, info, user_id, account_id)
+        return None
+    
+    def resolve_portfolio_health(self, info, user_id: str, account_id: str):
+        """Delegate to RepairQueries resolver"""
+        resolver = getattr(RepairQueries, 'resolve_portfolio_health', None)
+        if resolver:
+            return resolver(self, info, user_id, account_id)
+        return None
+    
+    def resolve_repair_history(self, info, user_id: str, limit: int = 50, offset: int = 0):
+        """Delegate to RepairQueries resolver"""
+        resolver = getattr(RepairQueries, 'resolve_repair_history', None)
+        if resolver:
+            return resolver(self, info, user_id, limit, offset)
+        return None
     
     # Explicitly expose chanQuantSignals to ensure it's available
     # This helps with MRO (Method Resolution Order) issues in multiple inheritance
