@@ -29,111 +29,111 @@ class PositionType(graphene.ObjectType):
     """Open position details"""
     id = graphene.String()
     ticker = graphene.String()
-    strategyType = graphene.String(name="strategy_type")
-    entryPrice = graphene.Float(name="entry_price")
-    currentPrice = graphene.Float(name="current_price")
+    strategy_type = graphene.String(name="strategyType")
+    entry_price = graphene.Float(name="entryPrice")
+    current_price = graphene.Float(name="currentPrice")
     quantity = graphene.Int()
-    unrealizedPnl = graphene.Float(name="unrealized_pnl")
-    daysToExpiration = graphene.Int(name="days_to_expiration")
-    expirationDate = graphene.String(name="expiration_date")
+    unrealized_pnl = graphene.Float(name="unrealizedPnl")
+    days_to_expiration = graphene.Int(name="daysToExpiration")
+    expiration_date = graphene.String(name="expirationDate")
     greeks = graphene.Field(GreeksType)
-    maxLoss = graphene.Float(name="max_loss")
-    probabilityOfProfit = graphene.Float(name="probability_of_profit")
+    max_loss = graphene.Float(name="maxLoss")
+    probability_of_profit = graphene.Float(name="probabilityOfProfit")
     status = graphene.String()
 
 
 class RepairPlanType(graphene.ObjectType):
     """Repair plan details"""
-    positionId = graphene.String(name="position_id")
+    position_id = graphene.String(name="positionId")
     ticker = graphene.String()
-    originalStrategy = graphene.String(name="original_strategy")
-    currentDelta = graphene.Float(name="current_delta")
-    deltaDriftPct = graphene.Float(name="delta_drift_pct")
-    currentMaxLoss = graphene.Float(name="current_max_loss")
-    repairType = graphene.String(name="repair_type")
-    repairStrikes = graphene.String(name="repair_strikes")
-    repairCredit = graphene.Float(name="repair_credit")
-    newMaxLoss = graphene.Float(name="new_max_loss")
-    newBreakEven = graphene.Float(name="new_break_even")
-    confidenceBoost = graphene.Float(name="confidence_boost")
+    original_strategy = graphene.String(name="originalStrategy")
+    current_delta = graphene.Float(name="currentDelta")
+    delta_drift_pct = graphene.Float(name="deltaDriftPct")
+    current_max_loss = graphene.Float(name="currentMaxLoss")
+    repair_type = graphene.String(name="repairType")
+    repair_strikes = graphene.String(name="repairStrikes")
+    repair_credit = graphene.Float(name="repairCredit")
+    new_max_loss = graphene.Float(name="newMaxLoss")
+    new_break_even = graphene.Float(name="newBreakEven")
+    confidence_boost = graphene.Float(name="confidenceBoost")
     headline = graphene.String()
     reason = graphene.String()
-    actionDescription = graphene.String(name="action_description")
+    action_description = graphene.String(name="actionDescription")
     priority = graphene.String()
 
 
 class PortfolioType(graphene.ObjectType):
     """Portfolio summary"""
-    totalDelta = graphene.Float(name="total_delta")
-    totalGamma = graphene.Float(name="total_gamma")
-    totalTheta = graphene.Float(name="total_theta")
-    totalVega = graphene.Float(name="total_vega")
-    portfolioHealthStatus = graphene.String(name="portfolio_health_status")
-    repairsAvailable = graphene.Int(name="repairs_available")
-    totalMaxLoss = graphene.Float(name="total_max_loss")
+    total_delta = graphene.Float(name="totalDelta")
+    total_gamma = graphene.Float(name="totalGamma")
+    total_theta = graphene.Float(name="totalTheta")
+    total_vega = graphene.Float(name="totalVega")
+    portfolio_health_status = graphene.String(name="portfolioHealthStatus")
+    repairs_available = graphene.Int(name="repairsAvailable")
+    total_max_loss = graphene.Float(name="totalMaxLoss")
 
 
 class PortfolioHealthType(graphene.ObjectType):
     """Portfolio health snapshot"""
     status = graphene.String()
-    healthScore = graphene.Float(name="health_score")
-    lastCheckTimestamp = graphene.String(name="last_check_timestamp")
+    health_score = graphene.Float(name="healthScore")
+    last_check_timestamp = graphene.String(name="lastCheckTimestamp")
     checks = graphene.List(graphene.JSONString)
     alerts = graphene.List(graphene.JSONString)
-    repairsNeeded = graphene.Int(name="repairs_needed")
-    estimatedImprovement = graphene.Float(name="estimated_improvement")
+    repairs_needed = graphene.Int(name="repairsNeeded")
+    estimated_improvement = graphene.Float(name="estimatedImprovement")
 
 
 class RepairExecutionType(graphene.ObjectType):
     """Result of executing a repair plan"""
     success = graphene.Boolean()
-    positionId = graphene.String(name="position_id")
-    repairType = graphene.String(name="repair_type")
-    executionPrice = graphene.Float(name="execution_price")
-    executionCredit = graphene.Float(name="execution_credit")
-    estimatedFees = graphene.Float(name="estimated_fees")
-    executionMessage = graphene.String(name="execution_message")
-    newPositionStatus = graphene.String(name="new_position_status")
+    position_id = graphene.String(name="positionId")
+    repair_type = graphene.String(name="repairType")
+    execution_price = graphene.Float(name="executionPrice")
+    execution_credit = graphene.Float(name="executionCredit")
+    estimated_fees = graphene.Float(name="estimatedFees")
+    execution_message = graphene.String(name="executionMessage")
+    new_position_status = graphene.String(name="newPositionStatus")
     timestamp = graphene.String()
 
 
 class BulkRepairExecutionType(graphene.ObjectType):
     """Result of executing multiple repairs"""
     success = graphene.Boolean()
-    repairsExecuted = graphene.Int(name="repairs_executed")
-    totalCreditCollected = graphene.Float(name="total_credit_collected")
-    executionSummary = graphene.String(name="execution_summary")
+    repairs_executed = graphene.Int(name="repairsExecuted")
+    total_credit_collected = graphene.Float(name="totalCreditCollected")
+    execution_summary = graphene.String(name="executionSummary")
     failures = graphene.List(graphene.JSONString)
 
 
 class FlightManualType(graphene.ObjectType):
     """Educational content for a repair strategy"""
     id = graphene.String()
-    repairType = graphene.String(name="repair_type")
+    repair_type = graphene.String(name="repairType")
     title = graphene.String()
     description = graphene.String()
-    mathematicalExplanation = graphene.String(name="mathematical_explanation")
-    exampleSetup = graphene.JSONString(name="example_setup")
-    historicalSuccessRate = graphene.Float(name="historical_success_rate")
-    edgePercentage = graphene.Float(name="edge_percentage")
-    avgCreditCollected = graphene.Float(name="avg_credit_collected")
-    riskMetrics = graphene.JSONString(name="risk_metrics")
-    relatedVideos = graphene.List(graphene.String, name="related_videos")
-    relatedArticles = graphene.List(graphene.String, name="related_articles")
+    mathematical_explanation = graphene.String(name="mathematicalExplanation")
+    example_setup = graphene.JSONString(name="exampleSetup")
+    historical_success_rate = graphene.Float(name="historicalSuccessRate")
+    edge_percentage = graphene.Float(name="edgePercentage")
+    avg_credit_collected = graphene.Float(name="avgCreditCollected")
+    risk_metrics = graphene.JSONString(name="riskMetrics")
+    related_videos = graphene.List(graphene.String, name="relatedVideos")
+    related_articles = graphene.List(graphene.String, name="relatedArticles")
 
 
 class RepairHistoryType(graphene.ObjectType):
     """Historical repair entry"""
     id = graphene.String()
-    positionId = graphene.String(name="position_id")
+    position_id = graphene.String(name="positionId")
     ticker = graphene.String()
-    repairType = graphene.String(name="repair_type")
+    repair_type = graphene.String(name="repairType")
     status = graphene.String()
-    acceptedAt = graphene.String(name="accepted_at")
-    executedAt = graphene.String(name="executed_at")
-    creditCollected = graphene.Float(name="credit_collected")
+    accepted_at = graphene.String(name="acceptedAt")
+    executed_at = graphene.String(name="executedAt")
+    credit_collected = graphene.Float(name="creditCollected")
     result = graphene.String()
-    pnlImpact = graphene.Float(name="pnl_impact")
+    pnl_impact = graphene.Float(name="pnlImpact")
 
 
 # -------------------- Mock Fallback Data --------------------
