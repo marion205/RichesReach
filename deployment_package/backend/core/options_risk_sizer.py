@@ -6,15 +6,18 @@ from dataclasses import dataclass, asdict
 from typing import Dict, Optional, Tuple
 
 
-# -----------------------------
-# Data models (inputs/outputs)
-# -----------------------------
+# ============================================================================
+# Data Models
+# ============================================================================
 
 @dataclass(frozen=True)
 class Greeks:
     """
     Portfolio-level or trade-level Greeks.
-    Convention: totals are in "per 1 contract" units unless otherwise noted.
+
+    NOTE: Keep units consistent across your system.
+    - If your valuation engine outputs greeks "per 1 contract", use that here.
+    - If your system outputs greeks "per share", multiply appropriately before passing in.
     """
     delta: float = 0.0
     vega: float = 0.0
@@ -27,9 +30,9 @@ class PortfolioSnapshot:
     """
     Current portfolio risk state.
     - equity: account equity in dollars
-    - greeks_total: aggregate greeks across all open positions (total portfolio)
-    - sector_exposure_pct: fraction (0..1) of current portfolio risk/exposure by sector
-    - ticker_exposure_pct: fraction (0..1) concentration in a single ticker (optional)
+    - greeks_total: aggregate greeks across all open positions
+    - sector_exposure_pct: fraction (0..1) exposure by sector (risk-weighted or notional-weighted)
+    - ticker_exposure_pct: optional fraction (0..1) exposure by ticker
     """
     equity: float
     greeks_total: Greeks
@@ -40,15 +43,19 @@ class PortfolioSnapshot:
 @dataclass(frozen=True)
 class TradeCandidate:
     """
-    Output of your Strategy Router / Valuation Engine (per 1 contract).
+    Output of your Strategy Router / Valuation Engine (PER 1 CONTRACT).
+
+    Required:
     - pop: probability of profit (0..1)
-    - max_profit: max profit in dollars per contract
-    - max_loss: max loss in dollars per contract (positive number)
-    - greeks_per_contract: greeks for 1 contract (should align with your options model)
-    - sector: e.g. "Tech", "Financials"
-    - ticker: e.g. "SPY"
-    - corr_to_portfolio: estimated correlation (0..1) with current portfolio PnL or major holdings
-    - edge_score: 0..10 or 0..100; used only for reporting / optional sizing bias
+    - max_profit: max profit per contract in $
+    - max_loss: max loss per contract in $ (positive)
+    - greeks_per_contract: greeks for 1 contract
+    - sector: e.g. "Tech"
+    - ticker: e.g. "AAPL"
+
+    Optional:
+    - corr_to_portfolio: 0..1 (estimated correlation to portfolio PnL or dominant exposures)
+    - edge_score: for reporting only (0..10 or 0..100)
     """
     pop: float
     max_profit: float
@@ -63,32 +70,32 @@ class TradeCandidate:
 @dataclass
 class RiskCaps:
     """
-    Hard caps. These are "do not cross" limits.
-    Values are tuned defaults; adjust per your app.
+    Hard caps + policy defaults.
+    Tune these after you see real user PnL + tail behavior.
     """
-    max_trade_risk_pct: float = 0.02          # 2% equity max risk per trade
-    min_trade_risk_pct: float = 0.0025        # 0.25% equity minimum risk if you want "meaningful" trades
+    # Per-trade risk caps
+    max_trade_risk_pct: float = 0.02        # 2% equity max risk per trade
+    min_trade_risk_pct: float = 0.0025      # 0.25% equity min "meaningful" risk (optional)
 
-    # Portfolio Greek caps (absolute). Router + sizer must keep within these.
-    # These should be calibrated to account size and instruments traded.
+    # Portfolio Greek caps (absolute)
     max_portfolio_abs_delta: float = 300.0
     max_portfolio_abs_vega: float = 800.0
     max_portfolio_abs_gamma: float = 80.0
 
-    # Sector concentration caps: if already above this, penalize size; if far above, block.
-    sector_soft_cap_pct: float = 0.25         # start penalizing above 25%
-    sector_hard_cap_pct: float = 0.40         # block above 40%
+    # Sector concentration caps
+    sector_soft_cap_pct: float = 0.25       # penalize size above 25%
+    sector_hard_cap_pct: float = 0.40       # block above 40%
 
     # Ticker concentration caps (optional)
     ticker_soft_cap_pct: float = 0.12
     ticker_hard_cap_pct: float = 0.20
 
-    # If correlation is high, reduce size proportionally.
+    # Correlation caps (0..1)
     corr_soft: float = 0.50
     corr_hard: float = 0.85
 
-    # Safety stop: do not recommend trades where max_loss is too small/invalid
-    min_max_loss_dollars: float = 25.0
+    # Basic sanity
+    min_max_loss_dollars: float = 25.0      # reject if max_loss per contract is too small/invalid
 
 
 @dataclass
@@ -96,10 +103,10 @@ class KellyConfig:
     """
     Fractional Kelly controls.
     - kelly_fraction: typically 0.10 to 0.25
-    - kelly_cap_pct: maximum Kelly-implied fraction of equity allowed (before max_trade_risk cap)
+    - kelly_cap_pct: additional cap on Kelly fraction (before per-trade hard caps)
     """
     kelly_fraction: float = 0.10
-    kelly_cap_pct: float = 0.05              # even full-kelly outputs won't exceed 5% equity before hard caps
+    kelly_cap_pct: float = 0.05            # never allocate >5% equity by Kelly alone
 
 
 @dataclass
@@ -114,22 +121,18 @@ class SizeDecision:
     risk_report: Dict
 
 
-# -----------------------------
+# ============================================================================
 # Risk Sizer
-# -----------------------------
+# ============================================================================
 
 class OptionsRiskSizer:
     """
     Fractional Kelly + Portfolio Guardrails.
 
-    Workflow:
-      1) compute full Kelly from (p, b)
-      2) apply fractional Kelly
-      3) convert to dollar risk
-      4) enforce trade risk caps
-      5) enforce portfolio Greek caps by limiting contracts
-      6) apply correlation + concentration penalties
-      7) produce final contracts + UI risk report
+    Output is deterministic and UI-friendly:
+      - recommended contracts
+      - risk amount
+      - what limited size (Kelly, Greek caps, concentration, correlation, experience gating)
     """
 
     def __init__(self, caps: RiskCaps | None = None, kelly: KellyConfig | None = None):
@@ -146,10 +149,6 @@ class OptionsRiskSizer:
         user_experience_level: str = "basic",   # basic | intermediate | pro
         allow_zero_contracts: bool = True
     ) -> SizeDecision:
-        """
-        Returns a size decision and a UI-ready risk report.
-        """
-
         limiting: Dict[str, str] = {}
         warnings = []
 
@@ -173,27 +172,26 @@ class OptionsRiskSizer:
         if kelly_full <= 0:
             return self._reject("Kelly <= 0 (negative EV or too low PoP).", portfolio, trade)
 
-        # 2) Fractional Kelly (and a cap)
+        # 2) Fractional Kelly + cap
         kelly_fractional = max(0.0, kelly_full * self.kelly.kelly_fraction)
         kelly_fractional = min(kelly_fractional, self.kelly.kelly_cap_pct)
 
         # 3) Dollar risk from Kelly
         kelly_dollar_risk = portfolio.equity * kelly_fractional
 
-        # 4) Hard cap: max risk per trade
+        # 4) Per-trade hard cap + (optional) minimum floor
         trade_risk_cap = portfolio.equity * self.caps.max_trade_risk_pct
         min_risk_floor = portfolio.equity * self.caps.min_trade_risk_pct
+
         target_risk = min(kelly_dollar_risk, trade_risk_cap)
 
         if target_risk < min_risk_floor:
             warnings.append(
-                f"Kelly suggests very small risk (${target_risk:.2f}) below your minimum floor "
+                f"Kelly suggests small risk (${target_risk:.2f}) below minimum floor "
                 f"(${min_risk_floor:.2f})."
             )
 
-        # Start with the contracts implied by target_risk
         base_contracts = math.floor(target_risk / trade.max_loss)
-
         if base_contracts <= 0:
             if allow_zero_contracts:
                 return self._reject("Sizer recommends 0 contracts under risk caps.", portfolio, trade)
@@ -201,7 +199,7 @@ class OptionsRiskSizer:
 
         limiting["kelly"] = f"Base contracts from fractional Kelly risk: {base_contracts}"
 
-        # 5) Enforce portfolio Greek caps (limit contracts)
+        # 5) Greek caps limiter
         contracts_greek_limited, greek_reason = self._limit_by_greeks(
             portfolio_greeks=portfolio.greeks_total,
             trade_greeks=trade.greeks_per_contract,
@@ -212,18 +210,15 @@ class OptionsRiskSizer:
 
         contracts = contracts_greek_limited
 
-        # 6) Correlation + concentration penalties (scale down; can also block)
-        # Sector
+        # 6) Concentration / correlation penalties (and blocks)
         sector_penalty, sector_msg, sector_block = self._sector_penalty(portfolio, trade)
         if sector_block:
             return self._reject(sector_msg, portfolio, trade)
 
-        # Ticker
         ticker_penalty, ticker_msg, ticker_block = self._ticker_penalty(portfolio, trade)
         if ticker_block:
             return self._reject(ticker_msg, portfolio, trade)
 
-        # Correlation
         corr_penalty, corr_msg, corr_block = self._correlation_penalty(trade.corr_to_portfolio)
         if corr_block:
             return self._reject(corr_msg, portfolio, trade)
@@ -231,13 +226,13 @@ class OptionsRiskSizer:
         combined_penalty = sector_penalty * ticker_penalty * corr_penalty
         if combined_penalty < 1.0:
             limiting["concentration"] = (
-                f"Applied penalties: sector={sector_penalty:.2f}, ticker={ticker_penalty:.2f}, corr={corr_penalty:.2f} "
+                f"Penalties: sector={sector_penalty:.2f}, ticker={ticker_penalty:.2f}, corr={corr_penalty:.2f} "
                 f"(combined={combined_penalty:.2f})"
             )
 
         penalized_contracts = math.floor(contracts * combined_penalty)
 
-        # Experience gating (optional but recommended)
+        # Experience gating (optional)
         exp_penalty, exp_msg = self._experience_penalty(user_experience_level, trade)
         if exp_penalty < 1.0:
             limiting["experience"] = exp_msg
@@ -252,13 +247,13 @@ class OptionsRiskSizer:
 
         # Final risk amount
         risk_amount = contracts * trade.max_loss
+
+        # Final safety clamp: should never exceed trade_risk_cap
         if risk_amount > trade_risk_cap + 1e-9:
-            # Safety: should not happen, but clamp anyway
             contracts = max(0, math.floor(trade_risk_cap / trade.max_loss))
             risk_amount = contracts * trade.max_loss
             limiting["hard_cap"] = "Clamped to max_trade_risk_pct"
 
-        # 7) Build UI Risk Report
         report = self._build_risk_report(
             portfolio=portfolio,
             trade=trade,
@@ -277,6 +272,7 @@ class OptionsRiskSizer:
                 "ticker_msg": ticker_msg,
                 "corr_msg": corr_msg,
                 "experience_msg": exp_msg,
+                "edge_score": str(trade.edge_score),
             },
             risk_amount=risk_amount,
             trade_risk_cap=trade_risk_cap,
@@ -290,7 +286,7 @@ class OptionsRiskSizer:
             risk_budget_trade_cap=trade_risk_cap,
             limiting_factors=limiting,
             warnings=tuple(warnings),
-            risk_report=report
+            risk_report=report,
         )
 
     # ---------- Core math ----------
@@ -300,9 +296,8 @@ class OptionsRiskSizer:
         """
         Kelly for asymmetric win/loss:
           f* = (p*(b+1) - 1) / b
-        where:
-          p = probability of winning
-          b = win/loss ratio (profit / loss)
+        p = probability of win
+        b = win/loss ratio (profit/loss)
         """
         if b <= 0:
             return 0.0
@@ -321,66 +316,50 @@ class OptionsRiskSizer:
         desired_contracts: int
     ) -> Tuple[int, str]:
         """
-        Compute maximum contracts allowed by portfolio Greek caps.
-        Uses absolute caps: e.g., |delta_total + n*delta_trade| <= max_abs_delta.
+        Find max contracts allowed by Greek caps:
+          |G_port + n*G_trade| <= cap_abs
         """
         caps = self.caps
 
-        def max_n_for_cap(current: float, per: float, cap_abs: float) -> int:
+        def max_n(current: float, per: float, cap_abs: float) -> int:
             if per == 0:
                 return desired_contracts
-            # Solve |current + n*per| <= cap_abs for n >= 0
-            # Conservative approach: test both bounds
-            # We'll iterate with math bounds rather than brute force.
-            # Consider upper bound: current + n*per <= cap_abs
-            # and lower bound: current + n*per >= -cap_abs
-            # derive n ranges.
-            n_max = desired_contracts
 
-            # If per > 0:
-            #   n <= (cap_abs - current) / per
-            #   n >= (-cap_abs - current) / per
-            # If per < 0 similarly flips, but we can compute both and take intersection.
+            # Solve bounds:
+            # -cap_abs <= current + n*per <= cap_abs
             upper = (cap_abs - current) / per
             lower = (-cap_abs - current) / per
             lo = math.ceil(min(lower, upper))
             hi = math.floor(max(lower, upper))
 
-            # n must be >= 0
             lo = max(lo, 0)
-            hi = max(hi, -1)
             if hi < lo:
                 return 0
-            return min(n_max, hi)
+            return min(desired_contracts, hi)
 
-        n_delta = max_n_for_cap(portfolio_greeks.delta, trade_greeks.delta, caps.max_portfolio_abs_delta)
-        n_vega = max_n_for_cap(portfolio_greeks.vega, trade_greeks.vega, caps.max_portfolio_abs_vega)
-        n_gamma = max_n_for_cap(portfolio_greeks.gamma, trade_greeks.gamma, caps.max_portfolio_abs_gamma)
+        n_delta = max_n(portfolio_greeks.delta, trade_greeks.delta, caps.max_portfolio_abs_delta)
+        n_vega = max_n(portfolio_greeks.vega, trade_greeks.vega, caps.max_portfolio_abs_vega)
+        n_gamma = max_n(portfolio_greeks.gamma, trade_greeks.gamma, caps.max_portfolio_abs_gamma)
 
         allowed = min(desired_contracts, n_delta, n_vega, n_gamma)
 
         if allowed < desired_contracts:
-            return allowed, (
-                f"Limited by Greek caps: allowed={allowed} (delta={n_delta}, vega={n_vega}, gamma={n_gamma})"
-            )
+            return allowed, f"Limited by Greek caps: allowed={allowed} (delta={n_delta}, vega={n_vega}, gamma={n_gamma})"
         return desired_contracts, "Within Greek caps"
 
     def _sector_penalty(self, portfolio: PortfolioSnapshot, trade: TradeCandidate) -> Tuple[float, str, bool]:
         caps = self.caps
         current = portfolio.sector_exposure_pct.get(trade.sector, 0.0)
 
-        # Hard block if already over hard cap
         if current >= caps.sector_hard_cap_pct:
-            return 0.0, f"Blocked: sector concentration {trade.sector} at {current:.0%} (>= {caps.sector_hard_cap_pct:.0%}).", True
+            return 0.0, f"Blocked: sector {trade.sector} at {current:.0%} (>= {caps.sector_hard_cap_pct:.0%}).", True
 
-        # Soft penalty between soft and hard
         if current <= caps.sector_soft_cap_pct:
-            return 1.0, f"Sector exposure {trade.sector}: {current:.0%} (no penalty).", False
+            return 1.0, f"Sector {trade.sector} exposure {current:.0%} (no penalty).", False
 
-        # Linear penalty from 1 -> 0.5 as it approaches hard cap
         t = (current - caps.sector_soft_cap_pct) / (caps.sector_hard_cap_pct - caps.sector_soft_cap_pct)
         penalty = max(0.5, 1.0 - 0.5 * t)
-        return penalty, f"Sector exposure {trade.sector}: {current:.0%} (penalty {penalty:.2f}).", False
+        return penalty, f"Sector {trade.sector} exposure {current:.0%} (penalty {penalty:.2f}).", False
 
     def _ticker_penalty(self, portfolio: PortfolioSnapshot, trade: TradeCandidate) -> Tuple[float, str, bool]:
         caps = self.caps
@@ -390,14 +369,14 @@ class OptionsRiskSizer:
         current = portfolio.ticker_exposure_pct.get(trade.ticker, 0.0)
 
         if current >= caps.ticker_hard_cap_pct:
-            return 0.0, f"Blocked: ticker concentration {trade.ticker} at {current:.0%} (>= {caps.ticker_hard_cap_pct:.0%}).", True
+            return 0.0, f"Blocked: ticker {trade.ticker} at {current:.0%} (>= {caps.ticker_hard_cap_pct:.0%}).", True
 
         if current <= caps.ticker_soft_cap_pct:
-            return 1.0, f"Ticker exposure {trade.ticker}: {current:.0%} (no penalty).", False
+            return 1.0, f"Ticker {trade.ticker} exposure {current:.0%} (no penalty).", False
 
         t = (current - caps.ticker_soft_cap_pct) / (caps.ticker_hard_cap_pct - caps.ticker_soft_cap_pct)
         penalty = max(0.6, 1.0 - 0.4 * t)
-        return penalty, f"Ticker exposure {trade.ticker}: {current:.0%} (penalty {penalty:.2f}).", False
+        return penalty, f"Ticker {trade.ticker} exposure {current:.0%} (penalty {penalty:.2f}).", False
 
     def _correlation_penalty(self, corr: float) -> Tuple[float, str, bool]:
         caps = self.caps
@@ -409,23 +388,21 @@ class OptionsRiskSizer:
         if c <= caps.corr_soft:
             return 1.0, f"Correlation {c:.2f} (no penalty).", False
 
-        # Linear penalty from 1 -> 0.5 as correlation approaches hard threshold
         t = (c - caps.corr_soft) / (caps.corr_hard - caps.corr_soft)
         penalty = max(0.5, 1.0 - 0.5 * t)
         return penalty, f"Correlation {c:.2f} (penalty {penalty:.2f}).", False
 
     def _experience_penalty(self, level: str, trade: TradeCandidate) -> Tuple[float, str]:
         """
-        Simple gating: if user is basic, cap size on high gamma/vega exposure trades.
-        You can replace this with your Router's complexity score.
+        Optional: reduce size for users who can't actively manage high gamma/vega trades.
+        Replace with your Router's complexity tiers later.
         """
         lvl = (level or "basic").lower()
         g = trade.greeks_per_contract
 
         if lvl == "pro":
-            return 1.0, "Pro user (no experience penalty)."
+            return 1.0, "Pro tier (no experience penalty)."
 
-        # Heuristic: large gamma or large vega implies more active management.
         gamma_risky = abs(g.gamma) > 2.0
         vega_risky = abs(g.vega) > 25.0
 
@@ -448,7 +425,7 @@ class OptionsRiskSizer:
             penalties={},
             messages={"reject_reason": reason},
             risk_amount=0.0,
-            trade_risk_cap=portfolio.equity * self.caps.max_trade_risk_pct if portfolio.equity > 0 else 0.0,
+            trade_risk_cap=(portfolio.equity * self.caps.max_trade_risk_pct) if portfolio.equity > 0 else 0.0,
         )
         return SizeDecision(
             contracts=0,
@@ -458,7 +435,7 @@ class OptionsRiskSizer:
             risk_budget_trade_cap=report.get("trade_caps", {}).get("trade_risk_cap", 0.0),
             limiting_factors={"rejected": reason},
             warnings=(reason,),
-            risk_report=report
+            risk_report=report,
         )
 
     def _build_risk_report(
@@ -475,9 +452,9 @@ class OptionsRiskSizer:
         risk_amount: float,
         trade_risk_cap: float
     ) -> Dict:
-        # Portfolio after trade (greeks)
         g0 = portfolio.greeks_total
         gt = trade.greeks_per_contract
+
         g_after = Greeks(
             delta=g0.delta + contracts * gt.delta,
             vega=g0.vega + contracts * gt.vega,
@@ -537,9 +514,10 @@ class OptionsRiskSizer:
         }
 
 
-# -----------------------------
-# Example usage (remove in prod)
-# -----------------------------
+# ============================================================================
+# Example Usage
+# ============================================================================
+
 if __name__ == "__main__":
     sizer = OptionsRiskSizer()
 
@@ -552,9 +530,9 @@ if __name__ == "__main__":
 
     trade = TradeCandidate(
         pop=0.66,
-        max_profit=160,
-        max_loss=340,
-        greeks_per_contract=Greeks(delta=5, vega=-18, theta=2.1, gamma=-0.2),
+        max_profit=160.0,
+        max_loss=100.0,  # Changed: favorable risk/reward
+        greeks_per_contract=Greeks(delta=8, vega=18, theta=2.2, gamma=0.7),
         sector="Tech",
         ticker="QQQ",
         corr_to_portfolio=0.62,
@@ -563,7 +541,7 @@ if __name__ == "__main__":
 
     decision = sizer.size_trade(portfolio, trade, user_experience_level="basic")
     print("Contracts:", decision.contracts)
-    print("Risk Amount:", decision.risk_amount)
-    print("Limiting Factors:", decision.limiting_factors)
+    print("Risk $:", decision.risk_amount)
+    print("Limiting factors:", decision.limiting_factors)
     print("Warnings:", decision.warnings)
-    print("Risk Report Keys:", decision.risk_report.keys())
+    print("Risk report summary:", decision.risk_report["summary"])
