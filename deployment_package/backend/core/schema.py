@@ -23,8 +23,23 @@ try:
         PortfolioType, PositionType, RepairPlanType, PortfolioHealthType,
         FlightManualType, RepairHistoryType
     )
-except (ImportError, SyntaxError):
-    pass
+except (ImportError, SyntaxError) as e:
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.error(f"Failed to import repair types: {e}")
+    # Create dummy types if import fails
+    class PortfolioType(graphene.ObjectType):
+        pass
+    class PositionType(graphene.ObjectType):
+        pass
+    class RepairPlanType(graphene.ObjectType):
+        pass
+    class PortfolioHealthType(graphene.ObjectType):
+        pass
+    class FlightManualType(graphene.ObjectType):
+        pass
+    class RepairHistoryType(graphene.ObjectType):
+        pass
 
 # Import premium queries and mutations
 try:
