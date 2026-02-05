@@ -410,20 +410,20 @@ export const PositionCardWithRepair: React.FC<{
       <View style={styles.positionHeader}>
         <View>
           <Text style={styles.positionTicker}>{position.ticker}</Text>
-          <Text style={styles.positionStrategy}>{position.strategy_type}</Text>
+          <Text style={styles.positionStrategy}>{position.strategyType}</Text>
         </View>
         <View style={styles.positionPrice}>
           <Text
             style={[
               styles.positionPnL,
               {
-                color: position.unrealized_pnl >= 0 ? '#10B981' : '#EF4444',
+                color: position.unrealizedPnl >= 0 ? '#10B981' : '#EF4444',
               },
             ]}
           >
-            {position.unrealized_pnl >= 0 ? '+' : ''}${position.unrealized_pnl.toFixed(0)}
+            {position.unrealizedPnl >= 0 ? '+' : ''}${position.unrealizedPnl.toFixed(0)}
           </Text>
-          <Text style={styles.positionDTE}>{position.days_to_expiration}dte</Text>
+          <Text style={styles.positionDTE}>{position.daysToExpiration}dte</Text>
         </View>
       </View>
 
@@ -469,12 +469,12 @@ export const PositionCardWithRepair: React.FC<{
       <View style={styles.riskMetrics}>
         <View style={styles.metricRow}>
           <Text style={styles.metricLabel}>Max Loss</Text>
-          <Text style={styles.metricValue}>${position.max_loss.toFixed(0)}</Text>
+          <Text style={styles.metricValue}>${position.maxLoss.toFixed(0)}</Text>
         </View>
         <View style={styles.metricRow}>
           <Text style={styles.metricLabel}>Probability of Profit</Text>
           <Text style={styles.metricValue}>
-            {(position.probability_of_profit * 100).toFixed(0)}%
+            {(position.probabilityOfProfit * 100).toFixed(0)}%
           </Text>
         </View>
       </View>
