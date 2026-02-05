@@ -501,11 +501,51 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
 
                 {/* Flight Manual Link */}
                 <TouchableOpacity 
-                  style={styles.flightManualButton} 
+                  style={[styles.flightManualButton, { opacity: 1 }]}
                   onPress={() => {
-                    console.log('[Button Press] Flight manual button tapped', { selectedRepair });
-                    handleShowFlightManual();
+                    try {
+                      console.log('[Flight Manual Button] Pressed!');
+                      setFlightManualContent({
+                        title: `${selectedRepair.repairType} Repair Guide`,
+                        strategy: selectedRepair.originalStrategy,
+                        overview: `Learn how to execute a ${selectedRepair.repairType} repair on your ${selectedRepair.originalStrategy} position.`,
+                        steps: [
+                          {
+                            number: 1,
+                            title: 'Understand the Problem',
+                            description: `Your ${selectedRepair.originalStrategy} has drifted from your original delta target by ${(selectedRepair.deltaDriftPct * 100).toFixed(1)}%.`,
+                          },
+                          {
+                            number: 2,
+                            title: 'The Repair Solution',
+                            description: `A ${selectedRepair.repairType} will add ${selectedRepair.repairStrikes} strikes to realign your position and collect ${selectedRepair.repairCredit.toFixed(2)} in premium.`,
+                          },
+                          {
+                            number: 3,
+                            title: 'Risk Management',
+                            description: `Your max loss will change from $${selectedRepair.currentMaxLoss.toFixed(0)} to $${selectedRepair.newMaxLoss.toFixed(0)}, while improving your statistical edge by ${(selectedRepair.confidenceBoost * 100).toFixed(0)}%.`,
+                          },
+                          {
+                            number: 4,
+                            title: 'Execution',
+                            description: `Place the ${selectedRepair.repairType} order to execute this repair. You can monitor your position in real-time.`,
+                          },
+                        ],
+                        keyMetrics: {
+                          currentDelta: selectedRepair.currentDelta,
+                          newBreakeven: selectedRepair.newBreakEven,
+                          creditReceived: selectedRepair.repairCredit,
+                          maxLossReduction: selectedRepair.currentMaxLoss - selectedRepair.newMaxLoss,
+                        },
+                      });
+                      setShowFlightManual(true);
+                      console.log('[Flight Manual Button] Modal should be visible now');
+                    } catch (e) {
+                      console.error('[Flight Manual Button] Error:', e);
+                      Alert.alert('Error', 'Could not open flight manual');
+                    }
                   }}
+                  activeOpacity={0.7}
                 >
                   <Text style={styles.flightManualButtonText}>📖 Read Flight Manual for {selectedRepair.repairType}</Text>
                 </TouchableOpacity>
