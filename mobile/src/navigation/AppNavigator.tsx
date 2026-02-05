@@ -113,6 +113,7 @@ import AIScansScreen from '../features/aiScans/screens/AIScansScreen';
 import ScanPlaybookScreen from '../features/aiScans/screens/ScanPlaybookScreen';
 import AIOptionsScreen from '../features/options/screens/AIOptionsScreen';
 import OptionsCopilotScreen from '../features/options/screens/OptionsCopilotScreen';
+import ActiveRepairWorkflow from '../screens/options/ActiveRepairWorkflow';
 import TomorrowScreen from '../features/futures/screens/TomorrowScreen';
 import DayTradingScreen from '../features/trading/screens/DayTradingScreen';
 import TradingScreenWrapper from './TradingScreenWrapper';
@@ -323,6 +324,7 @@ function InvestStack() {
       <Stack.Screen name="Screeners" component={AIScansScreen} options={{ headerShown: true, title: 'Screeners' }} />
       <Stack.Screen name="scan-playbook" component={ScanPlaybookScreen} options={{ headerShown: true, title: 'Scan Playbook' }} />
       <Stack.Screen name="AIOptions" component={AIOptionsScreen} options={{ headerShown: true, title: 'Options' }} />
+      <Stack.Screen name="ActiveRepairs" component={ActiveRepairWorkflow} options={{ headerShown: true, title: '🛡️ Active Repairs' }} />
       <Stack.Screen name="OptionsCopilot" component={OptionsCopilotScreen} options={{ headerShown: true, title: 'Advanced' }} />
       <Stack.Screen name="options-copilot" component={OptionsCopilotScreen} options={{ headerShown: true, title: 'Advanced' }} />
       <Stack.Screen name="Tomorrow" component={TomorrowScreen} options={{ headerShown: true, title: 'Tomorrow' }} />
