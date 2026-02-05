@@ -198,8 +198,11 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
     setShowRepairModal(false);
   };
 
-  const handleShowFlightManual = async () => {
-    if (!selectedRepair) return;
+  const handleShowFlightManual = () => {
+    if (!selectedRepair) {
+      console.log('[ActiveRepairWorkflow] No repair selected for manual');
+      return;
+    }
     
     // Get demo flight manual content
     const manualContent = {
@@ -236,6 +239,7 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
       },
     };
     
+    console.log('[ActiveRepairWorkflow] Opening flight manual', manualContent);
     setFlightManualContent(manualContent);
     setShowFlightManual(true);
   };
@@ -487,7 +491,13 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
                 </View>
 
                 {/* Flight Manual Link */}
-                <TouchableOpacity style={styles.flightManualButton} onPress={handleShowFlightManual}>
+                <TouchableOpacity 
+                  style={styles.flightManualButton} 
+                  onPress={() => {
+                    console.log('[Button Press] Flight manual button tapped', { selectedRepair });
+                    handleShowFlightManual();
+                  }}
+                >
                   <Text style={styles.flightManualButtonText}>📖 Read Flight Manual for {selectedRepair.repairType}</Text>
                 </TouchableOpacity>
               </>
