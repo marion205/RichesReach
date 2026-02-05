@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native';
+import Svg, { Circle, Line, Path } from 'react-native-svg';
 
 interface GreeksData {
   delta: number;
@@ -20,21 +21,21 @@ interface GreeksData {
 }
 
 interface RepairPlan {
-  position_id: string;
+  positionId: string;
   ticker: string;
-  original_strategy: string;
-  current_delta: number;
-  delta_drift_pct: number;
-  current_max_loss: number;
-  repair_type: string;
-  repair_strikes: string;
-  repair_credit: number;
-  new_max_loss: number;
-  new_break_even: number;
-  confidence_boost: number;
+  originalStrategy: string;
+  currentDelta: number;
+  deltaDriftPct: number;
+  currentMaxLoss: number;
+  repairType: string;
+  repairStrikes: string;
+  repairCredit: number;
+  newMaxLoss: number;
+  newBreakEven: number;
+  confidenceBoost: number;
   headline: string;
   reason: string;
-  action_description: string;
+  actionDescription: string;
   priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 }
 
@@ -152,10 +153,10 @@ export const GreeksRadarChart: React.FC<{ greeks: GreeksData; title?: string }> 
     <View style={styles.radarContainer}>
       <Text style={styles.radarTitle}>{title}</Text>
       <View style={{ width: size, height: size, backgroundColor: '#F3F4F6', borderRadius: 12 }}>
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
           {/* Grid circles */}
           {[0.25, 0.5, 0.75, 1].map((scale, i) => (
-            <circle
+            <Circle
               key={`grid-${i}`}
               cx={center}
               cy={center}
@@ -170,7 +171,7 @@ export const GreeksRadarChart: React.FC<{ greeks: GreeksData; title?: string }> 
           {angles.map((angle, i) => {
             const point = polarToCartesian(angle, radius);
             return (
-              <line
+              <Line
                 key={`axis-${i}`}
                 x1={center}
                 y1={center}
@@ -183,13 +184,13 @@ export const GreeksRadarChart: React.FC<{ greeks: GreeksData; title?: string }> 
           })}
 
           {/* Data polygon */}
-          <path d={pathData} fill="#3B82F6" fillOpacity="0.2" stroke="#3B82F6" strokeWidth="2" />
+          <Path d={pathData} fill="#3B82F6" fillOpacity="0.2" stroke="#3B82F6" strokeWidth="2" />
 
           {/* Data points */}
           {values.map((value, i) => {
             const point = polarToCartesian(angles[i], radius * value);
             return (
-              <circle
+              <Circle
                 key={`point-${i}`}
                 cx={point.x}
                 cy={point.y}
@@ -200,7 +201,7 @@ export const GreeksRadarChart: React.FC<{ greeks: GreeksData; title?: string }> 
               />
             );
           })}
-        </svg>
+        </Svg>
       </View>
 
       {/* Legend */}
@@ -338,24 +339,24 @@ export const RepairShield: React.FC<{
         {/* Action Description */}
         <View style={styles.actionBox}>
           <Text style={styles.actionLabel}>Recommended Action:</Text>
-          <Text style={styles.actionText}>{repairPlan.action_description}</Text>
+          <Text style={styles.actionText}>{repairPlan.actionDescription}</Text>
         </View>
 
         {/* Stats */}
         <View style={styles.statsContainer}>
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Current Max Loss</Text>
-            <Text style={styles.statValue}>${repairPlan.current_max_loss.toFixed(0)}</Text>
+            <Text style={styles.statValue}>${repairPlan.currentMaxLoss.toFixed(0)}</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>After Repair</Text>
-            <Text style={styles.statValueGreen}>${repairPlan.new_max_loss.toFixed(0)}</Text>
+            <Text style={styles.statValueGreen}>${repairPlan.newMaxLoss.toFixed(0)}</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.statItem}>
             <Text style={styles.statLabel}>Credit Collected</Text>
-            <Text style={styles.statValueGreen}>${repairPlan.repair_credit.toFixed(0)}</Text>
+            <Text style={styles.statValueGreen}>${repairPlan.repairCredit.toFixed(0)}</Text>
           </View>
         </View>
 
@@ -385,7 +386,7 @@ export const RepairShield: React.FC<{
         {/* Confidence Boost Badge */}
         <View style={styles.confidenceBadge}>
           <Text style={styles.confidenceText}>
-            +{(repairPlan.confidence_boost * 100).toFixed(0)}% Edge Boost
+            +{(repairPlan.confidenceBoost * 100).toFixed(0)}% Edge Boost
           </Text>
         </View>
       </LinearGradient>
@@ -488,7 +489,7 @@ export const PositionCardWithRepair: React.FC<{
           <View style={styles.repairBadgeText}>
             <Text style={styles.repairBadgeTitle}>Repair Available</Text>
             <Text style={styles.repairBadgeSubtitle}>
-              Reduce loss by ${repairPlan.repair_credit.toFixed(0)}
+              Reduce loss by ${repairPlan.repairCredit.toFixed(0)}
             </Text>
           </View>
           <Text style={styles.repairBadgeArrow}>›</Text>
