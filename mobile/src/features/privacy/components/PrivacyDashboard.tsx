@@ -64,68 +64,78 @@ interface PrivacyDashboardProps {
   onClose: () => void;
 }
 
+const DEFAULT_PRIVACY_SETTINGS = {
+  dataSharingEnabled: true,
+  aiAnalysisEnabled: true,
+  mlPredictionsEnabled: true,
+  analyticsEnabled: true,
+  sessionTrackingEnabled: true,
+  dataRetentionDays: 90,
+};
+
+const createDataCategories = (settings: any): DataCategory[] => {
+  return [
+    {
+      id: 'financial',
+      name: 'Financial Data',
+      description: 'Net worth, cashflow, positions',
+      icon: 'dollar-sign',
+      enabled: settings.dataSharingEnabled ?? true,
+      dataPoints: 12,
+      purpose: 'AI-powered recommendations and growth projections',
+      retentionDays: settings.dataRetentionDays ?? 90,
+    },
+    {
+      id: 'ai-analysis',
+      name: 'AI Analysis',
+      description: 'Life events, recommendations, insights',
+      icon: 'zap',
+      enabled: settings.aiAnalysisEnabled ?? true,
+      dataPoints: 8,
+      purpose: 'Personalized financial planning and goal tracking',
+      retentionDays: 90,
+    },
+    {
+      id: 'ml-predictions',
+      name: 'ML Predictions',
+      description: 'Growth rates, market regime, risk analysis',
+      icon: 'cpu',
+      enabled: settings.mlPredictionsEnabled ?? true,
+      dataPoints: 15,
+      purpose: 'Market predictions and portfolio optimization',
+      retentionDays: 60,
+    },
+    {
+      id: 'analytics',
+      name: 'Usage Analytics',
+      description: 'App usage, gesture interactions, feature engagement',
+      icon: 'bar-chart-2',
+      enabled: settings.analyticsEnabled ?? true,
+      dataPoints: 20,
+      purpose: 'Improve app experience and feature development',
+      retentionDays: 365,
+    },
+    {
+      id: 'session',
+      name: 'Session Tracking',
+      description: 'Session replays, error logs, performance metrics',
+      icon: 'activity',
+      enabled: settings.sessionTrackingEnabled ?? false,
+      dataPoints: 5,
+      purpose: 'Debug issues and optimize performance',
+      retentionDays: 30,
+    },
+  ];
+};
+
 export const PrivacyDashboard: React.FC<PrivacyDashboardProps> = ({
   visible,
   onClose,
 }) => {
-  const [dataCategories, setDataCategories] = useState<DataCategory[]>([]);
+  const [dataCategories, setDataCategories] = useState<DataCategory[]>(() =>
+    createDataCategories(DEFAULT_PRIVACY_SETTINGS)
+  );
   const [showDetails, setShowDetails] = useState<string | null>(null);
-  
-  // Helper function to create data categories from settings
-  const createDataCategories = (settings: any): DataCategory[] => {
-    return [
-      {
-        id: 'financial',
-        name: 'Financial Data',
-        description: 'Net worth, cashflow, positions',
-        icon: 'dollar-sign',
-        enabled: settings.dataSharingEnabled ?? true,
-        dataPoints: 12,
-        purpose: 'AI-powered recommendations and growth projections',
-        retentionDays: settings.dataRetentionDays ?? 90,
-      },
-      {
-        id: 'ai-analysis',
-        name: 'AI Analysis',
-        description: 'Life events, recommendations, insights',
-        icon: 'zap',
-        enabled: settings.aiAnalysisEnabled ?? true,
-        dataPoints: 8,
-        purpose: 'Personalized financial planning and goal tracking',
-        retentionDays: 90,
-      },
-      {
-        id: 'ml-predictions',
-        name: 'ML Predictions',
-        description: 'Growth rates, market regime, risk analysis',
-        icon: 'cpu',
-        enabled: settings.mlPredictionsEnabled ?? true,
-        dataPoints: 15,
-        purpose: 'Market predictions and portfolio optimization',
-        retentionDays: 60,
-      },
-      {
-        id: 'analytics',
-        name: 'Usage Analytics',
-        description: 'App usage, gesture interactions, feature engagement',
-        icon: 'bar-chart-2',
-        enabled: settings.analyticsEnabled ?? true,
-        dataPoints: 20,
-        purpose: 'Improve app experience and feature development',
-        retentionDays: 365,
-      },
-        {
-          id: 'session',
-          name: 'Session Tracking',
-          description: 'Session replays, error logs, performance metrics',
-          icon: 'activity',
-          enabled: settings.sessionTrackingEnabled ?? false,
-          dataPoints: 5,
-          purpose: 'Debug issues and optimize performance',
-          retentionDays: 30,
-        },
-      ];
-  };
   
   // Query with error handling - privacySettings may not exist in schema yet
   const { data, loading, refetch, error } = useQuery(GET_PRIVACY_SETTINGS, {
@@ -142,15 +152,7 @@ export const PrivacyDashboard: React.FC<PrivacyDashboardProps> = ({
     // Handle case where privacySettings doesn't exist in schema (use defaults)
     if (error && error.graphQLErrors?.some((e: any) => e.message?.includes('Cannot query field'))) {
       // Schema doesn't have privacySettings yet - use default values
-      const defaultSettings = {
-        dataSharingEnabled: true,
-        aiAnalysisEnabled: true,
-        mlPredictionsEnabled: true,
-        analyticsEnabled: true,
-        sessionTrackingEnabled: true,
-        dataRetentionDays: 90,
-      };
-      setDataCategories(createDataCategories(defaultSettings));
+      setDataCategories(createDataCategories(DEFAULT_PRIVACY_SETTINGS));
       return;
     }
     
@@ -159,15 +161,10 @@ export const PrivacyDashboard: React.FC<PrivacyDashboardProps> = ({
       setDataCategories(createDataCategories(settings));
     } else if (!loading && !error) {
       // No data and no error - use defaults
-      const defaultSettings = {
-        dataSharingEnabled: true,
-        aiAnalysisEnabled: true,
-        mlPredictionsEnabled: true,
-        analyticsEnabled: true,
-        sessionTrackingEnabled: true,
-        dataRetentionDays: 90,
-      };
-      setDataCategories(createDataCategories(defaultSettings));
+      setDataCategories(createDataCategories(DEFAULT_PRIVACY_SETTINGS));
+    } else if (!loading && error) {
+      // On error (e.g., network/auth), show defaults so the orb renders
+      setDataCategories(createDataCategories(DEFAULT_PRIVACY_SETTINGS));
     }
   }, [data, error, loading]);
 
@@ -213,6 +210,10 @@ export const PrivacyDashboard: React.FC<PrivacyDashboardProps> = ({
   // Animated orb size based on data usage
   const orbScale = useSharedValue(0.5);
   useEffect(() => {
+    if (dataCategories.length === 0) {
+      orbScale.value = withSpring(0.5);
+      return;
+    }
     const scale = 0.3 + (enabledCategories / dataCategories.length) * 0.4;
     orbScale.value = withSpring(scale);
   }, [enabledCategories, dataCategories.length]);
