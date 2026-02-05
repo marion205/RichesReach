@@ -567,7 +567,7 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
           </View>
 
           <ScrollView style={styles.flightManualScroll} contentContainerStyle={styles.flightManualContent}>
-            {flightManualContent && (
+            {flightManualContent ? (
               <>
                 {/* Manual Title */}
                 <Text style={styles.manualMainTitle}>{flightManualContent.title}</Text>
@@ -620,6 +620,10 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
 
                 <View style={{ height: 40 }} />
               </>
+            ) : (
+              <View style={{ justifyContent: 'center', alignItems: 'center', paddingVertical: 40 }}>
+                <Text style={{ fontSize: 16, color: '#999' }}>Loading manual...</Text>
+              </View>
             )}
           </ScrollView>
 
