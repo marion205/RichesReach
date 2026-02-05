@@ -29,9 +29,9 @@ import {
 interface Position {
   id: string;
   ticker: string;
-  strategy_type: string;
-  unrealized_pnl: number;
-  days_to_expiration: number;
+  strategyType: string;
+  unrealizedPnl: number;
+  daysToExpiration: number;
   greeks: {
     delta: number;
     gamma: number;
@@ -39,37 +39,37 @@ interface Position {
     vega: number;
     rho: number;
   };
-  max_loss: number;
-  probability_of_profit: number;
+  maxLoss: number;
+  probabilityOfProfit: number;
 }
 
 interface RepairPlan {
-  position_id: string;
+  positionId: string;
   ticker: string;
-  original_strategy: string;
-  current_delta: number;
-  delta_drift_pct: number;
-  current_max_loss: number;
-  repair_type: string;
-  repair_strikes: string;
-  repair_credit: number;
-  new_max_loss: number;
-  new_break_even: number;
-  confidence_boost: number;
+  originalStrategy: string;
+  currentDelta: number;
+  deltaDriftPct: number;
+  currentMaxLoss: number;
+  repairType: string;
+  repairStrikes: string;
+  repairCredit: number;
+  newMaxLoss: number;
+  newBreakEven: number;
+  confidenceBoost: number;
   headline: string;
   reason: string;
-  action_description: string;
+  actionDescription: string;
   priority: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
 }
 
 interface PortfolioState {
-  total_delta: number;
-  total_gamma: number;
-  total_theta: number;
-  total_vega: number;
-  portfolio_health_status: 'healthy' | 'warning' | 'critical';
-  repairs_available: number;
-  total_max_loss: number;
+  totalDelta: number;
+  totalGamma: number;
+  totalTheta: number;
+  totalVega: number;
+  portfolioHealthStatus: 'healthy' | 'warning' | 'critical';
+  repairsAvailable: number;
+  totalMaxLoss: number;
 }
 
 interface ActiveRepairWorkflowProps {
@@ -164,7 +164,7 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
   // Map repair plans to positions
   const positionsWithRepairs = positions.map((pos) => ({
     position: pos,
-    repair: repairPlans.find((rp) => rp.position_id === pos.id),
+    repair: repairPlans.find((rp) => rp.positionId === pos.id),
   }));
 
   const handleSelectRepair = (repair: RepairPlan) => {
@@ -181,8 +181,8 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
     try {
       await acceptRepairMutation({
         variables: {
-          position_id: selectedRepair.position_id,
-          repair_plan_id: selectedRepair.position_id, // Assuming this ID structure
+          position_id: selectedRepair.positionId,
+          repair_plan_id: selectedRepair.positionId, // Assuming this ID structure
           user_id: userId,
         },
       });
@@ -198,7 +198,7 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
 
   // Get portfolio health status
   const getHealthStatus = () => {
-    switch (portfolio.portfolio_health_status) {
+    switch (portfolio.portfolioHealthStatus) {
       case 'critical':
         return 'critical';
       case 'warning':
@@ -236,42 +236,42 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
         <View style={styles.overviewGrid}>
           <View style={styles.overviewCard}>
             <Text style={styles.overviewLabel}>Portfolio Delta</Text>
-            <Text style={[styles.overviewValue, { color: Math.abs(portfolio.total_delta) > 0.5 ? '#EF4444' : '#10B981' }]}>
-              {portfolio.total_delta.toFixed(2)}
+            <Text style={[styles.overviewValue, { color: Math.abs(portfolio.totalDelta) > 0.5 ? '#EF4444' : '#10B981' }]}>
+              {portfolio.totalDelta.toFixed(2)}
             </Text>
           </View>
 
           <View style={styles.overviewCard}>
             <Text style={styles.overviewLabel}>Max Daily Loss</Text>
             <Text style={styles.overviewValue}>
-              ${Math.abs(portfolio.total_max_loss).toFixed(0)}
+              ${Math.abs(portfolio.totalMaxLoss).toFixed(0)}
             </Text>
           </View>
 
           <View style={styles.overviewCard}>
             <Text style={styles.overviewLabel}>Active Repairs</Text>
-            <Text style={[styles.overviewValue, { color: portfolio.repairs_available > 0 ? '#DC2626' : '#10B981' }]}>
-              {portfolio.repairs_available}
+            <Text style={[styles.overviewValue, { color: portfolio.repairsAvailable > 0 ? '#DC2626' : '#10B981' }]}>
+              {portfolio.repairsAvailable}
             </Text>
           </View>
 
           <View style={styles.overviewCard}>
             <Text style={styles.overviewLabel}>Theta Decay</Text>
-            <Text style={[styles.overviewValue, { color: portfolio.total_theta > 0 ? '#10B981' : '#EF4444' }]}>
-              ${portfolio.total_theta.toFixed(0)}/day
+            <Text style={[styles.overviewValue, { color: portfolio.totalTheta > 0 ? '#10B981' : '#EF4444' }]}>
+              ${portfolio.totalTheta.toFixed(0)}/day
             </Text>
           </View>
         </View>
 
         {/* Portfolio Greeks Radar */}
-        {portfolio.total_delta !== undefined && (
+        {portfolio.totalDelta !== undefined && (
           <View style={styles.radarSection}>
             <GreeksRadarChart
               greeks={{
-                delta: portfolio.total_delta,
-                gamma: portfolio.total_gamma,
-                theta: portfolio.total_theta,
-                vega: portfolio.total_vega,
+                delta: portfolio.totalDelta,
+                gamma: portfolio.totalGamma,
+                theta: portfolio.totalTheta,
+                vega: portfolio.totalVega,
                 rho: 0, // Often omitted from portfolio view
               }}
               title="Portfolio Greeks Profile"
@@ -296,7 +296,7 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
           ) : (
             repairPlans.map((repair) => (
               <TouchableOpacity
-                key={repair.position_id}
+                key={repair.positionId}
                 onPress={() => handleSelectRepair(repair)}
                 activeOpacity={0.7}
               >
@@ -304,7 +304,7 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
                   repairPlan={repair}
                   onAccept={() => handleSelectRepair(repair)}
                   onReject={() => {}}
-                  loading={isProcessing && repairAccepted?.position_id === repair.position_id}
+                  loading={isProcessing && repairAccepted?.positionId === repair.positionId}
                 />
               </TouchableOpacity>
             ))
@@ -366,7 +366,7 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
                     <View style={styles.comparisonItem}>
                       <Text style={styles.comparisonLabel}>Delta Drift</Text>
                       <Text style={styles.comparisonBefore}>
-                        Current: {selectedRepair.current_delta.toFixed(2)}
+                        Current: {selectedRepair.currentDelta.toFixed(2)}
                       </Text>
                       <Text style={styles.comparisonAfter}>
                         Target: ~0.10 (Neutral)
@@ -382,16 +382,16 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
                   <View style={styles.actionDetail}>
                     <View style={styles.actionRow}>
                       <Text style={styles.actionRowLabel}>Strategy</Text>
-                      <Text style={styles.actionRowValue}>{selectedRepair.repair_type}</Text>
+                      <Text style={styles.actionRowValue}>{selectedRepair.repairType}</Text>
                     </View>
                     <View style={styles.actionRow}>
                       <Text style={styles.actionRowLabel}>Strikes</Text>
-                      <Text style={styles.actionRowValue}>{selectedRepair.repair_strikes}</Text>
+                      <Text style={styles.actionRowValue}>{selectedRepair.repairStrikes}</Text>
                     </View>
                     <View style={styles.actionRow}>
                       <Text style={styles.actionRowLabel}>Credit</Text>
                       <Text style={[styles.actionRowValue, { color: '#10B981' }]}>
-                        +${selectedRepair.repair_credit.toFixed(0)}
+                        +${selectedRepair.repairCredit.toFixed(0)}
                       </Text>
                     </View>
                   </View>
@@ -405,7 +405,7 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
                     <View style={styles.riskRow}>
                       <Text style={styles.riskLabel}>Current Max Loss</Text>
                       <Text style={styles.riskValue}>
-                        ${selectedRepair.current_max_loss.toFixed(0)}
+                        ${selectedRepair.currentMaxLoss.toFixed(0)}
                       </Text>
                     </View>
                     <View style={styles.riskArrow}>
@@ -414,13 +414,13 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
                     <View style={styles.riskRow}>
                       <Text style={styles.riskLabel}>After Repair</Text>
                       <Text style={[styles.riskValue, { color: '#10B981' }]}>
-                        ${selectedRepair.new_max_loss.toFixed(0)}
+                        ${selectedRepair.newMaxLoss.toFixed(0)}
                       </Text>
                     </View>
                   </View>
 
                   <Text style={styles.riskSubtext}>
-                    Reduces max loss by ${(selectedRepair.current_max_loss - selectedRepair.new_max_loss).toFixed(0)}
+                    Reduces max loss by ${(selectedRepair.currentMaxLoss - selectedRepair.newMaxLoss).toFixed(0)}
                   </Text>
                 </View>
 
@@ -438,13 +438,13 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
                   <Text style={styles.sectionTitle}>Edge Boost</Text>
                   <Text style={{ fontSize: 14, color: '#047857', marginTop: 8 }}>
                     This repair increases your statistical edge by{' '}
-                    <Text style={{ fontWeight: '700' }}>+{(selectedRepair.confidence_boost * 100).toFixed(0)}%</Text>.
+                    <Text style={{ fontWeight: '700' }}>+{(selectedRepair.confidenceBoost * 100).toFixed(0)}%</Text>.
                   </Text>
                 </View>
 
                 {/* Flight Manual Link */}
                 <TouchableOpacity style={styles.flightManualButton}>
-                  <Text style={styles.flightManualButtonText}>📖 Read Flight Manual for {selectedRepair.repair_type}</Text>
+                  <Text style={styles.flightManualButtonText}>📖 Read Flight Manual for {selectedRepair.repairType}</Text>
                 </TouchableOpacity>
               </>
             )}
