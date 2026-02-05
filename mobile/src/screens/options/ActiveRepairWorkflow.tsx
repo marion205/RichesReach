@@ -15,7 +15,16 @@ import { useQuery, useMutation } from '@apollo/client';
 import LottieView from 'lottie-react-native';
 
 import { RepairShield, GreeksRadarChart, PositionCardWithRepair, ShieldStatusBar } from '../../components/options/RepairShield';
-import { GraphQL_QUERIES, GraphQL_MUTATIONS } from '../../graphql';
+import {
+  GET_PORTFOLIO_WITH_REPAIRS,
+  GET_POSITION_WITH_REPAIR,
+  ACCEPT_REPAIR_PLAN,
+  EXECUTE_BULK_REPAIRS,
+  GET_PORTFOLIO_HEALTH,
+  GET_REPAIR_HISTORY,
+  GET_FLIGHT_MANUAL_FOR_REPAIR,
+  REPAIR_PLAN_UPDATES,
+} from '../../graphql/repairs.graphql';
 
 interface Position {
   id: string;
@@ -95,7 +104,7 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
 
   // GraphQL Queries
   const { data: portfolioData, loading: portfolioLoading, refetch: refetchPortfolio } = useQuery(
-    GraphQL_QUERIES.GET_PORTFOLIO_WITH_REPAIRS,
+    GET_PORTFOLIO_WITH_REPAIRS,
     {
       variables: { user_id: userId, account_id: accountId },
       pollInterval: 30000, // Poll every 30 seconds
@@ -104,7 +113,7 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
 
   // GraphQL Mutations
   const [acceptRepairMutation, { loading: acceptLoading }] = useMutation(
-    GraphQL_MUTATIONS.ACCEPT_REPAIR_PLAN,
+    ACCEPT_REPAIR_PLAN,
     {
       onCompleted: (data) => {
         setIsProcessing(false);
