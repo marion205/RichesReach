@@ -192,6 +192,17 @@ except (ImportError, SyntaxError) as e:
         pass
 
 try:
+    from .graphql_repairs_resolvers import Query as RepairQueries
+    REPAIR_QUERIES_AVAILABLE = True
+except (ImportError, SyntaxError) as e:
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.warning(f"Could not import RepairQueries: {e}")
+    REPAIR_QUERIES_AVAILABLE = False
+    class RepairQueries(graphene.ObjectType):
+        pass
+
+try:
     from .graphql.queries import (
         TradingQuery,
         BudgetSpendingQuery,
@@ -224,7 +235,7 @@ except (ImportError, SyntaxError) as e:
     class DiscussionsQuery(graphene.ObjectType):
         pass
 
-class ExtendedQuery(PremiumQueries, BrokerQueries, TradingQuery, BudgetSpendingQuery, SocialQuery, MarketDataQuery, AnalyticsQuery, SecurityQuery, SignalsQuery, OptionsRustQuery, DiscussionsQuery, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, RiskManagementQueries, OptionsAlertQueries, BlockchainQueries, RAHAQueries, ChanQuantQueries, TransparencyQueries, SpeedOptimizationQueries, OptionsQueries, Query, graphene.ObjectType):
+class ExtendedQuery(PremiumQueries, BrokerQueries, TradingQuery, BudgetSpendingQuery, SocialQuery, MarketDataQuery, AnalyticsQuery, SecurityQuery, SignalsQuery, OptionsRustQuery, DiscussionsQuery, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, RiskManagementQueries, OptionsAlertQueries, BlockchainQueries, RAHAQueries, ChanQuantQueries, TransparencyQueries, SpeedOptimizationQueries, OptionsQueries, RepairQueries, Query, graphene.ObjectType):
     """
     Final Query type exposed by the schema.
 
