@@ -6,6 +6,7 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from decimal import Decimal
+import uuid
 import json
 
 User = get_user_model()
@@ -359,7 +360,7 @@ class UserRiskBudget(models.Model):
         """Check if circuit breaker should trigger"""
         from django.utils import timezone
         self.reset_daily_risk()
-        
+
         if self.daily_pnl_pct <= -abs(self.max_daily_loss_pct):
             if not self.trading_paused:
                 self.trading_paused = True
@@ -368,4 +369,130 @@ class UserRiskBudget(models.Model):
                 self.save()
                 return True
         return False
+
+
+class UserFill(models.Model):
+    """
+    Records actual user fills (entry/exit) for trading signals.
+    Separates real execution data from theoretical SignalPerformance evaluations.
+    """
+    OUTCOME_CHOICES = [
+        ('WIN', 'Win'),
+        ('LOSS', 'Loss'),
+        ('BREAKEVEN', 'Breakeven'),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='fills')
+    signal = models.ForeignKey(
+        DayTradingSignal, on_delete=models.CASCADE,
+        related_name='user_fills', null=True, blank=True
+    )
+    swing_signal = models.ForeignKey(
+        SwingTradingSignal, on_delete=models.CASCADE,
+        related_name='user_fills', null=True, blank=True
+    )
+
+    symbol = models.CharField(max_length=10, db_index=True)
+    side = models.CharField(max_length=5)  # LONG/SHORT
+    entry_price = models.DecimalField(max_digits=10, decimal_places=2)
+    exit_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    entry_time = models.DateTimeField()
+    exit_time = models.DateTimeField(null=True, blank=True)
+    shares = models.IntegerField(default=100)
+
+    # Computed on save
+    pnl_dollars = models.DecimalField(max_digits=15, decimal_places=2, null=True, blank=True)
+    pnl_percent = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
+
+    # Execution quality (computed by ExecutionQualityTracker)
+    slippage_bps = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    execution_quality_score = models.DecimalField(max_digits=5, decimal_places=1, null=True, blank=True)
+
+    # Outcome
+    outcome = models.CharField(max_length=20, choices=OUTCOME_CHOICES, blank=True)
+    hit_stop = models.BooleanField(default=False)
+    hit_target = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'user_fills'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'created_at']),
+            models.Index(fields=['signal', 'user']),
+            models.Index(fields=['symbol', 'created_at']),
+        ]
+        verbose_name = 'User Fill'
+        verbose_name_plural = 'User Fills'
+
+    def __str__(self):
+        return f"{self.user_id} {self.symbol} {self.side} @ {self.entry_price}"
+
+    def save(self, *args, **kwargs):
+        # Auto-compute PnL if both entry and exit prices are set
+        if self.entry_price and self.exit_price:
+            if self.side == 'LONG':
+                self.pnl_dollars = (self.exit_price - self.entry_price) * self.shares
+                self.pnl_percent = ((self.exit_price - self.entry_price) / self.entry_price) * 100
+            else:  # SHORT
+                self.pnl_dollars = (self.entry_price - self.exit_price) * self.shares
+                self.pnl_percent = ((self.entry_price - self.exit_price) / self.entry_price) * 100
+
+            # Auto-determine outcome if not set
+            if not self.outcome:
+                if self.pnl_percent > Decimal('0.1'):
+                    self.outcome = 'WIN'
+                elif self.pnl_percent < Decimal('-0.1'):
+                    self.outcome = 'LOSS'
+                else:
+                    self.outcome = 'BREAKEVEN'
+        super().save(*args, **kwargs)
+
+
+class SymbolExecutionProfile(models.Model):
+    """
+    Aggregated execution quality per symbol.
+    Updated daily from UserFill data. Used to penalize signals
+    for symbols with historically poor execution.
+    """
+    symbol = models.CharField(max_length=10, unique=True, db_index=True)
+    avg_slippage_bps = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0'))
+    avg_quality_score = models.DecimalField(max_digits=5, decimal_places=1, default=Decimal('5.0'))
+    fill_count = models.IntegerField(default=0)
+    avg_time_to_fill_seconds = models.FloatField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'symbol_execution_profiles'
+        verbose_name = 'Symbol Execution Profile'
+        verbose_name_plural = 'Symbol Execution Profiles'
+
+    def __str__(self):
+        return f"{self.symbol} - quality={self.avg_quality_score}, fills={self.fill_count}"
+
+
+class StrategyHealthRecord(models.Model):
+    """
+    Tracks consecutive pass/fail for strategies to trigger adaptation.
+    Updated nightly after backtests complete.
+    """
+    strategy_name = models.CharField(max_length=100, unique=True, db_index=True)
+    consecutive_failures = models.IntegerField(default=0)
+    consecutive_passes = models.IntegerField(default=0)
+    last_backtest_date = models.DateField(null=True, blank=True)
+    last_backtest_passed = models.BooleanField(default=True)
+    auto_disabled = models.BooleanField(default=False)
+    auto_disabled_at = models.DateTimeField(null=True, blank=True)
+    last_optimization_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'strategy_health_records'
+        verbose_name = 'Strategy Health Record'
+        verbose_name_plural = 'Strategy Health Records'
+
+    def __str__(self):
+        status = "DISABLED" if self.auto_disabled else "ACTIVE"
+        return f"{self.strategy_name} [{status}] - passes={self.consecutive_passes}, fails={self.consecutive_failures}"
 

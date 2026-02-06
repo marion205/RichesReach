@@ -129,7 +129,7 @@ class GetBanditStrategy(graphene.Mutation):
     Output = BanditStrategyResultType
     
     def mutate(self, info, context=None):
-        """Get bandit strategy"""
+        """Get bandit strategy using Thompson Sampling"""
         try:
             user = get_user_from_context(info.context)
             if not user or getattr(user, "is_anonymous", True):
@@ -143,43 +143,40 @@ class GetBanditStrategy(graphene.Mutation):
                     ),
                     performance=None
                 )
-            
-            # In production, use bandit algorithm
-            from .ml_queries import BanditStrategyType, BanditType
-            
+
+            from .bandit_service import BanditService
+            from .ml_queries import BanditStrategyType
+
+            bandit = BanditService()
+            ctx = context if isinstance(context, dict) else {}
+            result = bandit.select_strategy(context=ctx)
+
+            # Build performance from all arms
+            arms_status = bandit.get_all_arms_status()
+            arms_by_slug = {a['strategy']: a for a in arms_status}
+
+            def _arm_type(slug):
+                a = arms_by_slug.get(slug, {})
+                return BanditStrategyType(
+                    winRate=a.get('win_rate', 0.5),
+                    confidence=a.get('weight', 0.25),
+                    alpha=a.get('alpha', 1.0),
+                    beta=a.get('beta', 1.0),
+                )
+
             return BanditStrategyResultType(
-                selected_strategy="momentum",
+                selected_strategy=result['strategy'],
                 context=BanditContextType(
-                    vix_level=context.get("vix_level", 18.0) if context else 18.0,
-                    market_trend=context.get("market_trend", "BULLISH") if context else "BULLISH",
-                    volatility_regime=context.get("volatility_regime", "LOW") if context else "LOW",
-                    time_of_day=context.get("time_of_day", "MORNING") if context else "MORNING"
+                    vix_level=ctx.get("vix_level", 18.0),
+                    market_trend=ctx.get("market_trend", "BULLISH"),
+                    volatility_regime=ctx.get("volatility_regime", "LOW"),
+                    time_of_day=ctx.get("time_of_day", "MORNING"),
                 ),
                 performance=BanditPerformanceType(
-                    breakout=BanditStrategyType(
-                        winRate=0.65,
-                        confidence=0.8,
-                        alpha=10.0,
-                        beta=5.0
-                    ),
-                    mean_reversion=BanditStrategyType(
-                        winRate=0.60,
-                        confidence=0.75,
-                        alpha=8.0,
-                        beta=5.0
-                    ),
-                    momentum=BanditStrategyType(
-                        winRate=0.70,
-                        confidence=0.85,
-                        alpha=12.0,
-                        beta=5.0
-                    ),
-                    etf_rotation=BanditStrategyType(
-                        winRate=0.55,
-                        confidence=0.70,
-                        alpha=7.0,
-                        beta=5.0
-                    )
+                    breakout=_arm_type('breakout'),
+                    mean_reversion=_arm_type('mean_reversion'),
+                    momentum=_arm_type('momentum'),
+                    etf_rotation=_arm_type('etf_rotation'),
                 )
             )
         except Exception as e:
@@ -207,7 +204,7 @@ class UpdateBanditReward(graphene.Mutation):
     Output = UpdateBanditRewardResultType
     
     def mutate(self, info, strategy, reward):
-        """Update bandit reward"""
+        """Update bandit reward using Thompson Sampling"""
         try:
             user = get_user_from_context(info.context)
             if not user or getattr(user, "is_anonymous", True):
@@ -215,38 +212,34 @@ class UpdateBanditReward(graphene.Mutation):
                     success=False,
                     message="Authentication required"
                 )
-            
-            # In production, update bandit algorithm
-            from .ml_queries import BanditStrategyType, BanditPerformanceType
-            
+
+            from .bandit_service import BanditService
+            from .ml_queries import BanditStrategyType
+
+            bandit = BanditService()
+            bandit.update_reward(strategy, reward)
+
+            # Return updated performance for all arms
+            arms_status = bandit.get_all_arms_status()
+            arms_by_slug = {a['strategy']: a for a in arms_status}
+
+            def _arm_type(slug):
+                a = arms_by_slug.get(slug, {})
+                return BanditStrategyType(
+                    winRate=a.get('win_rate', 0.5),
+                    confidence=a.get('weight', 0.25),
+                    alpha=a.get('alpha', 1.0),
+                    beta=a.get('beta', 1.0),
+                )
+
             return UpdateBanditRewardResultType(
                 success=True,
                 message=f"Reward updated for {strategy}",
                 performance=BanditPerformanceType(
-                    breakout=BanditStrategyType(
-                        winRate=0.65,
-                        confidence=0.8,
-                        alpha=10.0,
-                        beta=5.0
-                    ),
-                    mean_reversion=BanditStrategyType(
-                        winRate=0.60,
-                        confidence=0.75,
-                        alpha=8.0,
-                        beta=5.0
-                    ),
-                    momentum=BanditStrategyType(
-                        winRate=0.70,
-                        confidence=0.85,
-                        alpha=12.0,
-                        beta=5.0
-                    ),
-                    etf_rotation=BanditStrategyType(
-                        winRate=0.55,
-                        confidence=0.70,
-                        alpha=7.0,
-                        beta=5.0
-                    )
+                    breakout=_arm_type('breakout'),
+                    mean_reversion=_arm_type('mean_reversion'),
+                    momentum=_arm_type('momentum'),
+                    etf_rotation=_arm_type('etf_rotation'),
                 )
             )
         except Exception as e:

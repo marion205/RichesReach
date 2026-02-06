@@ -61,53 +61,56 @@ class MLQueries(graphene.ObjectType):
     )
     
     def resolve_mlSystemStatus(self, info):
-        """Get ML system status"""
+        """Get ML system status with real bandit data"""
         try:
             user = get_user_from_context(info.context)
             if not user or getattr(user, "is_anonymous", True):
                 return None
-            
-            # In production, query from ML service
+
+            # Get real bandit arm data
+            from .bandit_service import BanditService
+            bandit = BanditService()
+            arms_status = bandit.get_all_arms_status()
+            arms_by_slug = {a['strategy']: a for a in arms_status}
+
+            def _arm_type(slug):
+                a = arms_by_slug.get(slug, {})
+                return BanditStrategyType(
+                    winRate=a.get('win_rate', 0.5),
+                    confidence=a.get('weight', 0.25),
+                    alpha=a.get('alpha', 1.0),
+                    beta=a.get('beta', 1.0),
+                )
+
+            # Get real outcome counts
+            from .signal_performance_models import SignalPerformance, UserFill
+            from django.utils import timezone
+            from datetime import timedelta
+            total_outcomes = SignalPerformance.objects.count()
+            recent_outcomes = UserFill.objects.filter(
+                created_at__gte=timezone.now() - timedelta(days=7)
+            ).count()
+
             return MLSystemStatusType(
                 outcomeTracking=OutcomeTrackingType(
-                    totalOutcomes=1000,
-                    recentOutcomes=50
+                    totalOutcomes=total_outcomes,
+                    recentOutcomes=recent_outcomes,
                 ),
                 models=ModelsType(
                     safeModel="model-safe-v1",
-                    aggressiveModel="model-aggressive-v1"
+                    aggressiveModel="model-aggressive-v1",
                 ),
                 bandit=BanditType(
-                    breakout=BanditStrategyType(
-                        winRate=0.65,
-                        confidence=0.8,
-                        alpha=10.0,
-                        beta=5.0
-                    ),
-                    meanReversion=BanditStrategyType(
-                        winRate=0.60,
-                        confidence=0.75,
-                        alpha=8.0,
-                        beta=5.0
-                    ),
-                    momentum=BanditStrategyType(
-                        winRate=0.70,
-                        confidence=0.85,
-                        alpha=12.0,
-                        beta=5.0
-                    ),
-                    etfRotation=BanditStrategyType(
-                        winRate=0.55,
-                        confidence=0.70,
-                        alpha=7.0,
-                        beta=5.0
-                    )
+                    breakout=_arm_type('breakout'),
+                    meanReversion=_arm_type('mean_reversion'),
+                    momentum=_arm_type('momentum'),
+                    etfRotation=_arm_type('etf_rotation'),
                 ),
                 lastTraining=LastTrainingType(
-                    SAFE="2024-01-01T00:00:00Z",
-                    AGGRESSIVE="2024-01-01T00:00:00Z"
+                    SAFE="auto-retrain-6h",
+                    AGGRESSIVE="auto-retrain-6h",
                 ),
-                mlAvailable=True
+                mlAvailable=True,
             )
         except Exception as e:
             logger.error(f"Error resolving ML system status: {e}", exc_info=True)

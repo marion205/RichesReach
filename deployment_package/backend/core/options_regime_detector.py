@@ -37,7 +37,7 @@ class RegimeDetector:
     CONFIRMATION_BARS = 3  # Regime must be stable for N bars before flipping
     MIN_DATA_POINTS = 60  # Minimum bars needed for reliable indicators
     
-    # Regime-specific thresholds
+    # Regime-specific thresholds (overridden by learned values if available)
     RV_SPIKE_THRESHOLD = 1.2  # RV increase multiplier to trigger CRASH_PANIC
     PRICE_CRASH_THRESHOLD = -0.03  # Price distance from SMA20 (3% below)
     TREND_STRENGTH_THRESHOLD = 0.02  # Price distance from SMA (2% above/below)
@@ -45,6 +45,33 @@ class RegimeDetector:
     IV_RANK_HIGH = 0.7  # IV rank percentile for mean reversion signal
     IV_RANK_LOW = 0.3  # IV rank percentile for low-IV signals
     PRICE_FLAT_THRESHOLD = 0.015  # Distance from SMA for choppy/range-bound
+    _learned_thresholds_loaded = False
+
+    @classmethod
+    def load_learned_thresholds(cls):
+        """
+        Load learned thresholds from database if an active RegimeThresholdSet exists.
+        Called at module load time and after nightly optimization.
+        """
+        try:
+            from .regime_learning_models import RegimeThresholdSet
+            active_set = RegimeThresholdSet.objects.filter(is_active=True).first()
+            if active_set and active_set.thresholds:
+                mapping = {
+                    'rv_spike_threshold': 'RV_SPIKE_THRESHOLD',
+                    'price_crash_threshold': 'PRICE_CRASH_THRESHOLD',
+                    'trend_strength_threshold': 'TREND_STRENGTH_THRESHOLD',
+                    'iv_expansion_threshold': 'IV_EXPANSION_THRESHOLD',
+                    'iv_rank_high': 'IV_RANK_HIGH',
+                    'iv_rank_low': 'IV_RANK_LOW',
+                    'price_flat_threshold': 'PRICE_FLAT_THRESHOLD',
+                }
+                for param_key, class_attr in mapping.items():
+                    if param_key in active_set.thresholds:
+                        setattr(cls, class_attr, active_set.thresholds[param_key])
+                cls._learned_thresholds_loaded = True
+        except Exception:
+            pass  # Silently fail during module load (migrations may not be applied yet)
     
     # Flight Manual descriptions (why this regime matters to traders)
     REGIME_DESCRIPTIONS = {
@@ -407,6 +434,13 @@ class RegimeDetector:
         self.regime_candidate = None
         self.candidate_bar_count = 0
         self.current_regime = "NEUTRAL"
+
+
+# Load learned thresholds at module import time
+try:
+    RegimeDetector.load_learned_thresholds()
+except Exception:
+    pass  # Migrations may not be applied yet
 
 
 # --- Helper function for Alert Integration ---

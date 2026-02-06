@@ -45,6 +45,12 @@ ENABLE_HYBRID_ML_MODEL = os.getenv('ENABLE_HYBRID_ML_MODEL', 'true').lower() == 
 ENABLE_CONSUMER_STRENGTH_SCORE = os.getenv('ENABLE_CONSUMER_STRENGTH_SCORE', 'true').lower() == 'true'
 ENABLE_SHAP_EXPLAINABILITY = os.getenv('ENABLE_SHAP_EXPLAINABILITY', 'true').lower() == 'true'
 
+# Feature Flags - Revolutionary Improvements
+ENABLE_SHADOW_MODELS = os.getenv('ENABLE_SHADOW_MODELS', 'true').lower() == 'true'
+ENABLE_ADAPTIVE_BANDIT = os.getenv('ENABLE_ADAPTIVE_BANDIT', 'true').lower() == 'true'
+ENABLE_EXECUTION_RL = os.getenv('ENABLE_EXECUTION_RL', 'true').lower() == 'true'
+ENABLE_HMM_REGIME = os.getenv('ENABLE_HMM_REGIME', 'true').lower() == 'true'
+
 # Application definition
 INSTALLED_APPS = [
 'django.contrib.admin',
@@ -428,6 +434,36 @@ CELERY_BEAT_SCHEDULE = {
 'generate-weekly-report': {
 'task': 'core.transparency_tasks.generate_weekly_report_task',
 'schedule': crontab(day_of_week=0, hour=20, minute=0),  # Sunday 8 PM (set CELERY_TIMEZONE to America/New_York for EST)
+},
+# --- Self-Learning Feedback Loop Tasks ---
+'update-execution-profiles': {
+'task': 'core.celery_tasks.update_symbol_execution_profiles_task',
+'schedule': 86400.0,  # Daily - aggregate execution quality per symbol
+},
+'decay-bandit-priors': {
+'task': 'core.celery_tasks.decay_bandit_priors_task',
+'schedule': crontab(day_of_week=0, hour=4, minute=0),  # Weekly Sunday 4 AM
+},
+'optimize-regime-thresholds': {
+'task': 'core.celery_tasks.optimize_regime_thresholds_task',
+'schedule': crontab(day_of_month=1, hour=3, minute=0),  # Monthly 1st of month 3 AM
+},
+# Revolutionary Improvement Tasks
+'train-shadow-models': {
+'task': 'core.celery_tasks.train_shadow_models_task',
+'schedule': crontab(hour=1, minute=0),  # Nightly 1 AM
+},
+'evaluate-shadow-models': {
+'task': 'core.celery_tasks.evaluate_shadow_models_task',
+'schedule': 21600.0,  # Every 6 hours
+},
+'train-execution-policy': {
+'task': 'core.celery_tasks.train_execution_policy_task',
+'schedule': crontab(day_of_week=0, hour=5, minute=0),  # Sunday 5 AM
+},
+'train-hmm-regime': {
+'task': 'core.celery_tasks.train_hmm_regime_task',
+'schedule': crontab(day_of_month=1, hour=2, minute=0),  # Monthly 1st at 2 AM
 },
 }
 # Channels Configuration

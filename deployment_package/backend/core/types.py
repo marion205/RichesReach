@@ -1237,6 +1237,9 @@ class DayTradingPickType(graphene.ObjectType):
     symbol = graphene.String()
     side = graphene.String()  # "LONG" or "SHORT"
     score = graphene.Float()
+    banditWeight = graphene.Float(description="Adaptive bandit allocation weight for this strategy")
+    strategyType = graphene.String(description="Strategy classification label (e.g., MOMENTUM_SCALPER)")
+    regimeLabel = graphene.String(description="Market regime label at signal time")
     features = graphene.Field(DayTradingFeaturesType)
     risk = graphene.Field(DayTradingRiskType)
     notes = graphene.String()

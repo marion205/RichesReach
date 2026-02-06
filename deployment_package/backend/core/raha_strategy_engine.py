@@ -796,7 +796,8 @@ class RAHAOrchestrator:
         # Generate signals from each enabled strategy
         for strategy_version in enabled_strategies:
             try:
-                # Get user's parameters
+                # Get user's parameters with optimal params fallback
+                # Priority: user override > Optuna-optimized > hardcoded default
                 from .raha_models import UserStrategySettings
                 try:
                     user_settings = UserStrategySettings.objects.get(
@@ -804,9 +805,17 @@ class RAHAOrchestrator:
                         strategy_version=strategy_version,
                         enabled=True
                     )
-                    parameters = user_settings.parameters
+                    user_params = user_settings.parameters or {}
                 except UserStrategySettings.DoesNotExist:
-                    parameters = {}
+                    user_params = {}
+
+                # Load Optuna-optimized params from strategy version config
+                optimal_params = {}
+                if strategy_version.config_schema:
+                    optimal_params = strategy_version.config_schema.get('optimal_params', {})
+
+                # Merge: optimal params as base, user overrides on top
+                parameters = {**optimal_params, **user_params}
                 
                 # Generate signals
                 signals = self.strategy_engine.generate_signals(

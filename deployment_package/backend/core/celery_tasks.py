@@ -69,20 +69,20 @@ def run_backtest_async(self, backtest_id: int):
 def process_webhook_async(webhook_id: int):
     """
     Process a banking webhook asynchronously
-    
+
     Args:
         webhook_id: ID of the webhook event to process
     """
     try:
         from .banking_models import BankWebhookEvent
         from .banking_service import refresh_account_data, sync_transactions
-        
+
         logger.info(f"Processing webhook ID: {webhook_id}")
-        
+
         webhook = BankWebhookEvent.objects.get(id=webhook_id)
         event_type = webhook.event_type
         provider_account_id = webhook.provider_account_id
-        
+
         # Process based on event type
         if event_type == 'ACCOUNT_UPDATE':
             # Refresh account data
@@ -93,15 +93,221 @@ def process_webhook_async(webhook_id: int):
         elif event_type == 'ACCOUNT_DISCONNECTED':
             # Mark account as disconnected
             logger.warning(f"Account {provider_account_id} disconnected")
-        
+
         # Mark webhook as processed
         webhook.processed = True
         webhook.processed_at = datetime.now()
         webhook.save()
-        
+
         logger.info(f"Successfully processed webhook ID: {webhook_id}")
         return {'status': 'success', 'webhook_id': webhook_id}
-        
+
     except Exception as e:
         logger.error(f"Error processing webhook {webhook_id}: {e}", exc_info=True)
         return {'status': 'failed', 'webhook_id': webhook_id, 'error': str(e)}
+
+
+# ============================================================
+# Self-Learning Feedback Loop Tasks
+# ============================================================
+
+@shared_task
+def update_symbol_execution_profiles_task():
+    """
+    Daily task: Aggregate execution quality per symbol from UserFill data.
+    Updates SymbolExecutionProfile records used by the ML scorer to
+    penalize signals for symbols with historically poor execution.
+    """
+    try:
+        from .execution_quality_tracker import ExecutionQualityTracker
+        tracker = ExecutionQualityTracker()
+        result = tracker.update_all_symbol_profiles()
+        logger.info(f"Symbol execution profiles updated: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Error updating symbol execution profiles: {e}", exc_info=True)
+        return {'error': str(e)}
+
+
+@shared_task
+def trigger_ml_retrain_task():
+    """
+    Triggered when enough new UserFill records accumulate.
+    Forces a day trading ML model retrain.
+    """
+    try:
+        from .day_trading_ml_learner import get_day_trading_ml_learner
+        learner = get_day_trading_ml_learner()
+        result = learner.train_model(force_retrain=True)
+        logger.info(f"ML retrain triggered: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in ML retrain task: {e}", exc_info=True)
+        return {'error': str(e)}
+
+
+@shared_task
+def decay_bandit_priors_task():
+    """
+    Weekly task: Decay old evidence in bandit posteriors.
+    Moves alpha/beta toward uniform prior so the system adapts
+    to regime changes rather than being locked into old patterns.
+    """
+    try:
+        from .bandit_service import BanditService
+        bandit = BanditService()
+        bandit.decay_priors(decay_factor=0.99)
+        weights = bandit.get_allocation_weights()
+        logger.info(f"Bandit priors decayed, new weights: {weights}")
+        return {'weights': weights}
+    except Exception as e:
+        logger.error(f"Error decaying bandit priors: {e}", exc_info=True)
+        return {'error': str(e)}
+
+
+@shared_task
+def run_parameter_optimization_task(strategy_name: str, n_trials: int = 50):
+    """
+    On-demand task: Run Optuna Bayesian optimization for a strategy.
+    Triggered when a strategy fails nightly backtest performance gates.
+    """
+    try:
+        from .parameter_optimization_service import ParameterOptimizationService
+
+        service = ParameterOptimizationService()
+        result = service.optimize(strategy_name=strategy_name, n_trials=n_trials)
+
+        if result.get('success') and result.get('best_params'):
+            # Apply optimal params to strategy version
+            service.apply_optimal_params(strategy_name, result['best_params'])
+
+            # Update health record
+            from .signal_performance_models import StrategyHealthRecord
+            from django.utils import timezone
+            try:
+                health = StrategyHealthRecord.objects.get(strategy_name=strategy_name)
+                health.last_optimization_at = timezone.now()
+                health.save(update_fields=['last_optimization_at'])
+            except StrategyHealthRecord.DoesNotExist:
+                pass
+
+        logger.info(f"Parameter optimization for {strategy_name}: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in parameter optimization for {strategy_name}: {e}", exc_info=True)
+        return {'error': str(e)}
+
+
+@shared_task
+def optimize_regime_thresholds_task():
+    """
+    Monthly task: Learn optimal regime detection thresholds using Optuna.
+    Finds thresholds that maximize correlation between regime classifications
+    and subsequent strategy performance.
+    """
+    try:
+        from .regime_learning_service import RegimeLearningService
+
+        service = RegimeLearningService()
+        result = service.optimize_thresholds(n_trials=100)
+
+        if result.get('success') and result.get('best_thresholds'):
+            service.apply_thresholds(result['best_thresholds'])
+
+        logger.info(f"Regime threshold optimization: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Error in regime threshold optimization: {e}", exc_info=True)
+        return {'error': str(e)}
+
+
+# ============================================================
+# Revolutionary Improvement Tasks
+# ============================================================
+
+@shared_task
+def train_shadow_models_task():
+    """
+    Nightly task: Train candidate ML models with diverse algorithms.
+    Each shadow model runs in parallel with the incumbent for 72 hours.
+    If a shadow outperforms, it gets promoted to production.
+    """
+    try:
+        from .shadow_model_service import ShadowModelService
+        service = ShadowModelService()
+        results = service.train_shadow_models()
+        service.cleanup_old_shadows()
+        logger.info(f"Shadow models trained: {len(results)} candidates")
+        return {'models_trained': len(results), 'results': results}
+    except Exception as e:
+        logger.error(f"Error training shadow models: {e}", exc_info=True)
+        return {'error': str(e)}
+
+
+@shared_task
+def evaluate_shadow_models_task():
+    """
+    Periodic task (every 6h): Evaluate shadow models that have completed
+    their 72-hour validation window. Promote any that beat the incumbent.
+    """
+    try:
+        from .shadow_model_service import ShadowModelService
+        service = ShadowModelService()
+        results = service.evaluate_shadow_models()
+        promoted = [r for r in results if r.get('promoted')]
+        logger.info(f"Shadow evaluation: {len(results)} evaluated, {len(promoted)} promoted")
+        return {'evaluated': len(results), 'promoted': len(promoted), 'results': results}
+    except Exception as e:
+        logger.error(f"Error evaluating shadow models: {e}", exc_info=True)
+        return {'error': str(e)}
+
+
+@shared_task
+def train_execution_policy_task():
+    """
+    Weekly task: Train RL execution policy from accumulated UserFill experiences.
+    Learns optimal order type (market/limit/wait) for each market condition.
+    """
+    try:
+        from .execution_rl_service import ExecutionRLService
+        service = ExecutionRLService()
+        result = service.train_policy()
+        logger.info(f"Execution RL policy trained: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"Error training execution policy: {e}", exc_info=True)
+        return {'error': str(e)}
+
+
+@shared_task
+def train_hmm_regime_task():
+    """
+    Monthly task: Train HMM regime detector on historical market data.
+    Runs before regime threshold optimization to provide fresh HMM model.
+    """
+    try:
+        from .hmm_regime_detector import HMMRegimeDetector
+        from .options_regime_detector import RegimeDetector
+        import pandas as pd
+
+        detector = HMMRegimeDetector()
+
+        # Try to load historical data for SPY
+        try:
+            from .options_regime_integration import RegimeDetectionService
+            service = RegimeDetectionService()
+            df = service.get_market_data_for_symbol('SPY')
+            if df is not None and len(df) >= 252:
+                rule_detector = RegimeDetector()
+                df = rule_detector.calculate_indicators(df)
+                result = detector.train(df)
+                logger.info(f"HMM regime model trained: {result}")
+                return result
+        except Exception:
+            pass
+
+        logger.info("HMM training skipped: insufficient market data")
+        return {'success': False, 'error': 'Insufficient market data for HMM training'}
+    except Exception as e:
+        logger.error(f"Error training HMM regime model: {e}", exc_info=True)
+        return {'error': str(e)}

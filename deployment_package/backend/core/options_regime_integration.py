@@ -37,16 +37,26 @@ class RegimeDetectionService:
     def __init__(self, cache_backend: Optional[Any] = None, lookback_days: int = 60):
         """
         Initialize the RegimeDetectionService.
-        
+
         Args:
             cache_backend: Redis client or dict-like cache (defaults to in-memory dict)
             lookback_days: Historical days to fetch for regime detection
         """
-        self.detector = RegimeDetector()
+        try:
+            from django.conf import settings
+            if getattr(settings, 'ENABLE_HMM_REGIME', False):
+                from .ensemble_regime_detector import EnsembleRegimeDetector
+                self.detector = EnsembleRegimeDetector()
+                logger.info("Using EnsembleRegimeDetector (rule-based + HMM)")
+            else:
+                self.detector = RegimeDetector()
+        except Exception:
+            self.detector = RegimeDetector()
+
         self.cache = cache_backend or {}
         self.lookback_days = lookback_days
         self.polygon_service = PolygonOptionsFlowService()
-        
+
         logger.info(f"RegimeDetectionService initialized (lookback={lookback_days}d)")
     
     def get_market_data_for_symbol(self, symbol: str) -> Optional[pd.DataFrame]:
@@ -98,8 +108,20 @@ class RegimeDetectionService:
         
         if is_shift:
             logger.warning(f"🔔 REGIME SHIFT for {symbol}: {regime}")
-            # Alert system will pick this up via the shift flag
-        
+            # Record regime change event for ADTS adaptive discounting
+            try:
+                from .regime_change_models import RegimeChangeEvent
+                from django.utils import timezone as tz
+                RegimeChangeEvent.objects.create(
+                    symbol=symbol,
+                    previous_regime=self.detector.previous_regime or 'NEUTRAL',
+                    new_regime=regime,
+                    detected_at=tz.now(),
+                    confidence=1.0,
+                )
+            except Exception as e:
+                logger.debug(f"Could not record regime change event: {e}")
+
         return regime, is_shift, description
     
     def get_regime(self, symbol: str) -> Dict[str, Any]:

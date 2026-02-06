@@ -550,7 +550,12 @@ def _get_dynamic_universe_from_polygon(mode, max_symbols=100):
         return []
 
 
-def _get_real_intraday_day_trading_picks(mode="SAFE", limit=10, use_dynamic_discovery=True):
+def _get_real_intraday_day_trading_picks(
+    mode="SAFE",
+    limit=10,
+    use_dynamic_discovery=True,
+    min_bandit_weight: float = 0.10,
+):
     """
     Get real intraday day trading picks using multiple data providers.
     Returns up to 10 stocks filtered by SAFE or AGGRESSIVE criteria.
@@ -566,11 +571,14 @@ def _get_real_intraday_day_trading_picks(mode="SAFE", limit=10, use_dynamic_disc
     from datetime import datetime, timedelta
     import math
     from django.core.cache import cache
+    from .day_trading_feature_service import DayTradingFeatureService
+    from .day_trading_ml_scorer import DayTradingMLScorer
+    from .bandit_service import BanditService
     
     # Check cache first (60 second TTL for intraday data)
     # NOTE: Currently global per mode. Future: per-user cache keys when we add user-specific filters
     # Future cache key: f"day_trading_picks:{user_id}:{mode}:v4"
-    cache_key = f"day_trading_picks:{mode}:v4:dynamic_{use_dynamic_discovery}"
+    cache_key = f"day_trading_picks:{mode}:v4:dynamic_{use_dynamic_discovery}:bandit_{min_bandit_weight:.2f}"
     cached_result = cache.get(cache_key)
     if cached_result:
         # Log cache hit for debugging
@@ -600,6 +608,76 @@ def _get_real_intraday_day_trading_picks(mode="SAFE", limit=10, use_dynamic_disc
     
     logger.info(f"🔄 Fetching fresh intraday day trading picks for {mode} mode (limit={limit}, dynamic={use_dynamic_discovery})")
     
+    # Initialize core services (features, ML scoring, bandit allocation)
+    feature_service = DayTradingFeatureService()
+    ml_scorer = DayTradingMLScorer()
+    bandit_weights = {}
+    try:
+        from .bandit_models import BanditArm
+        arms = BanditArm.objects.filter(enabled=True)
+        if arms.exists():
+            bandit_weights = {arm.strategy_slug: float(arm.current_weight) for arm in arms}
+        else:
+            bandit_weights = BanditService().get_allocation_weights()
+    except Exception as e:
+        logger.debug(f"Bandit weights unavailable: {e}")
+
+    def _classify_intraday_strategy(features: dict) -> str:
+        """Heuristic mapping of feature state to strategy slug for bandit weighting."""
+        breakout_pct = float(features.get('breakout_pct', 0.0))
+        is_breakout = float(features.get('is_breakout', 0.0))
+        is_vol_expansion = float(features.get('is_vol_expansion', 0.0))
+        bb_position = float(features.get('bb_position', 0.5))
+        rsi_14 = float(features.get('rsi_14', 50.0))
+        trend_strength = float(features.get('trend_strength', 0.0))
+        regime_conf = float(features.get('regime_confidence', 0.5))
+
+        if is_breakout > 0.5 or breakout_pct > 0.08 or is_vol_expansion > 0.5:
+            return 'breakout'
+        if bb_position < 0.2 or bb_position > 0.8 or rsi_14 < 32 or rsi_14 > 68:
+            return 'mean_reversion'
+        if trend_strength > 0.015 and regime_conf > 0.6:
+            return 'momentum'
+        return 'momentum'
+
+    def _regime_label(features: dict) -> str:
+        is_trend = float(features.get('is_trend_regime', 0.0)) > 0.5
+        is_range = float(features.get('is_range_regime', 0.0)) > 0.5
+        is_chop = float(features.get('is_high_vol_chop', 0.0)) > 0.5
+        is_trend_up = float(features.get('is_trend_up', 0.0)) > 0.5
+        is_trend_down = float(features.get('is_trend_down', 0.0)) > 0.5
+        is_vol_expansion = float(features.get('is_vol_expansion', 0.0)) > 0.5
+        momentum_15m = float(features.get('momentum_15m', 0.0))
+        sentiment_score = float(features.get('sentiment_score', 0.0))
+
+        if is_chop and is_vol_expansion:
+            return 'BREAKOUT_EXPANSION'
+        if is_chop and momentum_15m < -0.02 and sentiment_score < -0.6:
+            return 'CRASH_PANIC'
+        if is_chop:
+            return 'VOLATILE_CHOP'
+        if is_trend and is_trend_up:
+            return 'TREND_UP'
+        if is_trend and is_trend_down:
+            return 'TREND_DOWN'
+        if is_range:
+            return 'MEAN_REVERSION'
+        return 'NEUTRAL'
+
+    def _regime_risk_settings(regime_label: str) -> Dict[str, float]:
+        """Return (time_stop_min, conviction_multiplier) by regime label."""
+        if regime_label in {'TREND_UP', 'TREND_DOWN'}:
+            return {'time_stop_min': 60, 'conviction_multiplier': 1.2}
+        if regime_label == 'MEAN_REVERSION':
+            return {'time_stop_min': 45, 'conviction_multiplier': 1.0}
+        if regime_label == 'BREAKOUT_EXPANSION':
+            return {'time_stop_min': 20, 'conviction_multiplier': 0.8}
+        if regime_label == 'CRASH_PANIC':
+            return {'time_stop_min': 15, 'conviction_multiplier': 0.5}
+        if regime_label == 'VOLATILE_CHOP':
+            return {'time_stop_min': 20, 'conviction_multiplier': 0.8}
+        return {'time_stop_min': 30, 'conviction_multiplier': 1.0}
+
     # Get universe (dynamic discovery or static fallback)
     universe_source = 'DYNAMIC_MOVERS' if use_dynamic_discovery else 'CORE'
     universe = []
@@ -780,6 +858,9 @@ def _get_real_intraday_day_trading_picks(mode="SAFE", limit=10, use_dynamic_disc
             mode_min_volume = 5_000_000 if mode == "SAFE" else 1_000_000
             mode_time_stop = 45 if mode == "SAFE" else 25
             
+            import pandas as pd
+            import numpy as np
+
             # Get current price
             current_price = float(bars[-1].get('c', 0))
             if current_price == 0:
@@ -801,14 +882,70 @@ def _get_real_intraday_day_trading_picks(mode="SAFE", limit=10, use_dynamic_disc
                     logger.debug(f"⚠️ Microstructure check failed for {symbol}: {e}, allowing through")
                     # Continue processing if microstructure check fails
             
-            # Calculate 15-minute momentum
-            if len(bars) >= 3:  # Need at least 3 bars (15 min)
-                price_15m_ago = float(bars[-3].get('c', current_price))
-                momentum15m = (current_price - price_15m_ago) / price_15m_ago if price_15m_ago > 0 else 0
-            else:
-                momentum15m = 0
+            # Build 5m OHLCV DataFrame from bars
+            df_5m = pd.DataFrame([
+                {
+                    'open': float(b.get('o', 0)),
+                    'high': float(b.get('h', 0)),
+                    'low': float(b.get('l', 0)),
+                    'close': float(b.get('c', 0)),
+                    'volume': float(b.get('v', 0)),
+                    'timestamp': int(b.get('t', 0)),
+                }
+                for b in bars
+            ])
+            df_5m = df_5m[df_5m['close'] > 0].copy()
+            if df_5m.empty:
+                return None
+            df_5m = df_5m.sort_values('timestamp')
+
+            # Create a lightweight 1m approximation from 5m bars (for feature extraction)
+            def _expand_5m_to_1m(df: pd.DataFrame) -> pd.DataFrame:
+                if df.empty:
+                    return df
+                rows = []
+                for _, row in df.iterrows():
+                    base_ts = int(row['timestamp'])
+                    o = float(row['open'])
+                    h = float(row['high'])
+                    l = float(row['low'])
+                    c = float(row['close'])
+                    v = float(row['volume'])
+                    # Linear interpolation for close across 5 minutes
+                    closes = np.linspace(o, c, 5)
+                    volume_per_min = v / 5.0
+                    for i in range(5):
+                        rows.append({
+                            'open': o if i == 0 else closes[i-1],
+                            'high': max(h, closes[i]),
+                            'low': min(l, closes[i]),
+                            'close': closes[i],
+                            'volume': volume_per_min,
+                            'timestamp': base_ts + (i * 60_000),
+                        })
+                return pd.DataFrame(rows)
+
+            df_1m = _expand_5m_to_1m(df_5m)
+            if df_1m.empty:
+                df_1m = df_5m.copy()
+
+            # Extract full feature set
+            current_time = datetime.now()
+            try:
+                if int(df_5m['timestamp'].iloc[-1]) > 0:
+                    current_time = datetime.fromtimestamp(int(df_5m['timestamp'].iloc[-1]) / 1000.0)
+            except Exception:
+                pass
+
+            features = feature_service.extract_all_features(
+                df_1m,
+                df_5m,
+                symbol,
+                sentiment_data=None,
+                current_time=current_time
+            )
             
-            # Calculate volume metrics
+            # Calculate volume metrics (fallback for filters if needed)
             recent_volumes = [float(b.get('v', 0)) for b in bars[-10:]]
             avg_volume = sum(recent_volumes) / len(recent_volumes) if recent_volumes else 0
             current_volume = float(bars[-1].get('v', 0))
@@ -823,11 +960,19 @@ def _get_real_intraday_day_trading_picks(mode="SAFE", limit=10, use_dynamic_disc
                     high_low_spreads.append((high - low) / current_price)
             volatility = sum(high_low_spreads) / len(high_low_spreads) if high_low_spreads else 0.02
             
-            # Calculate VWAP distance (simplified)
-            total_value = sum(float(b.get('c', 0)) * float(b.get('v', 0)) for b in bars)
-            total_volume = sum(float(b.get('v', 0)) for b in bars)
-            vwap = total_value / total_volume if total_volume > 0 else current_price
-            vwapDist = (current_price - vwap) / vwap if vwap > 0 else 0
+            # Execution/microstructure feature enrichment
+            if microstructure:
+                try:
+                    features['order_imbalance'] = float(microstructure.get('order_imbalance', 0.0))
+                    features['bid_depth'] = float(microstructure.get('bid_depth', 0.0))
+                    features['ask_depth'] = float(microstructure.get('ask_depth', 0.0))
+                    features['depth_imbalance'] = float(microstructure.get('depth_imbalance', 0.0))
+                    features['spread_bps'] = float(microstructure.get('spread_bps', features.get('spread_bps', 5.0)))
+                    features['execution_quality_score'] = float(
+                        microstructure_service.get_execution_quality_score(microstructure)
+                    )
+                except Exception as e:
+                    logger.debug(f"Microstructure enrich failed for {symbol}: {e}")
             
             # Check for gaps (price jumps > 5% in last 5 minutes)
             gap_pct = 0.0
@@ -847,18 +992,39 @@ def _get_real_intraday_day_trading_picks(mode="SAFE", limit=10, use_dynamic_disc
                 return None
             
             # Determine side (LONG if momentum positive, SHORT if negative)
+            momentum15m = float(features.get('momentum_15m', 0.0))
             side = 'LONG' if momentum15m > 0 else 'SHORT'
-            
-            # Calculate score based on momentum, volume, and volatility
-            momentum_score = abs(momentum15m) * 100  # Scale momentum
-            volume_score = min(5.0, rvol10m * 2)  # Volume boost
-            volatility_score = min(3.0, volatility * 100)  # Volatility component
-            score = momentum_score + volume_score + volatility_score
+
+            # Score with ML learner + rule-based fallback
+            base_score = ml_scorer.score(features, mode=mode, side=side, price_data=df_5m, symbol=symbol)
+
+            # Bandit-weighted score (strategy-aware allocation)
+            strategy_slug = _classify_intraday_strategy(features)
+            bandit_weight = float(bandit_weights.get(strategy_slug, 0.25)) if bandit_weights else 0.25
+            if bandit_weight < min_bandit_weight:
+                return None
+
+            regime_label = _regime_label(features)
+            regime_settings = _regime_risk_settings(regime_label)
+
+            score = base_score * (0.8 + (0.4 * bandit_weight))
+            score *= float(regime_settings['conviction_multiplier'])
+
+            # Execution-quality penalty for current microstructure snapshot
+            exec_quality = float(features.get('execution_quality_score', 6.0))
+            if exec_quality < 4.0:
+                score *= 0.9
+            if exec_quality < 2.5:
+                score *= 0.8
+
+            score = max(0.0, min(10.0, score))
             
             # Apply mode-specific filters
+            volume_ratio = float(features.get('volume_ratio', rvol10m))
+
             if mode == "SAFE":
                 # SAFE: Require lower volatility, higher liquidity
-                if volatility > mode_max_volatility or avg_volume < mode_min_volume:
+                if volatility > mode_max_volatility or avg_volume < mode_min_volume or volume_ratio < 1.2:
                     return None
                 # Prefer positive momentum (longs)
                 if momentum15m < 0.001:  # Very small positive momentum required
@@ -873,59 +1039,66 @@ def _get_real_intraday_day_trading_picks(mode="SAFE", limit=10, use_dynamic_disc
                     logger.debug(f"⚠️ {symbol} filtered: momentum {momentum15m:.6f} too small")
                     return None
             
-            # Calculate risk parameters
-            atr5m = current_price * volatility * 0.5  # Simplified ATR
-            stop_pct = 0.02 if mode == "SAFE" else 0.015  # 2% for SAFE, 1.5% for AGGRESSIVE
-            stop = round(current_price * (1 - stop_pct) if side == 'LONG' else current_price * (1 + stop_pct), 2)
+            # Calculate risk parameters using feature service
+            risk_metrics = feature_service.calculate_risk_metrics(features, mode, current_price)
+            risk_metrics['entryPrice'] = float(current_price)
+            risk_metrics['timeStopMin'] = int(regime_settings['time_stop_min'])
             
-            target1_pct = 0.03 if mode == "SAFE" else 0.04  # 3% or 4% first target
-            target2_pct = 0.05 if mode == "SAFE" else 0.07  # 5% or 7% second target
-            targets = [
-                round(current_price * (1 + target1_pct) if side == 'LONG' else current_price * (1 - target1_pct), 2),
-                round(current_price * (1 + target2_pct) if side == 'LONG' else current_price * (1 - target2_pct), 2)
-            ]
-            
-            # Position sizing (simplified - would use account size in production)
-            sizeShares = 100  # Default
-            
-            # Add microstructure features if available
+            # Catalyst score based on expanded features
+            catalyst_score = ml_scorer.calculate_catalyst_score(features)
+
+            # Sanitize full feature set for JSON serialization
+            def _sanitize_features(value):
+                if isinstance(value, dict):
+                    return {k: _sanitize_features(v) for k, v in value.items()}
+                if isinstance(value, (list, tuple)):
+                    return [_sanitize_features(v) for v in value]
+                if isinstance(value, (np.floating, np.integer)):
+                    return float(value)
+                return value
+
+            # Minimal feature payload for GraphQL + full features for logging
             features_dict = {
                 'momentum15m': round(momentum15m, 4),
-                'rvol10m': round(rvol10m, 2),
-                'vwapDist': round(vwapDist, 4),
-                'breakoutPct': round(abs(momentum15m), 4),
-                'spreadBps': 5.0,  # Default
-                'catalystScore': round(min(10.0, abs(momentum15m) * 200), 2)
+                'rvol10m': round(volume_ratio, 2),
+                'vwapDist': round(float(features.get('vwap_dist_pct', 0.0)), 4),
+                'breakoutPct': round(float(features.get('breakout_pct', 0.0)), 4),
+                'spreadBps': round(float(features.get('spread_bps', 5.0)), 2),
+                'catalystScore': round(float(catalyst_score), 2),
+                'executionQualityScore': round(float(features.get('execution_quality_score', 6.0)), 1),
             }
-            
-            # Add microstructure features if available
+
             if microstructure:
                 features_dict.update({
-                    'orderImbalance': round(microstructure.get('order_imbalance', 0), 4),
-                    'bidDepth': round(microstructure.get('bid_depth', 0), 2),
-                    'askDepth': round(microstructure.get('ask_depth', 0), 2),
-                    'depthImbalance': round(microstructure.get('depth_imbalance', 0), 4),
-                    'spreadBps': round(microstructure.get('spread_bps', 5.0), 2),
-                    'executionQualityScore': round(microstructure_service.get_execution_quality_score(microstructure), 1)
+                    'orderImbalance': round(float(features.get('order_imbalance', 0.0)), 4),
+                    'bidDepth': round(float(features.get('bid_depth', 0.0)), 2),
+                    'askDepth': round(float(features.get('ask_depth', 0.0)), 2),
+                    'depthImbalance': round(float(features.get('depth_imbalance', 0.0)), 4),
                 })
-                
+
                 # Mark as microstructure risky if quality score is low
-                if microstructure_service.get_execution_quality_score(microstructure) < 5.0:
+                if float(features.get('execution_quality_score', 6.0)) < 5.0:
                     features_dict['microstructureRisky'] = True
+
+            # Attach full feature set for logging and ML feedback loops
+            features_dict['_full_features'] = _sanitize_features(features)
+            features_dict['_strategy'] = strategy_slug
+            features_dict['_bandit_weight'] = round(bandit_weight, 4)
             
             return {
                 'symbol': symbol,
                 'side': side,
                 'score': round(score, 2),
+                'banditWeight': round(bandit_weight, 4),
+                'strategyType': strategy_slug.upper(),
+                'regimeLabel': regime_label,
                 'features': features_dict,
-                'risk': {
-                    'atr5m': round(atr5m, 2),
-                    'sizeShares': sizeShares,
-                    'stop': stop,
-                    'targets': targets,
-                    'timeStopMin': mode_time_stop
-                },
-                'notes': f"{mode} mode: {momentum15m*100:.2f}% momentum, {rvol10m:.1f}x volume"
+                'risk': risk_metrics,
+                'notes': (
+                    f"{mode} mode: {momentum15m*100:.2f}% momentum, "
+                    f"{volume_ratio:.1f}x volume, strategy={strategy_slug}, "
+                    f"bandit={bandit_weight:.2f}"
+                )
             }
         except Exception as e:
             logger.debug(f"Error processing intraday data for {symbol}: {e}")

@@ -777,7 +777,19 @@ from .signal_performance_models import (
     SignalPerformance,
     StrategyPerformance,
     UserRiskBudget,
+    UserFill,
+    SymbolExecutionProfile,
+    StrategyHealthRecord,
 )
+
+# Import self-learning feedback loop models
+from .bandit_models import BanditArm  # noqa: F401
+from .parameter_optimization_models import ParameterOptimizationRun  # noqa: F401
+from .regime_learning_models import RegimeThresholdSet  # noqa: F401
+from .shadow_model_models import ShadowModel, ShadowPrediction  # noqa: F401
+from .regime_change_models import RegimeChangeEvent  # noqa: F401
+from .execution_rl_models import ExecutionPolicy, ExecutionExperience  # noqa: F401
+from .hmm_regime_models import HMMRegimeSnapshot, HMMTrainingRecord  # noqa: F401
 
 
 class SignalRecord(models.Model):

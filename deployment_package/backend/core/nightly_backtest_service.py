@@ -88,9 +88,12 @@ class NightlyBacktestService:
         
         # Cache results (24 hours)
         cache.set('nightly_backtest_results', results, timeout=86400)
-        
-        logger.info(f"✅ Nightly backtests complete: {results['strategies_passed']}/{results['strategies_tested']} passed")
-        
+
+        # Close the feedback loop: adapt based on results
+        self._trigger_adaptations(results)
+
+        logger.info(f"Nightly backtests complete: {results['strategies_passed']}/{results['strategies_tested']} passed")
+
         return results
     
     def _backtest_day_trading_strategies(self, days_back: int) -> Dict[str, Any]:
@@ -392,16 +395,95 @@ class NightlyBacktestService:
         
         return all(checks)
     
+    def _trigger_adaptations(self, results: Dict[str, Any]):
+        """
+        Close the feedback loop: adapt the system based on backtest results.
+        1. Feed rewards to bandit (Thompson Sampling)
+        2. Update strategy health records
+        3. Trigger parameter optimization for failing strategies
+        4. Auto-disable consistently failing strategies
+        5. Re-enable long-disabled strategies with optimized params
+        """
+        try:
+            from .bandit_service import BanditService
+            from .signal_performance_models import StrategyHealthRecord
+
+            bandit = BanditService()
+
+            for category, category_results in results.get('strategy_results', {}).items():
+                if not isinstance(category_results, dict):
+                    continue
+
+                for strat_result in category_results.get('results', []):
+                    strategy_name = strat_result.get('strategy', strat_result.get('name', ''))
+                    if not strategy_name:
+                        continue
+
+                    passed = strat_result.get('passed', False)
+                    strategy_slug = strategy_name.lower().replace(' ', '_').replace('-', '_')
+
+                    # 1. Update bandit
+                    reward = 1.0 if passed else 0.0
+                    bandit.update_reward(strategy_slug, reward)
+
+                    # 2. Update health record
+                    health, _ = StrategyHealthRecord.objects.get_or_create(
+                        strategy_name=strategy_name,
+                    )
+                    health.last_backtest_date = timezone.now().date()
+                    health.last_backtest_passed = passed
+
+                    if passed:
+                        health.consecutive_passes += 1
+                        health.consecutive_failures = 0
+                    else:
+                        health.consecutive_failures += 1
+                        health.consecutive_passes = 0
+
+                    health.save()
+
+                    # 3. Trigger parameter optimization for failing strategies
+                    if not passed:
+                        try:
+                            from .celery_tasks import run_parameter_optimization_task
+                            run_parameter_optimization_task.delay(strategy_name)
+                            logger.info(f"Triggered parameter optimization for failing strategy: {strategy_name}")
+                        except Exception as e:
+                            logger.debug(f"Could not trigger optimization for {strategy_name}: {e}")
+
+                    # 4. Auto-disable if 3+ consecutive failures
+                    if health.consecutive_failures >= 3 and not health.auto_disabled:
+                        health.auto_disabled = True
+                        health.auto_disabled_at = timezone.now()
+                        health.save()
+                        logger.warning(f"Auto-disabled strategy {strategy_name} after {health.consecutive_failures} consecutive failures")
+
+                    # 5. Re-enable if disabled 30+ days and optimization has run
+                    if health.auto_disabled and health.auto_disabled_at:
+                        days_disabled = (timezone.now() - health.auto_disabled_at).days
+                        if days_disabled >= 30 and health.last_optimization_at:
+                            health.auto_disabled = False
+                            health.auto_disabled_at = None
+                            health.consecutive_failures = 0
+                            health.save()
+                            logger.info(f"Re-enabled strategy {strategy_name} after {days_disabled} days (optimized params available)")
+
+            # Recompute bandit allocation weights
+            bandit.get_allocation_weights()
+
+        except Exception as e:
+            logger.error(f"Error in adaptation trigger: {e}", exc_info=True)
+
     def _generate_recommendation(self, results: Dict[str, Any]) -> str:
         """Generate recommendation based on backtest results"""
         pass_rate = results['summary'].get('pass_rate', 0.0)
-        
+
         if pass_rate >= 0.7:
-            return "✅ Excellent: Most strategies passing thresholds. System is performing well."
+            return "Excellent: Most strategies passing thresholds. System is performing well."
         elif pass_rate >= 0.5:
-            return "⚠️ Moderate: Some strategies need improvement. Review failing strategies."
+            return "Moderate: Some strategies need improvement. Review failing strategies."
         else:
-            return "❌ Poor: Many strategies failing thresholds. Consider retraining or adjusting parameters."
+            return "Poor: Many strategies failing thresholds. Triggering parameter optimization."
 
 
 # Celery task for nightly backtests

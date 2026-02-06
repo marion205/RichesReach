@@ -22,6 +22,7 @@ class SignalsQuery(graphene.ObjectType):
     day_trading_picks = graphene.Field(
         "core.types.DayTradingDataType",
         mode=graphene.String(required=False, default_value="SAFE"),
+        minBanditWeight=graphene.Float(required=False, default_value=0.10),
     )
     day_trading_stats = graphene.List(
         "core.types.DayTradingStatsType",
@@ -72,14 +73,17 @@ class SignalsQuery(graphene.ObjectType):
         name="researchHub",
     )
 
-    def resolve_day_trading_picks(self, info, mode="SAFE"):
+    def resolve_day_trading_picks(self, info, mode="SAFE", minBanditWeight=0.10):
         """Resolve day trading picks using real intraday data."""
         from core.queries import _get_real_intraday_day_trading_picks
 
         logger.info("Generating day trading picks for mode: %s", mode)
         try:
             result_data = _get_real_intraday_day_trading_picks(
-                mode=mode, limit=10, use_dynamic_discovery=True
+                mode=mode,
+                limit=10,
+                use_dynamic_discovery=True,
+                min_bandit_weight=minBanditWeight,
             )
             if isinstance(result_data, tuple) and len(result_data) == 2:
                 picks, metadata = result_data

@@ -9,6 +9,7 @@ import logging
 from datetime import datetime, timedelta
 import pickle
 import os
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -91,10 +92,38 @@ class DayTradingMLScorer:
                 lstm_features = self.lstm_extractor.extract_features(price_data, symbol)
                 # Merge LSTM features into main features dict
                 features = {**features, **lstm_features}
-                logger.debug(f"🎯 LSTM features added for {symbol}: {len(lstm_features)} features")
+                logger.debug(f"LSTM features added for {symbol}: {len(lstm_features)} features")
             except Exception as e:
                 logger.debug(f"LSTM feature extraction failed: {e}")
-        
+
+        # Inject execution quality data for the symbol (Loop 2 feedback)
+        exec_quality_penalty = 1.0
+        if symbol:
+            try:
+                from .signal_performance_models import SymbolExecutionProfile
+                profile = SymbolExecutionProfile.objects.filter(symbol=symbol.upper()).first()
+                if profile and profile.fill_count >= 5:
+                    features['exec_avg_slippage_bps'] = float(profile.avg_slippage_bps)
+                    features['exec_avg_quality_score'] = float(profile.avg_quality_score)
+                    # Penalize symbols with poor execution quality
+                    if float(profile.avg_quality_score) < 4.0:
+                        exec_quality_penalty = 0.85
+                        logger.debug(f"Execution penalty for {symbol}: quality={profile.avg_quality_score}")
+            except Exception as e:
+                logger.debug(f"Could not load execution profile for {symbol}: {e}")
+
+        # Attach RL execution recommendation if available
+        if getattr(settings, 'ENABLE_EXECUTION_RL', False) and symbol:
+            try:
+                from .execution_rl_service import ExecutionRLService
+                rl = ExecutionRLService()
+                state = rl.build_state_from_features(features, symbol)
+                recommendation = rl.get_recommendation(state)
+                features['exec_recommendation'] = recommendation['action']
+                features['exec_confidence'] = recommendation['confidence']
+            except Exception:
+                pass
+
         # First, get base score from rule-based or static ML
         if self.model is not None and self.scaler is not None:
             base_score = self._ml_score(features)
@@ -113,14 +142,37 @@ class DayTradingMLScorer:
                 # Enhance score using learned patterns
                 enhanced_score = self.ml_learner.enhance_score_with_ml(base_score, features_with_meta)
                 ml_prob = self.ml_learner.predict_success_probability(features_with_meta)
-                logger.debug(f"🎯 ML-enhanced: base={base_score:.2f} → enhanced={enhanced_score:.2f} (ML prob={ml_prob:.2%})")
-                return enhanced_score
+                final_score = enhanced_score * exec_quality_penalty
+                logger.debug(f"ML-enhanced: base={base_score:.2f} -> enhanced={enhanced_score:.2f} (ML prob={ml_prob:.2%}, exec_penalty={exec_quality_penalty})")
+                self._record_shadow_predictions(features, final_score, symbol)
+                return final_score
             except Exception as e:
                 logger.debug(f"ML learner enhancement failed: {e}, using base score")
-                return base_score
-        
-        return base_score
+                fallback_score = base_score * exec_quality_penalty
+                self._record_shadow_predictions(features, fallback_score, symbol)
+                return fallback_score
+
+        base_final = base_score * exec_quality_penalty
+        self._record_shadow_predictions(features, base_final, symbol)
+        return base_final
     
+    def _record_shadow_predictions(self, features: Dict, incumbent_score: float, symbol: str = None):
+        """Record shadow model predictions for validation (non-blocking)."""
+        if not getattr(settings, 'ENABLE_SHADOW_MODELS', False):
+            return
+        if not symbol:
+            return
+        try:
+            from .shadow_model_service import ShadowModelService
+            # Use signal_id from features if available
+            signal_id = features.get('signal_id')
+            if signal_id:
+                ShadowModelService().record_predictions_for_signal(
+                    signal_id, features, incumbent_score
+                )
+        except Exception:
+            pass  # Never block production scoring
+
     def _ml_score(self, features: Dict[str, float]) -> float:
         """Score using trained ML model"""
         try:

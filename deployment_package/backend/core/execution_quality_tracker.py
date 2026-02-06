@@ -223,11 +223,11 @@ class ExecutionQualityTracker:
     ) -> Dict[str, Any]:
         """
         Compare actual fill to signal and return detailed analysis.
-        
+
         Args:
             signal: DayTradingSignal or SwingTradingSignal
             actual_fill: Dict with 'price', 'time', 'size', etc.
-        
+
         Returns:
             Detailed comparison dict
         """
@@ -237,4 +237,72 @@ class ExecutionQualityTracker:
             actual_fill_time=actual_fill.get('time', timezone.now()),
             signal_type='day_trading' if isinstance(signal, DayTradingSignal) else 'swing_trading'
         )
+
+    def update_symbol_profile(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        Aggregate execution quality for a symbol from UserFill data
+        and upsert a SymbolExecutionProfile record.
+        """
+        try:
+            from .signal_performance_models import UserFill, SymbolExecutionProfile
+
+            fills = UserFill.objects.filter(
+                symbol=symbol.upper(),
+                execution_quality_score__isnull=False,
+            )
+
+            fill_count = fills.count()
+            if fill_count == 0:
+                return None
+
+            agg = fills.aggregate(
+                avg_slippage=Avg('slippage_bps'),
+                avg_quality=Avg('execution_quality_score'),
+            )
+
+            profile, _ = SymbolExecutionProfile.objects.update_or_create(
+                symbol=symbol.upper(),
+                defaults={
+                    'avg_slippage_bps': agg['avg_slippage'] or Decimal('0'),
+                    'avg_quality_score': agg['avg_quality'] or Decimal('5.0'),
+                    'fill_count': fill_count,
+                }
+            )
+
+            return {
+                'symbol': symbol,
+                'avg_slippage_bps': float(profile.avg_slippage_bps),
+                'avg_quality_score': float(profile.avg_quality_score),
+                'fill_count': profile.fill_count,
+            }
+        except Exception as e:
+            logger.error(f"Error updating symbol profile for {symbol}: {e}", exc_info=True)
+            return None
+
+    def update_all_symbol_profiles(self) -> Dict[str, Any]:
+        """
+        Update execution profiles for all symbols with UserFill data.
+        Called by the nightly Celery task.
+        """
+        try:
+            from .signal_performance_models import UserFill
+
+            symbols = (
+                UserFill.objects
+                .filter(execution_quality_score__isnull=False)
+                .values_list('symbol', flat=True)
+                .distinct()
+            )
+
+            updated = 0
+            for symbol in symbols:
+                result = self.update_symbol_profile(symbol)
+                if result:
+                    updated += 1
+
+            logger.info(f"Updated execution profiles for {updated} symbols")
+            return {'symbols_updated': updated}
+        except Exception as e:
+            logger.error(f"Error updating all symbol profiles: {e}", exc_info=True)
+            return {'symbols_updated': 0, 'error': str(e)}
 
