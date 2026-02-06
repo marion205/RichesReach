@@ -72,6 +72,12 @@ class SignalsQuery(graphene.ObjectType):
         description="Get comprehensive research data for a stock",
         name="researchHub",
     )
+    system_health = graphene.Field(
+        "core.types.SystemHealthType",
+        limit=graphene.Int(required=False, default_value=5),
+        description="Get system health summary for regime, bandit weights, and execution risk",
+        name="systemHealth",
+    )
 
     def resolve_day_trading_picks(self, info, mode="SAFE", minBanditWeight=0.10):
         """Resolve day trading picks using real intraday data."""
@@ -281,6 +287,148 @@ class SignalsQuery(graphene.ObjectType):
                 "totalScanned": 0,
                 "minutesUntilOpen": 0,
             }
+
+    def resolve_system_health(self, info, limit=5):
+        """Resolve system health summary for dashboard."""
+        from django.utils import timezone
+
+        as_of = timezone.now()
+
+        current_regime = None
+        regime_confidence = None
+        regime_stability_minutes = None
+        try:
+            from core.hmm_regime_models import HMMRegimeSnapshot
+
+            latest = HMMRegimeSnapshot.objects.filter(symbol="SPY").first()
+            if latest:
+                current_regime = latest.ensemble_regime
+                try:
+                    regime_confidence = float(
+                        latest.hmm_probabilities.get(latest.hmm_regime, 0.0)
+                    )
+                except Exception:
+                    regime_confidence = 0.0
+
+                last_change = (
+                    HMMRegimeSnapshot.objects
+                    .filter(symbol="SPY", detected_at__lt=latest.detected_at)
+                    .exclude(ensemble_regime=current_regime)
+                    .first()
+                )
+                if last_change:
+                    stability_minutes = int(
+                        (latest.detected_at - last_change.detected_at).total_seconds() / 60
+                    )
+                else:
+                    stability_minutes = int(
+                        (as_of - latest.detected_at).total_seconds() / 60
+                    )
+                regime_stability_minutes = max(0, stability_minutes)
+        except Exception as e:
+            logger.debug("System health regime lookup failed: %s", e)
+
+        active_strategies = []
+        top_strategy = None
+        bandit_adaptation_rate = None
+        try:
+            from core.bandit_models import BanditArm
+
+            arms = BanditArm.objects.filter(enabled=True)
+            if arms.exists():
+                ordered_arms = arms.order_by("-current_weight")
+                top_strategy = ordered_arms.first().strategy_slug
+                active_strategies = [
+                    {
+                        "name": arm.strategy_slug,
+                        "weight": float(arm.current_weight),
+                        "recentWinRate": float(arm.expected_win_rate),
+                    }
+                    for arm in ordered_arms[:limit]
+                ]
+                avg_discount = sum(float(arm.discount_rate) for arm in arms) / arms.count()
+                bandit_adaptation_rate = max(0.0, 1.0 - avg_discount)
+        except Exception as e:
+            logger.debug("System health bandit lookup failed: %s", e)
+
+        execution_alerts = []
+        avg_slippage_bps = None
+        try:
+            from django.db.models import Avg
+            from core.signal_performance_models import SymbolExecutionProfile
+
+            profiles = SymbolExecutionProfile.objects.filter(fill_count__gte=5)
+            if profiles.exists():
+                avg_slippage_bps = float(
+                    profiles.aggregate(avg=Avg("avg_slippage_bps")).get("avg") or 0.0
+                )
+
+            ranked_profiles = profiles.order_by("-avg_slippage_bps")[:limit]
+            for profile in ranked_profiles:
+                avg_slippage = float(profile.avg_slippage_bps)
+                avg_quality = float(profile.avg_quality_score)
+                penalty = 1.0
+                if avg_slippage > 25:
+                    penalty = min(penalty, 0.75)
+                elif avg_slippage > 15:
+                    penalty = min(penalty, 0.85)
+                if avg_quality < 3.5:
+                    penalty = min(penalty, 0.75)
+                elif avg_quality < 4.5:
+                    penalty = min(penalty, 0.85)
+
+                if penalty < 1.0:
+                    execution_alerts.append({
+                        "symbol": profile.symbol,
+                        "penaltyApplied": float(penalty),
+                        "avgSlippage": avg_slippage,
+                    })
+        except Exception as e:
+            logger.debug("System health execution lookup failed: %s", e)
+
+        total_signals_filtered_by_liquidity = 0
+
+        safety_kill_switch_active = False
+        safety_kill_switch_reason = None
+        max_drawdown = None
+        max_drawdown_limit = None
+        try:
+            from core.signal_performance_models import UserRiskBudget
+
+            user = getattr(info.context, "user", None)
+            if user and not getattr(user, "is_anonymous", True):
+                budget = UserRiskBudget.objects.filter(user=user).first()
+                if budget:
+                    daily_pnl_pct = float(budget.daily_pnl_pct)
+                    max_daily_loss_pct = float(budget.max_daily_loss_pct)
+                    max_drawdown = daily_pnl_pct / 100.0
+                    max_drawdown_limit = max_daily_loss_pct / 100.0
+                    if budget.trading_paused:
+                        safety_kill_switch_active = True
+                        safety_kill_switch_reason = "Trading paused by user risk budget"
+                    elif daily_pnl_pct <= -max_daily_loss_pct:
+                        safety_kill_switch_active = True
+                        safety_kill_switch_reason = (
+                            f"Daily PnL {daily_pnl_pct:.2f}% exceeds max loss {max_daily_loss_pct:.2f}%"
+                        )
+        except Exception as e:
+            logger.debug("System health safety lookup failed: %s", e)
+
+        return {
+            "currentRegime": current_regime,
+            "regimeStabilityMinutes": regime_stability_minutes,
+            "regimeConfidence": regime_confidence,
+            "activeStrategies": active_strategies,
+            "topStrategy": top_strategy,
+            "banditAdaptationRate": bandit_adaptation_rate,
+            "executionAlerts": execution_alerts,
+            "avgSlippageBps": avg_slippage_bps,
+            "totalSignalsFilteredByLiquidity": total_signals_filtered_by_liquidity,
+            "safetyKillSwitchActive": safety_kill_switch_active,
+            "safetyKillSwitchReason": safety_kill_switch_reason,
+            "maxDrawdown": max_drawdown,
+            "maxDrawdownLimit": max_drawdown_limit,
+        }
 
     def resolve_swing_trading_stats(self, info, strategy=None, period="ALL_TIME"):
         """Resolve swing trading strategy performance stats."""

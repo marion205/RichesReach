@@ -41,6 +41,7 @@ class ExecutionAdvisor:
             microstructure = {
                 'execution_quality_score': features.get('executionQualityScore'),
                 'spread_bps': features.get('spreadBps', 5.0),
+                'spread_atr_ratio': features.get('spreadAtrRatio'),
                 'order_imbalance': features.get('orderImbalance', 0),
                 'bid_depth': features.get('bidDepth', 0),
                 'ask_depth': features.get('askDepth', 0),
@@ -90,6 +91,7 @@ class ExecutionAdvisor:
         """
         spread_bps = microstructure.get('spread_bps', 5.0)
         execution_quality = microstructure.get('execution_quality_score')
+        spread_atr_ratio = microstructure.get('spread_atr_ratio')
         order_imbalance = microstructure.get('order_imbalance', 0)
         bid_depth = microstructure.get('bid_depth', 0)
         ask_depth = microstructure.get('ask_depth', 0)
@@ -110,8 +112,8 @@ class ExecutionAdvisor:
         # Generate microstructure summary
         microstructure_summary = f"Spread {spread_bps:.2f}% · Book: {book_bias} · Liquidity: {liquidity}"
         
-        # If spread is wide (> 20 bps) or execution quality is low, use limit order
-        if spread_bps > 20 or (execution_quality and execution_quality < 5.0):
+        # If spread is wide (> 20 bps), spread/ATR is high, or execution quality is low, use limit order
+        if spread_bps > 20 or (spread_atr_ratio and spread_atr_ratio > 0.4) or (execution_quality and execution_quality < 5.0):
             # Use limit order with tight band around mid-price
             if side == 'LONG':
                 price_band = [entry_price * 0.9995, entry_price * 1.0005]  # ±0.05%

@@ -973,6 +973,29 @@ def _get_real_intraday_day_trading_picks(
                     )
                 except Exception as e:
                     logger.debug(f"Microstructure enrich failed for {symbol}: {e}")
+
+            # Execution profile enrichment (historical fills)
+            exec_profile_grade = None
+            exec_profile_slippage = None
+            exec_profile_quality = None
+            exec_profile_fills = 0
+            exec_profile_risky = False
+            try:
+                from .signal_performance_models import SymbolExecutionProfile
+                profile = SymbolExecutionProfile.objects.filter(symbol=symbol.upper()).first()
+                if profile and profile.fill_count >= 5:
+                    exec_profile_slippage = float(profile.avg_slippage_bps)
+                    exec_profile_quality = float(profile.avg_quality_score)
+                    exec_profile_fills = int(profile.fill_count)
+                    exec_profile_grade = (
+                        'A' if exec_profile_slippage < 5 else
+                        ('B' if exec_profile_slippage < 15 else 'C')
+                    )
+                    exec_profile_risky = exec_profile_slippage >= 15 or exec_profile_quality < 4.5
+                    features['exec_avg_slippage_bps'] = exec_profile_slippage
+                    features['exec_avg_quality_score'] = exec_profile_quality
+            except Exception as e:
+                logger.debug(f"Execution profile lookup failed for {symbol}: {e}")
             
             # Check for gaps (price jumps > 5% in last 5 minutes)
             gap_pct = 0.0
@@ -1058,14 +1081,24 @@ def _get_real_intraday_day_trading_picks(
                 return value
 
             # Minimal feature payload for GraphQL + full features for logging
+            spread_bps = float(features.get('spread_bps', 5.0))
+            atr_5m_pct = float(features.get('atr_5m_pct', 0.01))
+            spread_atr_ratio = (spread_bps / 10000.0) / atr_5m_pct if atr_5m_pct > 0 else 0.0
+            execution_risk_flag = bool(exec_profile_risky or spread_atr_ratio > 0.4)
+
             features_dict = {
                 'momentum15m': round(momentum15m, 4),
                 'rvol10m': round(volume_ratio, 2),
                 'vwapDist': round(float(features.get('vwap_dist_pct', 0.0)), 4),
                 'breakoutPct': round(float(features.get('breakout_pct', 0.0)), 4),
-                'spreadBps': round(float(features.get('spread_bps', 5.0)), 2),
+                'spreadBps': round(spread_bps, 2),
+                'spreadAtrRatio': round(spread_atr_ratio, 3),
                 'catalystScore': round(float(catalyst_score), 2),
                 'executionQualityScore': round(float(features.get('execution_quality_score', 6.0)), 1),
+                'executionAvgSlippageBps': round(exec_profile_slippage, 2) if exec_profile_slippage is not None else None,
+                'executionProfileGrade': exec_profile_grade,
+                'executionFillCount': exec_profile_fills if exec_profile_fills > 0 else None,
+                'executionRiskFlag': execution_risk_flag,
             }
 
             if microstructure:
@@ -1077,7 +1110,7 @@ def _get_real_intraday_day_trading_picks(
                 })
 
                 # Mark as microstructure risky if quality score is low
-                if float(features.get('execution_quality_score', 6.0)) < 5.0:
+                if float(features.get('execution_quality_score', 6.0)) < 5.0 or execution_risk_flag:
                     features_dict['microstructureRisky'] = True
 
             # Attach full feature set for logging and ML feedback loops

@@ -35,6 +35,7 @@ class RegimeDetector:
     # Regime thresholds and hysteresis
     LOOKBACK_PERIOD = 20  # Days for SMA calculations
     CONFIRMATION_BARS = 3  # Regime must be stable for N bars before flipping
+    MIN_HOLD_BARS = 3  # Minimum bars to hold a regime before allowing switch
     MIN_DATA_POINTS = 60  # Minimum bars needed for reliable indicators
     
     # Regime-specific thresholds (overridden by learned values if available)
@@ -85,7 +86,8 @@ class RegimeDetector:
     }
     
     def __init__(self, lookback_period: int = LOOKBACK_PERIOD, 
-                 confirmation_bars: int = CONFIRMATION_BARS):
+                 confirmation_bars: int = CONFIRMATION_BARS,
+                 min_hold_bars: int = MIN_HOLD_BARS):
         """
         Initialize RegimeDetector with hysteresis parameters.
         
@@ -95,15 +97,19 @@ class RegimeDetector:
         """
         self.lookback = lookback_period
         self.confirmation_bars = confirmation_bars
+        self.min_hold_bars = min_hold_bars
         
         # State tracking for hysteresis
         self.previous_regime: Optional[str] = None
         self.regime_candidate: Optional[str] = None
         self.candidate_bar_count: int = 0
         self.current_regime: str = "NEUTRAL"
+        self.current_regime_age: int = 0
         
-        logger.info(f"RegimeDetector initialized: lookback={lookback_period}, "
-                   f"confirmation_bars={confirmation_bars}")
+        logger.info(
+            f"RegimeDetector initialized: lookback={lookback_period}, "
+            f"confirmation_bars={confirmation_bars}, min_hold_bars={min_hold_bars}"
+        )
     
     def calculate_indicators(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -356,6 +362,7 @@ class RegimeDetector:
         ):
             self.previous_regime = self.current_regime
             self.current_regime = "TREND_UP"
+            self.current_regime_age = 0
             self.regime_candidate = "TREND_UP"
             self.candidate_bar_count = self.confirmation_bars
             logger.info("✓ REGIME SHIFT: CRASH_PANIC → TREND_UP (V-bottom override)")
@@ -367,8 +374,37 @@ class RegimeDetector:
         
         is_regime_shift = False
         
+        # If candidate matches current regime, increment age and return
+        if candidate == self.current_regime:
+            self.current_regime_age += 1
+            self.regime_candidate = candidate
+            self.candidate_bar_count = self.confirmation_bars
+            description = self.REGIME_DESCRIPTIONS.get(
+                self.current_regime,
+                self.REGIME_DESCRIPTIONS["NEUTRAL"]
+            )
+            return self.current_regime, False, description
+
         # Hysteresis override for crash panic
         confirmation_bars = 1 if candidate == "CRASH_PANIC" else self.confirmation_bars
+
+        # Stickiness: require extra confirmation to exit strong regimes
+        if self.current_regime in {"TREND_UP", "TREND_DOWN", "MEAN_REVERSION"}:
+            confirmation_bars = max(confirmation_bars, self.confirmation_bars + 1)
+
+        # Duration buffer: hold a regime for minimum bars before switching (except crash panic)
+        min_hold_ok = self.current_regime_age >= self.min_hold_bars or self.current_regime == "NEUTRAL"
+        if not min_hold_ok and candidate != "CRASH_PANIC":
+            if candidate == self.regime_candidate:
+                self.candidate_bar_count += 1
+            else:
+                self.regime_candidate = candidate
+                self.candidate_bar_count = 1
+            description = self.REGIME_DESCRIPTIONS.get(
+                self.current_regime,
+                self.REGIME_DESCRIPTIONS["NEUTRAL"]
+            )
+            return self.current_regime, False, description
 
         # Hysteresis logic: track candidate stability
         if candidate == self.regime_candidate:
@@ -381,6 +417,7 @@ class RegimeDetector:
                     self.previous_regime = self.current_regime
                     self.current_regime = candidate
                     is_regime_shift = True
+                    self.current_regime_age = 0
                     logger.info(f"✓ REGIME SHIFT: {self.previous_regime} → {self.current_regime} "
                                f"(confirmed after {confirmation_bars} bars)")
         else:
@@ -393,6 +430,7 @@ class RegimeDetector:
                 self.previous_regime = self.current_regime
                 self.current_regime = candidate
                 is_regime_shift = True
+                self.current_regime_age = 0
                 logger.info(f"✓ REGIME SHIFT: {self.previous_regime} → {self.current_regime} "
                            "(immediate crash override)")
 
@@ -422,6 +460,7 @@ class RegimeDetector:
             "previous_regime": self.previous_regime,
             "regime_candidate": self.regime_candidate,
             "candidate_bar_count": self.candidate_bar_count,
+            "current_regime_age": self.current_regime_age,
             "description": self.REGIME_DESCRIPTIONS.get(
                 self.current_regime,
                 self.REGIME_DESCRIPTIONS["NEUTRAL"]
@@ -434,6 +473,7 @@ class RegimeDetector:
         self.regime_candidate = None
         self.candidate_bar_count = 0
         self.current_regime = "NEUTRAL"
+        self.current_regime_age = 0
 
 
 # Load learned thresholds at module import time

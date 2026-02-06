@@ -1213,6 +1213,7 @@ class DayTradingFeaturesType(graphene.ObjectType):
     vwapDist = graphene.Float()
     breakoutPct = graphene.Float()
     spreadBps = graphene.Float()
+    spreadAtrRatio = graphene.Float(description="Spread/ATR ratio for liquidity risk")
     catalystScore = graphene.Float()
     # Microstructure features (optional - only present if L2 data available)
     orderImbalance = graphene.Float(description="Order imbalance: -1 (bearish) to +1 (bullish)")
@@ -1220,6 +1221,10 @@ class DayTradingFeaturesType(graphene.ObjectType):
     askDepth = graphene.Float(description="Total ask depth in dollars (top 5 levels)")
     depthImbalance = graphene.Float(description="Depth imbalance: (bid_depth - ask_depth) / total")
     executionQualityScore = graphene.Float(description="Execution quality score: 0-10 (higher = better)")
+    executionAvgSlippageBps = graphene.Float(description="Avg slippage from historical fills (bps)")
+    executionProfileGrade = graphene.String(description="Execution profile grade (A/B/C)")
+    executionFillCount = graphene.Int(description="Number of fills used for execution profile")
+    executionRiskFlag = graphene.Boolean(description="True if historical execution risk is high")
     microstructureRisky = graphene.Boolean(description="True if execution quality is low (thin depth, wide spread)")
 
 
@@ -1243,6 +1248,58 @@ class DayTradingPickType(graphene.ObjectType):
     features = graphene.Field(DayTradingFeaturesType)
     risk = graphene.Field(DayTradingRiskType)
     notes = graphene.String()
+
+
+class BanditStrategyWeightType(graphene.ObjectType):
+    """GraphQL type for bandit strategy weights."""
+
+    class Meta:
+        name = "StrategyWeight"
+
+    name = graphene.String()
+    weight = graphene.Float()
+    recentWinRate = graphene.Float()
+
+
+class ExecutionRiskSymbolType(graphene.ObjectType):
+    """GraphQL type for execution risk summary per symbol."""
+
+    class Meta:
+        name = "SymbolExecutionPenalty"
+
+    symbol = graphene.String()
+    penaltyApplied = graphene.Float()
+    avgSlippage = graphene.Float()
+
+
+class RegimeHealthType(graphene.ObjectType):
+    """GraphQL type for regime health diagnostics."""
+    regimeLabel = graphene.String()
+    detectedAt = graphene.DateTime()
+    stabilityMinutes = graphene.Int()
+    hmmConfidence = graphene.Float()
+    agreement = graphene.Boolean()
+
+
+class SystemHealthType(graphene.ObjectType):
+    """GraphQL type for system health summary."""
+
+    class Meta:
+        name = "SystemHealth"
+
+    currentRegime = graphene.String()
+    regimeStabilityMinutes = graphene.Int()
+    regimeConfidence = graphene.Float()
+    activeStrategies = graphene.List(BanditStrategyWeightType)
+    topStrategy = graphene.String()
+    banditAdaptationRate = graphene.Float()
+    executionAlerts = graphene.List(ExecutionRiskSymbolType)
+    avgSlippageBps = graphene.Float()
+    totalSignalsFilteredByLiquidity = graphene.Int()
+    safetyKillSwitchActive = graphene.Boolean()
+    safetyKillSwitchReason = graphene.String()
+    maxDrawdown = graphene.Float()
+    maxDrawdownLimit = graphene.Float()
 
 
 class DayTradingDataType(graphene.ObjectType):

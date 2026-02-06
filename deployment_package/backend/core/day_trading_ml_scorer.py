@@ -105,10 +105,22 @@ class DayTradingMLScorer:
                 if profile and profile.fill_count >= 5:
                     features['exec_avg_slippage_bps'] = float(profile.avg_slippage_bps)
                     features['exec_avg_quality_score'] = float(profile.avg_quality_score)
+                    avg_slippage_bps = float(profile.avg_slippage_bps)
+                    avg_quality_score = float(profile.avg_quality_score)
                     # Penalize symbols with poor execution quality
-                    if float(profile.avg_quality_score) < 4.0:
-                        exec_quality_penalty = 0.85
-                        logger.debug(f"Execution penalty for {symbol}: quality={profile.avg_quality_score}")
+                    if avg_slippage_bps > 25:
+                        exec_quality_penalty = min(exec_quality_penalty, 0.75)
+                    elif avg_slippage_bps > 15:
+                        exec_quality_penalty = min(exec_quality_penalty, 0.85)
+                    if avg_quality_score < 3.5:
+                        exec_quality_penalty = min(exec_quality_penalty, 0.75)
+                    elif avg_quality_score < 4.5:
+                        exec_quality_penalty = min(exec_quality_penalty, 0.85)
+                    if exec_quality_penalty < 1.0:
+                        logger.debug(
+                            f"Execution penalty for {symbol}: slippage={avg_slippage_bps:.2f}bps, "
+                            f"quality={avg_quality_score:.1f}, penalty={exec_quality_penalty:.2f}"
+                        )
             except Exception as e:
                 logger.debug(f"Could not load execution profile for {symbol}: {e}")
 
