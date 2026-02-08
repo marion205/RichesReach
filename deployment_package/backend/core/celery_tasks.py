@@ -311,3 +311,103 @@ def train_hmm_regime_task():
     except Exception as e:
         logger.error(f"Error training HMM regime model: {e}", exc_info=True)
         return {'error': str(e)}
+
+
+# ============================================================
+# DeFi Yield Data Tasks
+# ============================================================
+
+@shared_task(bind=True, max_retries=3)
+def fetch_defi_yields(self):
+    """
+    Periodic task (every 5 minutes): Fetch live yield data from DefiLlama,
+    persist to database, and cache in Redis for fast GraphQL queries.
+    """
+    try:
+        from .defi_data_service import (
+            fetch_defi_llama_pools,
+            sync_pools_to_database,
+            cache_top_yields,
+        )
+
+        logger.info("Starting DeFi yield data fetch from DefiLlama...")
+
+        # 1. Fetch from DefiLlama API
+        pools = fetch_defi_llama_pools()
+        if not pools:
+            logger.warning("No pools returned from DefiLlama, skipping sync")
+            return {'status': 'no_data', 'pools_fetched': 0}
+
+        # 2. Sync to database
+        snapshot_count = sync_pools_to_database(pools)
+
+        # 3. Update Redis cache
+        cache_top_yields()
+
+        logger.info(
+            f"DeFi yield sync complete: {len(pools)} pools fetched, "
+            f"{snapshot_count} snapshots created"
+        )
+        return {
+            'status': 'success',
+            'pools_fetched': len(pools),
+            'snapshots_created': snapshot_count,
+        }
+
+    except Exception as e:
+        logger.error(f"Error fetching DeFi yields: {e}", exc_info=True)
+        if CELERY_AVAILABLE and self.request.retries < self.max_retries:
+            raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))
+        return {'status': 'failed', 'error': str(e)}
+
+
+@shared_task
+def cleanup_defi_snapshots():
+    """
+    Weekly task: Remove old yield snapshots to keep database manageable.
+    Retains 90 days of historical data for analytics.
+    """
+    try:
+        from .defi_data_service import cleanup_old_snapshots
+        deleted = cleanup_old_snapshots(days_to_keep=90)
+        logger.info(f"DeFi snapshot cleanup: {deleted} old records removed")
+        return {'status': 'success', 'deleted': deleted}
+    except Exception as e:
+        logger.error(f"Error cleaning up DeFi snapshots: {e}", exc_info=True)
+        return {'status': 'failed', 'error': str(e)}
+
+
+@shared_task
+def monitor_defi_health_factors():
+    """
+    Periodic task (every 5 minutes): Monitor all active DeFi positions
+    and send alerts for health factor warnings, APY changes, and harvest opportunities.
+    """
+    try:
+        from .defi_alert_service import check_all_positions
+        result = check_all_positions()
+        logger.info(f"DeFi health monitor: {result}")
+        return {'status': 'success', **result}
+    except Exception as e:
+        logger.error(f"Error in DeFi health monitor: {e}", exc_info=True)
+        return {'status': 'failed', 'error': str(e)}
+
+
+@shared_task
+def evaluate_strategy_rotations():
+    """
+    Periodic task (every 30 minutes): Evaluate all active DeFi positions
+    for rotation opportunities and auto-compound triggers.
+
+    Uses 7-day rolling average APY to avoid false signals from temporary spikes.
+    Checks: APY improvement > 20%, risk delta < 20%, TVL > $100k, position age > 24h.
+    """
+    try:
+        from .defi_strategy_engine import StrategyEvaluation
+        engine = StrategyEvaluation()
+        result = engine.auto_compound_check()
+        logger.info(f"Strategy rotation evaluation complete: {result}")
+        return {'status': 'success', **result}
+    except Exception as e:
+        logger.error(f"Error in strategy rotation evaluation: {e}", exc_info=True)
+        return {'status': 'failed', 'error': str(e)}

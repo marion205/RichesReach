@@ -1228,22 +1228,6 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
             </View>
           )}
 
-          {/* Error Banner (if using mock data due to network error) */}
-          {error && picks.length > 0 && (
-            <View style={[styles.errorBanner, { backgroundColor: C.warning + '20', borderLeftColor: C.warning }]}>
-              <Icon name="alert-triangle" size={16} color={C.warning} />
-              <Text style={[styles.errorBannerText, { color: C.warning }]}>
-                Using mock data - Backend connection failed. {error.networkError?.message || error.message}
-              </Text>
-              <TouchableOpacity 
-                onPress={() => refetch({ mode })}
-                style={styles.retryButtonSmall}
-              >
-                <Text style={[styles.retryButtonText, { color: C.warning, fontSize: 12 }]}>Retry</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
           {/* Loading, Error, or Picks List */}
           {loading && picks.length === 0 ? (
             <View style={styles.emptyWrap}>

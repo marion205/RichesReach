@@ -24,10 +24,10 @@ allowed_hosts_env = os.getenv('ALLOWED_HOSTS', '')
 if allowed_hosts_env:
     ALLOWED_HOSTS = allowed_hosts_env.split(',')
 else:
-    ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '10.0.0.64', '192.168.1.151', '192.168.1.240', '0.0.0.0']
+    ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '10.0.0.64', '192.168.1.151', '192.168.1.240', '192.168.1.246', '0.0.0.0']
 
 # Always add common local development IPs if not already present
-local_ips = ['127.0.0.1', 'localhost', '192.168.1.240', '192.168.1.151', '0.0.0.0']
+local_ips = ['127.0.0.1', 'localhost', '192.168.1.240', '192.168.1.151', '192.168.1.246', '0.0.0.0']
 for ip in local_ips:
     if ip not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(ip)

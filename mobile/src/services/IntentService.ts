@@ -34,14 +34,85 @@ export interface IntentOrder {
 }
 
 class IntentService {
-  // CoW Swap API (Mainnet)
+  // CoW Swap API — supports mainnet + Sepolia
+  private readonly COWSWAP_API_MAINNET = 'https://api.cow.fi/mainnet/api/v1';
+  private readonly COWSWAP_API_SEPOLIA = 'https://api.cow.fi/sepolia/api/v1';
+
+  // Legacy single URL (kept for backward compat)
   private readonly COWSWAP_API = 'https://api.cow.fi/mainnet/api/v1';
-  
+
   // 1inch Fusion API
   private readonly ONEINCH_FUSION_API = 'https://fusion.1inch.io';
-  
+
   // UniswapX API
   private readonly UNISWAPX_API = 'https://api.uniswap.org/v2';
+
+  /**
+   * Get the CoW Swap API URL for a given chain.
+   */
+  private getCowSwapApiUrl(chainId?: number): string {
+    if (chainId === 11155111) return this.COWSWAP_API_SEPOLIA;
+    if (chainId === 100) return 'https://api.cow.fi/xdai/api/v1';
+    return this.COWSWAP_API_MAINNET;
+  }
+
+  /**
+   * Create a DeFi rotation swap.
+   * Used by the strategy engine when rotating from one pool to another
+   * that uses a different underlying token.
+   *
+   * Example: Rotating from USDC Aave pool → DAI Compound pool
+   * requires swapping USDC → DAI via CoW Swap before depositing.
+   */
+  async createDeFiRotationSwap(
+    sellToken: string,
+    buyToken: string,
+    sellAmount: string,
+    receiver: string,
+    chainId: number = 1,
+  ): Promise<IntentOrder> {
+    return this.createSwapIntent({
+      sellToken,
+      buyToken,
+      sellAmount,
+      receiver,
+      validFor: 600, // 10 min validity for rotation swaps
+      source: 'cowswap', // CoW Swap preferred for MEV protection on rotations
+    });
+  }
+
+  /**
+   * Get the best swap quote for a DeFi token swap.
+   * Returns the CoW Swap quote by default (gasless, MEV-protected).
+   */
+  async getDeFiSwapQuote(
+    sellToken: string,
+    buyToken: string,
+    sellAmount: string,
+    chainId: number = 1,
+  ): Promise<IntentQuote | null> {
+    try {
+      const apiUrl = this.getCowSwapApiUrl(chainId);
+      const response = await fetch(
+        `${apiUrl}/quote?sellToken=${sellToken}&buyToken=${buyToken}&sellAmount=${sellAmount}`
+      );
+
+      if (!response.ok) return null;
+      const result = await response.json();
+
+      return {
+        source: 'cowswap',
+        buyAmount: result.buyAmount,
+        estimatedGas: '0', // CoW Swap is gasless
+        priceImpact: parseFloat(result.priceImpact || '0'),
+        fee: result.feeAmount || '0',
+        validUntil: Date.now() + 600_000,
+      };
+    } catch (error) {
+      logger.warn('DeFi swap quote failed:', error);
+      return null;
+    }
+  }
 
   /**
    * Create a swap intent

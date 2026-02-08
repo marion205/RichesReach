@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  StyleSheet, 
-  ScrollView, 
-  ActivityIndicator, 
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  ActivityIndicator,
   Alert,
   TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import DeFiTribeCard, { DEFAULT_DEFI_TRIBES } from '../../defi/components/DeFiTribeCard';
 
 export default function WealthCirclesScreen({ navigation }: { navigation?: any }) {
   const [loading, setLoading] = useState(false);
@@ -185,6 +186,38 @@ export default function WealthCirclesScreen({ navigation }: { navigation?: any }
             </View>
           </View>
         )}
+      </View>
+
+      {/* DeFi Tribes */}
+      <View style={styles.section}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <Ionicons name="flash" size={20} color="#10B981" />
+          <Text style={styles.sectionTitle}>DeFi Tribes</Text>
+        </View>
+        <Text style={{ color: '#6b7280', marginBottom: 12, marginTop: -8 }}>
+          Join DeFi-focused groups. Share strategies. Build your Fortress together.
+        </Text>
+        {DEFAULT_DEFI_TRIBES.map((tribe) => (
+          <DeFiTribeCard
+            key={tribe.id}
+            tribe={tribe}
+            onPress={() => navigation?.navigate?.('circle-detail', {
+              circle: {
+                id: tribe.id,
+                name: tribe.name,
+                description: tribe.description,
+                member_count: tribe.memberCount,
+                cultural_focus: 'DeFi',
+                focus_area: 'defi_strategy',
+                is_private: false,
+              }
+            })}
+            onShareStrategy={() => Alert.alert(
+              'Share Your Strategy',
+              'Strategy sharing coming soon! You\'ll be able to share your DeFi positions with the community.',
+            )}
+          />
+        ))}
       </View>
 
       {/* Wealth Circles */}

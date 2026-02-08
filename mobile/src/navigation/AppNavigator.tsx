@@ -152,6 +152,10 @@ import CameraTestScreen from '../components/CameraTestScreen';
 
 // New hub screen
 import InvestHubScreen from '../features/invest/InvestHubScreen';
+import DeFiFortressScreen from '../features/defi/screens/DeFiFortressScreen';
+import DeFiPositionsScreen from '../features/defi/screens/DeFiPositionsScreen';
+import ImpermanentLossCalculatorScreen from '../features/defi/screens/ImpermanentLossCalculatorScreen';
+import VaultPortfolioScreen from '../features/defi/screens/VaultPortfolioScreen';
 import InvestAdvancedSheet from '../features/invest/InvestAdvancedSheet';
 
 // Swing Trading screens
@@ -318,6 +322,11 @@ function InvestStack() {
       <Stack.Screen name="Stocks" component={StockScreenWrapper} options={{ headerShown: true, title: 'Stocks' }} />
       <Stack.Screen name="StockDetail" component={StockDetailScreen} options={{ headerShown: true, title: 'Stock Detail' }} />
       <Stack.Screen name="Crypto" component={CryptoScreen} options={{ headerShown: true, title: 'Crypto' }} />
+      <Stack.Screen name="DeFiFortress" component={DeFiFortressScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="DeFiPositions" component={DeFiPositionsScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ILCalculator" component={ImpermanentLossCalculatorScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="PoolAnalytics" component={require('../screens/PoolAnalyticsScreen').default} options={{ headerShown: true, title: 'Pool Analytics' }} />
+      <Stack.Screen name="VaultPortfolio" component={VaultPortfolioScreen} options={{ headerShown: false }} />
       <Stack.Screen name="AIPortfolio" component={AIPortfolioScreen} options={{ headerShown: true, title: 'AI Portfolio' }} />
       <Stack.Screen name="Portfolio" component={PortfolioScreen} options={{ headerShown: true, title: 'Portfolio' }} />
       <Stack.Screen name="PortfolioManagement" component={PortfolioManagementScreen} options={{ headerShown: true, title: 'Manage Holdings' }} />

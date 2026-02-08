@@ -21,6 +21,11 @@ export const FEATURES = {
   // Crypto trading disabled for App Store compliance (regulatory requirements)
   CRYPTO_TRADING_ENABLED: (process.env.EXPO_PUBLIC_CRYPTO_TRADING_ENABLED ?? 'false').toLowerCase() !== 'false',
   CRYPTO_TRADING_MESSAGE: 'Cryptocurrency trading is currently not available. This feature will be available in the future once all regulatory requirements are met.',
+  // DeFi Fortress - yield farming, lending, and DeFi education
+  DEFI_FORTRESS_ENABLED: (process.env.EXPO_PUBLIC_DEFI_FORTRESS_ENABLED ?? 'true').toLowerCase() !== 'false',
+  // DeFi Mainnet — real funds on Ethereum, Polygon, Arbitrum, Base
+  // Defaults to false: must be explicitly enabled when ready for production
+  DEFI_MAINNET_ENABLED: (process.env.EXPO_PUBLIC_DEFI_MAINNET_ENABLED ?? 'false').toLowerCase() !== 'false',
 };
 
 // Production guardrails - hard fail if features are disabled in release

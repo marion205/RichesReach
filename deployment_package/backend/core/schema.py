@@ -154,6 +154,30 @@ except (ImportError, SyntaxError):
         pass
 
 try:
+    from .defi_queries import DefiQueries
+except (ImportError, SyntaxError):
+    class DefiQueries(graphene.ObjectType):
+        pass
+
+try:
+    from .defi_mutations import DefiMutations
+except (ImportError, SyntaxError):
+    class DefiMutations(graphene.ObjectType):
+        pass
+
+try:
+    from .crypto_queries import CryptoQueries
+except (ImportError, SyntaxError):
+    class CryptoQueries(graphene.ObjectType):
+        pass
+
+try:
+    from .crypto_mutations import CryptoMutations
+except (ImportError, SyntaxError):
+    class CryptoMutations(graphene.ObjectType):
+        pass
+
+try:
     from .raha_queries import RAHAQueries
 except (ImportError, SyntaxError):
     class RAHAQueries(graphene.ObjectType):
@@ -258,7 +282,7 @@ except (ImportError, SyntaxError) as e:
     class DiscussionsQuery(graphene.ObjectType):
         pass
 
-class ExtendedQuery(PremiumQueries, BrokerQueries, TradingQuery, BudgetSpendingQuery, SocialQuery, MarketDataQuery, AnalyticsQuery, SecurityQuery, SignalsQuery, OptionsRustQuery, DiscussionsQuery, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, RiskManagementQueries, OptionsAlertQueries, BlockchainQueries, RAHAQueries, ChanQuantQueries, TransparencyQueries, SpeedOptimizationQueries, OptionsQueries, RepairQueries, Query, graphene.ObjectType):
+class ExtendedQuery(PremiumQueries, BrokerQueries, TradingQuery, BudgetSpendingQuery, SocialQuery, MarketDataQuery, AnalyticsQuery, SecurityQuery, SignalsQuery, OptionsRustQuery, DiscussionsQuery, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, RiskManagementQueries, OptionsAlertQueries, BlockchainQueries, DefiQueries, CryptoQueries, RAHAQueries, ChanQuantQueries, TransparencyQueries, SpeedOptimizationQueries, OptionsQueries, RepairQueries, Query, graphene.ObjectType):
     """
     Final Query type exposed by the schema.
 
@@ -377,7 +401,7 @@ except (ImportError, SyntaxError):
     class OptionsAlertMutations(graphene.ObjectType):
         pass
 
-class ExtendedMutation(PremiumMutations, BrokerMutations, BankingMutations, SBLOCMutations, PaperTradingMutations, SocialMutations, PrivacyMutations, AIInsightsMutations, OptionsAlertMutations, RAHAMutations, RAHAAdvancedMutations, Mutation, graphene.ObjectType):
+class ExtendedMutation(PremiumMutations, BrokerMutations, BankingMutations, SBLOCMutations, PaperTradingMutations, SocialMutations, PrivacyMutations, AIInsightsMutations, OptionsAlertMutations, DefiMutations, CryptoMutations, RAHAMutations, RAHAAdvancedMutations, Mutation, graphene.ObjectType):
     """
     Final Mutation type exposed by the schema.
 
@@ -503,6 +527,48 @@ try:
     from .speed_optimization_types import LatencyStatsType, OptimizationStatusType
     schema_types.extend([
         LatencyStatsType, OptimizationStatusType
+    ])
+except ImportError:
+    pass
+
+# Add DeFi Types
+try:
+    from .defi_queries import (
+        DefiReserveType, DefiAccountType,
+        AchievementType, PortfolioAnalyticsType, GhostWhisperType,
+    )
+    from .defi_mutations import (
+        DefiPositionType, YieldPoolType, OptimizedPoolType,
+        YieldOptimizerResultType, PoolAnalyticsPointType,
+        StakeIntentResultType, RecordStakeTransactionResultType
+    )
+    schema_types.extend([
+        DefiReserveType, DefiAccountType, DefiPositionType,
+        YieldPoolType, OptimizedPoolType, YieldOptimizerResultType,
+        PoolAnalyticsPointType, StakeIntentResultType, RecordStakeTransactionResultType,
+        AchievementType, PortfolioAnalyticsType, GhostWhisperType,
+    ])
+except ImportError:
+    pass
+
+# Add Crypto Types
+try:
+    from .crypto_queries import (
+        CryptocurrencyType, CryptoPriceType, CryptoMlSignalType,
+        CryptoRecommendationType, CryptoSblocLoanType, CryptoHoldingType,
+        CryptoPortfolioType
+    )
+    from .crypto_mutations import (
+        AlpacaCryptoAccountType, AlpacaCryptoBalanceType,
+        AlpacaCryptoOrderType, CreateAlpacaCryptoOrderResultType,
+        CancelAlpacaCryptoOrderResultType
+    )
+    schema_types.extend([
+        CryptocurrencyType, CryptoPriceType, CryptoMlSignalType,
+        CryptoRecommendationType, CryptoSblocLoanType, CryptoHoldingType,
+        CryptoPortfolioType, AlpacaCryptoAccountType, AlpacaCryptoBalanceType,
+        AlpacaCryptoOrderType, CreateAlpacaCryptoOrderResultType,
+        CancelAlpacaCryptoOrderResultType
     ])
 except ImportError:
     pass

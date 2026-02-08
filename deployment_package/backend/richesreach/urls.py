@@ -12,6 +12,7 @@ from core.voices_views import VoicesListView, PollySynthesizeView, VoicePreviewV
 from core.ai_options_views import AIOptionsRecommendationsView
 from core.auth_views import LoginView
 from core.ai_async_views import chat_view, stream_chat_view, health_view
+from core.defi_views import ValidateTransactionView, RecordTransactionView
 from core.transparency_views import (
     transparency_dashboard_view,
     methodology_view,
@@ -53,6 +54,9 @@ urlpatterns = [
     path('api/ai/chat/', chat_view, name='ai_chat'),
     path('api/ai/chat/stream/', stream_chat_view, name='ai_chat_stream'),
     path('api/ai/health/', health_view, name='ai_health'),
+    # DeFi transaction validation endpoints
+    path('defi/validate-transaction/', ValidateTransactionView.as_view(), name='defi_validate_transaction'),
+    path('defi/record-transaction/', RecordTransactionView.as_view(), name='defi_record_transaction'),
     # Include core app URLs (banking endpoints) - Keep last as catch-all
     path('', include('core.banking_urls')),
 ]
