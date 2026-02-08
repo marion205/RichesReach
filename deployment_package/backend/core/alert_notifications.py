@@ -244,23 +244,186 @@ This regime change may require adjusting your strategy selection. Review active 
 def send_push_notification(title: str, body: str, priority: str = "normal",
                           data: Optional[Dict[str, Any]] = None) -> bool:
     """
-    Send push notification to mobile app (Firebase Cloud Messaging or equivalent).
-    
+    Send push notification to mobile app.
+
+    Tries FCM first (if FCM_SERVER_KEY is set), then falls back to Expo Push
+    (if Expo tokens are available in DB). Returns True if either succeeds.
+
     Args:
         title: Notification title
         body: Notification body
         priority: "high" or "normal"
         data: Optional additional data payload
-    
+
     Returns:
-        True if sent successfully
+        True if sent successfully via any channel
     """
-    # Implementation depends on your push notification service
-    # This is a placeholder that logs the notification
-    
     logger.info(f"📱 PUSH: [{priority}] {title} — {body}")
-    
-    # TODO: Integrate with Firebase FCM or equivalent
-    # fcm_client.send_multicast_message(...)
-    
-    return True
+
+    if not REQUESTS_AVAILABLE:
+        logger.warning("Push notification skipped: requests not available")
+        return False
+
+    # Try FCM first
+    fcm_sent = _send_fcm_push(title, body, priority, data)
+    if fcm_sent:
+        return True
+
+    # Fall back to Expo Push API
+    expo_sent = _send_expo_push(title, body, priority, data)
+    if expo_sent:
+        return True
+
+    logger.warning("Push notification: no delivery channel available (set FCM_SERVER_KEY or register Expo tokens)")
+    return False
+
+
+def _send_fcm_push(title: str, body: str, priority: str = "normal",
+                   data: Optional[Dict[str, Any]] = None) -> bool:
+    """Send push notification via Firebase Cloud Messaging (legacy HTTP API)."""
+    server_key = os.getenv("FCM_SERVER_KEY")
+    device_tokens = [
+        token.strip()
+        for token in os.getenv("FCM_DEVICE_TOKENS", "").split(",")
+        if token.strip()
+    ]
+    topic = os.getenv("FCM_TOPIC")
+
+    if not server_key:
+        return False
+
+    if not device_tokens and not topic:
+        return False
+
+    payload: Dict[str, Any] = {
+        "notification": {
+            "title": title,
+            "body": body,
+        },
+        "data": data or {},
+        "priority": "high" if priority == "high" else "normal",
+    }
+
+    if device_tokens:
+        payload["registration_ids"] = device_tokens
+    else:
+        payload["to"] = f"/topics/{topic}"
+
+    try:
+        response = requests.post(
+            "https://fcm.googleapis.com/fcm/send",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"key={server_key}",
+            },
+            json=payload,
+            timeout=10,
+        )
+
+        if response.status_code != 200:
+            logger.error(f"FCM push failed: {response.status_code} {response.text}")
+            return False
+
+        result = response.json() if response.text else {}
+        failures = result.get("failure", 0)
+        if failures:
+            logger.error(f"FCM push had {failures} failures: {result}")
+            return False
+
+        logger.info("FCM push sent successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send FCM push notification: {e}")
+        return False
+
+
+def _send_expo_push(title: str, body: str, priority: str = "normal",
+                    data: Optional[Dict[str, Any]] = None) -> bool:
+    """
+    Send push notification via Expo Push API.
+
+    Queries stored Expo push tokens from the database and sends via
+    https://exp.host/--/api/v2/push/send.
+
+    Compatible with tokens registered by the whisper-server's
+    /api/register-push-token/ endpoint.
+    """
+    # Collect Expo tokens from DB
+    expo_tokens = _get_expo_tokens()
+    if not expo_tokens:
+        return False
+
+    # Expo Push API accepts batches of up to 100
+    messages = []
+    for token in expo_tokens:
+        messages.append({
+            "to": token,
+            "title": title,
+            "body": body,
+            "priority": "high" if priority == "high" else "default",
+            "sound": "default",
+            "data": data or {},
+        })
+
+    try:
+        response = requests.post(
+            "https://exp.host/--/api/v2/push/send",
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "Accept-Encoding": "gzip, deflate",
+            },
+            json=messages,
+            timeout=10,
+        )
+
+        if response.status_code != 200:
+            logger.error(f"Expo push failed: {response.status_code} {response.text}")
+            return False
+
+        result = response.json()
+        errors = [
+            t for t in result.get("data", [])
+            if t.get("status") == "error"
+        ]
+        if errors:
+            logger.warning(f"Expo push had {len(errors)} errors: {errors[:3]}")
+
+        successes = len(result.get("data", [])) - len(errors)
+        if successes > 0:
+            logger.info(f"Expo push sent to {successes} device(s)")
+            return True
+
+        return False
+    except Exception as e:
+        logger.error(f"Failed to send Expo push notification: {e}")
+        return False
+
+
+def _get_expo_tokens() -> list:
+    """
+    Retrieve stored Expo push tokens from the database.
+
+    Tries Django ORM (UserPushToken model) first, falls back to
+    EXPO_PUSH_TOKENS env var (comma-separated).
+    """
+    # Try Django ORM
+    try:
+        from .models import UserPushToken
+        tokens = list(
+            UserPushToken.objects.filter(
+                token__startswith="ExponentPushToken["
+            ).values_list("token", flat=True)[:100]
+        )
+        if tokens:
+            return tokens
+    except Exception:
+        pass
+
+    # Fallback: env var
+    env_tokens = [
+        t.strip()
+        for t in os.getenv("EXPO_PUSH_TOKENS", "").split(",")
+        if t.strip() and t.strip().startswith("ExponentPushToken[")
+    ]
+    return env_tokens

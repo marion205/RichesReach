@@ -482,20 +482,22 @@ class Query(graphene.ObjectType):
 
     def resolve_flight_manual_by_repair_type(self, info, repair_type: str) -> FlightManualType:
         """Get educational content for a repair type"""
-        # TODO: Integrate with flight_manual_engine.py
+        from .flight_manual_engine import get_flight_manual_by_repair_type
+
+        manual = get_flight_manual_by_repair_type(repair_type)
         return FlightManualType(
             id=repair_type,
             repair_type=repair_type,
-            title=f"How to {repair_type}",
-            description=f"Complete guide to executing {repair_type}",
-            mathematical_explanation="...",
-            example_setup={},
-            historical_success_rate=0.85,
-            edge_percentage=15.0,
-            avg_credit_collected=150.0,
-            risk_metrics={},
-            related_videos=[],
-            related_articles=[],
+            title=manual.get("title"),
+            description=manual.get("description"),
+            mathematical_explanation=manual.get("mathematical_explanation"),
+            example_setup=manual.get("example_setup"),
+            historical_success_rate=manual.get("historical_success_rate"),
+            edge_percentage=manual.get("edge_percentage"),
+            avg_credit_collected=manual.get("avg_credit_collected"),
+            risk_metrics=manual.get("risk_metrics"),
+            related_videos=manual.get("related_videos", []),
+            related_articles=manual.get("related_articles", []),
         )
 
     def resolve_repair_history(self, info, user_id: str, limit: int = 50, offset: int = 0) -> list:
