@@ -483,9 +483,12 @@ class FlightManualEngine:
         """Generate 3-5 bullet points on 'Why Now'."""
         thesis_template = template.get("thesis_template", ["Setup identified", "Trade ready"])
         
-        # Estimate price direction
-        price_pct = (portfolio.portfolio_equity - portfolio.portfolio_equity) / portfolio.portfolio_equity * 100  # Placeholder
-        price_direction = "higher" if price_pct > 0 else "lower"
+        # Estimate price direction from the trade's expected P&L relative to portfolio
+        if portfolio.portfolio_equity > 0:
+            price_pct = (router.max_profit / portfolio.portfolio_equity) * 100
+        else:
+            price_pct = 0.0
+        price_direction = "higher" if router.composite_score >= 50 else "lower"
 
         # Build format dict with all possible fields
         format_dict = {

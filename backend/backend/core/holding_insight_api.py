@@ -77,27 +77,11 @@ def _extract_json_object(text: str) -> Optional[str]:
 
 
 def _fallback_insight(ticker: str) -> Dict[str, object]:
-    mock_insights = {
-        "AAPL": {
-            "headline": "Strong iPhone 15 sales driving momentum",
-            "drivers": ["Revenue growth", "Services expansion", "China recovery"],
-        },
-        "MSFT": {
-            "headline": "AI integration driving Azure growth",
-            "drivers": ["Cloud adoption", "Office 365", "Copilot demand"],
-        },
-        "GOOGL": {
-            "headline": "Search revenue stable, YouTube growing",
-            "drivers": ["Ad recovery", "YouTube Premium", "Cloud expansion"],
-        },
+    """Generate a generic fallback insight when the LLM is unavailable."""
+    return {
+        "headline": f"{ticker} — AI insight temporarily unavailable",
+        "drivers": ["Market analysis pending", "Check back shortly"],
     }
-    return mock_insights.get(
-        ticker,
-        {
-            "headline": f"{ticker} showing positive market momentum",
-            "drivers": ["Recent earnings", "Sector momentum", "Market trends"],
-        },
-    )
 
 
 async def _call_llm_insight(ticker: str) -> Optional[Dict[str, object]]:
