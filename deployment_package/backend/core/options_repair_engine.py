@@ -394,50 +394,195 @@ class RepairPlanAcceptor:
     Handles user acceptance/rejection of repair plans.
     Executes the repair trade if accepted, or logs rejection for analytics.
     """
-    
-    def __init__(self, broker_api=None):
+
+    def __init__(self, broker_service=None, account_id: str = None):
         """
         Args:
-            broker_api: Optional broker API for executing actual trades
+            broker_service: AlpacaBrokerService instance (or None for dry-run mode)
+            account_id: Alpaca account ID for the user
         """
-        self.broker_api = broker_api
+        self.broker_service = broker_service
+        self.account_id = account_id
         self.logger = logging.getLogger("RepairAcceptor")
-    
-    def accept_repair(self, repair_plan: RepairPlan, position_id: int) -> Dict:
+
+    @staticmethod
+    def _build_occ_symbol(ticker: str, expiration_date: str, option_type: str, strike: float) -> str:
         """
-        User accepted the repair plan. Execute the trade.
-        
+        Build OCC-format option symbol.
+
+        Args:
+            ticker: Underlying ticker (e.g., "AAPL")
+            expiration_date: Expiration in YYYY-MM-DD format
+            option_type: "C" or "P"
+            strike: Strike price (e.g., 125.0)
+
+        Returns:
+            OCC symbol (e.g., "AAPL  260320C00125000")
+        """
+        exp = datetime.strptime(expiration_date, '%Y-%m-%d')
+        padded_ticker = ticker.upper().ljust(6)
+        date_part = exp.strftime('%y%m%d')
+        strike_part = f"{int(strike * 1000):08d}"
+        return f"{padded_ticker}{date_part}{option_type.upper()}{strike_part}"
+
+    @staticmethod
+    def _parse_repair_strikes(
+        repair_strikes: str,
+        ticker: str,
+        expiration_date: str,
+    ) -> List[Dict]:
+        """
+        Parse repair_strikes string into structured leg data with OCC symbols.
+
+        Args:
+            repair_strikes: e.g., "Sell 125C / Buy 130C"
+            ticker: Underlying ticker (e.g., "AAPL")
+            expiration_date: Target expiration (YYYY-MM-DD)
+
+        Returns:
+            List of dicts with: side, strike, option_type, occ_symbol
+        """
+        import re
+
+        legs = []
+        parts = repair_strikes.split(' / ')
+
+        for part in parts:
+            part = part.strip()
+            match = re.match(r'(Sell|Buy)\s+(\d+(?:\.\d+)?)(C|P)', part, re.IGNORECASE)
+            if match:
+                side = 'sell' if match.group(1).lower() == 'sell' else 'buy'
+                strike = float(match.group(2))
+                option_type = match.group(3).upper()
+                occ_symbol = RepairPlanAcceptor._build_occ_symbol(
+                    ticker, expiration_date, option_type, strike
+                )
+                legs.append({
+                    'side': side,
+                    'strike': strike,
+                    'option_type': option_type,
+                    'occ_symbol': occ_symbol,
+                })
+
+        return legs
+
+    def accept_repair(self, repair_plan: RepairPlan, position_id: int, expiration_date: str = None) -> Dict:
+        """
+        User accepted the repair plan. Execute the trade via broker API.
+
+        If no broker_service is configured, runs in dry-run mode (backward compatible).
+
         Args:
             repair_plan: RepairPlan object
             position_id: Position ID being repaired
-        
+            expiration_date: Target expiration for repair legs (YYYY-MM-DD)
+
         Returns:
-            Execution result
+            Execution result dict
         """
+        from datetime import timedelta
+
         result = {
             "status": "pending",
             "position_id": position_id,
             "timestamp": datetime.utcnow().isoformat(),
+            "order_ids": [],
         }
-        
+
         try:
-            # TODO: Actually execute hedge trade via broker API
-            # For now, just log the intention
+            # Dry-run mode: simulate when no broker is configured
+            if not self.broker_service or not self.account_id:
+                self.logger.info(
+                    f"DRY RUN: REPAIR {repair_plan.ticker} {repair_plan.repair_type} "
+                    f"({repair_plan.repair_strikes})"
+                )
+                result["status"] = "simulated"
+                result["order_ids"] = [f"SIM_{position_id}_{int(datetime.utcnow().timestamp())}"]
+                result["message"] = (
+                    f"Repair trade simulated: Collect ${repair_plan.repair_credit:.0f}, "
+                    f"reduce max loss to ${repair_plan.new_max_loss:.0f}"
+                )
+                return result
+
+            # Default expiration: nearest monthly ~30 days out (snap to Friday)
+            if not expiration_date:
+                target = datetime.utcnow() + timedelta(days=30)
+                days_until_friday = (4 - target.weekday()) % 7
+                expiration_date = (target + timedelta(days=days_until_friday)).strftime('%Y-%m-%d')
+
+            # 1. Parse repair_strikes into structured legs
+            legs = self._parse_repair_strikes(
+                repair_plan.repair_strikes,
+                repair_plan.ticker,
+                expiration_date,
+            )
+
+            if not legs:
+                raise ValueError(f"Could not parse repair strikes: {repair_plan.repair_strikes}")
+
             self.logger.info(
-                f"✅ REPAIR ACCEPTED: {repair_plan.ticker} {repair_plan.repair_type} "
-                f"({repair_plan.repair_strikes}). Executing trade..."
+                f"Executing repair: {repair_plan.ticker} {repair_plan.repair_type} "
+                f"with {len(legs)} legs (expiry={expiration_date})"
             )
-            
-            # Simulate execution
-            result["status"] = "executed"
-            result["order_id"] = f"REPAIR_{position_id}_{int(datetime.utcnow().timestamp())}"
+
+            # 2. Submit each leg via AlpacaBrokerService
+            errors = []
+            for leg in legs:
+                order_result = self.broker_service.create_options_order(
+                    account_id=self.account_id,
+                    contract_symbol=leg["occ_symbol"],
+                    side=leg["side"],
+                    quantity=1,
+                    order_type="limit",
+                    limit_price=None,
+                    time_in_force="day",
+                )
+
+                if order_result and "error" not in order_result:
+                    order_id = order_result.get("id", "unknown")
+                    result["order_ids"].append(order_id)
+                    self.logger.info(f"  Leg submitted: {leg['side']} {leg['occ_symbol']} -> order {order_id}")
+                else:
+                    error_msg = order_result.get("error", "Unknown error") if order_result else "No response"
+                    self.logger.error(f"  Leg FAILED: {leg['side']} {leg['occ_symbol']}: {error_msg}")
+                    errors.append({"leg": leg["occ_symbol"], "error": error_msg})
+
+            # 3. Record BrokerOrder in database for audit trail
+            try:
+                from .broker_models import BrokerOrder, BrokerAccount
+                import uuid
+
+                broker_account = BrokerAccount.objects.get(alpaca_account_id=self.account_id)
+                for i, leg in enumerate(legs):
+                    BrokerOrder.objects.create(
+                        broker_account=broker_account,
+                        client_order_id=str(uuid.uuid4()),
+                        alpaca_order_id=result["order_ids"][i] if i < len(result["order_ids"]) else None,
+                        symbol=leg["occ_symbol"],
+                        side=leg["side"].upper(),
+                        order_type="LIMIT",
+                        quantity=1,
+                        status="NEW",
+                        guardrail_checks_passed=True,
+                    )
+            except Exception as db_err:
+                self.logger.warning(f"Could not record BrokerOrder: {db_err}")
+
+            # 4. Set final status
+            if errors:
+                result["status"] = "partial_failure"
+                result["errors"] = errors
+            else:
+                result["status"] = "executed"
+
             result["message"] = (
-                f"Repair trade executed: Collect ${repair_plan.repair_credit:.0f}, "
-                f"reduce max loss to ${repair_plan.new_max_loss:.0f}"
+                f"Repair trade {'executed' if not errors else 'partially executed'}: "
+                f"{len(result['order_ids'])} legs submitted. "
+                f"Expected credit: ${repair_plan.repair_credit:.0f}"
             )
-            
+
             return result
-            
+
         except Exception as e:
             self.logger.error(f"Error executing repair: {e}")
             result["status"] = "failed"

@@ -22,6 +22,7 @@ import webSocketService, { PortfolioUpdate } from '../services/WebSocketService'
 import UserProfileService, { ExtendedUserProfile } from '../features/user/services/UserProfileService';
 import { assistantQuery } from '../services/aiClient';
 import { usePortfolioHistory, setPortfolioHistory } from '../shared/portfolioHistory';
+import { useRAHASignals } from '../features/raha/hooks/useRAHASignals';
 
 // New imports for smart portfolio metrics
 import { FEATURE_PORTFOLIO_METRICS } from '../config/flags';
@@ -1037,6 +1038,31 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
   
       return { totalValue, totalReturn, totalReturnPercent, holdings };
     }, [realPortfolio, live, portfolioData]);
+
+    const whisperHolding = useMemo(() => {
+      if (!resolved.holdings?.length) return null;
+      return resolved.holdings.reduce((best, current) => {
+        const bestValue = best?.totalValue || 0;
+        const currentValue = current?.totalValue || 0;
+        return currentValue > bestValue ? current : best;
+      }, resolved.holdings[0]);
+    }, [resolved.holdings]);
+
+    const whisperSymbol = useMemo(() => {
+      return whisperHolding?.symbol || 'AAPL';
+    }, [whisperHolding]);
+
+    const { signals: whisperSignals } = useRAHASignals(whisperSymbol, '5m', 1);
+    const whisperSignal = useMemo(() => whisperSignals[0], [whisperSignals]);
+
+    const whisperLaunchData = useMemo(() => {
+      return {
+        symbol: whisperSymbol,
+        currentPrice: Number(whisperSignal?.price ?? whisperHolding?.currentPrice ?? 0),
+        change: Number(whisperHolding?.change ?? 0),
+        changePercent: Number(whisperHolding?.changePercent ?? 0),
+      };
+    }, [whisperSymbol, whisperSignal, whisperHolding]);
   
     // Use portfolio history from shared store
     const portfolioHistory = usePortfolioHistory();
@@ -1420,34 +1446,28 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
               <TouchableOpacity style={styles.learningCard} onPress={() => {
                 logger.log('The Whisper pressed');
                 try {
-                  // Use AAPL as default (we have signals for it)
-                  // Realistic mock price data for AAPL
-                  const mockPrice = 175.50;
-                  const mockChange = 2.30;
-                  const mockChangePercent = 1.33;
-                  
                   if (navigateTo) {
                     navigateTo('the-whisper', {
-                      symbol: 'AAPL',
-                      currentPrice: mockPrice,
-                      change: mockChange,
-                      changePercent: mockChangePercent,
+                      symbol: whisperLaunchData.symbol,
+                      currentPrice: whisperLaunchData.currentPrice,
+                      change: whisperLaunchData.change,
+                      changePercent: whisperLaunchData.changePercent,
                     });
                   } else if (typeof window !== 'undefined' && (window as any).__navigateToGlobal) {
                     (window as any).__navigateToGlobal('the-whisper', {
-                      symbol: 'AAPL',
-                      currentPrice: mockPrice,
-                      change: mockChange,
-                      changePercent: mockChangePercent,
+                      symbol: whisperLaunchData.symbol,
+                      currentPrice: whisperLaunchData.currentPrice,
+                      change: whisperLaunchData.change,
+                      changePercent: whisperLaunchData.changePercent,
                     });
                   } else if (typeof window !== 'undefined' && (window as any).__setCurrentScreen) {
                     (window as any).__setCurrentScreen('the-whisper');
                     // Also set params in window
                     (window as any).__currentScreenParams = {
-                      symbol: 'AAPL',
-                      currentPrice: mockPrice,
-                      change: mockChange,
-                      changePercent: mockChangePercent,
+                      symbol: whisperLaunchData.symbol,
+                      currentPrice: whisperLaunchData.currentPrice,
+                      change: whisperLaunchData.change,
+                      changePercent: whisperLaunchData.changePercent,
                     };
                   }
                 } catch (error) {

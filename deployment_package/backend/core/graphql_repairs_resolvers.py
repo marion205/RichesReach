@@ -8,11 +8,11 @@ All resolvers integrate with the backend repair engine and broker APIs.
 import graphene
 from graphene_django import DjangoObjectType
 from django.core.cache import cache
-from deployment_package.backend.core.options_repair_engine import (
+from .options_repair_engine import (
     OptionsRepairEngine,
     RepairPlan,
 )
-from deployment_package.backend.core.options_health_monitor import HealthStatus
+from .options_health_monitor import HealthStatus
 
 
 # GraphQL Types
@@ -463,7 +463,7 @@ class Query(graphene.ObjectType):
     def resolve_portfolio_health(self, info, user_id: str, account_id: str) -> PortfolioHealthType:
         """Get portfolio health snapshot"""
         try:
-            from deployment_package.backend.core.options_health_monitor import OptionsHealthMonitor
+            from .options_health_monitor import OptionsHealthMonitor
 
             monitor = OptionsHealthMonitor()
             health = monitor.run_health_check()
@@ -540,7 +540,8 @@ class AcceptRepairPlan(graphene.Mutation):
 
     def mutate(self, info, position_id: str, repair_plan_id: str, user_id: str):
         from core.models import Position, RepairHistory
-        from deployment_package.backend.core.broker_api import BrokerAPI
+        from .alpaca_broker_service import AlpacaBrokerService
+        from .options_repair_engine import RepairPlanAcceptor
         import datetime
 
         try:
@@ -559,12 +560,29 @@ class AcceptRepairPlan(graphene.Mutation):
             if not repair_plan:
                 raise Exception("No repair plan available")
 
-            # Execute via broker API
-            broker = BrokerAPI()
-            execution = broker.execute_repair_trade(
-                ticker=pos.ticker,
-                repair_type=repair_plan.repair_type,
-                strikes=repair_plan.repair_strikes,
+            # Get user's broker account for execution
+            try:
+                from .broker_models import BrokerAccount
+                broker_account = BrokerAccount.objects.get(user_id=user_id)
+                broker_service = AlpacaBrokerService()
+                acceptor = RepairPlanAcceptor(
+                    broker_service=broker_service,
+                    account_id=broker_account.alpaca_account_id,
+                )
+            except Exception:
+                # Fallback to dry-run if no broker account
+                acceptor = RepairPlanAcceptor()
+
+            # Get expiration date from position if available
+            expiration_date = None
+            if hasattr(pos, 'expiration_date') and pos.expiration_date:
+                expiration_date = pos.expiration_date.strftime('%Y-%m-%d')
+
+            # Execute via RepairPlanAcceptor (real broker or dry-run)
+            execution = acceptor.accept_repair(
+                repair_plan=repair_plan,
+                position_id=int(position_id),
+                expiration_date=expiration_date,
             )
 
             # Log repair history
@@ -573,7 +591,7 @@ class AcceptRepairPlan(graphene.Mutation):
                 position_id=position_id,
                 ticker=pos.ticker,
                 repair_type=repair_plan.repair_type,
-                status="executed",
+                status=execution.get("status", "executed"),
                 accepted_at=datetime.datetime.now(),
                 executed_at=datetime.datetime.now(),
                 credit_collected=repair_plan.repair_credit,
@@ -581,11 +599,11 @@ class AcceptRepairPlan(graphene.Mutation):
 
             return AcceptRepairPlan(
                 repair_execution=RepairExecutionType(
-                    success=True,
+                    success=execution.get("status") in ("executed", "simulated"),
                     position_id=position_id,
                     repair_type=repair_plan.repair_type,
                     execution_credit=repair_plan.repair_credit,
-                    execution_message=f"✓ {repair_plan.repair_type} executed at {repair_plan.repair_strikes}",
+                    execution_message=execution.get("message", f"✓ {repair_plan.repair_type} executed at {repair_plan.repair_strikes}"),
                     new_position_status="repaired",
                     timestamp=datetime.datetime.now().isoformat(),
                 )

@@ -62,29 +62,132 @@ class RegimeDetectionService:
     def get_market_data_for_symbol(self, symbol: str) -> Optional[pd.DataFrame]:
         """
         Fetch OHLCV + implied volatility + realized volatility for regime detection.
-        
-        This integrates with your existing market data provider (Polygon API, etc.)
-        
+
+        Uses Polygon.io daily aggregates for OHLCV and options reference data for IV.
+
         Args:
             symbol: Stock ticker (e.g., "AAPL")
-        
+
         Returns:
             DataFrame with columns: ['close', 'high', 'low', 'iv', 'rv', 'volume']
-            or None if data unavailable
+            indexed by date, or None if data unavailable
         """
-        # TODO: Implement actual data fetching
-        # This is a placeholder that shows expected data structure
-        
-        # Expected flow:
-        # 1. Query Polygon historical bars for symbol (last 60 days)
-        # 2. Query options IV surface (use ATM IV as proxy for 30-day IV)
-        # 3. Calculate realized vol (std dev of returns over rolling 30-day window)
-        # 4. Combine into DataFrame
-        
-        logger.debug(f"Fetching market data for {symbol} (lookback={self.lookback_days}d)")
-        
-        # Placeholder: would be replaced with actual API calls
-        return None
+        import os
+        import requests
+        import numpy as np
+
+        polygon_api_key = os.getenv('POLYGON_API_KEY', '')
+        if not polygon_api_key:
+            logger.warning("No POLYGON_API_KEY configured, cannot fetch market data")
+            return None
+
+        try:
+            # 1. Fetch OHLCV daily bars from Polygon (lookback + buffer for weekends)
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=self.lookback_days + 15)
+
+            url = (
+                f"https://api.polygon.io/v2/aggs/ticker/{symbol}/range/1/day/"
+                f"{start_date.strftime('%Y-%m-%d')}/{end_date.strftime('%Y-%m-%d')}"
+            )
+            params = {'apiKey': polygon_api_key, 'sort': 'asc', 'limit': 50000}
+
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
+
+            data = response.json()
+            if data.get('status') != 'OK':
+                logger.warning(f"Polygon API error for {symbol}: {data.get('message')}")
+                return None
+
+            results = data.get('results', [])
+            if len(results) < 10:
+                logger.warning(f"Insufficient OHLCV data for {symbol}: only {len(results)} bars")
+                return None
+
+            # Build DataFrame from Polygon bars
+            rows = []
+            for bar in results:
+                rows.append({
+                    'date': datetime.utcfromtimestamp(bar.get('t', 0) / 1000).strftime('%Y-%m-%d'),
+                    'close': float(bar.get('c', 0)),
+                    'high': float(bar.get('h', 0)),
+                    'low': float(bar.get('l', 0)),
+                    'volume': int(bar.get('v', 0)),
+                })
+
+            df = pd.DataFrame(rows)
+            df['date'] = pd.to_datetime(df['date'])
+            df = df.set_index('date').sort_index()
+
+            # 2. Calculate realized volatility (rolling 30-day window, annualized)
+            df['returns'] = df['close'].pct_change()
+            df['rv'] = df['returns'].rolling(window=30, min_periods=10).std() * np.sqrt(252)
+            df['rv'] = df['rv'].fillna(method='bfill').fillna(0.18)  # Default 18% RV
+
+            # 3. Get ATM IV from options data
+            atm_iv = self._fetch_atm_iv(symbol, polygon_api_key)
+            # IV is typically higher than RV; use RV * 1.1 as fallback
+            df['iv'] = atm_iv if atm_iv > 0 else df['rv'] * 1.1
+
+            # Drop helper columns, keep required
+            df = df.drop(columns=['returns'], errors='ignore')
+
+            # Trim to lookback window
+            df = df.tail(self.lookback_days)
+
+            required_cols = ['close', 'high', 'low', 'iv', 'rv', 'volume']
+            for col in required_cols:
+                if col not in df.columns:
+                    df[col] = 0.0
+
+            logger.info(f"Fetched {len(df)} days of regime data for {symbol}")
+            return df[required_cols]
+
+        except requests.RequestException as e:
+            logger.error(f"Polygon API request error for {symbol}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Error building market data for {symbol}: {e}", exc_info=True)
+            return None
+
+    def _fetch_atm_iv(self, symbol: str, api_key: str) -> float:
+        """
+        Fetch ATM implied volatility from Polygon options contracts.
+
+        Uses PolygonOptionsFlowService to get contracts, then extracts
+        median IV as an ATM proxy.
+
+        Args:
+            symbol: Stock ticker
+            api_key: Polygon API key
+
+        Returns:
+            ATM implied volatility (0-1 scale), or 0.0 if unavailable
+        """
+        import numpy as np
+
+        try:
+            contracts_data = self.polygon_service._get_options_contracts(symbol)
+            if not contracts_data:
+                return 0.0
+
+            iv_values = []
+            for contract in contracts_data:
+                iv = contract.get('implied_volatility')
+                if iv and float(iv) > 0:
+                    iv_values.append(float(iv))
+
+            if not iv_values:
+                return 0.0
+
+            atm_iv = float(np.median(iv_values))
+            logger.debug(f"ATM IV for {symbol}: {atm_iv:.4f} (from {len(iv_values)} contracts)")
+            return atm_iv
+
+        except Exception as e:
+            logger.debug(f"Could not fetch ATM IV for {symbol}: {e}")
+            return 0.0
     
     def update_regime(self, symbol: str, df: pd.DataFrame) -> Tuple[str, bool, str]:
         """
@@ -189,9 +292,16 @@ class RegimeDetectionService:
         Returns:
             Dict mapping symbol → (regime, is_shift, description)
         """
+        import time
+
         results = {}
-        
-        for symbol in symbols:
+
+        for idx, symbol in enumerate(symbols):
+            # Rate limiting: Polygon free tier = 5 req/min
+            # Each symbol uses ~2 requests (OHLCV + contracts), so pause every 2 symbols
+            if idx > 0 and idx % 2 == 0:
+                time.sleep(12)
+
             try:
                 df = self.get_market_data_for_symbol(symbol)
                 if df is not None:

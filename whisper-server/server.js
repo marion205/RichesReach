@@ -463,22 +463,24 @@ app.use((error, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// Start server
+// Start server (skip when running under Jest)
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  console.log(`🚀 Whisper server running on port ${PORT}`);
-  console.log(`🎤 Whisper model: ${WHISPER_MODEL}`);
-  console.log(`📁 Model path: ${MODEL_PATH}`);
-  console.log(`🔧 Whisper path: ${WHISPER_PATH}`);
-  
-  // Check model availability
-  checkWhisperModel().then(exists => {
-    if (exists) {
-      console.log('✅ Whisper model ready');
-    } else {
-      console.log('⚠️  Whisper model not found - run setup');
-    }
+if (process.env.NODE_ENV !== 'test') {
+  server.listen(PORT, () => {
+    console.log(`🚀 Whisper server running on port ${PORT}`);
+    console.log(`🎤 Whisper model: ${WHISPER_MODEL}`);
+    console.log(`📁 Model path: ${MODEL_PATH}`);
+    console.log(`🔧 Whisper path: ${WHISPER_PATH}`);
+
+    // Check model availability
+    checkWhisperModel().then(exists => {
+      if (exists) {
+        console.log('✅ Whisper model ready');
+      } else {
+        console.log('⚠️  Whisper model not found - run setup');
+      }
+    });
   });
-});
+}
 
 module.exports = { app, server, io };

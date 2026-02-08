@@ -108,7 +108,9 @@ class StrategyRouter:
         scored_candidates = self._score_candidates(
             candidates,
             playbook,
-            portfolio_state
+            iv=iv,
+            dte=days_to_expiration,
+            portfolio_state=portfolio_state,
         )
         
         # Step 4: Rank and return top 3
@@ -524,7 +526,9 @@ class StrategyRouter:
         self,
         candidates: List[Dict],
         playbook: Dict,
-        portfolio_state: Optional[Dict] = None
+        iv: float = 0.25,
+        dte: int = 30,
+        portfolio_state: Optional[Dict] = None,
     ) -> List[Dict]:
         """
         Score candidates using multi-factor algorithm.
@@ -563,8 +567,8 @@ class StrategyRouter:
                     )
                     for leg in candidate["legs"]
                 ],
-                ttm_days=30,  # TODO: Use actual DTE
-                volatility=0.25  # TODO: Use actual IV
+                ttm_days=dte,
+                volatility=iv if iv > 0 else 0.25,  # Fallback if IV unavailable
             )
             
             # Sub-scores (normalized 0-100)

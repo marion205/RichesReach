@@ -15,15 +15,31 @@ import {
   Modal,
   TextInput,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 // Removed useNavigation - using navigateTo prop instead
 import Icon from 'react-native-vector-icons/Feather';
 import { useRAHASignals } from '../hooks/useRAHASignals';
+import { useUserBacktests } from '../hooks/useBacktest';
 import { useUserStrategySettings } from '../hooks/useStrategies';
 import StockChart from '../../stocks/components/StockChart';
 import logger from '../../../utils/logger';
-import { useMutation, gql } from '@apollo/client';
+import { useMutation, useQuery, gql } from '@apollo/client';
+import { GET_RISK_SUMMARY } from '../../../graphql/riskManagement';
 
 const { width, height } = Dimensions.get('window');
+
+const RISK_PREFERENCE_KEY = 'whisper:riskPreference:v1';
+
+type RiskOption =
+  | { id: string; label: string; type: 'fixed'; amount: number }
+  | { id: string; label: string; type: 'percent'; percent: number };
+
+const RISK_OPTIONS: RiskOption[] = [
+  { id: 'fixed-50', label: '$50', type: 'fixed', amount: 50 },
+  { id: 'fixed-100', label: '$100', type: 'fixed', amount: 100 },
+  { id: 'fixed-200', label: '$200', type: 'fixed', amount: 200 },
+  { id: 'percent-1', label: '1%', type: 'percent', percent: 1 },
+];
 
 // GraphQL Mutation for placing market orders
 const PLACE_MARKET_ORDER = gql`
@@ -105,6 +121,7 @@ export default function TheWhisperScreen({
   const [showSymbolPicker, setShowSymbolPicker] = useState(false); // Symbol picker modal
   const [symbolSearch, setSymbolSearch] = useState(''); // Symbol search input
   const [loadingTimeout, setLoadingTimeout] = useState(false); // Loading timeout state - must be before any returns
+  const [riskPreferenceId, setRiskPreferenceId] = useState<string>('fixed-100');
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const chartPressStartTime = useRef<number | null>(null);
   const hideButtonTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -122,6 +139,23 @@ export default function TheWhisperScreen({
       }
     };
   }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    AsyncStorage.getItem(RISK_PREFERENCE_KEY)
+      .then((stored) => {
+        if (!isMounted) return;
+        if (stored) {
+          setRiskPreferenceId(stored);
+        }
+      })
+      .catch((error) => {
+        logger.error('❌ [TheWhisper] Failed to load risk preference:', error);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
   
   // Update state when props change (if navigated with new symbol)
   useEffect(() => {
@@ -136,6 +170,12 @@ export default function TheWhisperScreen({
   const { settings: userStrategySettings } = useUserStrategySettings();
   const enabledStrategies = userStrategySettings.filter(s => s.enabled);
   const hasEnabledStrategies = enabledStrategies.length > 0;
+
+  const { backtests: userBacktests } = useUserBacktests(10);
+  const { data: riskSummaryData } = useQuery(GET_RISK_SUMMARY, {
+    fetchPolicy: 'cache-and-network',
+  });
+  const accountValue = riskSummaryData?.riskSummary?.accountValue;
   
   // Get RAHA signals for this symbol
   const { signals, loading: signalsLoading, error: signalsError, refetch: refetchSignals } = useRAHASignals(
@@ -285,6 +325,98 @@ export default function TheWhisperScreen({
 
   // Calculate P&L projection from top signal (memoized for performance)
   const topSignal = useMemo(() => signals[0], [signals]);
+
+  const selectedRiskOption = useMemo(() => {
+    return RISK_OPTIONS.find(option => option.id === riskPreferenceId) || RISK_OPTIONS[1];
+  }, [riskPreferenceId]);
+
+  const riskAmount = useMemo(() => {
+    if (!selectedRiskOption) return 100;
+    if (selectedRiskOption.type === 'percent') {
+      const portfolioValue = Number(accountValue || 0);
+      if (!portfolioValue) return 100;
+      return (portfolioValue * selectedRiskOption.percent) / 100;
+    }
+    return selectedRiskOption.amount;
+  }, [selectedRiskOption, accountValue]);
+
+  const riskAmountLabel = useMemo(() => {
+    const rounded = Math.round(riskAmount || 0);
+    if (selectedRiskOption?.type === 'percent' && selectedRiskOption.percent) {
+      return `$${rounded}`;
+    }
+    return `$${rounded}`;
+  }, [riskAmount, selectedRiskOption]);
+
+  const riskAmountExplanation = useMemo(() => {
+    if (selectedRiskOption?.type === 'percent' && selectedRiskOption.percent) {
+      return `${selectedRiskOption.percent}% of your balance`;
+    }
+    return 'Fixed risk setting';
+  }, [selectedRiskOption]);
+
+  const handleRiskPreferenceChange = useCallback((optionId: string) => {
+    setRiskPreferenceId(optionId);
+    AsyncStorage.setItem(RISK_PREFERENCE_KEY, optionId).catch((error) => {
+      logger.error('❌ [TheWhisper] Failed to save risk preference:', error);
+    });
+  }, []);
+
+  const userHistory = useMemo(() => {
+    const completed = userBacktests
+      .filter((backtest) => backtest.status === 'COMPLETED' && backtest.metrics)
+      .sort((a, b) => {
+        const aTime = new Date(a.completedAt || a.createdAt).getTime();
+        const bTime = new Date(b.completedAt || b.createdAt).getTime();
+        return bTime - aTime;
+      });
+
+    if (!completed.length) {
+      return {
+        value: 'No history yet',
+        color: '#6B7280',
+        explanation: 'Run a backtest to personalize this',
+      };
+    }
+
+    const metrics = (completed[0].metrics || {}) as Record<string, any>;
+    const totalPnlPercent =
+      typeof metrics.total_pnl_percent === 'number'
+        ? metrics.total_pnl_percent
+        : typeof metrics.totalPnlPercent === 'number'
+          ? metrics.totalPnlPercent
+          : null;
+
+    if (typeof totalPnlPercent === 'number') {
+      return {
+        value: `${totalPnlPercent >= 0 ? '+' : ''}${totalPnlPercent.toFixed(1)}% for you`,
+        color: totalPnlPercent >= 0 ? '#10B981' : '#EF4444',
+        explanation: 'Based on your most recent backtest',
+      };
+    }
+
+    const winRate =
+      typeof metrics.win_rate === 'number'
+        ? metrics.win_rate
+        : typeof metrics.winRate === 'number'
+          ? metrics.winRate
+          : null;
+
+    if (typeof winRate === 'number') {
+      const winRatePercent = Math.round(winRate * 100);
+      return {
+        value: `${winRatePercent}% win rate`,
+        color: winRatePercent >= 50 ? '#10B981' : '#F59E0B',
+        explanation: 'Based on your backtest history',
+      };
+    }
+
+    return {
+      value: 'No history yet',
+      color: '#6B7280',
+      explanation: 'Run a backtest to personalize this',
+    };
+  }, [userBacktests]);
   
   // Should show trade button? (only if expectancy is positive and high enough)
   // Memoized to prevent unnecessary recalculations - declared early to avoid use-before-declaration
@@ -303,22 +435,21 @@ export default function TheWhisperScreen({
     // Calculate risk/reward ratio
     const risk = Math.abs(entry - sl);
     const reward = Math.abs(tp - entry);
-    
-    // Default risk amount ($100) - could be user-configurable
-    const riskAmount = 100;
-    const rewardAmount = risk > 0 ? (reward / risk) * riskAmount : 0;
+
+    const calculatedRiskAmount = Math.max(1, riskAmount || 0);
+    const rewardAmount = risk > 0 ? (reward / risk) * calculatedRiskAmount : 0;
     
     // Get confidence score (0-1)
     const confidenceScore = topSignal.confidenceScore || 0.64;
     
     return {
       likelyGain: rewardAmount,
-      maxLoss: riskAmount,
+      maxLoss: calculatedRiskAmount,
       winChance: confidenceScore,
-      riskAmount,
+      riskAmount: calculatedRiskAmount,
       riskRewardRatio: risk > 0 ? reward / risk : 0,
     };
-  }, [topSignal, symbol]);
+  }, [topSignal, symbol, riskAmount]);
 
   // Market regime (from oracle)
   const regimeLabel = useMemo(() => {
@@ -374,8 +505,9 @@ export default function TheWhisperScreen({
     const expectedValue = (likelyGain * winChance) - (maxLoss * (1 - winChance));
     
     if (expectedValue > 0) {
-      const finalAmount = 100 + expectedValue;
-      return `Most people like you turned $100 into $${Math.round(finalAmount)} here\n(risking only $${Math.round(maxLoss)})`;
+      const baseAmount = Math.round(projectedPNL.riskAmount || 0);
+      const finalAmount = baseAmount + expectedValue;
+      return `Most people like you turned $${baseAmount} into $${Math.round(finalAmount)} here\n(risking only $${Math.round(maxLoss)})`;
     }
     return null;
   }, [projectedPNL]);
@@ -1135,21 +1267,46 @@ export default function TheWhisperScreen({
 
               <View style={styles.detailsItem}>
                 <Text style={styles.detailsItemLabel}>Your History</Text>
-                <Text style={[styles.detailsItemValue, { color: '#10B981' }]}>
-                  +71% for you
+                <Text style={[styles.detailsItemValue, { color: userHistory.color }]}>
+                  {userHistory.value}
                 </Text>
                 <Text style={styles.detailsItemExplanation}>
-                  You personally do well on these
+                  {userHistory.explanation}
                 </Text>
+              </View>
+
+              <View style={styles.detailsItem}>
+                <Text style={styles.detailsItemLabel}>Risk Preference</Text>
+                <View style={styles.riskOptionsRow}>
+                  {RISK_OPTIONS.map((option) => (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[
+                        styles.riskOption,
+                        option.id === riskPreferenceId && styles.riskOptionActive,
+                      ]}
+                      onPress={() => handleRiskPreferenceChange(option.id)}
+                    >
+                      <Text
+                        style={[
+                          styles.riskOptionText,
+                          option.id === riskPreferenceId && styles.riskOptionTextActive,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
 
               <View style={styles.detailsItem}>
                 <Text style={styles.detailsItemLabel}>Suggested Risk</Text>
                 <Text style={styles.detailsItemValue}>
-                  ${Math.round(projectedPNL?.riskAmount || 0)} on your account
+                  {riskAmountLabel} on your account
                 </Text>
                 <Text style={styles.detailsItemExplanation}>
-                  (1% of your balance)
+                  ({riskAmountExplanation})
                 </Text>
               </View>
 
@@ -1202,7 +1359,7 @@ export default function TheWhisperScreen({
 
               <Text style={[styles.proDrawerSectionTitle, { marginTop: 24 }]}>Position Sizing</Text>
               <Text style={styles.proDrawerText}>
-                Risk: ${Math.round(projectedPNL?.riskAmount || 0)} (1% of account)
+                Risk: ${Math.round(projectedPNL?.riskAmount || 0)} ({riskAmountExplanation})
               </Text>
               <Text style={styles.proDrawerText}>
                 Position Size: Auto-calculated based on stop distance
@@ -1702,6 +1859,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6B7280',
     lineHeight: 20,
+  },
+  riskOptionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  riskOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#F9FAFB',
+  },
+  riskOptionActive: {
+    borderColor: '#2563EB',
+    backgroundColor: '#DBEAFE',
+  },
+  riskOptionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  riskOptionTextActive: {
+    color: '#1D4ED8',
   },
   showMathButton: {
     marginTop: 8,

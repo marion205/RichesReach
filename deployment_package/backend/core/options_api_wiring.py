@@ -642,12 +642,26 @@ class OptionsAnalysisPipeline:
 
         # PHASE 2: Generate strategy candidates (Route)
         try:
+            # Calculate actual DTE from the nearest option chain expiry
+            actual_dte = 21  # Fallback default
+            try:
+                if market_data.option_chain:
+                    expiries = sorted(market_data.option_chain.keys())
+                    if expiries:
+                        nearest_expiry = datetime.strptime(expiries[0], '%Y-%m-%d')
+                        actual_dte = max(1, (nearest_expiry - datetime.utcnow()).days)
+            except Exception as dte_err:
+                logger.debug(f"Could not calculate DTE from chain, using default: {dte_err}")
+
+            # Use IV proxy (iv_rank is percentile 0-1, not raw IV)
+            actual_iv = max(0.05, market_data.realized_vol * (1 + market_data.iv_rank * 0.5))
+
             router_results = self.router.route_regime(
                 regime=regime,
                 option_chain=market_data.option_chain,
-                iv=market_data.iv_rank,
-                days_to_expiration=21,
-                portfolio_state={},  # Optional portfolio context
+                iv=actual_iv,
+                days_to_expiration=actual_dte,
+                portfolio_state={},
             )
             top_candidates = router_results.get("top_3_strategies", [])
             if not top_candidates:
