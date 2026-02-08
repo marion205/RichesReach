@@ -186,6 +186,7 @@ def validate_transaction(
     Returns ValidationResult with is_valid, reason, and optional warnings.
     """
     warnings = []
+    is_authenticated = bool(user and getattr(user, 'is_authenticated', False))
 
     # 1. Basic input validation
     try:
@@ -266,7 +267,7 @@ def validate_transaction(
             )
 
     # 6. Daily volume check (uses tiered daily limit)
-    daily_check = _check_daily_volume(user, wallet_address, float(amount))
+    daily_check = _check_daily_volume(user if is_authenticated else None, wallet_address, float(amount))
     if not daily_check.is_valid:
         return daily_check
     if daily_check.warnings:
@@ -303,14 +304,14 @@ def validate_transaction(
             )
 
     # 11. Rate limiting (max 10 transactions per minute)
-    rate_check = _check_rate_limit(user, wallet_address)
+    rate_check = _check_rate_limit(user if is_authenticated else None, wallet_address)
     if not rate_check.is_valid:
         return rate_check
 
     logger.info(
-        f"Transaction validated: type={tx_type} user={user.id} "
+        f"Transaction validated: type={tx_type} user={getattr(user, 'id', None)} "
         f"wallet={wallet_address[:8]}... amount={amount_human} {symbol} "
-        f"chain={chain_id} tier={_get_user_tier(user)}"
+        f"chain={chain_id} tier={_get_user_tier(user) if user else 'starter'}"
     )
 
     result = ValidationResult(True, warnings=warnings)
@@ -401,6 +402,8 @@ def _check_gas_price(chain_id: int) -> ValidationResult:
 
 def _check_daily_volume(user, wallet_address: str, amount_usd: float) -> ValidationResult:
     """Check daily transaction volume against tiered limits."""
+    if not user:
+        return ValidationResult(True, warnings=['Daily limits unavailable for unauthenticated user.'])
     try:
         from .defi_models import DeFiTransaction
 
@@ -446,6 +449,8 @@ def _check_daily_volume(user, wallet_address: str, amount_usd: float) -> Validat
 
 def _check_monthly_volume(user, amount_usd: float) -> ValidationResult:
     """Check monthly transaction volume against tiered limits."""
+    if not user:
+        return ValidationResult(True)
     try:
         from .defi_models import DeFiTransaction
 
@@ -573,6 +578,8 @@ def _check_health_factor(user, wallet_address: str, borrow_amount_usd: float) ->
 
 def _check_rate_limit(user, wallet_address: str) -> ValidationResult:
     """Rate limiting: max 10 DeFi transactions per minute per user."""
+    if not user:
+        return ValidationResult(True)
     try:
         from .defi_models import DeFiTransaction
 
@@ -680,6 +687,11 @@ def confirm_transaction(
     the circuit breaker's auto-trip logic.
     """
     try:
+        if not user or not getattr(user, 'is_authenticated', False):
+            return {
+                'success': False,
+                'message': 'Authentication required to record transactions.',
+            }
         from .defi_models import DeFiPool, DeFiTransaction, UserDeFiPosition
 
         pool = DeFiPool.objects.filter(id=pool_id).first() if pool_id else None
@@ -780,7 +792,10 @@ def _update_position(user, pool, wallet_address: str, action: str, amount: Decim
         if position.staked_amount == 0:
             position.is_active = False
     elif action == 'harvest':
-        position.rewards_earned += amount
+        if amount and amount > 0:
+            position.rewards_earned = max(Decimal('0'), position.rewards_earned - amount)
+        else:
+            position.rewards_earned = Decimal('0')
 
     position.save()
 

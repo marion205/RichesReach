@@ -6,7 +6,11 @@ All mutations validate through defi_validation_service before returning approval
 import graphene
 import logging
 from decimal import Decimal
-from graphql_jwt.decorators import login_required
+try:
+    from graphql_jwt.decorators import login_required
+except ImportError:  # Optional dependency in dev
+    def login_required(func):
+        return func
 from graphql import GraphQLError
 from graphene.types import JSONString
 
@@ -63,12 +67,97 @@ class PoolAnalyticsPointType(graphene.ObjectType):
     netApy = graphene.Float()
 
 
+class ProtocolInfoType(graphene.ObjectType):
+    """Protocol metadata for UI"""
+    name = graphene.String()
+    slug = graphene.String()
+
+
+class ChainInfoType(graphene.ObjectType):
+    """Chain metadata for UI"""
+    name = graphene.String()
+    chain_id = graphene.Int()
+
+
+class PoolSummaryType(graphene.ObjectType):
+    """Pool summary used by staking intent responses"""
+    id = graphene.String()
+    protocol = graphene.Field(ProtocolInfoType)
+    chain = graphene.Field(ChainInfoType)
+    symbol = graphene.String()
+    total_apy = graphene.Float()
+    risk_score = graphene.Float()
+
+
 class ValidationResultType(graphene.ObjectType):
     """Result of backend transaction validation"""
     is_valid = graphene.Boolean()
     reason = graphene.String()
     warnings = graphene.List(graphene.String)
     transaction_id = graphene.String()
+
+
+class PositionSummaryType(graphene.ObjectType):
+    """Position summary for mutation responses"""
+    id = graphene.String()
+    staked_lp = graphene.Float()
+    rewards_earned = graphene.Float()
+
+
+class ActionSummaryType(graphene.ObjectType):
+    """Action summary for mutation responses"""
+    id = graphene.String()
+    tx_hash = graphene.String()
+    action = graphene.String()
+    success = graphene.Boolean()
+
+
+def _resolve_wallet(user, wallet_address: str = None) -> str:
+    """Resolve wallet address for a user if not provided."""
+    if wallet_address:
+        return wallet_address
+    try:
+        from .defi_models import UserDeFiPosition
+
+        last_position = UserDeFiPosition.objects.filter(user=user).order_by('-updated_at').first()
+        if last_position:
+            return last_position.wallet_address
+    except Exception:
+        pass
+    return ''
+
+
+def _build_pool_summary(pool):
+    """Build a pool summary with latest APY/risk."""
+    if not pool:
+        return None
+
+    latest = None
+    try:
+        latest = pool.yield_snapshots.order_by('-timestamp').first()
+    except Exception:
+        latest = None
+
+    total_apy = float(latest.apy_total) if latest else 0.0
+    risk_score = float(latest.risk_score) if latest else 0.0
+
+    protocol = ProtocolInfoType(
+        name=pool.protocol.name if pool.protocol else '',
+        slug=pool.protocol.slug if pool.protocol else '',
+    )
+    chain = ChainInfoType(
+        name=pool.chain,
+        chain_id=pool.chain_id,
+    )
+
+    return PoolSummaryType(
+        id=str(pool.id),
+        protocol=protocol,
+        chain=chain,
+        symbol=pool.symbol,
+        total_apy=total_apy,
+        risk_score=risk_score,
+    )
 
 
 # ---- Mutations ----
@@ -83,7 +172,7 @@ class DefiSupply(graphene.Mutation):
         symbol = graphene.String(required=True)
         quantity = graphene.Float(required=True)
         use_as_collateral = graphene.Boolean(default_value=False)
-        wallet_address = graphene.String(required=True)
+        wallet_address = graphene.String(required=False)
         pool_id = graphene.String()
         chain_id = graphene.Int(default_value=11155111)
 
@@ -94,9 +183,17 @@ class DefiSupply(graphene.Mutation):
     error = graphene.String()
 
     @login_required
-    def mutate(self, info, symbol, quantity, wallet_address,
+    def mutate(self, info, symbol, quantity, wallet_address=None,
                use_as_collateral=False, pool_id=None, chain_id=11155111):
         user = info.context.user
+
+        wallet_address = _resolve_wallet(user, wallet_address)
+        if not wallet_address:
+            return DefiSupply(
+                success=False,
+                message='Wallet address is required to validate this transaction.',
+                error='wallet_required',
+            )
 
         try:
             from .defi_validation_service import validate_and_record_intent
@@ -154,7 +251,7 @@ class DefiBorrow(graphene.Mutation):
         symbol = graphene.String(required=True)
         amount = graphene.Float(required=True)
         rate_mode = graphene.String(default_value='VARIABLE')
-        wallet_address = graphene.String(required=True)
+        wallet_address = graphene.String(required=False)
         pool_id = graphene.String()
         chain_id = graphene.Int(default_value=11155111)
 
@@ -162,13 +259,22 @@ class DefiBorrow(graphene.Mutation):
     message = graphene.String()
     position = JSONString
     validation = graphene.Field(ValidationResultType)
+    health_factor_after = graphene.Float()
     error = graphene.String()
 
     @login_required
-    def mutate(self, info, symbol, amount, wallet_address,
+    def mutate(self, info, symbol, amount, wallet_address=None,
                rate_mode='VARIABLE', pool_id=None, chain_id=11155111):
         user = info.context.user
         rate_mode_int = 1 if rate_mode == 'STABLE' else 2
+
+        wallet_address = _resolve_wallet(user, wallet_address)
+        if not wallet_address:
+            return DefiBorrow(
+                success=False,
+                message='Wallet address is required to validate this transaction.',
+                error='wallet_required',
+            )
 
         try:
             from .defi_validation_service import validate_and_record_intent
@@ -198,6 +304,38 @@ class DefiBorrow(graphene.Mutation):
                     error=result.get('reason'),
                 )
 
+            # Estimate post-borrow health factor (simple heuristic)
+            health_factor_after = None
+            try:
+                from .defi_models import UserDeFiPosition, DeFiTransaction
+
+                positions = UserDeFiPosition.objects.filter(
+                    user=user,
+                    wallet_address=wallet_address,
+                    is_active=True,
+                )
+                total_collateral = sum(float(p.staked_value_usd) for p in positions)
+
+                total_borrowed = 0.0
+                borrows = DeFiTransaction.objects.filter(
+                    user=user,
+                    action='borrow',
+                    status='confirmed',
+                )
+                repays = DeFiTransaction.objects.filter(
+                    user=user,
+                    action='repay',
+                    status='confirmed',
+                )
+                total_borrowed += sum(float(b.amount_usd) for b in borrows)
+                total_borrowed -= sum(float(r.amount_usd) for r in repays)
+                total_borrowed = max(0.0, total_borrowed + float(amount))
+
+                if total_borrowed > 0 and total_collateral > 0:
+                    health_factor_after = (total_collateral * 0.80) / total_borrowed
+            except Exception:
+                health_factor_after = None
+
             return DefiBorrow(
                 success=True,
                 message=f"Borrow of {amount} {symbol} approved. Send via WalletConnect.",
@@ -207,6 +345,7 @@ class DefiBorrow(graphene.Mutation):
                     'healthFactorWarnings': result.get('warnings', []),
                 },
                 validation=validation,
+                health_factor_after=health_factor_after,
             )
 
         except Exception as e:
@@ -226,6 +365,8 @@ class StakeIntentResultType(graphene.ObjectType):
     amount = graphene.Float()
     warnings = graphene.List(graphene.String)
     transaction_id = graphene.String()
+    pool = graphene.Field(PoolSummaryType)
+    required_approvals = graphene.List(graphene.String)
 
 
 class StakeIntent(graphene.Mutation):
@@ -247,6 +388,9 @@ class StakeIntent(graphene.Mutation):
 
         try:
             from .defi_validation_service import validate_and_record_intent
+            from .defi_models import DeFiPool
+
+            pool = DeFiPool.objects.filter(id=poolId).select_related('protocol').first()
             result = validate_and_record_intent(
                 user=user,
                 tx_type='deposit',
@@ -257,6 +401,11 @@ class StakeIntent(graphene.Mutation):
                 amount_human=str(amount),
             )
 
+            pool_summary = _build_pool_summary(pool)
+            required_approvals = []
+            if pool and pool.pool_address:
+                required_approvals = [pool.pool_address]
+
             if not result.get('isValid'):
                 return StakeIntentResultType(
                     ok=False,
@@ -264,6 +413,8 @@ class StakeIntent(graphene.Mutation):
                     poolId=poolId,
                     amount=amount,
                     warnings=result.get('warnings', []),
+                    pool=pool_summary,
+                    required_approvals=required_approvals,
                 )
 
             return StakeIntentResultType(
@@ -273,6 +424,8 @@ class StakeIntent(graphene.Mutation):
                 amount=amount,
                 warnings=result.get('warnings', []),
                 transaction_id=result.get('transactionId'),
+                pool=pool_summary,
+                required_approvals=required_approvals,
             )
 
         except Exception as e:
@@ -287,9 +440,12 @@ class StakeIntent(graphene.Mutation):
 
 class RecordStakeTransactionResultType(graphene.ObjectType):
     """Record stake transaction result"""
+    ok = graphene.Boolean()
     success = graphene.Boolean()
     message = graphene.String()
     position_id = graphene.String()
+    position = graphene.Field(PositionSummaryType)
+    action = graphene.Field(ActionSummaryType)
 
 
 class RecordStakeTransaction(graphene.Mutation):
@@ -315,6 +471,7 @@ class RecordStakeTransaction(graphene.Mutation):
 
         try:
             from .defi_validation_service import confirm_transaction
+            from .defi_models import DeFiTransaction
             result = confirm_transaction(
                 tx_hash=txHash,
                 pool_id=poolId,
@@ -326,10 +483,31 @@ class RecordStakeTransaction(graphene.Mutation):
                 gas_used=gasUsed,
             )
 
+            tx_record = DeFiTransaction.objects.filter(tx_hash=txHash).first()
+            position_summary = None
+            action_summary = None
+
+            if tx_record:
+                if tx_record.position:
+                    position_summary = PositionSummaryType(
+                        id=str(tx_record.position.id),
+                        staked_lp=float(tx_record.position.staked_amount),
+                        rewards_earned=float(tx_record.position.rewards_earned),
+                    )
+                action_summary = ActionSummaryType(
+                    id=str(tx_record.id),
+                    tx_hash=tx_record.tx_hash,
+                    action=tx_record.action,
+                    success=tx_record.status == 'confirmed',
+                )
+
             return RecordStakeTransactionResultType(
+                ok=result.get('success', False),
                 success=result.get('success', False),
                 message=result.get('message', 'Transaction recorded'),
                 position_id=result.get('transactionId'),
+                position=position_summary,
+                action=action_summary,
             )
 
         except Exception as e:
@@ -389,6 +567,60 @@ class ValidateDefiTransaction(graphene.Mutation):
             )
 
 
+class HarvestRewards(graphene.Mutation):
+    """Record a harvest rewards transaction for a position."""
+
+    class Arguments:
+        positionId = graphene.String(required=True)
+        txHash = graphene.String(required=True)
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    action = graphene.Field(ActionSummaryType)
+
+    @login_required
+    def mutate(self, info, positionId, txHash):
+        user = info.context.user
+        try:
+            from .defi_models import UserDeFiPosition, DeFiTransaction
+            from .defi_validation_service import confirm_transaction
+
+            position = UserDeFiPosition.objects.filter(id=positionId, user=user).select_related('pool').first()
+            if not position:
+                return HarvestRewards(ok=False, message='Position not found')
+
+            amount = float(position.rewards_earned)
+            result = confirm_transaction(
+                tx_hash=txHash,
+                pool_id=str(position.pool.id),
+                user=user,
+                wallet_address=position.wallet_address,
+                chain_id=position.pool.chain_id,
+                amount_human=str(amount),
+                action='harvest',
+            )
+
+            tx_record = DeFiTransaction.objects.filter(tx_hash=txHash).first()
+            action_summary = None
+            if tx_record:
+                action_summary = ActionSummaryType(
+                    id=str(tx_record.id),
+                    tx_hash=tx_record.tx_hash,
+                    action=tx_record.action,
+                    success=tx_record.status == 'confirmed',
+                )
+
+            return HarvestRewards(
+                ok=result.get('success', False),
+                message=result.get('message', 'Harvest recorded'),
+                action=action_summary,
+            )
+
+        except Exception as e:
+            logger.error(f"HarvestRewards error: {e}")
+            return HarvestRewards(ok=False, message=str(e))
+
+
 class DefiMutations(graphene.ObjectType):
     """DeFi mutations — all wired to validation service"""
     defi_supply = DefiSupply.Field()
@@ -396,9 +628,11 @@ class DefiMutations(graphene.ObjectType):
     stake_intent = StakeIntent.Field()
     record_stake_transaction = RecordStakeTransaction.Field()
     validate_defi_transaction = ValidateDefiTransaction.Field()
+    harvest_rewards = HarvestRewards.Field()
     # CamelCase aliases for GraphQL schema
     defiSupply = DefiSupply.Field()
     defiBorrow = DefiBorrow.Field()
     stakeIntent = StakeIntent.Field()
     recordStakeTransaction = RecordStakeTransaction.Field()
     validateDefiTransaction = ValidateDefiTransaction.Field()
+    harvestRewards = HarvestRewards.Field()

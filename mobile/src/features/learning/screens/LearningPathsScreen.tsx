@@ -36,9 +36,7 @@ const [showModuleModal, setShowModuleModal] = useState(false);
 const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
 const [userAnswers, setUserAnswers] = useState<{[key: string]: number}>({});
 const handlePathSelect = (pathId: string) => {
-// Convert path ID to the correct key format
-const pathKey = pathId.toUpperCase().replace(/-/g, '_');
-setSelectedPath(pathKey);
+setSelectedPath(pathId);
 };
 const handleModuleSelect = (module: LearningModule) => {
 if (module?.locked) {

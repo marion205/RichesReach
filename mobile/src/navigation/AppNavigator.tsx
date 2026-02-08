@@ -389,9 +389,10 @@ function LearnStack() {
   const StackNavigator = Stack.Navigator as any;
   return (
     <StackNavigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="LearnMain" component={TutorScreen} />
+      <Stack.Screen name="LearnMain" component={require('../features/learning/screens/LearningPathsScreen').default} />
       {/* Legacy alias */}
       <Stack.Screen name="tutor" component={TutorScreen} />
+      <Stack.Screen name="learning-paths" component={require('../features/learning/screens/LearningPathsScreen').default} />
       {/* Explicit learning routes for deep links from Home */}
       <Stack.Screen name="tutor-ask-explain" component={TutorAskExplainScreen} />
       <Stack.Screen name="tutor-quiz" component={TutorQuizScreen} />

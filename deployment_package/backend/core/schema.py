@@ -535,17 +535,27 @@ except ImportError:
 try:
     from .defi_queries import (
         DefiReserveType, DefiAccountType,
+        SupplyPositionType, BorrowPositionType,
+        DeFiProtocolInfoType, DeFiChainInfoType, DeFiPoolSummaryType,
+        DeFiPositionSummaryType, UserDeFiPositionType,
         AchievementType, PortfolioAnalyticsType, GhostWhisperType,
     )
     from .defi_mutations import (
         DefiPositionType, YieldPoolType, OptimizedPoolType,
         YieldOptimizerResultType, PoolAnalyticsPointType,
-        StakeIntentResultType, RecordStakeTransactionResultType
+        StakeIntentResultType, RecordStakeTransactionResultType,
+        ProtocolInfoType, ChainInfoType, PoolSummaryType,
+        PositionSummaryType, ActionSummaryType
     )
     schema_types.extend([
         DefiReserveType, DefiAccountType, DefiPositionType,
+        SupplyPositionType, BorrowPositionType,
+        DeFiProtocolInfoType, DeFiChainInfoType, DeFiPoolSummaryType,
+        DeFiPositionSummaryType, UserDeFiPositionType,
         YieldPoolType, OptimizedPoolType, YieldOptimizerResultType,
         PoolAnalyticsPointType, StakeIntentResultType, RecordStakeTransactionResultType,
+        ProtocolInfoType, ChainInfoType, PoolSummaryType,
+        PositionSummaryType, ActionSummaryType,
         AchievementType, PortfolioAnalyticsType, GhostWhisperType,
     ])
 except ImportError:

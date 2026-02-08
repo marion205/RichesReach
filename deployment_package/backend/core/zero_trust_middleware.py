@@ -24,7 +24,14 @@ class ZeroTrustMiddleware(MiddlewareMixin):
     def process_request(self, request):
         """Verify every request before processing"""
         # Skip for public endpoints
-        public_paths = ['/health', '/graphql/schema', '/static/', '/media/']
+        public_paths = [
+            '/health',
+            '/graphql/schema',
+            '/static/',
+            '/media/',
+            '/defi/validate-transaction/',
+            '/defi/record-transaction/',
+        ]
         if any(request.path.startswith(path) for path in public_paths):
             return None
         

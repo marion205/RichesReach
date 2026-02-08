@@ -39,6 +39,7 @@ export interface UserPosition {
   amount: number;
   apy: number;
   earned: number;
+  valueUsd?: number;
   chain: string;
   chainId: number;
   healthFactor?: number;
@@ -240,6 +241,7 @@ export class YieldAggregatorService {
           amount: parseFloat(p.stakedAmount),
           apy: p.currentApy,
           earned: parseFloat(p.rewardsEarned || '0'),
+          valueUsd: parseFloat(p.stakedValueUsd || '0'),
           chain: p.chain,
           chainId: this.chainNameToId(p.chain),
           healthFactor: p.healthFactor,

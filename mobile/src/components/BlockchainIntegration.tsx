@@ -22,6 +22,8 @@ import ReferralProgramCard from './blockchain/ReferralProgramCard';
 import IntentSwapCard from './blockchain/IntentSwapCard';
 import ERC4626VaultCard from './blockchain/ERC4626VaultCard';
 import NFTGallery from '../features/blockchain/components/NFTGallery';
+import { useWallet } from '../wallet/WalletProvider';
+import { YieldAggregatorService, type YieldOpportunity, type UserPosition } from '../features/blockchain/services/YieldAggregatorService';
 import logger from '../utils/logger';
 
 const { width } = Dimensions.get('window');
@@ -76,9 +78,12 @@ export default function BlockchainIntegration({
 }: BlockchainIntegrationProps = {}) {
   const navigation = useNavigation<any>();
   const theme = useTheme();
+  const wallet = useWallet();
+  const walletAddress = wallet?.address || null;
   const [activeTab, setActiveTab] = useState<'tokenized' | 'defi' | 'governance' | 'bridge' | 'nfts'>('tokenized');
   const [tokenizedPortfolios, setTokenizedPortfolios] = useState<TokenizedPortfolio[]>([]);
   const [defiPositions, setDefiPositions] = useState<DeFiPosition[]>([]);
+  const [yieldOpportunities, setYieldOpportunities] = useState<YieldOpportunity[]>([]);
   const [governanceProposals, setGovernanceProposals] = useState<GovernanceProposal[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -87,9 +92,12 @@ export default function BlockchainIntegration({
   const slideAnim = useRef(new Animated.Value(50)).current;
 
   useEffect(() => {
-    loadData();
     startEntranceAnimation();
   }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [walletAddress]);
 
   const startEntranceAnimation = () => {
     Animated.parallel([
@@ -153,38 +161,11 @@ export default function BlockchainIntegration({
         },
       ];
 
-      const mockDeFiPositions: DeFiPosition[] = [
-        {
-          id: '1',
-          protocol: 'Aave',
-          type: 'lending',
-          asset: 'USDC',
-          amount: 10000,
-          apy: 3.5,
-          value: 10000,
-          network: 'Ethereum',
-        },
-        {
-          id: '2',
-          protocol: 'Compound',
-          type: 'borrowing',
-          asset: 'ETH',
-          amount: 2.5,
-          apy: 2.1,
-          value: 5000,
-          network: 'Ethereum',
-        },
-        {
-          id: '3',
-          protocol: 'Lido',
-          type: 'staking',
-          asset: 'ETH',
-          amount: 5.0,
-          apy: 4.2,
-          value: 10000,
-          network: 'Ethereum',
-        },
-      ];
+      const yieldService = YieldAggregatorService.getInstance();
+      const [opportunities, userPositions] = await Promise.all([
+        yieldService.getYieldOpportunities(),
+        walletAddress ? yieldService.getUserPositions(walletAddress) : Promise.resolve([]),
+      ]);
 
       const mockGovernanceProposals: GovernanceProposal[] = [
         {
@@ -214,7 +195,8 @@ export default function BlockchainIntegration({
       ];
 
       setTokenizedPortfolios(mockTokenizedPortfolios);
-      setDefiPositions(mockDeFiPositions);
+      setYieldOpportunities(opportunities);
+      setDefiPositions(mapUserPositions(userPositions));
       setGovernanceProposals(mockGovernanceProposals);
     } catch (error) {
       logger.error('Error loading blockchain data:', error);
@@ -222,6 +204,32 @@ export default function BlockchainIntegration({
     } finally {
       setLoading(false);
     }
+  };
+
+  const mapUserPositions = (positions: UserPosition[]): DeFiPosition[] =>
+    positions.map((position) => ({
+      id: position.id,
+      protocol: position.protocol,
+      type: inferPositionType(position),
+      asset: position.asset,
+      amount: position.amount,
+      apy: position.apy,
+      value: position.valueUsd ?? 0,
+      network: position.chain || 'Unknown',
+    }));
+
+  const inferPositionType = (position: UserPosition): DeFiPosition['type'] => {
+    const protocol = position.protocol.toLowerCase();
+    if (protocol.includes('lido') || protocol.includes('rocket')) return 'staking';
+    if (position.asset.toLowerCase().includes('lp')) return 'liquidity';
+    return 'lending';
+  };
+
+  const inferOpportunityType = (opportunity: YieldOpportunity): DeFiPosition['type'] => {
+    if (opportunity.isVault) return 'staking';
+    const protocol = opportunity.protocol.toLowerCase();
+    if (protocol.includes('lido') || protocol.includes('rocket')) return 'staking';
+    return 'lending';
   };
 
   const tokenizePortfolio = async (portfolio: any) => {
@@ -505,42 +513,56 @@ export default function BlockchainIntegration({
                   </Text>
                 </View>
 
-                {defiPositions.map((position) => (
-                  <DeFiPositionCard
-                    key={position.id}
-                    position={position}
-                    getProtocolIcon={getProtocolIcon}
-                    getNetworkColor={getNetworkColor}
-                  />
-                ))}
+                {defiPositions.length > 0 ? (
+                  defiPositions.map((position) => (
+                    <DeFiPositionCard
+                      key={position.id}
+                      position={position}
+                      getProtocolIcon={getProtocolIcon}
+                      getNetworkColor={getNetworkColor}
+                    />
+                  ))
+                ) : (
+                  <Text style={styles.emptyStateText}>
+                    {walletAddress
+                      ? 'No active DeFi positions found yet.'
+                      : 'Connect a wallet to view your DeFi positions.'}
+                  </Text>
+                )}
 
                 <View style={styles.defiOpportunities}>
                   <Text style={styles.opportunitiesTitle}>Yield Opportunities</Text>
-                  {[
-                    { protocol: 'Aave', asset: 'USDC', apy: 3.5, type: 'lending' },
-                    { protocol: 'Compound', asset: 'ETH', apy: 2.1, type: 'lending' },
-                    { protocol: 'Lido', asset: 'ETH', apy: 4.2, type: 'staking' },
-                  ].map((opportunity, index) => (
-                    <TouchableOpacity
-                      key={index}
-                      style={styles.opportunityCard}
-                      activeOpacity={0.9}
-                      onPress={() =>
-                        createDeFiPosition(opportunity.protocol, opportunity.type, opportunity.asset)
-                      }
-                    >
-                      <Text style={styles.opportunityIcon}>
-                        {getProtocolIcon(opportunity.protocol)}
-                      </Text>
-                      <View style={styles.opportunityInfo}>
-                        <Text style={styles.opportunityTitle}>
-                          {opportunity.protocol} - {opportunity.asset}
+                  {yieldOpportunities.length > 0 ? (
+                    yieldOpportunities.map((opportunity) => (
+                      <TouchableOpacity
+                        key={`${opportunity.protocol}-${opportunity.asset}-${opportunity.chain}`}
+                        style={styles.opportunityCard}
+                        activeOpacity={0.9}
+                        onPress={() =>
+                          createDeFiPosition(
+                            opportunity.protocol,
+                            inferOpportunityType(opportunity),
+                            opportunity.asset,
+                          )
+                        }
+                      >
+                        <Text style={styles.opportunityIcon}>
+                          {getProtocolIcon(opportunity.protocol)}
                         </Text>
-                        <Text style={styles.opportunityType}>{opportunity.type}</Text>
-                      </View>
-                      <Text style={styles.opportunityApy}>{opportunity.apy}% APY</Text>
-                    </TouchableOpacity>
-                  ))}
+                        <View style={styles.opportunityInfo}>
+                          <Text style={styles.opportunityTitle}>
+                            {opportunity.protocol} - {opportunity.asset}
+                          </Text>
+                          <Text style={styles.opportunityType}>
+                            {inferOpportunityType(opportunity)} · {opportunity.chain}
+                          </Text>
+                        </View>
+                        <Text style={styles.opportunityApy}>{opportunity.apy.toFixed(2)}% APY</Text>
+                      </TouchableOpacity>
+                    ))
+                  ) : (
+                    <Text style={styles.emptyStateText}>No yield opportunities available yet.</Text>
+                  )}
                 </View>
               </View>
             </>
@@ -1107,6 +1129,12 @@ const styles = StyleSheet.create({
     ...UI.typography.small,
     color: UI.colors.textSecondary,
     marginTop: 2,
+  },
+  emptyStateText: {
+    ...UI.typography.small,
+    color: UI.colors.textSecondary,
+    textAlign: 'center',
+    marginTop: UI.spacing.sm,
   },
   tokenizedContent: {
     marginTop: 8,
