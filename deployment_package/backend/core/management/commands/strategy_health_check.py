@@ -9,7 +9,7 @@ Usage:
 """
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from core.signal_performance_models import StrategyPerformance
+from core.signal_performance_models import StrategyPerformance, StrategyGovernance
 from core.strategy_governance import StrategyHealthCheck, StrategyStatus
 import logging
 
@@ -105,8 +105,31 @@ class Command(BaseCommand):
 
                 # Save status if requested
                 if options['save_status']:
-                    # TODO: Implement StrategyGovernance model to persist status
-                    self.stdout.write(self.style.SUCCESS('Status saved to database\n'))
+                    try:
+                        status_value = evaluation.get('status')
+                        if hasattr(status_value, 'value'):
+                            status_value = status_value.value
+
+                        StrategyGovernance.objects.update_or_create(
+                            strategy_performance=strategy,
+                            defaults={
+                                'mode': mode,
+                                'period': period,
+                                'status': status_value,
+                                'score': float(evaluation.get('score', 0.0)),
+                                'issues': evaluation.get('issues', []),
+                                'recommendations': evaluation.get('recommendations', []),
+                                'kpi_status': evaluation.get('kpi_status', {}),
+                                'insufficient_data': bool(evaluation.get('insufficient_data', False)),
+                                'report': report,
+                                'evaluated_at': timezone.now(),
+                            },
+                        )
+                        self.stdout.write(self.style.SUCCESS('Status saved to database\n'))
+                    except Exception as save_error:
+                        self.stdout.write(self.style.ERROR(
+                            f'❌ Failed to save status to database: {save_error}\n'
+                        ))
 
             except Exception as e:
                 self.stdout.write(self.style.ERROR(

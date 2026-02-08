@@ -33,6 +33,7 @@ except ImportError:
 EXECUTION_LOG = "execution_log.jsonl"
 TRADING_LOG = "trading_log.jsonl"
 PERFORMANCE_LOG = "performance_tracking.jsonl"
+BACKTEST_PREDICTIONS_FILE = os.getenv("BACKTEST_PREDICTIONS_FILE", "backtest_predictions.jsonl")
 
 
 def load_executions() -> pd.DataFrame:
@@ -69,6 +70,95 @@ def load_trading_decisions() -> pd.DataFrame:
                 continue
     
     return pd.DataFrame(decisions)
+
+
+def _normalize_expected_return(value: Optional[float], source_key: str) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        val = float(value)
+    except (TypeError, ValueError):
+        return None
+
+    key_lower = source_key.lower()
+    if "pct" in key_lower or "percent" in key_lower:
+        return val
+    if abs(val) <= 1.0:
+        return val * 100.0
+    return val
+
+
+def load_backtest_predictions(file_path: str) -> pd.DataFrame:
+    """Load backtest predictions from JSONL/JSON/CSV into a normalized DataFrame."""
+    path = Path(file_path)
+    if not path.exists():
+        return pd.DataFrame()
+
+    records = []
+    try:
+        if path.suffix.lower() == ".jsonl":
+            with path.open("r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        records.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+        elif path.suffix.lower() == ".json":
+            with path.open("r") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                records = data
+            elif isinstance(data, dict):
+                for key in ("predictions", "trades", "results", "data"):
+                    if isinstance(data.get(key), list):
+                        records = data[key]
+                        break
+        elif path.suffix.lower() == ".csv":
+            return pd.read_csv(path)
+        else:
+            return pd.DataFrame()
+    except Exception:
+        return pd.DataFrame()
+
+    if not records:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(records)
+    symbol_col = None
+    for candidate in ["symbol", "ticker", "asset"]:
+        if candidate in df.columns:
+            symbol_col = candidate
+            break
+    if symbol_col is None:
+        return pd.DataFrame()
+
+    expected_col = None
+    for candidate in [
+        "expected_return_pct",
+        "expected_return",
+        "predicted_return_pct",
+        "predicted_return",
+        "return_pct",
+        "pnl_pct",
+        "prediction",
+    ]:
+        if candidate in df.columns:
+            expected_col = candidate
+            break
+
+    df = df.copy()
+    df["symbol"] = df[symbol_col].astype(str).str.upper().str.strip()
+    if expected_col:
+        df["expected_return_pct"] = df[expected_col].apply(
+            lambda val: _normalize_expected_return(val, expected_col)
+        )
+    else:
+        df["expected_return_pct"] = None
+
+    return df[["symbol", "expected_return_pct"]].dropna(subset=["symbol"])
 
 
 def get_current_positions(api) -> Dict[str, Dict]:
@@ -153,7 +243,11 @@ def calculate_performance(executions_df: pd.DataFrame, decisions_df: pd.DataFram
     return performance
 
 
-def print_performance(performance: Dict, compare_backtest: bool = False):
+def print_performance(
+    performance: Dict,
+    compare_backtest: bool = False,
+    backtest_comparison: Optional[Dict] = None,
+):
     """Print performance summary"""
     print("\n" + "="*80)
     print("PAPER TRADING PERFORMANCE TRACKER")
@@ -185,8 +279,23 @@ def print_performance(performance: Dict, compare_backtest: bool = False):
     
     if compare_backtest:
         print(f"\n📊 Backtest Comparison:")
-        print(f"   (Load backtest results and compare)")
-        # TODO: Load backtest predictions and compare
+        if not backtest_comparison:
+            print("   No backtest comparison data available")
+        elif backtest_comparison.get("status") == "no_predictions":
+            print("   No backtest predictions found")
+        elif backtest_comparison.get("status") == "no_positions":
+            print(f"   Predictions loaded: {backtest_comparison.get('predictions', 0)}")
+            print("   No open positions available for comparison")
+        elif backtest_comparison.get("status") == "no_overlap":
+            print(f"   Predictions loaded: {backtest_comparison.get('predictions', 0)}")
+            print("   No symbol overlap between predictions and positions")
+        else:
+            print(f"   Matches: {backtest_comparison.get('matches', 0)}")
+            print(f"   Avg Expected Return: {backtest_comparison.get('avg_expected', 0.0):.2f}%")
+            print(f"   Avg Actual Return: {backtest_comparison.get('avg_actual', 0.0):.2f}%")
+            print(f"   Mean Error: {backtest_comparison.get('mean_error', 0.0):.2f}%")
+            print(f"   Mean Abs Error: {backtest_comparison.get('mae', 0.0):.2f}%")
+            print(f"   Directional Accuracy: {backtest_comparison.get('directional_accuracy', 0.0):.1f}%")
     
     print("\n" + "="*80)
 
@@ -196,6 +305,7 @@ def main():
     
     parser = argparse.ArgumentParser(description="Track Paper Trading Performance")
     parser.add_argument("--compare-backtest", action="store_true", help="Compare to backtest predictions")
+    parser.add_argument("--backtest-file", default=BACKTEST_PREDICTIONS_FILE, help="Backtest predictions file path")
     parser.add_argument("--execution-log", default=EXECUTION_LOG, help="Execution log file")
     parser.add_argument("--trading-log", default=TRADING_LOG, help="Trading log file")
     
@@ -220,8 +330,55 @@ def main():
     # Calculate performance
     performance = calculate_performance(executions_df, decisions_df, positions)
     
+    # Compare to backtest predictions if requested
+    backtest_comparison = None
+    if args.compare_backtest:
+        predictions_df = load_backtest_predictions(args.backtest_file)
+        if predictions_df.empty:
+            backtest_comparison = {"status": "no_predictions"}
+        elif not positions:
+            backtest_comparison = {
+                "status": "no_positions",
+                "predictions": len(predictions_df),
+            }
+        else:
+            pred_map = dict(
+                zip(predictions_df["symbol"], predictions_df["expected_return_pct"])
+            )
+            matches = []
+            for symbol, pos in positions.items():
+                expected = pred_map.get(symbol)
+                actual = pos.get("unrealized_plpc")
+                if expected is None or actual is None:
+                    continue
+                matches.append((expected, actual))
+
+            if not matches:
+                backtest_comparison = {
+                    "status": "no_overlap",
+                    "predictions": len(predictions_df),
+                }
+            else:
+                expected_vals = np.array([m[0] for m in matches], dtype=float)
+                actual_vals = np.array([m[1] for m in matches], dtype=float)
+                errors = actual_vals - expected_vals
+                directional = np.mean(np.sign(expected_vals) == np.sign(actual_vals)) * 100
+                backtest_comparison = {
+                    "status": "ok",
+                    "matches": len(matches),
+                    "avg_expected": float(np.mean(expected_vals)),
+                    "avg_actual": float(np.mean(actual_vals)),
+                    "mean_error": float(np.mean(errors)),
+                    "mae": float(np.mean(np.abs(errors))),
+                    "directional_accuracy": float(directional),
+                }
+
     # Print results
-    print_performance(performance, compare_backtest=args.compare_backtest)
+    print_performance(
+        performance,
+        compare_backtest=args.compare_backtest,
+        backtest_comparison=backtest_comparison,
+    )
     
     # Save performance snapshot
     snapshot = {

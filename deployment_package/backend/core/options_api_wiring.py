@@ -555,9 +555,35 @@ class OptionsAnalysisPipeline:
         self.repair_engine = OptionsRepairEngine(router=self.router)
         self.repair_acceptor = RepairPlanAcceptor()
         self._regime_shift_cache: Dict[str, datetime] = {}
+        self._ticker_activity: Dict[str, Dict[int, datetime]] = {}
+        self._active_user_ttl = timedelta(minutes=30)
         self.router = StrategyRouter(playbooks=playbooks_config or {})
         self.sizer = OptionsRiskSizer(caps=risk_caps, kelly=kelly_config)
         self.flight_manual_engine = FlightManualEngine(playbooks_config=playbooks_config)
+
+    def _track_ticker_activity(self, user_id: int, ticker: str) -> None:
+        now = datetime.utcnow()
+        ticker_key = ticker.upper().strip()
+        bucket = self._ticker_activity.setdefault(ticker_key, {})
+        bucket[user_id] = now
+        self._prune_ticker_activity(ticker_key, now)
+
+    def _prune_ticker_activity(self, ticker: str, now: Optional[datetime] = None) -> None:
+        now = now or datetime.utcnow()
+        cutoff = now - self._active_user_ttl
+        bucket = self._ticker_activity.get(ticker)
+        if not bucket:
+            return
+        stale_users = [user_id for user_id, last_seen in bucket.items() if last_seen < cutoff]
+        for user_id in stale_users:
+            bucket.pop(user_id, None)
+        if not bucket:
+            self._ticker_activity.pop(ticker, None)
+
+    def _get_active_user_count(self, ticker: str) -> int:
+        ticker_key = ticker.upper().strip()
+        self._prune_ticker_activity(ticker_key)
+        return len(self._ticker_activity.get(ticker_key, {}))
 
     def get_ready_to_trade_plans(
         self,
@@ -579,6 +605,9 @@ class OptionsAnalysisPipeline:
 
         warnings = []
         confidence_override = None
+
+        self._track_ticker_activity(user_id, ticker)
+        active_user_count = self._get_active_user_count(ticker)
 
         # PHASE 0: Fetch live market data
         market_data = self.fetcher.fetch_market_data(ticker)
@@ -629,7 +658,7 @@ class OptionsAnalysisPipeline:
                 ticker=ticker,
                 health=health,
                 timestamp=datetime.utcnow(),
-                user_count_affected=0,  # TODO: Query active user count for this ticker
+                user_count_affected=active_user_count,
             )
             
             if not health.is_healthy:

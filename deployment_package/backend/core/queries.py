@@ -4,10 +4,10 @@ import graphene
 from django.contrib.auth import get_user_model
 
 
-from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType, StockType, StockDataType, ProfileInput, AIRecommendationsType
+from .types import UserType, PostType, ChatSessionType, ChatMessageType, CommentType, StockType, StockDataType, ProfileInput, AIRecommendationsType, WatchlistItemType, RustStockAnalysisType, RustRecommendationType, RustHealthType
 
 
-from .models import Post, ChatSession, ChatMessage, Comment, User, Stock, StockData
+from .models import Post, ChatSession, ChatMessage, Comment, User, Stock, StockData, Watchlist
 
 
 import django.db.models as models
@@ -84,15 +84,15 @@ class Query(graphene.ObjectType):
     # Market data (stocks, stock, fss_scores, top_fss_stocks, beginner_friendly_stocks, current_stock_prices)
     # live in core.graphql.queries.market_data.MarketDataQuery
 
-    # my_watchlist = graphene.List(WatchlistItemType) # TODO: Uncomment when WatchlistItemType is available
+    my_watchlist = graphene.List(WatchlistItemType)
 
-    # Rust Engine queries - TODO: Uncomment when types are available
+    # Rust Engine queries
 
-    # rust_stock_analysis = graphene.Field(RustStockAnalysisType, symbol=graphene.String(required=True))
+    rust_stock_analysis = graphene.Field(RustStockAnalysisType, symbol=graphene.String(required=True))
 
-    # rust_recommendations = graphene.List(RustRecommendationType)
+    rust_recommendations = graphene.List(RustRecommendationType)
 
-    # rust_health = graphene.Field(RustHealthType)
+    rust_health = graphene.Field(RustHealthType)
 
     # AI Portfolio, watchlists, discussions, social_feed, top_performers, market_sentiment, stock_moments
     # live in core.graphql.queries.discussions.DiscussionsQuery
@@ -263,6 +263,42 @@ def resolve_rust_health(root, info):
             service='rust_stock_engine',
             timestamp=timezone.now()
         )
+
+
+def resolve_rust_stock_analysis(self, info, symbol):
+    """Delegate Rust stock analysis to OptionsRustQuery when available."""
+    try:
+        from core.graphql.queries.options_rust import OptionsRustQuery
+        resolver = getattr(OptionsRustQuery, 'resolve_rust_stock_analysis', None)
+        if resolver:
+            return resolver(self, info, symbol)
+    except Exception as e:
+        logger.warning(f"Rust stock analysis delegation failed: {e}")
+
+    try:
+        from core.rust_stock_service import rust_stock_service
+        rust_response = rust_stock_service.analyze_stock(symbol.upper())
+        return rust_response or None
+    except Exception as e:
+        logger.error(f"Error getting Rust stock analysis: {e}")
+        return None
+
+
+def resolve_my_watchlist(self, info):
+    """Return the authenticated user's watchlist items."""
+    user = info.context.user
+    if user.is_anonymous:
+        return []
+
+    try:
+        from core.graphql.queries.discussions import DiscussionsQuery
+        resolver = getattr(DiscussionsQuery, 'resolve_my_watchlist', None)
+        if resolver:
+            return resolver(self, info)
+    except Exception as e:
+        logger.debug(f"DiscussionsQuery delegation failed: {e}")
+
+    return Watchlist.objects.filter(user=user).select_related("stock").order_by("-added_at")
 
     # Phase 3 Social Feature Resolvers
 def _generate_picks_for_symbols(

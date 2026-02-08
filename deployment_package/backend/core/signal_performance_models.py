@@ -295,6 +295,50 @@ class StrategyPerformance(models.Model):
         return f"{self.mode} {self.period} - Sharpe: {self.sharpe_ratio or 0:.2f}, Win Rate: {self.win_rate:.1f}%"
 
 
+class StrategyGovernance(models.Model):
+    """
+    Persisted Investment Committee status for a specific strategy performance period.
+    """
+    STATUS_CHOICES = [
+        ('ACTIVE', 'Active - Meeting all KPIs'),
+        ('WATCH', 'Watch - Below target but above minimum'),
+        ('REVIEW', 'Review Required - Below minimum thresholds'),
+        ('PAUSED', 'Paused - Temporarily disabled'),
+        ('RETIRED', 'Retired - Permanently disabled'),
+    ]
+
+    strategy_performance = models.OneToOneField(
+        StrategyPerformance,
+        on_delete=models.CASCADE,
+        related_name='governance_status',
+    )
+    mode = models.CharField(max_length=10, db_index=True)
+    period = models.CharField(max_length=10, db_index=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, db_index=True)
+    score = models.FloatField(default=0.0)
+    issues = models.JSONField(default=list, blank=True)
+    recommendations = models.JSONField(default=list, blank=True)
+    kpi_status = models.JSONField(default=dict, blank=True)
+    insufficient_data = models.BooleanField(default=False)
+    report = models.TextField(blank=True)
+    evaluated_at = models.DateTimeField(default=timezone.now, db_index=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'strategy_governance'
+        ordering = ['-evaluated_at']
+        indexes = [
+            models.Index(fields=['mode', 'period', 'evaluated_at']),
+            models.Index(fields=['status']),
+        ]
+        verbose_name = 'Strategy Governance'
+        verbose_name_plural = 'Strategy Governance'
+
+    def __str__(self):
+        return f"{self.mode} {self.period} - {self.status} ({self.score:.1f})"
+
+
 class UserRiskBudget(models.Model):
     """
     Per-user risk management - tracks daily/weekly risk budgets and circuit breakers.
