@@ -539,6 +539,7 @@ try:
         DeFiProtocolInfoType, DeFiChainInfoType, DeFiPoolSummaryType,
         DeFiPositionSummaryType, UserDeFiPositionType,
         AchievementType, PortfolioAnalyticsType, GhostWhisperType,
+        VaultAuditType, RiskMetricsType,
     )
     from .defi_mutations import (
         DefiPositionType, YieldPoolType, OptimizedPoolType,
@@ -546,6 +547,15 @@ try:
         StakeIntentResultType, RecordStakeTransactionResultType,
         ProtocolInfoType, ChainInfoType, PoolSummaryType,
         PositionSummaryType, ActionSummaryType
+    )
+    from .autopilot_types import (
+        FinancialIntegrityType,
+        AutopilotPolicyType,
+        AutopilotStatusType,
+        LastMoveType,
+        RepairActionType,
+        RepairProofType,
+        TransactionReceiptType,
     )
     schema_types.extend([
         DefiReserveType, DefiAccountType, DefiPositionType,
@@ -557,6 +567,10 @@ try:
         ProtocolInfoType, ChainInfoType, PoolSummaryType,
         PositionSummaryType, ActionSummaryType,
         AchievementType, PortfolioAnalyticsType, GhostWhisperType,
+        VaultAuditType, RiskMetricsType,
+        FinancialIntegrityType, AutopilotPolicyType, AutopilotStatusType,
+        LastMoveType,
+        RepairActionType, RepairProofType, TransactionReceiptType,
     ])
 except ImportError:
     pass

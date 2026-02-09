@@ -282,10 +282,21 @@ def validate_transaction(
             warnings.extend(gas_check.warnings)
 
     # 8. Pool validation (if pool_id provided)
+    pool = None
     if pool_id:
         pool_check = _validate_pool(pool_id)
         if not pool_check.is_valid:
             return pool_check
+        pool = _get_pool(pool_id)
+
+    # 8b. Risk Guardian (optional, non-blocking unless EXIT)
+    if pool:
+        risk_audit = _run_risk_guardian(pool)
+        if risk_audit:
+            if risk_audit['recommendation'] == 'EXIT':
+                return ValidationResult(False, f"Risk Guardian: {risk_audit['explanation']}")
+            if risk_audit['recommendation'] == 'REBALANCE':
+                warnings.append(f"Risk Guardian: {risk_audit['explanation']}")
 
     # 9. Health factor check for borrows
     if tx_type == 'borrow':
@@ -507,6 +518,69 @@ def _validate_pool(pool_id: str) -> ValidationResult:
     except Exception as e:
         logger.warning(f"Pool validation error (non-blocking): {e}")
         return ValidationResult(True, warnings=['Could not verify pool status.'])
+
+
+def _get_pool(pool_id: str):
+    """Fetch a pool object without raising validation errors."""
+    try:
+        from .defi_models import DeFiPool
+
+        return DeFiPool.objects.filter(id=pool_id, is_active=True).first()
+    except Exception:
+        return None
+
+
+def _run_risk_guardian(pool) -> dict:
+    """
+    Compute a lightweight risk audit for a pool using yield snapshots.
+    Returns a dict with recommendation/explanation or None if insufficient data.
+    """
+    try:
+        from .risk_scoring_service import audit_vault, build_nav_from_apy_series
+
+        snapshots = list(pool.yield_snapshots.order_by('-timestamp')[:2000])
+        if not snapshots:
+            return None
+
+        # Use latest snapshot per day to build a stable series
+        daily = {}
+        for snap in snapshots:
+            day = snap.timestamp.date()
+            if day not in daily:
+                daily[day] = snap
+
+        if len(daily) < 7:
+            return None
+
+        ordered_days = sorted(daily.keys())
+        apy_series = [float(daily[day].apy_total) for day in ordered_days]
+        tvl_series = [float(daily[day].tvl_usd) for day in ordered_days]
+
+        nav_history = build_nav_from_apy_series(apy_series)
+        current_apy = apy_series[-1] if apy_series else 0.0
+
+        protocol_name = ''
+        if pool.protocol:
+            protocol_name = pool.protocol.slug or pool.protocol.name
+
+        audit = audit_vault(
+            vault_address=pool.pool_address or str(pool.id),
+            protocol=protocol_name,
+            symbol=pool.symbol,
+            apy=current_apy,
+            nav_history=nav_history,
+            tvl_history=tvl_series,
+            is_erc4626_compliant=pool.pool_type in ('vault', 'yield'),
+        )
+
+        return {
+            'recommendation': audit.recommendation.value,
+            'explanation': audit.explanation,
+            'overall_score': audit.overall_score,
+        }
+    except Exception as e:
+        logger.warning(f"Risk Guardian audit error (non-blocking): {e}")
+        return None
 
 
 # ---- Health Factor Check ----

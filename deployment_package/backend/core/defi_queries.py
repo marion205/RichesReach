@@ -12,8 +12,91 @@ except ImportError:  # Optional dependency in dev
         return func
 from graphql import GraphQLError
 from graphene.types import JSONString
+from .autopilot_types import (
+    FinancialIntegrityType,
+    AutopilotStatusType,
+    AutopilotPolicyType,
+    RepairActionType,
+    RepairProofType,
+    LastMoveType,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _build_yield_audit(yield_item: dict):
+    """Attempt to build a Risk Guardian audit payload for a yield item."""
+    try:
+        from .defi_models import DeFiPool
+        from .risk_scoring_service import audit_vault, build_nav_from_apy_series
+
+        pool = None
+        pool_id = yield_item.get('id')
+        pool_address = yield_item.get('poolAddress')
+
+        if pool_id:
+            pool = DeFiPool.objects.filter(defi_llama_pool_id=pool_id, is_active=True).first()
+        if not pool and pool_address:
+            pool = DeFiPool.objects.filter(pool_address=pool_address, is_active=True).first()
+
+        if not pool:
+            return None
+
+        snapshots = list(pool.yield_snapshots.order_by('-timestamp')[:2000])
+        if not snapshots:
+            return None
+
+        daily = {}
+        for snap in snapshots:
+            day = snap.timestamp.date()
+            if day not in daily:
+                daily[day] = snap
+
+        if len(daily) < 7:
+            return None
+
+        ordered_days = sorted(daily.keys())
+        apy_series = [float(daily[day].apy_total) for day in ordered_days]
+        tvl_series = [float(daily[day].tvl_usd) for day in ordered_days]
+        nav_history = build_nav_from_apy_series(apy_series)
+
+        protocol_name = ''
+        if pool.protocol:
+            protocol_name = pool.protocol.slug or pool.protocol.name
+
+        audit = audit_vault(
+            vault_address=pool.pool_address or str(pool.id),
+            protocol=protocol_name,
+            symbol=pool.symbol,
+            apy=apy_series[-1] if apy_series else 0.0,
+            nav_history=nav_history,
+            tvl_history=tvl_series,
+            is_erc4626_compliant=pool.pool_type in ('vault', 'yield'),
+        )
+
+        return {
+            'vaultAddress': audit.vault_address,
+            'protocol': audit.protocol,
+            'symbol': audit.symbol,
+            'apy': audit.apy,
+            'integrity': {
+                'altmanZScore': audit.integrity.altman_z_score,
+                'beneishMScore': audit.integrity.beneish_m_score,
+                'isErc4626Compliant': audit.integrity.is_erc4626_compliant,
+            },
+            'risk': {
+                'calmarRatio': audit.risk.calmar_ratio,
+                'maxDrawdown': audit.risk.max_drawdown,
+                'volatility': audit.risk.volatility,
+                'tvlStability': audit.risk.tvl_stability,
+            },
+            'overallScore': audit.overall_score,
+            'recommendation': audit.recommendation.value,
+            'explanation': audit.explanation,
+        }
+    except Exception as e:
+        logger.warning(f"Yield audit build error (non-blocking): {e}")
+        return None
 
 
 class AchievementType(graphene.ObjectType):
@@ -49,6 +132,27 @@ class GhostWhisperType(graphene.ObjectType):
     confidence = graphene.Float()
     reasoning = graphene.String()
     suggested_pool = JSONString()
+
+
+class RiskMetricsType(graphene.ObjectType):
+    """Risk metrics for a vault"""
+    calmar_ratio = graphene.Float()
+    max_drawdown = graphene.Float()
+    volatility = graphene.Float()
+    tvl_stability = graphene.Float()
+
+
+class VaultAuditType(graphene.ObjectType):
+    """Risk Guardian audit for a vault"""
+    vault_address = graphene.String()
+    protocol = graphene.String()
+    symbol = graphene.String()
+    apy = graphene.Float()
+    integrity = graphene.Field(FinancialIntegrityType)
+    risk = graphene.Field(RiskMetricsType)
+    overall_score = graphene.Float()
+    recommendation = graphene.String()
+    explanation = graphene.String()
 
 
 class DefiReserveType(graphene.ObjectType):
@@ -150,6 +254,35 @@ class DefiQueries(graphene.ObjectType):
     defi_account = graphene.Field(DefiAccountType, walletAddress=graphene.String(required=False))
     my_de_fi_positions = graphene.List(UserDeFiPositionType)
     myDeFiPositions = graphene.List(UserDeFiPositionType)
+
+    vault_audit = graphene.Field(
+        VaultAuditType,
+        poolId=graphene.String(required=True),
+        description="Get Risk Guardian audit for a specific pool"
+    )
+    auditVault = graphene.Field(
+        VaultAuditType,
+        poolId=graphene.String(required=True),
+        description="Get Risk Guardian audit for a pool (camelCase alias)"
+    )
+
+    autopilot_status = graphene.Field(
+        AutopilotStatusType,
+        description="Get Auto-Pilot status and policy"
+    )
+    autopilotStatus = graphene.Field(
+        AutopilotStatusType,
+        description="Get Auto-Pilot status and policy (camelCase alias)"
+    )
+
+    pending_repairs = graphene.List(
+        RepairActionType,
+        description="Get pending Auto-Pilot repair actions"
+    )
+    pendingRepairs = graphene.List(
+        RepairActionType,
+        description="Get pending Auto-Pilot repair actions (camelCase alias)"
+    )
 
     @login_required
     def resolve_defi_reserves(self, info):
@@ -368,6 +501,140 @@ class DefiQueries(graphene.ObjectType):
     def resolve_myDeFiPositions(self, info):
         return DefiQueries.resolve_my_de_fi_positions(self, info)
 
+    @login_required
+    def resolve_vault_audit(self, info, poolId):
+        """Compute and return a Risk Guardian audit for a pool."""
+        try:
+            from .defi_models import DeFiPool
+            from .risk_scoring_service import audit_vault, build_nav_from_apy_series
+
+            pool = DeFiPool.objects.filter(id=poolId, is_active=True).first()
+            if not pool:
+                raise GraphQLError(f"Pool {poolId} not found or inactive.")
+
+            snapshots = list(pool.yield_snapshots.order_by('-timestamp')[:2000])
+            if not snapshots:
+                raise GraphQLError("Insufficient historical data for audit.")
+
+            daily = {}
+            for snap in snapshots:
+                day = snap.timestamp.date()
+                if day not in daily:
+                    daily[day] = snap
+
+            if len(daily) < 7:
+                raise GraphQLError("Insufficient historical data for audit.")
+
+            ordered_days = sorted(daily.keys())
+            apy_series = [float(daily[day].apy_total) for day in ordered_days]
+            tvl_series = [float(daily[day].tvl_usd) for day in ordered_days]
+
+            nav_history = build_nav_from_apy_series(apy_series)
+            current_apy = apy_series[-1] if apy_series else 0.0
+
+            protocol_name = ''
+            if pool.protocol:
+                protocol_name = pool.protocol.slug or pool.protocol.name
+
+            audit = audit_vault(
+                vault_address=pool.pool_address or str(pool.id),
+                protocol=protocol_name,
+                symbol=pool.symbol,
+                apy=current_apy,
+                nav_history=nav_history,
+                tvl_history=tvl_series,
+                is_erc4626_compliant=pool.pool_type in ('vault', 'yield'),
+            )
+
+            return VaultAuditType(
+                vault_address=audit.vault_address,
+                protocol=audit.protocol,
+                symbol=audit.symbol,
+                apy=audit.apy,
+                integrity=FinancialIntegrityType(
+                    altman_z_score=audit.integrity.altman_z_score,
+                    beneish_m_score=audit.integrity.beneish_m_score,
+                    is_erc4626_compliant=audit.integrity.is_erc4626_compliant,
+                ),
+                risk=RiskMetricsType(
+                    calmar_ratio=audit.risk.calmar_ratio,
+                    max_drawdown=audit.risk.max_drawdown,
+                    volatility=audit.risk.volatility,
+                    tvl_stability=audit.risk.tvl_stability,
+                ),
+                overall_score=audit.overall_score,
+                recommendation=audit.recommendation.value,
+                explanation=audit.explanation,
+            )
+        except GraphQLError:
+            raise
+        except Exception as e:
+            logger.error(f"Vault audit error: {e}")
+            raise GraphQLError("Unable to compute vault audit.")
+
+    def resolve_auditVault(self, info, poolId):
+        return DefiQueries.resolve_vault_audit(self, info, poolId)
+
+    @login_required
+    def resolve_autopilot_status(self, info):
+        from .autopilot_service import get_autopilot_status
+
+        status = get_autopilot_status(info.context.user)
+        policy = status.get('policy') or {}
+        last_move = status.get('last_move') or {}
+        return AutopilotStatusType(
+            enabled=bool(status.get('enabled')),
+            last_evaluated_at=status.get('last_evaluated_at'),
+            policy=AutopilotPolicyType(
+                target_apy=policy.get('target_apy'),
+                max_drawdown=policy.get('max_drawdown'),
+                risk_level=policy.get('risk_level'),
+                level=policy.get('level'),
+                spend_limit_24h=policy.get('spend_limit_24h'),
+            ),
+            last_move=LastMoveType(
+                id=last_move.get('id'),
+                from_vault=last_move.get('from_vault'),
+                to_vault=last_move.get('to_vault'),
+                executed_at=last_move.get('executed_at'),
+                can_revert=last_move.get('can_revert'),
+                revert_deadline=last_move.get('revert_deadline'),
+            ) if last_move else None,
+        )
+
+    def resolve_autopilotStatus(self, info):
+        return DefiQueries.resolve_autopilot_status(self, info)
+
+    @login_required
+    def resolve_pending_repairs(self, info):
+        from .autopilot_service import get_pending_repairs
+
+        repairs = get_pending_repairs(info.context.user)
+        return [
+            RepairActionType(
+                id=r['id'],
+                from_vault=r['from_vault'],
+                to_vault=r['to_vault'],
+                estimated_apy_delta=r.get('estimated_apy_delta'),
+                gas_estimate=r.get('gas_estimate'),
+                proof=RepairProofType(
+                    calmar_improvement=r['proof'].get('calmar_improvement'),
+                    integrity_check=FinancialIntegrityType(
+                        altman_z_score=r['proof']['integrity_check'].get('altman_z_score'),
+                        beneish_m_score=r['proof']['integrity_check'].get('beneish_m_score'),
+                        is_erc4626_compliant=r['proof']['integrity_check'].get('is_erc4626_compliant'),
+                    ),
+                    tvl_stability_check=r['proof'].get('tvl_stability_check'),
+                    policy_alignment=r['proof'].get('policy_alignment'),
+                    explanation=r['proof'].get('explanation'),
+                ),
+            )
+            for r in repairs
+        ]
+
+    def resolve_pendingRepairs(self, info):
+        return DefiQueries.resolve_pending_repairs(self, info)
+
     # ---- Yield queries (powered by DefiLlama) ----
 
     top_yields = graphene.List(
@@ -431,6 +698,7 @@ class DefiQueries(graphene.ObjectType):
                         apy=y.get('apy', 0),
                         tvl=y.get('tvl', 0),
                         risk=y.get('risk', 0.5),
+                        audit=_build_yield_audit(y),
                     )
                     for y in yields
                 ][:limit]
@@ -441,7 +709,8 @@ class DefiQueries(graphene.ObjectType):
         return [
             YieldPoolType(
                 id="aave-v3-usdc", protocol="Aave V3", chain="ethereum",
-                symbol="USDC", poolAddress="", apy=8.5, tvl=2500000000, risk=0.2
+                symbol="USDC", poolAddress="", apy=8.5, tvl=2500000000, risk=0.2,
+                audit=None,
             )
         ][:limit]
 

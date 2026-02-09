@@ -604,6 +604,27 @@ export default function DeFiFortressScreen() {
         <Feather name="chevron-right" size={20} color="#9CA3AF" />
       </Pressable>
 
+      {/* ---- Auto-Pilot Command Card ---- */}
+      <Pressable
+        style={({ pressed }) => [
+          styles.educationCard,
+          { borderColor: '#93C5FD', backgroundColor: '#EFF6FF' },
+          pressed && { opacity: 0.9 },
+        ]}
+        onPress={() => navigation.navigate('DeFiAutopilot')}
+      >
+        <View style={[styles.educationLeft, { backgroundColor: '#DBEAFE' }]}>
+          <Feather name="cpu" size={24} color="#2563EB" />
+        </View>
+        <View style={styles.educationRight}>
+          <Text style={[styles.educationTitle, { color: '#1D4ED8' }]}>Auto-Pilot Command</Text>
+          <Text style={[styles.educationDesc, { color: '#1E40AF' }]}>
+            Set your intent and let the fortress repair risk automatically.
+          </Text>
+        </View>
+        <Feather name="chevron-right" size={20} color="#9CA3AF" />
+      </Pressable>
+
       {/* ---- IL Calculator Card ---- */}
       <Pressable
         style={({ pressed }) => [

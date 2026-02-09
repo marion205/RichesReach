@@ -13,6 +13,14 @@ except ImportError:  # Optional dependency in dev
         return func
 from graphql import GraphQLError
 from graphene.types import JSONString
+from .autopilot_types import (
+    AutopilotPolicyType,
+    AutopilotPolicyInput,
+    RepairActionType,
+    RepairProofType,
+    FinancialIntegrityType,
+    TransactionReceiptType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +43,7 @@ class YieldPoolType(graphene.ObjectType):
     apy = graphene.Float()
     tvl = graphene.Float()
     risk = graphene.Float()
+    audit = JSONString()
 
 
 class OptimizedPoolType(graphene.ObjectType):
@@ -110,6 +119,122 @@ class ActionSummaryType(graphene.ObjectType):
     tx_hash = graphene.String()
     action = graphene.String()
     success = graphene.Boolean()
+
+
+class UpdateAutopilotPolicy(graphene.Mutation):
+    """Update the Auto-Pilot policy settings."""
+
+    class Arguments:
+        input = AutopilotPolicyInput(required=True)
+
+    policy = graphene.Field(AutopilotPolicyType)
+
+    @login_required
+    def mutate(self, info, input):
+        from .autopilot_service import set_autopilot_policy
+
+        policy = set_autopilot_policy(info.context.user, dict(input))
+        return UpdateAutopilotPolicy(
+            policy=AutopilotPolicyType(
+                target_apy=policy.get('target_apy'),
+                max_drawdown=policy.get('max_drawdown'),
+                risk_level=policy.get('risk_level'),
+                level=policy.get('level'),
+                spend_limit_24h=policy.get('spend_limit_24h'),
+            )
+        )
+
+
+class ToggleAutopilot(graphene.Mutation):
+    """Enable or disable Auto-Pilot."""
+
+    class Arguments:
+        enabled = graphene.Boolean(required=True)
+
+    ok = graphene.Boolean()
+
+    @login_required
+    def mutate(self, info, enabled):
+        from .autopilot_service import set_autopilot_enabled
+
+        result = set_autopilot_enabled(info.context.user, enabled)
+        return ToggleAutopilot(ok=bool(result))
+
+
+class ExecuteRepair(graphene.Mutation):
+    """Execute a pending repair action."""
+
+    class Arguments:
+        repair_id = graphene.String(required=True)
+
+    receipt = graphene.Field(TransactionReceiptType)
+
+    @login_required
+    def mutate(self, info, repair_id):
+        from .autopilot_service import execute_repair
+
+        result = execute_repair(info.context.user, repair_id)
+        return ExecuteRepair(
+            receipt=TransactionReceiptType(
+                success=result.get('success', False),
+                tx_hash=result.get('tx_hash'),
+                message=result.get('message', ''),
+            )
+        )
+
+
+class RevertAutopilotMove(graphene.Mutation):
+    """Revert the most recent Auto-Pilot move within the allowed window."""
+
+    receipt = graphene.Field(TransactionReceiptType)
+
+    @login_required
+    def mutate(self, info):
+        from .autopilot_service import revert_last_move
+
+        result = revert_last_move(info.context.user)
+        return RevertAutopilotMove(
+            receipt=TransactionReceiptType(
+                success=result.get('success', False),
+                tx_hash=result.get('tx_hash'),
+                message=result.get('message', ''),
+            )
+        )
+
+
+class SeedAutopilotDemo(graphene.Mutation):
+    """Create a demo repair action for Auto-Pilot UI testing."""
+
+    repair = graphene.Field(RepairActionType)
+
+    @login_required
+    def mutate(self, info):
+        from .autopilot_service import seed_demo_repair
+
+        demo = seed_demo_repair(info.context.user)
+        proof = demo.get('proof', {})
+        integrity = proof.get('integrity_check', {})
+
+        return SeedAutopilotDemo(
+            repair=RepairActionType(
+                id=demo.get('id'),
+                from_vault=demo.get('from_vault'),
+                to_vault=demo.get('to_vault'),
+                estimated_apy_delta=demo.get('estimated_apy_delta'),
+                gas_estimate=demo.get('gas_estimate'),
+                proof=RepairProofType(
+                    calmar_improvement=proof.get('calmar_improvement'),
+                    integrity_check=FinancialIntegrityType(
+                        altman_z_score=integrity.get('altman_z_score'),
+                        beneish_m_score=integrity.get('beneish_m_score'),
+                        is_erc4626_compliant=integrity.get('is_erc4626_compliant'),
+                    ),
+                    tvl_stability_check=proof.get('tvl_stability_check'),
+                    policy_alignment=proof.get('policy_alignment'),
+                    explanation=proof.get('explanation'),
+                ),
+            )
+        )
 
 
 def _resolve_wallet(user, wallet_address: str = None) -> str:
@@ -629,6 +754,11 @@ class DefiMutations(graphene.ObjectType):
     record_stake_transaction = RecordStakeTransaction.Field()
     validate_defi_transaction = ValidateDefiTransaction.Field()
     harvest_rewards = HarvestRewards.Field()
+    update_autopilot_policy = UpdateAutopilotPolicy.Field()
+    toggle_autopilot = ToggleAutopilot.Field()
+    execute_repair = ExecuteRepair.Field()
+    seed_autopilot_demo = SeedAutopilotDemo.Field()
+    revert_autopilot_move = RevertAutopilotMove.Field()
     # CamelCase aliases for GraphQL schema
     defiSupply = DefiSupply.Field()
     defiBorrow = DefiBorrow.Field()
@@ -636,3 +766,8 @@ class DefiMutations(graphene.ObjectType):
     recordStakeTransaction = RecordStakeTransaction.Field()
     validateDefiTransaction = ValidateDefiTransaction.Field()
     harvestRewards = HarvestRewards.Field()
+    updateAutopilotPolicy = UpdateAutopilotPolicy.Field()
+    toggleAutopilot = ToggleAutopilot.Field()
+    executeRepair = ExecuteRepair.Field()
+    seedAutopilotDemo = SeedAutopilotDemo.Field()
+    revertAutopilotMove = RevertAutopilotMove.Field()

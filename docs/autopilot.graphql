@@ -1,0 +1,80 @@
+"""
+Auto-Pilot GraphQL Schema (Spec)
+Defines the contract between the Agentic frontend and backend services.
+"""
+
+enum AutonomyLevel {
+  NOTIFY_ONLY
+  APPROVE_REPAIRS
+  AUTO_BOUNDED
+}
+
+enum RiskLevel {
+  FORTRESS
+  BALANCED
+  SPECULATIVE
+}
+
+type AutopilotPolicy {
+  targetApy: Float
+  maxDrawdown: Float
+  riskLevel: RiskLevel
+  level: AutonomyLevel
+  spendLimit24h: Float
+}
+
+input AutopilotPolicyInput {
+  targetApy: Float
+  maxDrawdown: Float
+  riskLevel: RiskLevel
+  level: AutonomyLevel
+  spendLimit24h: Float
+}
+
+type RepairProof {
+  calmarImprovement: Float
+  integrityCheck: FinancialIntegrity
+  tvlStabilityCheck: Boolean
+  policyAlignment: Boolean
+  explanation: String
+}
+
+type RepairAction {
+  id: ID!
+  fromVault: String!
+  toVault: String!
+  estimatedApyDelta: Float
+  gasEstimate: Float
+  proof: RepairProof!
+}
+
+type AutopilotStatus {
+  enabled: Boolean!
+  lastEvaluatedAt: String
+  policy: AutopilotPolicy
+}
+
+type TransactionReceipt {
+  success: Boolean!
+  txHash: String
+  message: String
+}
+
+# Reuse Risk Guardian types
+
+type FinancialIntegrity {
+  altmanZScore: Float
+  beneishMScore: Float
+  isErc4626Compliant: Boolean
+}
+
+extend type Query {
+  autopilotStatus: AutopilotStatus
+  pendingRepairs: [RepairAction]
+}
+
+extend type Mutation {
+  updateAutopilotPolicy(input: AutopilotPolicyInput!): AutopilotPolicy
+  executeRepair(repairId: ID!): TransactionReceipt
+  toggleAutopilot(enabled: Boolean!): Boolean
+}
