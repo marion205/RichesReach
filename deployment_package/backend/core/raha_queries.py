@@ -34,6 +34,14 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
+def _has_field(model, field_name: str) -> bool:
+    try:
+        model._meta.get_field(field_name)
+        return True
+    except Exception:
+        return False
+
+
 def _generate_mock_signals_helper(symbol: str, limit: int = 3, user=None):
     """Helper function to generate mock RAHA signals for UI testing"""
     from django.utils import timezone
@@ -257,17 +265,19 @@ class RAHAQueries(graphene.ObjectType):
             logger.debug(f"Cache hit for strategies query (user={user.id})")
             return cached_result
         
-        # Query database with select_related for related objects
-        queryset = Strategy.objects.filter(enabled=True).select_related('created_by')
+        # Query database with select_related for related objects (if field exists)
+        queryset = Strategy.objects.filter(enabled=True)
+        if _has_field(Strategy, 'created_by'):
+            queryset = queryset.select_related('created_by')
         
-        # Filter custom strategies - only show user's own custom strategies
-        if not include_custom:
-            queryset = queryset.filter(is_custom=False)
-        else:
-            # Include user's custom strategies
-            queryset = queryset.filter(
-                models.Q(is_custom=False) | models.Q(is_custom=True, created_by=user)
-            )
+        # Filter custom strategies - only if model supports custom fields
+        if _has_field(Strategy, 'is_custom'):
+            if not include_custom:
+                queryset = queryset.filter(is_custom=False)
+            elif _has_field(Strategy, 'created_by'):
+                queryset = queryset.filter(
+                    models.Q(is_custom=False) | models.Q(is_custom=True, created_by=user)
+                )
         
         if market_type:
             queryset = queryset.filter(market_type=market_type)
@@ -426,6 +436,17 @@ class RAHAQueries(graphene.ObjectType):
             cache_query_result(cache_key, result, timeout=CACHE_TIMEOUTS['raha_signals'])
         
         return result
+
+    def resolve_raha_signals(self, info, symbol=None, timeframe=None, strategy_version_id=None, limit=20, offset=0):
+        """Snake_case alias for resolve_rahaSignals (tests and legacy clients)."""
+        return self.resolve_rahaSignals(
+            info,
+            symbol=symbol,
+            timeframe=timeframe,
+            strategy_version_id=strategy_version_id,
+            limit=limit,
+            offset=offset,
+        )
     
     def resolve_backtest_run(self, info, id):
         """Get a specific backtest run (cached)"""

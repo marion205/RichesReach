@@ -391,7 +391,7 @@ class RAHABacktestService:
                 net_proceeds = proceeds - commission - slippage
                 
                 pnl = net_proceeds - (shares * entry_price)
-                pnl_percent = (pnl / (shares * entry_price)) * 100) if entry_price > 0 else 0
+                pnl_percent = (pnl / (shares * entry_price)) * 100 if entry_price > 0 else 0
                 
                 cash += net_proceeds
                 equity = cash

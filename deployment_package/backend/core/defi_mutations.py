@@ -141,6 +141,9 @@ class UpdateAutopilotPolicy(graphene.Mutation):
                 risk_level=policy.get('risk_level'),
                 level=policy.get('level'),
                 spend_limit_24h=policy.get('spend_limit_24h'),
+                spend_permission_enabled=policy.get('spend_permission_enabled'),
+                spend_permission_expires_at=policy.get('spend_permission_expires_at'),
+                orchestration_mode=policy.get('orchestration_mode'),
             )
         )
 
@@ -159,6 +162,65 @@ class ToggleAutopilot(graphene.Mutation):
 
         result = set_autopilot_enabled(info.context.user, enabled)
         return ToggleAutopilot(ok=bool(result))
+
+
+class GrantAutopilotSpendPermission(graphene.Mutation):
+    """Grant spend-permission autonomy for a limited window."""
+
+    class Arguments:
+        hours = graphene.Int(required=False)
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    policy = graphene.Field(AutopilotPolicyType)
+
+    @login_required
+    def mutate(self, info, hours=None):
+        from .autopilot_service import grant_spend_permission
+
+        policy = grant_spend_permission(info.context.user, hours=hours or 24)
+        return GrantAutopilotSpendPermission(
+            ok=True,
+            message='Spend permission granted.',
+            policy=AutopilotPolicyType(
+                target_apy=policy.get('target_apy'),
+                max_drawdown=policy.get('max_drawdown'),
+                risk_level=policy.get('risk_level'),
+                level=policy.get('level'),
+                spend_limit_24h=policy.get('spend_limit_24h'),
+                spend_permission_enabled=policy.get('spend_permission_enabled'),
+                spend_permission_expires_at=policy.get('spend_permission_expires_at'),
+                orchestration_mode=policy.get('orchestration_mode'),
+            ),
+        )
+
+
+class RevokeAutopilotSpendPermission(graphene.Mutation):
+    """Revoke spend-permission autonomy immediately."""
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+    policy = graphene.Field(AutopilotPolicyType)
+
+    @login_required
+    def mutate(self, info):
+        from .autopilot_service import revoke_spend_permission
+
+        policy = revoke_spend_permission(info.context.user)
+        return RevokeAutopilotSpendPermission(
+            ok=True,
+            message='Spend permission revoked.',
+            policy=AutopilotPolicyType(
+                target_apy=policy.get('target_apy'),
+                max_drawdown=policy.get('max_drawdown'),
+                risk_level=policy.get('risk_level'),
+                level=policy.get('level'),
+                spend_limit_24h=policy.get('spend_limit_24h'),
+                spend_permission_enabled=policy.get('spend_permission_enabled'),
+                spend_permission_expires_at=policy.get('spend_permission_expires_at'),
+                orchestration_mode=policy.get('orchestration_mode'),
+            ),
+        )
 
 
 class ExecuteRepair(graphene.Mutation):
@@ -222,6 +284,11 @@ class SeedAutopilotDemo(graphene.Mutation):
                 to_vault=demo.get('to_vault'),
                 estimated_apy_delta=demo.get('estimated_apy_delta'),
                 gas_estimate=demo.get('gas_estimate'),
+                source=demo.get('source'),
+                from_pool_id=demo.get('from_pool_id'),
+                to_pool_id=demo.get('to_pool_id'),
+                execution_plan=demo.get('execution_plan'),
+                agent_trace=demo.get('agent_trace'),
                 proof=RepairProofType(
                     calmar_improvement=proof.get('calmar_improvement'),
                     integrity_check=FinancialIntegrityType(
@@ -798,6 +865,8 @@ class DefiMutations(graphene.ObjectType):
     harvest_rewards = HarvestRewards.Field()
     update_autopilot_policy = UpdateAutopilotPolicy.Field()
     toggle_autopilot = ToggleAutopilot.Field()
+    grant_autopilot_spend_permission = GrantAutopilotSpendPermission.Field()
+    revoke_autopilot_spend_permission = RevokeAutopilotSpendPermission.Field()
     execute_repair = ExecuteRepair.Field()
     seed_autopilot_demo = SeedAutopilotDemo.Field()
     revert_autopilot_move = RevertAutopilotMove.Field()
@@ -812,6 +881,8 @@ class DefiMutations(graphene.ObjectType):
     harvestRewards = HarvestRewards.Field()
     updateAutopilotPolicy = UpdateAutopilotPolicy.Field()
     toggleAutopilot = ToggleAutopilot.Field()
+    grantAutopilotSpendPermission = GrantAutopilotSpendPermission.Field()
+    revokeAutopilotSpendPermission = RevokeAutopilotSpendPermission.Field()
     executeRepair = ExecuteRepair.Field()
     seedAutopilotDemo = SeedAutopilotDemo.Field()
     revertAutopilotMove = RevertAutopilotMove.Field()

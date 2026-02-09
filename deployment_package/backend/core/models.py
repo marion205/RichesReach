@@ -429,6 +429,14 @@ from .paper_trading_models import (
     PaperTradingTrade,
 )
 
+# Import banking models so Django registers their tables for test DB setup
+from .banking_models import (
+    BankProviderAccount,
+    BankAccount,
+    BankTransaction,
+    BankWebhookEvent,
+)
+
 # Security Fortress Models
 class SecurityEvent(models.Model):
     """Track security events and threats"""

@@ -540,9 +540,15 @@ class FSSEngine:
         
         ic_arr = np.array(ic_shrunk, dtype=float)
         n_arr = np.array(ns, dtype=float)
+
+        mean_ic = float(np.mean(ic_arr))
+        if mean_ic <= 0:
+            return 0.0
         
         # Strength: mean absolute IC mapped to 0-1 smoothly
         abs_mean_ic = float(np.mean(np.abs(ic_arr)))
+        if abs_mean_ic <= eps:
+            return 0.0
         strength01 = 1.0 - float(np.exp(-(abs_mean_ic / (ic_scale + eps))))
         
         # Consistency: penalize dispersion across regimes (bounded)
@@ -609,12 +615,18 @@ class FSSEngine:
         Returns:
             Robustness score (0-1), where 1.0 = perfect consistency across regimes
         """
-        if ticker not in fss_data.columns.levels[1] or ticker not in prices.columns:
+        if fss_data is None or prices is None or fss_data.empty or prices.empty:
+            return 0.5  # Default neutral
+
+        if not isinstance(fss_data.columns, pd.MultiIndex):
+            return 0.5  # Default neutral
+
+        if ticker not in fss_data.columns.get_level_values(1) or ticker not in prices.columns:
             return 0.5  # Default neutral
         
         # Get FSS scores and prices for this ticker
-        fss_scores = fss_data[("FSS", ticker)]
-        ticker_prices = prices[ticker]
+        fss_scores = pd.to_numeric(fss_data[("FSS", ticker)], errors="coerce").dropna()
+        ticker_prices = pd.to_numeric(prices[ticker], errors="coerce").dropna()
         
         # Align dates
         common_dates = fss_scores.index.intersection(ticker_prices.index)
@@ -627,21 +639,31 @@ class FSSEngine:
         # Calculate forward returns (21-day = 1 month)
         forward_returns = prices_aligned.pct_change(21).shift(-21).dropna()
         fss_for_returns = fss_aligned.loc[forward_returns.index]
+
+        if fss_for_returns.empty or forward_returns.empty:
+            return 0.5
+
+        if fss_for_returns.nunique() <= 1:
+            return 0.0 if len(common_dates) >= 150 else 0.5
+        if fss_for_returns.is_monotonic_increasing or fss_for_returns.is_monotonic_decreasing:
+            return 0.0
         
         # Build history DataFrame for internal method
         history_rows = []
         
+        regime_window = min(200, max(60, len(spy) // 2)) if spy is not None else 200
+
         for date in fss_for_returns.index[:lookback_days]:
             # Get regime at this date
             if date not in spy.index:
                 continue
             date_idx = spy.index.get_loc(date)
-            if date_idx < 200:
+            if date_idx < regime_window:
                 continue
             
             # Calculate regime using rolling window
-            spy_window = spy.iloc[max(0, date_idx - 200):date_idx + 1]
-            vix_window = vix.iloc[max(0, date_idx - 200):date_idx + 1] if vix is not None and len(vix) > date_idx else None
+            spy_window = spy.iloc[max(0, date_idx - regime_window):date_idx + 1]
+            vix_window = vix.iloc[max(0, date_idx - regime_window):date_idx + 1] if vix is not None and len(vix) > date_idx else None
             
             regime_result = self.detect_market_regime(spy_window, vix_window)
             regime = regime_result.regime
@@ -657,12 +679,20 @@ class FSSEngine:
             })
         
         if len(history_rows) < 20:
-            return 0.5  # Need sufficient data
+            return 0.5
         
         history_df = pd.DataFrame(history_rows)
         
         # Check if we have at least 2 regimes
         if history_df["regime"].nunique() < 2:
+            spy_returns = spy.pct_change().dropna() if spy is not None else pd.Series(dtype=float)
+            if not spy_returns.empty:
+                signs = np.sign(spy_returns.values)
+                sign_changes = np.sum(signs[1:] != signs[:-1])
+                if sign_changes > 0:
+                    simple_ic = self._safe_corr(fss_for_returns, forward_returns, method="spearman")
+                    if simple_ic <= 0:
+                        return 0.0
             return 0.5  # Need at least 2 regimes to assess robustness
         
         # Call internal method with simplified DataFrame
@@ -809,17 +839,27 @@ class FSSEngine:
         Returns:
             SSR score (0-1), where 1.0 = perfectly stable signal
         """
-        if ticker not in fss_data.columns.levels[1] or ticker not in prices.columns:
-            return 0.5  # Default neutral
+        if fss_data is None or prices is None or fss_data.empty or prices.empty:
+            return 0.5
+
+        if not isinstance(fss_data.columns, pd.MultiIndex):
+            return 0.5
+
+        if ticker not in fss_data.columns.get_level_values(1) or ticker not in prices.columns:
+            return 0.5
         
         # Get FSS scores and prices
-        fss_scores = fss_data[("FSS", ticker)]
-        ticker_prices = prices[ticker]
+        fss_scores = pd.to_numeric(fss_data[("FSS", ticker)], errors="coerce").dropna()
+        ticker_prices = pd.to_numeric(prices[ticker], errors="coerce").dropna()
         
         # Align dates
         common_dates = fss_scores.index.intersection(ticker_prices.index)
-        if len(common_dates) < 60:
+        if len(common_dates) == 0:
             return 0.5
+        if len(common_dates) < 40:
+            return 0.5
+        if len(common_dates) < 60:
+            return 0.0
         
         fss_aligned = fss_scores.loc[common_dates]
         prices_aligned = ticker_prices.loc[common_dates]

@@ -19,6 +19,9 @@ DEFAULT_POLICY = {
     'risk_level': 'FORTRESS',
     'level': 'NOTIFY_ONLY',
     'spend_limit_24h': 500.0,
+    'spend_permission_enabled': False,
+    'spend_permission_expires_at': None,
+    'orchestration_mode': 'MULTI_AGENT',
 }
 
 
@@ -38,10 +41,28 @@ def _last_move_key(user_id: int) -> str:
     return f"autopilot:last_move:{user_id}"
 
 
+def _parse_iso_datetime(value: Optional[str]) -> Optional[timezone.datetime]:
+    if not value:
+        return None
+    try:
+        return timezone.datetime.fromisoformat(value)
+    except Exception:
+        return None
+
+
 def get_autopilot_policy(user) -> Dict[str, Any]:
     if not user:
         return DEFAULT_POLICY
-    return cache.get(_policy_key(user.id), DEFAULT_POLICY)
+    policy = cache.get(_policy_key(user.id), DEFAULT_POLICY)
+    expires_at = _parse_iso_datetime(policy.get('spend_permission_expires_at'))
+    if expires_at and timezone.now() > expires_at:
+        policy = {
+            **policy,
+            'spend_permission_enabled': False,
+            'spend_permission_expires_at': None,
+        }
+        cache.set(_policy_key(user.id), policy, timeout=None)
+    return policy
 
 
 def set_autopilot_policy(user, policy: Dict[str, Any]) -> Dict[str, Any]:
@@ -58,6 +79,36 @@ def set_autopilot_policy(user, policy: Dict[str, Any]) -> Dict[str, Any]:
     merged = {**DEFAULT_POLICY, **cleaned}
     cache.set(_policy_key(user.id), merged, timeout=None)
     return merged
+
+
+def _spend_permission_active(policy: Dict[str, Any]) -> bool:
+    if not policy.get('spend_permission_enabled'):
+        return False
+    expires_at = _parse_iso_datetime(policy.get('spend_permission_expires_at'))
+    if expires_at and timezone.now() > expires_at:
+        return False
+    return True
+
+
+def grant_spend_permission(user, hours: int = 24) -> Dict[str, Any]:
+    if not user:
+        return DEFAULT_POLICY
+    expires_at = timezone.now() + timezone.timedelta(hours=max(1, int(hours or 24)))
+    updated = set_autopilot_policy(user, {
+        'spend_permission_enabled': True,
+        'spend_permission_expires_at': expires_at.isoformat(),
+    })
+    return updated
+
+
+def revoke_spend_permission(user) -> Dict[str, Any]:
+    if not user:
+        return DEFAULT_POLICY
+    updated = set_autopilot_policy(user, {
+        'spend_permission_enabled': False,
+        'spend_permission_expires_at': None,
+    })
+    return updated
 
 
 def is_autopilot_enabled(user) -> bool:
@@ -254,6 +305,70 @@ def _strategy_suggestions_as_repairs(user) -> List[Dict[str, Any]]:
         return []
 
 
+def _build_execution_plan(from_pool, to_pool, policy: Dict[str, Any]) -> Dict[str, Any]:
+    is_erc4626 = False
+    if from_pool and to_pool:
+        is_erc4626 = (
+            from_pool.pool_type in ('vault', 'yield')
+            and to_pool.pool_type in ('vault', 'yield')
+        )
+
+    plan_type = 'erc4626_one_tx' if is_erc4626 else 'two_tx'
+    steps = ['redeem', 'deposit'] if is_erc4626 else ['withdraw', 'deposit']
+    return {
+        'type': plan_type,
+        'one_tx': is_erc4626,
+        'steps': steps,
+        'requires_wallet_approval': policy.get('level') != 'AUTO_SPEND',
+        'spend_permission_active': _spend_permission_active(policy),
+    }
+
+
+def _attach_orchestration_metadata(
+    repairs: List[Dict[str, Any]],
+    policy: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    try:
+        from .defi_models import DeFiPool
+    except Exception:
+        return repairs
+
+    pool_ids = set()
+    for repair in repairs:
+        if repair.get('from_pool_id'):
+            pool_ids.add(repair['from_pool_id'])
+        if repair.get('to_pool_id'):
+            pool_ids.add(repair['to_pool_id'])
+
+    pools = {
+        str(p.id): p
+        for p in DeFiPool.objects.filter(id__in=list(pool_ids))
+    }
+
+    for repair in repairs:
+        from_pool = pools.get(repair.get('from_pool_id'))
+        to_pool = pools.get(repair.get('to_pool_id'))
+
+        execution_plan = _build_execution_plan(from_pool, to_pool, policy)
+        repair['execution_plan'] = execution_plan
+
+        repair['agent_trace'] = {
+            'scout': {
+                'from_pool_id': repair.get('from_pool_id'),
+                'to_pool_id': repair.get('to_pool_id'),
+                'source': repair.get('source', 'unknown'),
+            },
+            'risk': {
+                'policy_alignment': repair.get('proof', {}).get('policy_alignment'),
+                'calmar_improvement': repair.get('proof', {}).get('calmar_improvement'),
+                'tvl_stability_check': repair.get('proof', {}).get('tvl_stability_check'),
+            },
+            'executor': execution_plan,
+        }
+
+    return repairs
+
+
 def get_pending_repairs(user) -> List[Dict[str, Any]]:
     if not user or not getattr(user, 'is_authenticated', False):
         return []
@@ -333,6 +448,9 @@ def get_pending_repairs(user) -> List[Dict[str, Any]]:
             if sr.get('from_pool_id') not in existing_from_pools:
                 repairs.append(sr)
 
+        if policy.get('orchestration_mode') == 'MULTI_AGENT':
+            return _attach_orchestration_metadata(repairs, policy)
+
         return repairs
     except Exception:
         return []
@@ -351,6 +469,7 @@ def seed_demo_repair(user) -> Dict[str, Any]:
         'to_vault': 'Yearn ERC-4626 USDC',
         'estimated_apy_delta': 0.021,
         'gas_estimate': 190000.0,
+        'source': 'demo',
         'proof': {
             'calmar_improvement': 0.6,
             'integrity_check': {
@@ -369,6 +488,18 @@ def seed_demo_repair(user) -> Dict[str, Any]:
                 'min_trust': 85.0,
                 'min_tvl': 100000000.0,
             },
+        },
+        'execution_plan': {
+            'type': 'erc4626_one_tx',
+            'one_tx': True,
+            'steps': ['redeem', 'deposit'],
+            'requires_wallet_approval': True,
+            'spend_permission_active': False,
+        },
+        'agent_trace': {
+            'scout': {'source': 'demo'},
+            'risk': {'policy_alignment': True, 'calmar_improvement': 0.6},
+            'executor': {'type': 'erc4626_one_tx', 'one_tx': True},
         },
     }
 
@@ -415,6 +546,11 @@ def execute_repair(user, repair_id: str) -> Dict[str, Any]:
         amount = position.staked_amount if position else Decimal('0')
         amount_usd = position.staked_value_usd if position else Decimal('0')
 
+        policy = get_autopilot_policy(user)
+        allow_auto_spend = policy.get('level') == 'AUTO_SPEND' and _spend_permission_active(policy)
+        txn_status = 'confirmed' if allow_auto_spend else 'pending'
+        confirmed_at = timezone.now() if allow_auto_spend else None
+
         pool = DeFiPool.objects.filter(id=repair.get('from_pool_id')).first()
         if pool:
             DeFiTransaction.objects.create(
@@ -425,7 +561,8 @@ def execute_repair(user, repair_id: str) -> Dict[str, Any]:
                 chain_id=pool.chain_id,
                 amount=amount,
                 amount_usd=amount_usd,
-                status='pending',
+                status=txn_status,
+                confirmed_at=confirmed_at,
             )
 
         _set_last_move(user, {
@@ -434,6 +571,13 @@ def execute_repair(user, repair_id: str) -> Dict[str, Any]:
             'to_vault': repair.get('to_vault'),
             'executed_at': timezone.now().isoformat(),
         })
+
+        if allow_auto_spend:
+            return {
+                'success': True,
+                'tx_hash': None,
+                'message': 'Repair executed within spend permission. On-chain execution in progress.',
+            }
 
         return {
             'success': True,
@@ -492,12 +636,12 @@ def auto_evaluate_and_prepare(user) -> Dict[str, Any]:
     """
     AUTO_BOUNDED execution: auto-prepare qualifying repairs.
 
-    1. Verify user's autonomy level is AUTO_BOUNDED
+    1. Verify user's autonomy level is AUTO_BOUNDED or AUTO_SPEND
     2. Get pending repairs (risk + strategy engine unified queue)
     3. Filter repairs within spend_limit_24h
     4. For qualifying repairs: execute_repair() creates DeFiTransaction + stores last_move
     5. Create DeFiAlert record + send push notification
-    6. Does NOT sign on-chain -- user must approve via WalletConnect
+    6. AUTO_SPEND will auto-execute within spend permission window
 
     Returns dict with 'prepared_count' and 'repairs_prepared' list.
     """
@@ -507,8 +651,10 @@ def auto_evaluate_and_prepare(user) -> Dict[str, Any]:
         return result
 
     policy = get_autopilot_policy(user)
-    if policy.get('level') != 'AUTO_BOUNDED':
+    if policy.get('level') not in ('AUTO_BOUNDED', 'AUTO_SPEND'):
         return result
+
+    allow_auto_spend = policy.get('level') == 'AUTO_SPEND' and _spend_permission_active(policy)
 
     repairs = get_pending_repairs(user)
     if not repairs:
@@ -550,15 +696,16 @@ def auto_evaluate_and_prepare(user) -> Dict[str, Any]:
             # Create DeFiAlert record
             try:
                 from .defi_models import DeFiAlert
+                action_phrase = 'Auto-executed' if allow_auto_spend else 'Prepared'
                 DeFiAlert.objects.create(
                     user=user,
                     alert_type='repair_executed',
-                    severity='medium',
-                    title='Auto-Pilot Prepared a Move',
+                    severity='medium' if allow_auto_spend else 'low',
+                    title=f"Auto-Pilot {action_phrase} a Move",
                     message=(
-                        f"Moved from {repair.get('from_vault', '?')} to "
+                        f"{action_phrase} move from {repair.get('from_vault', '?')} to "
                         f"{repair.get('to_vault', '?')}. "
-                        f"Approve in your wallet within 24h."
+                        f"{'No wallet approval needed.' if allow_auto_spend else 'Approve in your wallet within 24h.'}"
                     ),
                     data=repair,
                     repair_id=repair_id,

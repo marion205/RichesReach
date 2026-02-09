@@ -797,6 +797,10 @@ class PremiumQueries(graphene.ObjectType):
         logger.info(
             "Portfolio metrics result for user %s: %s", user_id, type(result)
         )
+        if isinstance(result, dict):
+            return AIRecommendationsType(**result)
+        if isinstance(result, dict):
+            return AIRecommendationsType(**result)
         return result
 
     def resolve_advanced_stock_screening(self, info, **kwargs):
@@ -881,10 +885,26 @@ class PremiumQueries(graphene.ObjectType):
         profile_dict = None
         if profile:
             # Profile is a ProfileInput object, extract values
+            goals_value = (
+                getattr(profile, "investmentGoals", None)
+                or getattr(profile, "investment_goals", None)
+            )
+            if goals_value is None or isinstance(goals_value, type):
+                goals_list = []
+            elif isinstance(goals_value, (list, tuple, set)):
+                goals_list = list(goals_value)
+            elif isinstance(goals_value, str):
+                goals_list = [goals_value]
+            else:
+                try:
+                    goals_list = list(goals_value)
+                except TypeError:
+                    goals_list = []
+
             profile_dict = {
                 "age": getattr(profile, "age", None),
                 "income_bracket": getattr(profile, "incomeBracket", None) or getattr(profile, "income_bracket", None),
-                "investment_goals": list(getattr(profile, "investmentGoals", []) or getattr(profile, "investment_goals", []) or []),
+                "investment_goals": goals_list,
                 "investment_horizon_years": getattr(profile, "investmentHorizonYears", None) or getattr(profile, "investment_horizon_years", None),
                 "risk_tolerance": risk_tolerance,  # Already extracted above
             }
@@ -903,6 +923,26 @@ class PremiumQueries(graphene.ObjectType):
             except Exception as e:
                 logger.debug(f"Could not get profile from user: {e}")
         
+        def _to_json_safe(value):
+            if value is None or isinstance(value, (str, int, float, bool)):
+                return value
+            if isinstance(value, (list, tuple, set)):
+                return [_to_json_safe(v) for v in value]
+            if isinstance(value, dict):
+                return {str(k): _to_json_safe(v) for k, v in value.items()}
+            if hasattr(value, "value"):
+                return _to_json_safe(getattr(value, "value"))
+            try:
+                return int(value)
+            except Exception:
+                try:
+                    return float(value)
+                except Exception:
+                    return str(value)
+
+        if profile_dict is not None:
+            profile_dict = _to_json_safe(profile_dict)
+
         analytics_service = PremiumAnalyticsService()
         result = analytics_service.get_ai_recommendations(
             user_id, risk_tolerance, profile=profile_dict
@@ -930,6 +970,8 @@ class PremiumQueries(graphene.ObjectType):
                 "[AI RECS] ⚠️ Unexpected result type for user %s: type=%s, value=%s",
                 user_id, type(result), result
             )
+        if isinstance(result, dict):
+            return AIRecommendationsType(**result)
         return result
 
     def resolve_research_report(self, info, symbol: str, report_type: str = 'comprehensive'):

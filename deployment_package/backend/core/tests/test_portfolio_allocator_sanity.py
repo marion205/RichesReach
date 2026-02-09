@@ -8,13 +8,7 @@ This is critical to ensure the portfolio protection actually works.
 import unittest
 import pandas as pd
 import numpy as np
-import sys
-import os
-
-# Add backend to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../')))
-
-from deployment_package.backend.core.chan_portfolio_allocator import ChanPortfolioAllocator, get_chan_portfolio_allocator
+from core.chan_portfolio_allocator import ChanPortfolioAllocator, get_chan_portfolio_allocator
 
 
 class TestPortfolioAllocatorSanity(unittest.TestCase):

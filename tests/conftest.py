@@ -376,11 +376,14 @@ def pytest_collection_modifyitems(config, items):
         if "slow" in item.name or "load" in item.name:
             item.add_marker(pytest.mark.slow)
 
-# Test reporting
+# Test reporting (optional pytest-html integration)
+@pytest.hookimpl(optionalhook=True)
 def pytest_html_report_title(report):
     """Customize HTML report title."""
     report.title = "RichesReach AI - Comprehensive Test Report"
 
+
+@pytest.hookimpl(optionalhook=True)
 def pytest_html_results_summary(prefix, summary, postfix):
     """Customize HTML report summary."""
     prefix.extend([

@@ -3,6 +3,8 @@
 Quick test to verify voice endpoints are working.
 Tests for 404s and basic functionality.
 """
+__test__ = False
+
 import asyncio
 import aiohttp
 import json

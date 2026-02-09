@@ -192,7 +192,7 @@ class TestStartFastlinkView(BankingViewsTestCase):
         """Test successful FastLink token creation"""
         # Setup mock
         mock_client = MagicMock()
-        mock_client.ensure_user.return_value = True
+        mock_client.ensure_user_registered.return_value = True
         mock_client.create_fastlink_token.return_value = 'test_token_123'
         mock_client.fastlink_url = 'https://fastlink.example.com'
         mock_client_class.return_value = mock_client
@@ -208,15 +208,16 @@ class TestStartFastlinkView(BankingViewsTestCase):
         self.assertIn('expiresAt', data)
         
         # Verify client methods were called
-        mock_client.ensure_user.assert_called_once_with(str(self.user.id))
-        mock_client.create_fastlink_token.assert_called_once_with(str(self.user.id))
+        expected_login = f"rr_{self.user.id}".replace(' ', '_')[:150]
+        mock_client.ensure_user_registered.assert_called_once_with(expected_login, self.user.email)
+        mock_client.create_fastlink_token.assert_called_once_with(expected_login)
     
     @patch.dict(os.environ, {'USE_YODLEE': 'true'})
     @patch('core.banking_views.EnhancedYodleeClient')
     def test_fastlink_user_creation_failure(self, mock_client_class):
         """Test handling when user creation fails"""
         mock_client = MagicMock()
-        mock_client.ensure_user.return_value = False
+        mock_client.ensure_user_registered.return_value = False
         mock_client_class.return_value = mock_client
         
         request = self._create_authenticated_request('GET', '/api/yodlee/fastlink/start')
@@ -232,7 +233,7 @@ class TestStartFastlinkView(BankingViewsTestCase):
     def test_fastlink_token_creation_failure(self, mock_client_class):
         """Test handling when token creation fails"""
         mock_client = MagicMock()
-        mock_client.ensure_user.return_value = True
+        mock_client.ensure_user_registered.return_value = True
         mock_client.create_fastlink_token.return_value = None
         mock_client_class.return_value = mock_client
         

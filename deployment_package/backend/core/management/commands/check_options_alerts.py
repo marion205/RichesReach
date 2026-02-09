@@ -6,6 +6,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 from datetime import timedelta
 from decimal import Decimal
+import os
 import logging
 
 from core.options_alert_models import OptionsAlert, OptionsAlertNotification
@@ -26,6 +27,8 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         dry_run = options['dry_run']
+        email_enabled = os.getenv('OPTIONS_ALERT_EMAIL_ENABLED', 'false').lower() == 'true'
+        push_enabled = os.getenv('OPTIONS_ALERT_PUSH_ENABLED', 'false').lower() == 'true'
         
         # Get all active alerts
         active_alerts = OptionsAlert.objects.filter(status='ACTIVE')
@@ -125,36 +128,39 @@ class Command(BaseCommand):
                             notification_type='in_app',
                             message=message
                         )
-                        # Send email to user
-                        try:
-                            from django.core.mail import send_mail
-                            from django.conf import settings
-                            user_email = getattr(alert.user, 'email', None)
-                            if user_email:
-                                subject = f"Options Alert: {alert.symbol} {alert.alert_type}"
-                                send_mail(
-                                    subject=subject,
-                                    message=message,
-                                    from_email=settings.DEFAULT_FROM_EMAIL,
-                                    recipient_list=[user_email],
-                                    fail_silently=True,
-                                )
+                        # Send email to user if enabled
+                        if email_enabled:
+                            try:
+                                from django.core.mail import send_mail
+                                from django.conf import settings
+                                user_email = getattr(alert.user, 'email', None)
+                                if user_email:
+                                    subject = f"Options Alert: {alert.symbol} {alert.alert_type}"
+                                    send_mail(
+                                        subject=subject,
+                                        message=message,
+                                        from_email=settings.DEFAULT_FROM_EMAIL,
+                                        recipient_list=[user_email],
+                                        fail_silently=True,
+                                    )
+                                    OptionsAlertNotification.objects.create(
+                                        alert=alert,
+                                        notification_type='email',
+                                        message=message
+                                    )
+                            except Exception as e:
+                                logger.warning(f"Options alert email failed: {e}")
+
+                        # Record push notification if enabled
+                        if push_enabled:
+                            try:
                                 OptionsAlertNotification.objects.create(
                                     alert=alert,
-                                    notification_type='email',
+                                    notification_type='push',
                                     message=message
                                 )
-                        except Exception as e:
-                            logger.warning(f"Options alert email failed: {e}")
-                        # Record push notification (in_app + email done; push would use FCM/APNs when wired)
-                        try:
-                            OptionsAlertNotification.objects.create(
-                                alert=alert,
-                                notification_type='push',
-                                message=message
-                            )
-                        except Exception:
-                            pass
+                            except Exception:
+                                pass
                     self.stdout.write(self.style.SUCCESS(f"✓ Triggered: {message}"))
                     triggered_count += 1
                     

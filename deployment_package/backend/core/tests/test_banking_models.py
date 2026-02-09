@@ -136,6 +136,9 @@ class BankAccountTestCase(TestCase):
             provider_account=self.provider_account,
             yodlee_account_id='acc_456',
             provider='Test Bank',
+            name='Checking Account',
+            mask='1234',
+            account_type='CHECKING',
         )
         
         self.assertFalse(bank_account.is_verified)
@@ -150,6 +153,9 @@ class BankAccountTestCase(TestCase):
             provider_account=self.provider_account,
             yodlee_account_id='acc_456',
             provider='Test Bank',
+            name='Checking Account',
+            mask='1234',
+            account_type='CHECKING',
         )
         
         # Try to create another with same yodlee_account_id
@@ -159,6 +165,9 @@ class BankAccountTestCase(TestCase):
                 provider_account=self.provider_account,
                 yodlee_account_id='acc_456',
                 provider='Another Bank',
+                name='Checking Account',
+                mask='1234',
+                account_type='CHECKING',
             )
     
     def test_bank_account_cascade_delete(self):
@@ -168,6 +177,9 @@ class BankAccountTestCase(TestCase):
             provider_account=self.provider_account,
             yodlee_account_id='acc_456',
             provider='Test Bank',
+            name='Checking Account',
+            mask='1234',
+            account_type='CHECKING',
         )
         
         account_id = bank_account.id
@@ -196,6 +208,9 @@ class BankTransactionTestCase(TestCase):
             provider_account=self.provider_account,
             yodlee_account_id='acc_456',
             provider='Test Bank',
+            name='Checking Account',
+            mask='1234',
+            account_type='CHECKING',
         )
     
     def test_create_transaction(self):
@@ -229,6 +244,7 @@ class BankTransactionTestCase(TestCase):
             amount=-50.0,
             description='Test Transaction',
             posted_date=posted_date,
+            transaction_type='DEBIT',
         )
         
         # Try to create duplicate
@@ -240,6 +256,7 @@ class BankTransactionTestCase(TestCase):
                 amount=-50.0,
                 description='Test Transaction',
                 posted_date=posted_date,
+                transaction_type='DEBIT',
             )
     
     def test_transaction_positive_amount(self):
@@ -266,6 +283,7 @@ class BankTransactionTestCase(TestCase):
             amount=-50.0,
             description='Test Transaction',
             posted_date=timezone.now().date(),
+            transaction_type='DEBIT',
         )
         
         transaction_id = transaction.id

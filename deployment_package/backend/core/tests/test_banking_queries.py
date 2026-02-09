@@ -39,6 +39,8 @@ class BankingQueriesTestCase(TestCase):
             yodlee_account_id='acc_456',
             provider='Test Bank',
             name='Checking Account',
+            mask='1234',
+            account_type='CHECKING',
             is_verified=True,
         )
     
@@ -108,6 +110,7 @@ class BankingQueriesTestCase(TestCase):
             yodlee_transaction_id='txn_789',
             amount=-50.0,
             description='Test Transaction',
+            transaction_type='DEBIT',
             posted_date=timezone.now().date(),
         )
         
@@ -136,6 +139,7 @@ class BankingQueriesTestCase(TestCase):
             yodlee_transaction_id='txn_789',
             amount=-50.0,
             description='Test Transaction',
+            transaction_type='DEBIT',
             posted_date=timezone.now().date(),
         )
         
@@ -202,6 +206,9 @@ class BankingGraphQLIntegrationTestCase(TestCase):
             provider_account=provider_account,
             yodlee_account_id='acc_456',
             provider='Test Bank',
+            name='Checking Account',
+            mask='1234',
+            account_type='CHECKING',
             is_verified=True,
         )
         
@@ -235,6 +242,9 @@ class BankingGraphQLIntegrationTestCase(TestCase):
             provider_account=provider_account,
             yodlee_account_id='acc_456',
             provider='Test Bank',
+            name='Checking Account',
+            mask='1234',
+            account_type='CHECKING',
         )
         transaction = BankTransaction.objects.create(
             user=self.user,
@@ -242,6 +252,7 @@ class BankingGraphQLIntegrationTestCase(TestCase):
             yodlee_transaction_id='txn_789',
             amount=-50.0,
             description='Test Transaction',
+            transaction_type='DEBIT',
             posted_date=timezone.now().date(),
         )
         

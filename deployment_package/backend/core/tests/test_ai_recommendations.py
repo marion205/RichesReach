@@ -5,7 +5,7 @@ import time
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from core.models import Stock, IncomeProfile
-from core.queries import Query
+from core.premium_types import PremiumQueries
 from core.types import ProfileInput
 import logging
 
@@ -69,7 +69,7 @@ class AIRecommendationsTestCase(TestCase):
     
     def test_basic_ai_recommendations(self):
         """Test basic AI recommendations functionality"""
-        query = Query()
+        query = PremiumQueries()
         info = self._create_mock_info(self.user)
         
         start_time = time.time()
@@ -101,7 +101,7 @@ class AIRecommendationsTestCase(TestCase):
     
     def test_ai_recommendations_with_profile(self):
         """Test AI recommendations with custom profile"""
-        query = Query()
+        query = PremiumQueries()
         info = self._create_mock_info(self.user)
         
         profile = ProfileInput(
@@ -138,7 +138,7 @@ class AIRecommendationsTestCase(TestCase):
     
     def test_ai_recommendations_performance(self):
         """Test performance with multiple calls"""
-        query = Query()
+        query = PremiumQueries()
         info = self._create_mock_info(self.user)
         
         times = []
@@ -170,7 +170,7 @@ class AIRecommendationsTestCase(TestCase):
     
     def test_ml_scoring_quality(self):
         """Test ML scoring quality"""
-        query = Query()
+        query = PremiumQueries()
         info = self._create_mock_info(self.user)
         
         result = query.resolve_ai_recommendations(
@@ -218,7 +218,7 @@ class AIRecommendationsTestCase(TestCase):
             investment_horizon="5-10 years"
         )
         
-        query = Query()
+        query = PremiumQueries()
         info = self._create_mock_info(self.user)
         
         result = query.resolve_ai_recommendations(

@@ -135,6 +135,13 @@ class Command(BaseCommand):
         self.stdout.write("")
         
         setups = scanner.scan_pre_market_sync(mode=mode, limit=limit)
+        if setups is None:
+            setups = []
+        elif not isinstance(setups, list):
+            try:
+                setups = list(setups)
+            except TypeError:
+                setups = []
         
         if not setups:
             self.stdout.write(

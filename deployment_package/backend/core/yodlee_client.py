@@ -89,6 +89,7 @@ class YodleeClient:
         if not self.client_id or not self.client_secret:
             logger.error("Yodlee credentials not configured. Set YODLEE_CLIENT_ID and YODLEE_SECRET environment variables.")
             return None
+        timeout = int(os.getenv('YODLEE_TIMEOUT', '10'))
         
         try:
             login_url = f"{self.base_url}/auth/token"
@@ -112,7 +113,7 @@ class YodleeClient:
                 login_url,
                 headers=headers,
                 data=data,  # Use data= for form-urlencoded, not json=
-                timeout=15
+                timeout=timeout
             )
             
             logger.info(f"🔵 Token response: status={response.status_code}")
@@ -260,6 +261,11 @@ class YodleeClient:
         except Exception as e:
             logger.error(f"Error ensuring user registered: {e}", exc_info=True)
             return False
+
+    def ensure_user(self, login_name: str) -> bool:
+        """Legacy helper for ensuring a user token can be fetched."""
+        token = self._get_user_token(login_name)
+        return bool(token)
     
     def create_fastlink_token(self, login_name: str) -> Optional[str]:
         """Create FastLink token for user (must use user token, not admin)"""

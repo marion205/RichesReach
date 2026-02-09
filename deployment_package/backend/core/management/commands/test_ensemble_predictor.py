@@ -2,11 +2,9 @@
 Test Ensemble Predictor
 Tests the ensemble predictor with real data and compares with single models.
 """
+__test__ = False
+
 from django.core.management.base import BaseCommand
-from core.ensemble_predictor import get_ensemble_predictor
-from core.enhanced_alternative_data_service import get_enhanced_alternative_data_service
-from core.lstm_feature_extractor import get_lstm_feature_extractor
-from core.live_hybrid_inference import get_live_inference
 import asyncio
 import numpy as np
 
@@ -29,6 +27,11 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        from core.ensemble_predictor import get_ensemble_predictor
+        from core.enhanced_alternative_data_service import get_enhanced_alternative_data_service
+        from core.lstm_feature_extractor import get_lstm_feature_extractor
+        from core.live_hybrid_inference import get_live_inference
+
         self.stdout.write("🧪 Testing Ensemble Predictor")
         self.stdout.write("=" * 60)
         

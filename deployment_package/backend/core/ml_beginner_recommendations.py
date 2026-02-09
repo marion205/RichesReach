@@ -381,8 +381,17 @@ class MLBeginnerRecommendationService:
 
         # Get best match
         best_persona = max(scores.items(), key=lambda x: x[1])
-        total_score = sum(scores.values())
-        confidence = best_persona[1] / total_score if total_score > 0 else 0.25
+        sorted_scores = sorted(scores.values(), reverse=True)
+        best_score = sorted_scores[0] if sorted_scores else 0.0
+        second_score = sorted_scores[1] if len(sorted_scores) > 1 else 0.0
+
+        if best_score <= 0:
+            confidence = 0.25
+        elif second_score <= 0:
+            confidence = 0.95
+        else:
+            # Pairwise confidence vs the runner-up to avoid dilution across personas
+            confidence = best_score / (best_score + second_score)
 
         return best_persona[0], min(0.95, confidence)
 

@@ -240,6 +240,7 @@ class BankingMutationsGraphQLTestCase(TestCase):
         )
         bank_account = BankAccount.objects.create(
             user=self.user,
+            yodlee_account_id='acc_456',
             provider='Test Bank',
             name='Test Account',
             mask='1234',

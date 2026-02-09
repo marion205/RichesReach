@@ -4,6 +4,8 @@ Worker that processes raw moment jobs and generates AI-powered stock moments.
 Uses structured outputs for reliable JSON parsing and Pydantic for validation.
 """
 
+from __future__ import annotations
+
 import os
 import json
 import logging
@@ -11,18 +13,10 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from functools import wraps
 
-import django
 from django.db import transaction
 from django.conf import settings
 
-# Django setup
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
-django.setup()
-
-from openai import OpenAI
 from pydantic import BaseModel, Field, validator
-from core.models import StockMoment, MomentCategory
-from core.data_sources.unified_data_service import UnifiedDataService, Event
 
 # Configure logging
 logging.basicConfig(
@@ -33,12 +27,11 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-IMPORTANCE_THRESHOLD = float(os.getenv("IMPORTANCE_THRESHOLD", "0.05"))
+IMPORTANCE_THRESHOLD = float(os.getenv("IMPORTANCE_THRESHOLD", "0.2"))
 MAX_RETRIES = int(os.getenv("OPENAI_MAX_RETRIES", "3"))
 RETRY_DELAY = 2  # seconds, exponential backoff base
 
-client = OpenAI()  # Uses OPENAI_API_KEY from env
-unified_data_service = UnifiedDataService()  # Unified data aggregation service
+_openai_client = None
 
 # Data structures for jobs (using Pydantic for better validation)
 class PriceContext(BaseModel):
@@ -80,11 +73,29 @@ class StockMomentOutput(BaseModel):
 
     @validator("category")
     def validate_category(cls, v):
+        from core.models import MomentCategory
         v = (v or "").upper().strip()
         valid_categories = {c[0] for c in MomentCategory.choices}  # Get the value (first element of tuple)
         if v not in valid_categories:
             return MomentCategory.OTHER  # Return the value directly
         return v
+
+
+def normalize_category(value: Optional[str]) -> str:
+    """Normalize a category string to a valid MomentCategory value."""
+    from core.models import MomentCategory
+
+    v = (value or "").upper().strip()
+    valid_categories = {c[0] for c in MomentCategory.choices}
+    return v if v in valid_categories else MomentCategory.OTHER
+
+
+def _get_openai_client():
+    global _openai_client
+    if _openai_client is None:
+        from openai import OpenAI
+        _openai_client = OpenAI()
+    return _openai_client
 
 
 # Prompt pieces (refined for clarity and structured output)
@@ -136,7 +147,7 @@ Guidelines:
 
 def build_events_block(events: List[Event]) -> str:
     if not events:
-        return "- (No clearly linked events found in this window.)"
+        return "- No specific events found in this window."
 
     lines = []
     for ev in events:
@@ -189,6 +200,7 @@ def call_llm_for_moment(job: RawMomentJob) -> StockMomentOutput:
     )
 
     # Use structured outputs with Pydantic schema
+    client = _get_openai_client()
     response = client.chat.completions.create(
         model=OPENAI_MODEL,
         messages=[
@@ -220,7 +232,23 @@ def call_llm_for_moment(job: RawMomentJob) -> StockMomentOutput:
 
 @transaction.atomic
 def create_stock_moment_from_job(job: RawMomentJob) -> Optional[StockMoment]:
-    data = call_llm_for_moment(job)
+    from core.models import StockMoment
+    try:
+        data = call_llm_for_moment(job)
+    except Exception as e:
+        logger.error("Failed to generate stock moment for %s: %s", job.symbol, e, exc_info=True)
+        return None
+
+    if isinstance(data, dict):
+        try:
+            data = StockMomentOutput.model_validate(data)
+        except Exception as e:
+            logger.error("Invalid LLM response for %s: %s", job.symbol, e, exc_info=True)
+            return None
+
+    if not hasattr(data, "importance_score"):
+        logger.error("LLM response missing importance_score for %s", job.symbol)
+        return None
 
     # Ignore unimportant moments
     if data.importance_score <= IMPORTANCE_THRESHOLD:
@@ -233,12 +261,12 @@ def create_stock_moment_from_job(job: RawMomentJob) -> Optional[StockMoment]:
     moment = StockMoment.objects.create(
         symbol=job.symbol.upper(),
         timestamp=timestamp,
-        importance_score=data.importance_score,
-        category=data.category,
-        title=data.title.strip(),
-        quick_summary=data.quick_summary.strip(),
-        deep_summary=data.deep_summary.strip(),
-        source_links=data.source_links,
+        importance_score=float(data.importance_score),
+        category=normalize_category(getattr(data, "category", None)),
+        title=(data.title or "").strip(),
+        quick_summary=(data.quick_summary or "").strip(),
+        deep_summary=(data.deep_summary or "").strip(),
+        source_links=getattr(data, "source_links", []) or [],
         # impact_1d / impact_7d can be backfilled later by a separate worker
     )
     logger.info(f"Created StockMoment {moment.id} for {moment.symbol} @ {moment.timestamp} (score: {data.importance_score})")
@@ -256,10 +284,13 @@ async def fetch_events_for_moment(
     """
     import asyncio
     
+    from core.data_sources.unified_data_service import UnifiedDataService
+
     start_date = timestamp - timedelta(hours=window_hours)
     end_date = timestamp + timedelta(hours=window_hours)
     
     try:
+        unified_data_service = UnifiedDataService()
         events = await unified_data_service.get_all_events_for_symbol(
             symbol, start_date, end_date
         )

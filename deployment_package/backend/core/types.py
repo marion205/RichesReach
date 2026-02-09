@@ -29,20 +29,25 @@ class MLRecommendationType(graphene.ObjectType):
     fundamentals_score = graphene.Float(description="Score from stock fundamentals analysis (0-100)")
     fundamentalsScore = graphene.Float(description="Fundamentals score (camelCase)")
 
-    def resolve_companyName(self, info):
-        return self.get('company_name') if isinstance(self, dict) else getattr(self, 'company_name', None)
+    @staticmethod
+    def resolve_companyName(root, info):
+        return root.get('company_name') if isinstance(root, dict) else getattr(root, 'company_name', None)
 
-    def resolve_mlScore(self, info):
-        return self.get('ml_score') if isinstance(self, dict) else getattr(self, 'ml_score', None)
+    @staticmethod
+    def resolve_mlScore(root, info):
+        return root.get('ml_score') if isinstance(root, dict) else getattr(root, 'ml_score', None)
 
-    def resolve_personaMatch(self, info):
-        return self.get('persona_match') if isinstance(self, dict) else getattr(self, 'persona_match', None)
+    @staticmethod
+    def resolve_personaMatch(root, info):
+        return root.get('persona_match') if isinstance(root, dict) else getattr(root, 'persona_match', None)
 
-    def resolve_similarUserScore(self, info):
-        return self.get('similar_user_score') if isinstance(self, dict) else getattr(self, 'similar_user_score', None)
+    @staticmethod
+    def resolve_similarUserScore(root, info):
+        return root.get('similar_user_score') if isinstance(root, dict) else getattr(root, 'similar_user_score', None)
 
-    def resolve_fundamentalsScore(self, info):
-        return self.get('fundamentals_score') if isinstance(self, dict) else getattr(self, 'fundamentals_score', None)
+    @staticmethod
+    def resolve_fundamentalsScore(root, info):
+        return root.get('fundamentals_score') if isinstance(root, dict) else getattr(root, 'fundamentals_score', None)
 
 
 class UserType(DjangoObjectType):

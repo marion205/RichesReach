@@ -8,6 +8,7 @@ Unit and Integration Tests for Options Trading Features
 from unittest.mock import Mock, patch, MagicMock
 from django.test import TestCase
 from django.contrib.auth import get_user_model
+from uuid import uuid4
 from graphene.test import Client
 from decimal import Decimal
 from datetime import datetime, timedelta
@@ -31,7 +32,7 @@ class PlaceBracketOptionsOrderTestCase(TestCase):
     def setUp(self):
         """Set up test fixtures"""
         self.user = User.objects.create_user(
-            email='test@example.com',
+            email=f'test_{uuid4()}@example.com',
             password='testpass123',
             name='Test User'
         )
@@ -189,7 +190,7 @@ class OptionsPaperTradingTestCase(TestCase):
     def setUp(self):
         """Set up test fixtures"""
         self.user = User.objects.create_user(
-            email='test@example.com',
+            email=f'test_{uuid4()}@example.com',
             password='testpass123',
             name='Test User'
         )
@@ -254,7 +255,7 @@ class OptionsAlertsTestCase(TestCase):
     def setUp(self):
         """Set up test fixtures"""
         self.user = User.objects.create_user(
-            email='test@example.com',
+            email=f'test_{uuid4()}@example.com',
             password='testpass123',
             name='Test User'
         )
@@ -588,7 +589,7 @@ class OptionsScannerTestCase(TestCase):
     def setUp(self):
         """Set up test fixtures"""
         self.user = User.objects.create_user(
-            email='test@example.com',
+            email=f'test_{uuid4()}@example.com',
             password='testpass123',
             name='Test User'
         )

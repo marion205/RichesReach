@@ -9,7 +9,7 @@ from django.test import TestCase
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from core.banking_queries import BankingQueries
+from core.graphql.queries.banking import BudgetSpendingQuery
 from core.banking_models import BankAccount, BankTransaction
 from core.banking_types import (
     BudgetDataType, BudgetCategoryType,
@@ -29,7 +29,7 @@ class BudgetDataTestCase(TestCase):
             password='testpass123',
             name='Test User'
         )
-        self.queries = BankingQueries()
+        self.queries = BudgetSpendingQuery()
         
         # Create mock info object
         self.mock_info = Mock()
@@ -65,8 +65,10 @@ class BudgetDataTestCase(TestCase):
         # Create bank account
         account = BankAccount.objects.create(
             user=self.user,
+            yodlee_account_id='acc_test',
             provider='test',
             name='Test Account',
+            mask='1234',
             account_type='checking',
             balance_current=Decimal('1000.00')
         )
@@ -76,10 +78,10 @@ class BudgetDataTestCase(TestCase):
             user=self.user,
             bank_account=account,
             amount=Decimal('-500.00'),
-            yodlee_transaction_id='test_txn_20'
-        ),
+            description='Test Transaction',
             category='Housing',
             merchant_name='Rent',
+            transaction_type='DEBIT',
             posted_date=timezone.now().date(),
             yodlee_transaction_id='test_txn_1'
         )
@@ -87,10 +89,10 @@ class BudgetDataTestCase(TestCase):
             user=self.user,
             bank_account=account,
             amount=Decimal('-200.00'),
-            yodlee_transaction_id='test_txn_21'
-        ),
+            description='Test Transaction',
             category='Food',
             merchant_name='Grocery Store',
+            transaction_type='DEBIT',
             posted_date=timezone.now().date(),
             yodlee_transaction_id='test_txn_2'
         )
@@ -98,10 +100,10 @@ class BudgetDataTestCase(TestCase):
             user=self.user,
             bank_account=account,
             amount=Decimal('-100.00'),
-            yodlee_transaction_id='test_txn_22'
-        ),
+            description='Test Transaction',
             category='Transportation',
             merchant_name='Gas Station',
+            transaction_type='DEBIT',
             posted_date=timezone.now().date(),
             yodlee_transaction_id='test_txn_3'
         )
@@ -129,8 +131,10 @@ class BudgetDataTestCase(TestCase):
         """Test budget category percentage calculation"""
         account = BankAccount.objects.create(
             user=self.user,
+            yodlee_account_id='acc_test',
             provider='test',
             name='Test Account',
+            mask='1234',
             account_type='checking'
         )
         
@@ -139,9 +143,9 @@ class BudgetDataTestCase(TestCase):
             user=self.user,
             bank_account=account,
             amount=Decimal('-600.00'),
-            yodlee_transaction_id='test_txn_23'
-        ),
+            description='Test Transaction',
             category='Housing',
+            transaction_type='DEBIT',
             posted_date=timezone.now().date(),
             yodlee_transaction_id='test_txn_4'
         )
@@ -172,7 +176,7 @@ class SpendingAnalysisTestCase(TestCase):
             password='testpass123',
             name='Test User'
         )
-        self.queries = BankingQueries()
+        self.queries = BudgetSpendingQuery()
         
         self.mock_info = Mock()
         self.mock_info.context = Mock()
@@ -204,8 +208,10 @@ class SpendingAnalysisTestCase(TestCase):
         """Test spending analysis with transactions"""
         account = BankAccount.objects.create(
             user=self.user,
+            yodlee_account_id='acc_test',
             provider='test',
             name='Test Account',
+            mask='1234',
             account_type='checking'
         )
         
@@ -214,31 +220,34 @@ class SpendingAnalysisTestCase(TestCase):
             user=self.user,
             bank_account=account,
             amount=Decimal('-50.00'),
-            yodlee_transaction_id='test_txn_24'
-        ),
+            yodlee_transaction_id='test_txn_24',
             category='Food',
             merchant_name='Grocery Store',
-            posted_date=timezone.now().date() - timedelta(days=5)
+            posted_date=timezone.now().date() - timedelta(days=5),
+            description='Test Transaction',
+            transaction_type='DEBIT',
         )
         BankTransaction.objects.create(
             user=self.user,
             bank_account=account,
             amount=Decimal('-30.00'),
-            yodlee_transaction_id='test_txn_25'
-        ),
+            yodlee_transaction_id='test_txn_25',
             category='Food',
             merchant_name='Restaurant',
-            posted_date=timezone.now().date() - timedelta(days=3)
+            posted_date=timezone.now().date() - timedelta(days=3),
+            description='Test Transaction',
+            transaction_type='DEBIT',
         )
         BankTransaction.objects.create(
             user=self.user,
             bank_account=account,
             amount=Decimal('-100.00'),
-            yodlee_transaction_id='test_txn_26'
-        ),
+            yodlee_transaction_id='test_txn_26',
             category='Transportation',
             merchant_name='Gas Station',
-            posted_date=timezone.now().date() - timedelta(days=1)
+            posted_date=timezone.now().date() - timedelta(days=1),
+            description='Test Transaction',
+            transaction_type='DEBIT',
         )
         
         result = self.queries.resolve_spending_analysis(self.mock_info, 'month')
@@ -267,8 +276,10 @@ class SpendingAnalysisTestCase(TestCase):
         """Test top merchants calculation"""
         account = BankAccount.objects.create(
             user=self.user,
+            yodlee_account_id='acc_test',
             provider='test',
             name='Test Account',
+            mask='1234',
             account_type='checking'
         )
         
@@ -277,12 +288,13 @@ class SpendingAnalysisTestCase(TestCase):
             BankTransaction.objects.create(
                 user=self.user,
                 bank_account=account,
-            amount=Decimal('-20.00'),
-            yodlee_transaction_id='test_txn_27'
-        ),
+                amount=Decimal('-20.00'),
+                description='Test Transaction',
                 category='Food',
                 merchant_name='Grocery Store',
-                posted_date=timezone.now().date() - timedelta(days=i)
+                transaction_type='DEBIT',
+                posted_date=timezone.now().date() - timedelta(days=i),
+                yodlee_transaction_id=f'test_txn_27_{i}',
             )
         
         result = self.queries.resolve_spending_analysis(self.mock_info, 'month')
@@ -299,8 +311,10 @@ class SpendingAnalysisTestCase(TestCase):
         """Test period filtering (week/month/year)"""
         account = BankAccount.objects.create(
             user=self.user,
+            yodlee_account_id='acc_test',
             provider='test',
             name='Test Account',
+            mask='1234',
             account_type='checking'
         )
         
@@ -309,10 +323,11 @@ class SpendingAnalysisTestCase(TestCase):
             user=self.user,
             bank_account=account,
             amount=Decimal('-50.00'),
-            yodlee_transaction_id='test_txn_28'
-        ),
+            description='Test Transaction',
             category='Food',
-            posted_date=timezone.now().date() - timedelta(days=3)
+            transaction_type='DEBIT',
+            posted_date=timezone.now().date() - timedelta(days=3),
+            yodlee_transaction_id='test_txn_28'
         )
         
         # Transaction older than 7 days (should be excluded for 'week')
@@ -320,10 +335,11 @@ class SpendingAnalysisTestCase(TestCase):
             user=self.user,
             bank_account=account,
             amount=Decimal('-100.00'),
-            yodlee_transaction_id='test_txn_29'
-        ),
+            description='Test Transaction',
             category='Food',
-            posted_date=timezone.now().date() - timedelta(days=10)
+            transaction_type='DEBIT',
+            posted_date=timezone.now().date() - timedelta(days=10),
+            yodlee_transaction_id='test_txn_29'
         )
         
         # Test week period
@@ -338,8 +354,10 @@ class SpendingAnalysisTestCase(TestCase):
         """Test categories are sorted by amount descending"""
         account = BankAccount.objects.create(
             user=self.user,
+            yodlee_account_id='acc_test',
             provider='test',
             name='Test Account',
+            mask='1234',
             account_type='checking'
         )
         
@@ -347,28 +365,31 @@ class SpendingAnalysisTestCase(TestCase):
             user=self.user,
             bank_account=account,
             amount=Decimal('-30.00'),
-            yodlee_transaction_id='test_txn_30'
-        ),
+            description='Test Transaction',
             category='Small',
-            posted_date=timezone.now().date()
+            transaction_type='DEBIT',
+            posted_date=timezone.now().date(),
+            yodlee_transaction_id='test_txn_30'
         )
         BankTransaction.objects.create(
             user=self.user,
             bank_account=account,
             amount=Decimal('-100.00'),
-            yodlee_transaction_id='test_txn_31'
-        ),
+            description='Test Transaction',
             category='Large',
-            posted_date=timezone.now().date()
+            transaction_type='DEBIT',
+            posted_date=timezone.now().date(),
+            yodlee_transaction_id='test_txn_31'
         )
         BankTransaction.objects.create(
             user=self.user,
             bank_account=account,
             amount=Decimal('-50.00'),
-            yodlee_transaction_id='test_txn_32'
-        ),
+            description='Test Transaction',
             category='Medium',
-            posted_date=timezone.now().date()
+            transaction_type='DEBIT',
+            posted_date=timezone.now().date(),
+            yodlee_transaction_id='test_txn_32'
         )
         
         result = self.queries.resolve_spending_analysis(self.mock_info, 'month')
@@ -385,8 +406,10 @@ class SpendingAnalysisTestCase(TestCase):
         """Test top merchants limited to 10"""
         account = BankAccount.objects.create(
             user=self.user,
+            yodlee_account_id='acc_test',
             provider='test',
             name='Test Account',
+            mask='1234',
             account_type='checking'
         )
         
@@ -395,12 +418,13 @@ class SpendingAnalysisTestCase(TestCase):
             BankTransaction.objects.create(
                 user=self.user,
                 bank_account=account,
-            amount=Decimal('-10.00'),
-            yodlee_transaction_id='test_txn_33'
-        ),
+                amount=Decimal('-10.00'),
+                description='Test Transaction',
                 category='Other',
                 merchant_name=f'Merchant {i}',
-                posted_date=timezone.now().date()
+                transaction_type='DEBIT',
+                posted_date=timezone.now().date(),
+                yodlee_transaction_id=f'test_txn_33_{i}'
             )
         
         result = self.queries.resolve_spending_analysis(self.mock_info, 'month')
@@ -420,8 +444,10 @@ class SpendingAnalysisTestCase(TestCase):
         """Test handling of unknown period (defaults to month)"""
         account = BankAccount.objects.create(
             user=self.user,
+            yodlee_account_id='acc_test',
             provider='test',
             name='Test Account',
+            mask='1234',
             account_type='checking'
         )
         
@@ -429,10 +455,11 @@ class SpendingAnalysisTestCase(TestCase):
             user=self.user,
             bank_account=account,
             amount=Decimal('-50.00'),
-            yodlee_transaction_id='test_txn_34'
-        ),
+            description='Test Transaction',
             category='Food',
-            posted_date=timezone.now().date()
+            transaction_type='DEBIT',
+            posted_date=timezone.now().date(),
+            yodlee_transaction_id='test_txn_34'
         )
         
         # Unknown period should default to month
@@ -446,8 +473,10 @@ class SpendingAnalysisTestCase(TestCase):
         """Test handling of transactions with no category"""
         account = BankAccount.objects.create(
             user=self.user,
+            yodlee_account_id='acc_test',
             provider='test',
             name='Test Account',
+            mask='1234',
             account_type='checking'
         )
         
@@ -455,12 +484,12 @@ class SpendingAnalysisTestCase(TestCase):
             user=self.user,
             bank_account=account,
             amount=Decimal('-50.00'),
-            yodlee_transaction_id='test_txn_35'
-        ),
-            category=None,  # No category
+            description='Test Transaction',
+            category='',  # No category
             merchant_name='Unknown',
+            transaction_type='DEBIT',
             posted_date=timezone.now().date(),
-            yodlee_transaction_id='test_txn_15'
+            yodlee_transaction_id='test_txn_35'
         )
         
         result = self.queries.resolve_spending_analysis(self.mock_info, 'month')
@@ -474,8 +503,10 @@ class SpendingAnalysisTestCase(TestCase):
         """Test handling of transactions with no merchant name"""
         account = BankAccount.objects.create(
             user=self.user,
+            yodlee_account_id='acc_test',
             provider='test',
             name='Test Account',
+            mask='1234',
             account_type='checking'
         )
         
@@ -483,12 +514,12 @@ class SpendingAnalysisTestCase(TestCase):
             user=self.user,
             bank_account=account,
             amount=Decimal('-50.00'),
-            yodlee_transaction_id='test_txn_36'
-        ),
+            description='Test Transaction',
             category='Food',
             merchant_name='Unknown',  # No merchant - use 'Unknown' instead of None
+            transaction_type='DEBIT',
             posted_date=timezone.now().date(),
-            yodlee_transaction_id='test_txn_16'
+            yodlee_transaction_id='test_txn_36'
         )
         
         result = self.queries.resolve_spending_analysis(self.mock_info, 'month')

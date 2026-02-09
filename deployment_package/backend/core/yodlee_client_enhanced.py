@@ -59,6 +59,59 @@ class EnhancedYodleeClient(YodleeClient):
         self.max_retries = int(os.getenv('YODLEE_MAX_RETRIES', '3'))
         self.retry_delay = float(os.getenv('YODLEE_RETRY_DELAY', '1'))
         self.timeout = int(os.getenv('YODLEE_TIMEOUT', '10'))
+
+    def _auth_token(self, login_name: str) -> Optional[str]:
+        """Get access token with fixed timeout (legacy behavior)."""
+        if not self.client_id or not self.client_secret:
+            logger.error("Yodlee credentials not configured. Set YODLEE_CLIENT_ID and YODLEE_SECRET environment variables.")
+            return None
+
+        timeout = 10
+
+        try:
+            login_url = f"{self.base_url}/auth/token"
+
+            headers = {
+                'Api-Version': '1.1',
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'loginName': login_name,
+            }
+
+            data = {
+                'clientId': self.client_id.strip(),
+                'secret': self.client_secret.strip(),
+            }
+
+            logger.info(f"🔵 Requesting token: URL={login_url}, loginName={login_name}")
+
+            response = requests.post(
+                login_url,
+                headers=headers,
+                data=data,
+                timeout=timeout,
+            )
+
+            logger.info(f"🔵 Token response: status={response.status_code}")
+
+            if response.status_code in (200, 201):
+                response_data = response.json()
+                if 'token' in response_data:
+                    token = response_data.get('token', {}).get('accessToken')
+                else:
+                    token = response_data.get('accessToken')
+
+                if token:
+                    logger.info(f"✅ Token obtained for loginName={login_name}")
+                    return token
+                logger.warning(f"⚠️  Token response missing accessToken: {response_data}")
+            else:
+                error_text = response.text[:500] if response.text else "No error text"
+                logger.error(f"❌ Failed to get token: {response.status_code} - {error_text}")
+
+        except Exception as e:
+            logger.error(f"Error getting token: {e}", exc_info=True)
+
+        return None
     
     def _make_request_with_retry(
         self,

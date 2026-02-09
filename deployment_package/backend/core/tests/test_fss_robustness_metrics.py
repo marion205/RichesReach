@@ -17,13 +17,7 @@ import unittest
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-import sys
-import os
-
-# Add parent directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..'))
-
-from deployment_package.backend.core.fss_engine import FSSEngine, get_fss_engine
+from core.fss_engine import FSSEngine, get_fss_engine
 
 # Also support pytest-style tests
 try:

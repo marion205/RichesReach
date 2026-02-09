@@ -46,31 +46,49 @@ class Command(BaseCommand):
             query &= Q(symbol=symbol_filter)
         
         signals = DayTradingSignal.objects.filter(query).order_by('-created_at')
-        
-        if not signals.exists():
+
+        if hasattr(signals, "exists"):
+            has_signals = signals.exists()
+        else:
+            has_signals = bool(signals)
+
+        if not has_signals:
             self.stdout.write(self.style.WARNING("⚠️  No signals found in the specified period"))
             return
-        
-        self.stdout.write(f"Found {signals.count()} signal(s) to evaluate")
+
+        if hasattr(signals, "count") and not isinstance(signals, list):
+            total_signals = signals.count()
+        else:
+            total_signals = len(signals)
+        self.stdout.write(f"Found {total_signals} signal(s) to evaluate")
         self.stdout.write("")
         
         ml_learner = get_ml_learner()
         evaluated_count = 0
         
-        for signal in signals:
+        iterable_signals = signals if isinstance(signals, list) else list(signals)
+        for signal in iterable_signals:
             # Get performance data
             performances = SignalPerformance.objects.filter(signal=signal)
-            
-            if not performances.exists():
+
+            if hasattr(performances, "exists"):
+                has_perf = performances.exists()
+            else:
+                has_perf = bool(performances)
+
+            if not has_perf:
                 self.stdout.write(
                     self.style.WARNING(f"⚠️  No performance data for {signal.symbol} (signal ID: {signal.id})")
                 )
                 continue
             
             # Use EOD performance if available, otherwise use latest
-            eod_perf = performances.filter(horizon='EOD').first()
+            eod_perf = performances.filter(horizon='EOD').first() if hasattr(performances, "filter") else None
             if not eod_perf:
-                eod_perf = performances.order_by('-evaluated_at').first()
+                if hasattr(performances, "order_by"):
+                    eod_perf = performances.order_by('-evaluated_at').first()
+                elif isinstance(performances, list) and performances:
+                    eod_perf = performances[0]
             
             # Reconstruct original pick data (simplified - in production, store this)
             pick_data = {

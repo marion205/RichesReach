@@ -6,6 +6,7 @@ import pytest
 from unittest.mock import Mock, patch, MagicMock
 from django.test import TestCase
 from decimal import Decimal
+from uuid import uuid4
 
 
 class TestMLBeginnerRecommendations(TestCase):
@@ -17,7 +18,7 @@ class TestMLBeginnerRecommendations(TestCase):
 
         # Create test user
         self.user = User.objects.create(
-            email='test@example.com',
+            email=f'test_{uuid4()}@example.com',
             name='Test User'
         )
 
@@ -310,7 +311,7 @@ class TestBeginnerFriendlyScoreFix(TestCase):
         from core.models import Stock, User, IncomeProfile, Portfolio
 
         self.user = User.objects.create(
-            email='profile_test@example.com',
+            email=f'profile_test_{uuid4()}@example.com',
             name='Profile Test User'
         )
 

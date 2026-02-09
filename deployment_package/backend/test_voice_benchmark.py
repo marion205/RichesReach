@@ -3,6 +3,8 @@
 Benchmark test for voice streaming endpoint.
 Tests latency improvements: streaming vs non-streaming.
 """
+__test__ = False
+
 import asyncio
 import aiohttp
 import time

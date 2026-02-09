@@ -5,7 +5,7 @@ from django.test import TestCase
 from django.utils import timezone
 from datetime import datetime, timedelta
 from core.models import StockMoment, MomentCategory
-from core.queries import Query
+from core.graphql.queries.discussions import DiscussionsQuery
 from core.types import ChartRangeEnum
 
 
@@ -14,9 +14,9 @@ class StockMomentQueriesTestCase(TestCase):
     
     def setUp(self):
         """Set up test fixtures"""
-        self.now = timezone.now()
+        self.now = timezone.make_aware(datetime(2024, 8, 1, 12, 0, 0))
         self.symbol = "AAPL"
-        self.query = Query()
+        self.query = DiscussionsQuery()
         
         # Create test moments
         self.moment_1m = StockMoment.objects.create(
@@ -129,11 +129,14 @@ class StockMomentQueriesTestCase(TestCase):
             ChartRangeEnum.YEAR_TO_DATE
         )
         
-        # Should include moment_ytd and moment_1m (both in current year)
-        self.assertEqual(len(moments), 2)
+        # Should include all moments in the current year
+        self.assertEqual(len(moments), 5)
         moment_ids = [m.id for m in moments]
         self.assertIn(self.moment_1m.id, moment_ids)
+        self.assertIn(self.moment_3m.id, moment_ids)
+        self.assertIn(self.moment_6m.id, moment_ids)
         self.assertIn(self.moment_ytd.id, moment_ids)
+        self.assertIn(self.moment_1y.id, moment_ids)
     
     def test_resolve_stock_moments_one_year(self):
         """Test resolving moments for ONE_YEAR range"""

@@ -65,20 +65,12 @@ class BudgetSpendingQuery(graphene.ObjectType):
             remaining = monthly_income - monthly_expenses
             savings_rate = (remaining / monthly_income * 100) if monthly_income > 0 else 0
             if not transactions.exists() or total_spent == 0:
-                mock_categories = [
-                    BudgetCategoryType(name="Housing", budgeted=1500, spent=1450, percentage=96.7),
-                    BudgetCategoryType(name="Food", budgeted=600, spent=580, percentage=96.7),
-                    BudgetCategoryType(name="Transportation", budgeted=400, spent=420, percentage=105),
-                    BudgetCategoryType(name="Entertainment", budgeted=300, spent=250, percentage=83.3),
-                    BudgetCategoryType(name="Utilities", budgeted=200, spent=180, percentage=90),
-                    BudgetCategoryType(name="Other", budgeted=500, spent=620, percentage=124),
-                ]
                 return BudgetDataType(
-                    monthlyIncome=5000.0,
-                    monthlyExpenses=3500.0,
-                    categories=mock_categories,
-                    remaining=1500.0,
-                    savingsRate=30.0,
+                    monthlyIncome=monthly_income,
+                    monthlyExpenses=0.0,
+                    categories=[],
+                    remaining=monthly_income,
+                    savingsRate=100.0,
                 )
             return BudgetDataType(
                 monthlyIncome=monthly_income,
@@ -167,24 +159,10 @@ class BudgetSpendingQuery(graphene.ObjectType):
                 )
             trends = []
             if not transactions.exists() or total_spent == 0:
-                mock_categories = [
-                    SpendingCategoryType(name="Housing", amount=1450, percentage=41.4, transactions=2, trend="stable"),
-                    SpendingCategoryType(name="Food", amount=580, percentage=16.6, transactions=45, trend="up"),
-                    SpendingCategoryType(name="Transportation", amount=420, percentage=12, transactions=12, trend="down"),
-                    SpendingCategoryType(name="Entertainment", amount=250, percentage=7.1, transactions=8, trend="up"),
-                    SpendingCategoryType(name="Utilities", amount=180, percentage=5.1, transactions=4, trend="stable"),
-                    SpendingCategoryType(name="Other", amount=620, percentage=17.7, transactions=23, trend="up"),
-                ]
-                mock_merchants = [
-                    TopMerchantType(name="Amazon", amount=320, count=15),
-                    TopMerchantType(name="Whole Foods", amount=280, count=12),
-                    TopMerchantType(name="Uber", amount=180, count=25),
-                    TopMerchantType(name="Netflix", amount=15, count=1),
-                ]
                 return SpendingAnalysisType(
-                    totalSpent=3500.0,
-                    categories=mock_categories,
-                    topMerchants=mock_merchants,
+                    totalSpent=0.0,
+                    categories=[],
+                    topMerchants=[],
                     trends=trends,
                 )
             return SpendingAnalysisType(

@@ -7,6 +7,7 @@ AutonomyLevel = graphene.Enum('AutonomyLevel', [
     'NOTIFY_ONLY',
     'APPROVE_REPAIRS',
     'AUTO_BOUNDED',
+    'AUTO_SPEND',
 ])
 
 RiskLevel = graphene.Enum('RiskLevel', [
@@ -29,6 +30,9 @@ class AutopilotPolicyType(graphene.ObjectType):
     risk_level = RiskLevel()
     level = AutonomyLevel()
     spend_limit_24h = graphene.Float()
+    spend_permission_enabled = graphene.Boolean()
+    spend_permission_expires_at = graphene.String()
+    orchestration_mode = graphene.String()
 
 
 class AutopilotPolicyInput(graphene.InputObjectType):
@@ -37,6 +41,9 @@ class AutopilotPolicyInput(graphene.InputObjectType):
     risk_level = RiskLevel()
     level = AutonomyLevel()
     spend_limit_24h = graphene.Float()
+    spend_permission_enabled = graphene.Boolean()
+    spend_permission_expires_at = graphene.String()
+    orchestration_mode = graphene.String()
 
 
 class RepairProofType(graphene.ObjectType):
@@ -56,6 +63,11 @@ class RepairActionType(graphene.ObjectType):
     estimated_apy_delta = graphene.Float()
     gas_estimate = graphene.Float()
     proof = graphene.Field(RepairProofType)
+    source = graphene.String()
+    from_pool_id = graphene.String()
+    to_pool_id = graphene.String()
+    execution_plan = JSONString()
+    agent_trace = JSONString()
 
 
 class LastMoveType(graphene.ObjectType):

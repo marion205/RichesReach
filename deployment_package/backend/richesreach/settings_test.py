@@ -7,7 +7,7 @@ from .settings import *
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': ':memory:',
+        'NAME': BASE_DIR / 'test_db.sqlite3',
     }
 }
 
@@ -39,4 +39,7 @@ LOGGING = {
         'handlers': ['console'],
     },
 }
+
+# Force synchronous spending analysis in tests to avoid SQLite locking
+SPENDING_HABITS_SYNC = True
 

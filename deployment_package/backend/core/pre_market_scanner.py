@@ -21,6 +21,15 @@ except ImportError:
     ML_LEARNING_AVAILABLE = False
     logger.warning("ML learning not available")
 
+# Import alert service (optional)
+try:
+    from .pre_market_alerts import get_alert_service
+    ALERTS_AVAILABLE = True
+except ImportError:
+    ALERTS_AVAILABLE = False
+    def get_alert_service():
+        raise ImportError("Alert service not available")
+
 
 class PreMarketScanner:
     """

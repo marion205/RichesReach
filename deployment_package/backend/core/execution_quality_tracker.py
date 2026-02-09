@@ -72,6 +72,12 @@ class ExecutionQualityTracker:
             # Generate coaching tip
             coaching_tip = self._generate_coaching_tip(slippage_pct, chased_price, signal_type)
             
+            generated_at = getattr(signal, 'generated_at', None)
+            if generated_at:
+                time_to_fill_seconds = (actual_fill_time - generated_at).total_seconds()
+            else:
+                time_to_fill_seconds = 0
+
             return {
                 'slippage': slippage,
                 'slippage_pct': round(slippage_pct, 2),
@@ -80,7 +86,7 @@ class ExecutionQualityTracker:
                 'coaching_tip': coaching_tip,
                 'entry_price': float(entry_price),
                 'fill_price': float(actual_fill_price),
-                'time_to_fill_seconds': (actual_fill_time - signal.generated_at).total_seconds() if hasattr(signal, 'generated_at') else 0,
+                'time_to_fill_seconds': time_to_fill_seconds,
             }
         except Exception as e:
             logger.error(f"Error analyzing fill: {e}", exc_info=True)
@@ -145,11 +151,13 @@ class ExecutionQualityTracker:
             
             # Get performance records (proxy for fills)
             # In production, you'd track actual fills separately
-            performances = SignalPerformance.objects.filter(
-                signal__in=signals if signal_type == 'day_trading' else None,
-                swing_signal__in=signals if signal_type == 'swing_trading' else None,
-                evaluated_at__gte=cutoff_date
-            )
+            perf_filters = {'evaluated_at__gte': cutoff_date}
+            if signal_type == 'day_trading':
+                perf_filters['signal__in'] = signals
+            else:
+                perf_filters['swing_signal__in'] = signals
+
+            performances = SignalPerformance.objects.filter(**perf_filters)
             
             total_fills = performances.count()
             

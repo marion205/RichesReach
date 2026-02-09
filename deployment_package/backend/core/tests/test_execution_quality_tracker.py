@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import Mock, patch, MagicMock
 from decimal import Decimal
 from datetime import datetime, timedelta
+from uuid import uuid4
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 
@@ -20,7 +21,7 @@ class TestExecutionQualityTracker(TestCase):
         """Set up test fixtures"""
         self.tracker = ExecutionQualityTracker()
         self.user = User.objects.create_user(
-            email='test@example.com',
+            email=f'test_{uuid4()}@example.com',
             password='testpass123',
             name='Test User'
         )

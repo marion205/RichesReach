@@ -37,6 +37,9 @@ class BankingTasksTestCase(TestCase):
             provider_account=self.provider_account,
             yodlee_account_id='acc_456',
             provider='Test Bank',
+            name='Checking Account',
+            mask='1234',
+            account_type='CHECKING',
         )
     
     @patch.dict(os.environ, {'USE_YODLEE': 'false'})

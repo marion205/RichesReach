@@ -3,6 +3,7 @@ Spending Habits Analysis Service
 Analyzes bank transactions to understand user spending patterns and calculate discretionary income
 """
 from django.db.models import Sum, Q, Count, F
+from django.conf import settings
 from django.utils import timezone
 from django.core.cache import cache
 from asgiref.sync import sync_to_async
@@ -53,6 +54,8 @@ class SpendingHabitsService:
         Returns:
             Dictionary with spending analysis
         """
+        if getattr(settings, "SPENDING_HABITS_SYNC", False):
+            return self._analyze_spending_habits_sync(user_id, months)
         import asyncio
         try:
             loop = asyncio.get_event_loop()
@@ -60,6 +63,153 @@ class SpendingHabitsService:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
         return loop.run_until_complete(self.analyze_spending_habits_async(user_id, months))
+
+    def _analyze_spending_habits_sync(self, user_id: int, months: int = 3) -> Dict[str, Any]:
+        """Synchronous spending analysis to avoid async DB locks in tests."""
+        cache_key = f"spending_analysis:{user_id}:{months}"
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return cached_result
+
+        end_date = timezone.now()
+        start_date = end_date - timedelta(days=months * 30)
+
+        total_spending_result = BankTransaction.objects.filter(
+            user_id=user_id,
+            transaction_type='DEBIT',
+            transaction_date__gte=start_date,
+            transaction_date__lte=end_date
+        ).aggregate(total=Sum('amount'))
+
+        total_spending = abs(float(total_spending_result['total'] or 0))
+
+        if total_spending == 0:
+            result = self._get_default_analysis_sync(user_id)
+            cache.set(cache_key, result, SPENDING_ANALYSIS_CACHE_TTL)
+            return result
+
+        category_totals_list = list(
+            BankTransaction.objects.filter(
+                user_id=user_id,
+                transaction_type='DEBIT',
+                transaction_date__gte=start_date,
+                transaction_date__lte=end_date
+            ).values('category').annotate(total=Sum('amount'))
+        )
+
+        spending_by_category: Dict[str, Decimal] = {}
+        for item in category_totals_list:
+            category = item['category'] or 'Other'
+            amount = abs(float(item['total'] or 0))
+            if category not in spending_by_category:
+                spending_by_category[category] = Decimal('0')
+            spending_by_category[category] += Decimal(str(amount))
+
+        uncategorized = BankTransaction.objects.filter(
+            user_id=user_id,
+            transaction_type='DEBIT',
+            transaction_date__gte=start_date,
+            transaction_date__lte=end_date
+        ).exclude(
+            category__in=[cat for cat in spending_by_category.keys() if cat != 'Other']
+        ).only('description', 'merchant_name', 'category', 'amount')
+
+        for transaction in uncategorized:
+            matched_category = self._match_transaction_category(transaction)
+            amount = abs(float(transaction.amount))
+            if matched_category not in spending_by_category:
+                spending_by_category[matched_category] = Decimal('0')
+            spending_by_category[matched_category] += Decimal(str(amount))
+
+        monthly_average = total_spending / months if months > 0 else 0
+
+        try:
+            income_profile = IncomeProfile.objects.select_related('user').get(user_id=user_id)
+            income_bracket = income_profile.income_bracket
+            monthly_income = self._estimate_monthly_income(income_bracket)
+        except IncomeProfile.DoesNotExist:
+            monthly_income = 0
+            income_bracket = None
+
+        essential_expenses = sum(
+            spending_by_category.get(cat, 0) for cat in self.ESSENTIAL_CATEGORIES
+        )
+        essential_monthly = essential_expenses / months if months > 0 else 0
+
+        discretionary_income = monthly_income - essential_monthly
+        if discretionary_income < 0:
+            discretionary_income = 0
+
+        spending_patterns = self._analyze_spending_patterns(
+            spending_by_category,
+            monthly_average,
+            monthly_income,
+        )
+
+        suggested_budget = discretionary_income * Decimal('0.30')
+
+        top_categories = sorted(
+            spending_by_category.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )[:5]
+
+        transaction_count = BankTransaction.objects.filter(
+            user_id=user_id,
+            transaction_type='DEBIT',
+            transaction_date__gte=start_date,
+            transaction_date__lte=end_date
+        ).count()
+
+        result = {
+            'spending_by_category': {k: float(v) for k, v in spending_by_category.items()},
+            'total_spending': float(total_spending),
+            'monthly_average': float(monthly_average),
+            'monthly_income': float(monthly_income),
+            'income_bracket': income_bracket,
+            'essential_expenses': float(essential_expenses),
+            'essential_monthly': float(essential_monthly),
+            'discretionary_income': float(discretionary_income),
+            'spending_patterns': spending_patterns,
+            'suggested_budget': float(suggested_budget),
+            'top_categories': [
+                {'category': cat, 'amount': float(amt)} for cat, amt in top_categories
+            ],
+            'analysis_period_months': months,
+            'transaction_count': transaction_count,
+        }
+
+        cache.set(cache_key, result, SPENDING_ANALYSIS_CACHE_TTL)
+        return result
+
+    def _get_default_analysis_sync(self, user_id: int) -> Dict[str, Any]:
+        """Synchronous default analysis when no transactions exist."""
+        try:
+            income_profile = IncomeProfile.objects.select_related('user').get(user_id=user_id)
+            income_bracket = income_profile.income_bracket
+            monthly_income = self._estimate_monthly_income(income_bracket)
+        except IncomeProfile.DoesNotExist:
+            monthly_income = 0
+            income_bracket = None
+
+        return {
+            'spending_by_category': {},
+            'total_spending': 0.0,
+            'monthly_average': 0.0,
+            'monthly_income': float(monthly_income),
+            'income_bracket': income_bracket,
+            'essential_expenses': 0.0,
+            'essential_monthly': 0.0,
+            'discretionary_income': float(monthly_income),
+            'spending_patterns': {
+                'spending_health': 'unknown',
+                'insights': [],
+            },
+            'suggested_budget': 0.0,
+            'top_categories': [],
+            'analysis_period_months': 0,
+            'transaction_count': 0,
+        }
     
     async def analyze_spending_habits_async(self, user_id: int, months: int = 3) -> Dict[str, Any]:
         """

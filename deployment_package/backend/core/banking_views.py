@@ -234,13 +234,6 @@ class StartFastlinkView(View):
         logger.info(f"🔵 Request path: {request.path}")
         logger.info(f"🔵 Request META keys (first 20): {list(request.META.keys())[:20]}")
         
-        if not _is_yodlee_enabled():
-            logger.warning("🔵 Yodlee is disabled")
-            return JsonResponse(
-                {'error': 'Yodlee integration is disabled'},
-                status=503
-            )
-        
         logger.info("🔵 Yodlee is enabled, proceeding with authentication")
         
         # Authenticate request
@@ -250,6 +243,13 @@ class StartFastlinkView(View):
             print("❌❌❌ Authentication failed - no user returned", file=sys.stdout, flush=True)
             logger.error("🔵❌ Authentication failed - no user returned")
             return JsonResponse({'error': 'Authentication required'}, status=401)
+
+        if not _is_yodlee_enabled():
+            logger.warning("🔵 Yodlee is disabled")
+            return JsonResponse(
+                {'error': 'Yodlee integration is disabled'},
+                status=503
+            )
         
         import sys
         print(f"✅✅✅ Authentication successful - user: {user.email}", file=sys.stdout, flush=True)
@@ -305,6 +305,11 @@ class StartFastlinkView(View):
             # Step 2: Register user if needed (skip in sandbox with test user)
             if not (is_sandbox and sandbox_test_user):
                 registered = yodlee.ensure_user_registered(yodlee_loginname, user.email)
+                if not registered:
+                    return JsonResponse(
+                        {'error': 'Failed to register user with Yodlee'},
+                        status=500
+                    )
 
             # Step 3: Get user token (not admin token - FastLink requires user token)
             token = yodlee.create_fastlink_token(yodlee_loginname)
@@ -321,7 +326,7 @@ class StartFastlinkView(View):
                         'details': error_details,
                         'loginName': yodlee_loginname,
                     },
-                    status=503
+                    status=500
                 )
             
             fastlink_url = yodlee.fastlink_url
@@ -357,6 +362,7 @@ class YodleeCallbackView(View):
         user = _authenticate_from_header(request)
         if not user:
             return JsonResponse({'error': 'Authentication required'}, status=401)
+        request.user = user
         
         try:
             data = json.loads(request.body)
@@ -404,6 +410,7 @@ class YodleeCallbackView(View):
                 logger.warning(f"Could not retrieve user token for storage: {e}")
             
             # Store provider account with encrypted tokens
+            token_to_store = user_token if isinstance(user_token, str) and user_token else None
             provider_account, created = BankProviderAccount.objects.get_or_create(
                 user=request.user,
                 provider_account_id=str(provider_account_id),
@@ -411,14 +418,14 @@ class YodleeCallbackView(View):
                     'provider_name': provider_accounts[0].get('providerName', ''),
                     'provider_id': provider_accounts[0].get('providerId', ''),
                     'status': 'ACTIVE',
-                    'access_token_enc': encrypt_token(user_token) if user_token else '',
+                    'access_token_enc': encrypt_token(token_to_store) if token_to_store else '',
                     # Note: Refresh tokens are handled separately by Yodlee
                 }
             )
             
             # Update tokens if account already existed
-            if not created and user_token:
-                provider_account.access_token_enc = encrypt_token(user_token)
+            if not created and token_to_store:
+                provider_account.access_token_enc = encrypt_token(token_to_store)
                 provider_account.save(update_fields=['access_token_enc'])
             
             # Store normalized bank accounts

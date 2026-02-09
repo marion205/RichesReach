@@ -602,6 +602,9 @@ class DefiQueries(graphene.ObjectType):
                 risk_level=policy.get('risk_level'),
                 level=policy.get('level'),
                 spend_limit_24h=policy.get('spend_limit_24h'),
+                spend_permission_enabled=policy.get('spend_permission_enabled'),
+                spend_permission_expires_at=policy.get('spend_permission_expires_at'),
+                orchestration_mode=policy.get('orchestration_mode'),
             ),
             last_move=LastMoveType(
                 id=last_move.get('id'),
@@ -628,6 +631,11 @@ class DefiQueries(graphene.ObjectType):
                 to_vault=r['to_vault'],
                 estimated_apy_delta=r.get('estimated_apy_delta'),
                 gas_estimate=r.get('gas_estimate'),
+                source=r.get('source'),
+                from_pool_id=r.get('from_pool_id'),
+                to_pool_id=r.get('to_pool_id'),
+                execution_plan=r.get('execution_plan'),
+                agent_trace=r.get('agent_trace'),
                 proof=RepairProofType(
                     calmar_improvement=r['proof'].get('calmar_improvement'),
                     integrity_check=FinancialIntegrityType(

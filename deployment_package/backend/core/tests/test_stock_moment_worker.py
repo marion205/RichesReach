@@ -114,7 +114,7 @@ class StockMomentWorkerTestCase(TestCase):
     def test_build_events_block_empty(self):
         """Test build_events_block with empty events"""
         block = build_events_block([])
-        self.assertIn("No specific events", block.lower())
+        self.assertIn("no specific events", block.lower())
     
     def test_normalize_category(self):
         """Test normalize_category function"""

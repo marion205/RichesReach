@@ -116,7 +116,7 @@ class AdvancedMarketDataService:
         if self.session is None or self.session.closed:
             timeout = aiohttp.ClientTimeout(total=30)
             self.session = aiohttp.ClientSession(timeout=timeout)
-            return self.session
+        return self.session
     def _check_rate_limit(self, source: DataSource) -> bool:
         """Check if we can make a call to the data source"""
         now = time.time()
@@ -458,9 +458,9 @@ class AdvancedMarketDataService:
     
     def _analyze_sector_trend(self, change: float) -> str:
         """Analyze sector trend based on price change"""
-        if change > 0.5:
+        if change >= 0.5:
             return 'bullish'
-        elif change < -0.5:
+        elif change <= -0.5:
             return 'bearish'
         else:
             return 'neutral'

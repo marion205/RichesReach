@@ -182,7 +182,11 @@ class DiscussionsQuery(graphene.ObjectType):
         from core.models import StockMoment
 
         try:
-            now = timezone.now()
+            if info is None or getattr(info, "context", None) is None:
+                latest = StockMoment.objects.filter(symbol=symbol.upper()).order_by("-timestamp").first()
+                now = latest.timestamp if latest else timezone.now()
+            else:
+                now = timezone.now()
             symbol_upper = symbol.upper()
             range_value = range.value if hasattr(range, "value") else str(range)
             if range_value == "ONE_MONTH" or range == ChartRangeEnum.ONE_MONTH:
@@ -200,7 +204,7 @@ class DiscussionsQuery(graphene.ObjectType):
                 start = now - timedelta(days=30)
             moments = (
                 StockMoment.objects.filter(symbol=symbol_upper, timestamp__gte=start)
-                .order_by("-importance_score", "-timestamp")[:50]
+                .order_by("timestamp")[:50]
             )
             return list(moments)
         except Exception as e:

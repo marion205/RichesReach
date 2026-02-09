@@ -218,7 +218,21 @@ class DayTradingFeatureService:
                 features['stoch_k'] = 50.0
             # Simplified %D (3-period SMA of %K)
             if len(closes) >= 17:
-                k_values = [((closes[i] - float(np.min(lows[i-13:i+1]))) / (float(np.max(highs[i-13:i+1])) - float(np.min(lows[i-13:i+1]))) * 100) if (float(np.max(highs[i-13:i+1])) - float(np.min(lows[i-13:i+1]))) > 0 else 50.0 for i in range(-3, 0)]
+                k_values = []
+                for i in range(-3, 0):
+                    end = i + 1
+                    if end == 0:
+                        end = None
+                    window_highs = highs[i-13:end]
+                    window_lows = lows[i-13:end]
+                    if len(window_highs) == 0 or len(window_lows) == 0:
+                        k_values.append(50.0)
+                        continue
+                    denom = float(np.max(window_highs)) - float(np.min(window_lows))
+                    if denom > 0:
+                        k_values.append(((closes[i] - float(np.min(window_lows))) / denom) * 100)
+                    else:
+                        k_values.append(50.0)
                 features['stoch_d'] = float(np.mean(k_values))
             else:
                 features['stoch_d'] = features['stoch_k']
@@ -275,7 +289,7 @@ class DayTradingFeatureService:
         
         # Realized volatility
         if len(closes) >= 20:
-            returns = np.diff(closes[-20:]) / closes[-21:-1]
+            returns = np.diff(closes[-20:]) / closes[-20:-1]
             features['realized_vol_20'] = float(np.std(returns)) * np.sqrt(252)  # Annualized
             features['realized_vol_10'] = float(np.std(returns[-10:])) * np.sqrt(252) if len(returns) >= 10 else features['realized_vol_20']
         else:
@@ -627,7 +641,7 @@ class DayTradingFeatureService:
         
         # Position sizing
         risk_amount = current_price * risk_pct
-        shares = int(risk_amount / stop_distance) if stop_distance > 0 else 0
+        shares = max(1, int(risk_amount / stop_distance)) if stop_distance > 0 else 0
         
         # Time stop (from book: 45min for SAFE, 25min for AGGRESSIVE)
         time_stop_min = 45 if mode == "SAFE" else 25

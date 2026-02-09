@@ -10,6 +10,7 @@ Tests:
 import unittest
 from unittest.mock import patch, MagicMock, Mock
 from decimal import Decimal
+from uuid import uuid4
 from django.test import TestCase
 from graphene.test import Client
 from django.contrib.auth import get_user_model
@@ -27,7 +28,7 @@ class EdgePredictorTestCase(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(
-            email='test@example.com',
+            email=f'test_{uuid4()}@example.com',
             password='testpass123'
         )
         self.client = Client(schema)
@@ -155,7 +156,7 @@ class OneTapTradesTestCase(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(
-            email='test@example.com',
+            email=f'test_{uuid4()}@example.com',
             password='testpass123'
         )
         self.client = Client(schema)
@@ -329,7 +330,7 @@ class IVSurfaceForecastTestCase(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(
-            email='test@example.com',
+            email=f'test_{uuid4()}@example.com',
             password='testpass123'
         )
         self.client = Client(schema)
@@ -503,7 +504,7 @@ class MLFeaturesIntegrationTestCase(TestCase):
 
     def setUp(self):
         self.user = User.objects.create_user(
-            email='test@example.com',
+            email=f'test_{uuid4()}@example.com',
             password='testpass123'
         )
         self.client = Client(schema)

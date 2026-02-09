@@ -14,6 +14,7 @@ try:
     FERNET_AVAILABLE = True
 except ImportError:
     FERNET_AVAILABLE = False
+    Fernet = None
     logger.warning("cryptography library not available, token encryption disabled")
 
 # Try to import AWS KMS
