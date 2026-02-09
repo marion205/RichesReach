@@ -56,6 +56,21 @@ class RepairProofType(graphene.ObjectType):
     guardrails = JSONString()
 
 
+class RepairOptionVariant(graphene.Enum):
+    FORTRESS = 'FORTRESS'
+    BALANCED = 'BALANCED'
+    YIELD_MAX = 'YIELD_MAX'
+
+
+class RepairOptionType(graphene.ObjectType):
+    """One of three repair options per position: Fortress (safest), Balanced (best Calmar), Yield-max (highest APY within policy)."""
+    variant = graphene.Field(RepairOptionVariant)
+    to_vault = graphene.String()
+    to_pool_id = graphene.String()
+    estimated_apy_delta = graphene.Float()
+    proof = graphene.Field(RepairProofType)
+
+
 class RepairActionType(graphene.ObjectType):
     id = graphene.String()
     from_vault = graphene.String()
@@ -68,6 +83,7 @@ class RepairActionType(graphene.ObjectType):
     to_pool_id = graphene.String()
     execution_plan = JSONString()
     agent_trace = JSONString()
+    options = graphene.List(RepairOptionType, description='Three alternatives: Fortress, Balanced, Yield-max')
 
 
 class LastMoveType(graphene.ObjectType):
@@ -84,6 +100,7 @@ class AutopilotStatusType(graphene.ObjectType):
     last_evaluated_at = graphene.String()
     policy = graphene.Field(AutopilotPolicyType)
     last_move = graphene.Field(LastMoveType)
+    relayer_configured = graphene.Boolean(description="True if relayer can submit repairs (user signs once)")
 
 
 class TransactionReceiptType(graphene.ObjectType):

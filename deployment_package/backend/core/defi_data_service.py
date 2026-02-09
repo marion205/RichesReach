@@ -437,6 +437,150 @@ def get_ai_optimized_portfolio(
     }
 
 
+def get_fortress_alternative(asset: str, chain: str = 'all', limit: int = 5) -> List[Dict]:
+    """
+    Return best Fortress-grade vault(s) for the given asset (e.g. USDC).
+    Filters by Risk Guardian: recommendation HOLD, min Calmar, and policy thresholds.
+    Used by getFortressAlternative GraphQL query and repair option "Fortress" variant.
+    """
+    try:
+        from .defi_models import DeFiPool
+        from .risk_scoring_service import audit_vault, build_nav_from_apy_series
+
+        query = DeFiPool.objects.filter(is_active=True).select_related('protocol')
+        if chain != 'all':
+            query = query.filter(chain=chain)
+        # Symbol can be exact (USDC) or contain (e.g. "USDC" in "USDC-USDT")
+        pools = list(query.filter(symbol__icontains=asset)[:30])
+
+        candidates = []
+        for pool in pools:
+            snapshots = list(pool.yield_snapshots.order_by('-timestamp')[:2000])
+            if len(snapshots) < 7:
+                continue
+            daily = {}
+            for snap in snapshots:
+                day = snap.timestamp.date()
+                if day not in daily:
+                    daily[day] = snap
+            ordered_days = sorted(daily.keys())
+            apy_series = [float(daily[d].apy_total) for d in ordered_days]
+            tvl_series = [float(daily[d].tvl_usd) for d in ordered_days]
+            nav_history = build_nav_from_apy_series(apy_series)
+            protocol_name = (pool.protocol.slug or pool.protocol.name or '') if pool.protocol else ''
+            audit = audit_vault(
+                vault_address=pool.pool_address or str(pool.id),
+                protocol=protocol_name,
+                symbol=pool.symbol,
+                apy=apy_series[-1] if apy_series else 0.0,
+                nav_history=nav_history,
+                tvl_history=tvl_series,
+                is_erc4626_compliant=pool.pool_type in ('vault', 'yield'),
+            )
+            if audit.recommendation.value != 'HOLD':
+                continue
+            if audit.risk.calmar_ratio < 0.5:
+                continue
+            candidates.append({
+                'id': str(pool.id),
+                'protocol': pool.protocol.name if pool.protocol else '',
+                'chain': pool.chain,
+                'symbol': pool.symbol,
+                'poolAddress': pool.pool_address,
+                'apy': audit.apy,
+                'tvl': tvl_series[-1] if tvl_series else 0,
+                'risk': audit.risk.max_drawdown,
+                'audit': audit,
+                'overall_score': audit.overall_score,
+            })
+
+        candidates.sort(key=lambda x: (x['overall_score'], x['audit'].risk.calmar_ratio), reverse=True)
+        out = []
+        for c in candidates[:limit]:
+            a = c['audit']
+            out.append({
+                'id': c['id'],
+                'protocol': c['protocol'],
+                'chain': c['chain'],
+                'symbol': c['symbol'],
+                'poolAddress': c['poolAddress'],
+                'apy': c['apy'],
+                'tvl': c['tvl'],
+                'risk': c['risk'],
+                'integrity': {
+                    'altmanZScore': a.integrity.altman_z_score,
+                    'beneishMScore': a.integrity.beneish_m_score,
+                    'isErc4626Compliant': a.integrity.is_erc4626_compliant,
+                },
+                'riskMetrics': {
+                    'calmarRatio': a.risk.calmar_ratio,
+                    'maxDrawdown': a.risk.max_drawdown,
+                    'volatility': a.risk.volatility,
+                    'tvlStability': a.risk.tvl_stability,
+                },
+                'overallScore': a.overall_score,
+                'recommendation': a.recommendation.value,
+                'explanation': a.explanation,
+            })
+        return out
+    except Exception as e:
+        logger.warning(f"get_fortress_alternative error: {e}")
+        return []
+
+
+def get_position_health(pool_id: int) -> Dict:
+    """
+    Return health status for a pool for position display (green/amber/red).
+    Uses Risk Guardian when enough history exists; otherwise snapshot risk_score.
+    """
+    try:
+        from .defi_models import DeFiPool
+        from .risk_scoring_service import audit_vault, build_nav_from_apy_series
+
+        pool = DeFiPool.objects.filter(id=pool_id, is_active=True).select_related('protocol').first()
+        if not pool:
+            return {'status': 'green', 'reason': 'No data'}
+        latest = pool.yield_snapshots.order_by('-timestamp').first()
+        if not latest:
+            return {'status': 'green', 'reason': 'No history yet'}
+        snapshots = list(pool.yield_snapshots.order_by('-timestamp')[:2000])
+        if len(snapshots) < 7:
+            rs = float(latest.risk_score)
+            if rs >= 0.7:
+                return {'status': 'red', 'reason': 'Elevated risk'}
+            if rs >= 0.5:
+                return {'status': 'amber', 'reason': 'Moderate risk'}
+            return {'status': 'green', 'reason': 'Within range'}
+        daily = {}
+        for snap in snapshots:
+            day = snap.timestamp.date()
+            if day not in daily:
+                daily[day] = snap
+        ordered_days = sorted(daily.keys())
+        apy_series = [float(daily[d].apy_total) for d in ordered_days]
+        tvl_series = [float(daily[d].tvl_usd) for d in ordered_days]
+        nav_history = build_nav_from_apy_series(apy_series)
+        protocol_name = (pool.protocol.slug or pool.protocol.name or '') if pool.protocol else ''
+        audit = audit_vault(
+            vault_address=pool.pool_address or str(pool.id),
+            protocol=protocol_name,
+            symbol=pool.symbol,
+            apy=apy_series[-1] if apy_series else 0.0,
+            nav_history=nav_history,
+            tvl_history=tvl_series,
+            is_erc4626_compliant=pool.pool_type in ('vault', 'yield'),
+        )
+        rec = audit.recommendation.value
+        if rec == 'EXIT':
+            return {'status': 'red', 'reason': audit.explanation or 'Risk above threshold'}
+        if rec == 'REBALANCE':
+            return {'status': 'amber', 'reason': audit.explanation or 'Consider rebalancing'}
+        return {'status': 'green', 'reason': 'Within policy'}
+    except Exception as e:
+        logger.warning(f"get_position_health error: {e}")
+        return {'status': 'green', 'reason': 'Unknown'}
+
+
 def cleanup_old_snapshots(days_to_keep: int = 90):
     """
     Remove yield snapshots older than the retention period.

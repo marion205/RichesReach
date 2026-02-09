@@ -11,6 +11,11 @@
     "deploy:local": "hardhat run scripts/deploy-local.ts --network localhost",
     "deploy:amoy": "hardhat run scripts/deploy.ts --network polygonAmoy",
     "deploy:mainnet": "hardhat run scripts/deploy.ts --network polygonMainnet",
+    "deploy:repair-forwarder:local": "hardhat run scripts/deploy-repair-forwarder.ts --network localhost",
+    "deploy:repair-forwarder:amoy": "hardhat run scripts/deploy-repair-forwarder.ts --network polygonAmoy",
+    "deploy:repair-forwarder:mainnet": "hardhat run scripts/deploy-repair-forwarder.ts --network polygonMainnet",
+    "approve-forwarder:local": "hardhat run scripts/approve-forwarder.ts --network localhost",
+    "approve-forwarder:amoy": "hardhat run scripts/approve-forwarder.ts --network polygonAmoy",
     "verify": "hardhat verify --network",
     "coverage": "hardhat coverage"
   },

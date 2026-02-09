@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,17 +10,21 @@ import {
   Modal,
   Pressable,
   Platform,
+  Alert,
 } from 'react-native';
-import { gql, useQuery, useMutation } from '@apollo/client';
+import { gql, useQuery, useMutation, useLazyQuery } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import { LinearGradient } from 'expo-linear-gradient';
+import { ethers } from 'ethers';
 import UI from '../../../shared/constants';
 import logger from '../../../utils/logger';
+import { useWallet } from '../../../wallet/WalletProvider';
 
 const AUTOPILOT_QUERY = gql`
   query AutopilotCommand {
     autopilotStatus {
       enabled
+      relayerConfigured
       lastEvaluatedAt
       lastMove {
         id
@@ -44,6 +48,17 @@ const AUTOPILOT_QUERY = gql`
       toVault
       estimatedApyDelta
       gasEstimate
+      options {
+        variant
+        toVault
+        toPoolId
+        estimatedApyDelta
+        proof {
+          calmarImprovement
+          explanation
+          policyAlignment
+        }
+      }
       proof {
         calmarImprovement
         tvlStabilityCheck
@@ -91,6 +106,106 @@ const EXECUTE_REPAIR = gql`
         txHash
         message
       }
+      executionPayload
+    }
+  }
+`;
+
+const GET_SPEND_PERMISSION_TYPED_DATA = gql`
+  query GetSpendPermissionTypedData(
+    $chainId: Int!
+    $maxAmountWei: String!
+    $tokenAddress: String!
+    $validUntilSeconds: Int!
+    $nonce: String!
+  ) {
+    spendPermissionTypedData(
+      chainId: $chainId
+      maxAmountWei: $maxAmountWei
+      tokenAddress: $tokenAddress
+      validUntilSeconds: $validUntilSeconds
+      nonce: $nonce
+    )
+  }
+`;
+
+const GET_REPAIR_AUTH_TYPED_DATA = gql`
+  query GetRepairAuthorizationTypedData(
+    $chainId: Int!
+    $fromVault: String!
+    $toVault: String!
+    $amountWei: String!
+    $deadline: Int!
+    $nonce: Int!
+  ) {
+    repairAuthorizationTypedData(
+      chainId: $chainId
+      fromVault: $fromVault
+      toVault: $toVault
+      amountWei: $amountWei
+      deadline: $deadline
+      nonce: $nonce
+    )
+  }
+`;
+
+const GET_FORWARDER_NONCE = gql`
+  query GetRepairForwarderNonce($chainId: Int!, $userAddress: String!) {
+    repairForwarderNonce(chainId: $chainId, userAddress: $userAddress)
+  }
+`;
+
+const SUBMIT_REPAIR_VIA_RELAYER = gql`
+  mutation SubmitRepairViaRelayer(
+    $userAddress: String!
+    $chainId: Int!
+    $fromVault: String!
+    $toVault: String!
+    $amountWei: String!
+    $deadline: Int!
+    $nonce: Int!
+    $signature: String!
+  ) {
+    submitRepairViaRelayer(
+      userAddress: $userAddress
+      chainId: $chainId
+      fromVault: $fromVault
+      toVault: $toVault
+      amountWei: $amountWei
+      deadline: $deadline
+      nonce: $nonce
+      signature: $signature
+    ) {
+      success
+      txHash
+      message
+    }
+  }
+`;
+
+const SUBMIT_SPEND_PERMISSION = gql`
+  mutation SubmitSpendPermission(
+    $wallet_address: String!
+    $chain_id: Int!
+    $max_amount_wei: String!
+    $token_address: String!
+    $valid_until_seconds: Int!
+    $nonce: String!
+    $signature: String!
+    $raw_typed_data: JSONString
+  ) {
+    submitSpendPermission(
+      wallet_address: $wallet_address
+      chain_id: $chain_id
+      max_amount_wei: $max_amount_wei
+      token_address: $token_address
+      valid_until_seconds: $valid_until_seconds
+      nonce: $nonce
+      signature: $signature
+      raw_typed_data: $raw_typed_data
+    ) {
+      ok
+      message
     }
   }
 `;
@@ -107,6 +222,49 @@ const REVERT_MOVE = gql`
   }
 `;
 
+// ERC-4626 vault calls for repair on-chain (withdraw from source, deposit to target)
+const ERC4626_ABI = [
+  'function withdraw(uint256 assets, address receiver, address owner) returns (uint256)',
+  'function deposit(uint256 assets, address receiver) returns (uint256)',
+];
+
+/** Build and send the two repair txs (withdraw then deposit) via wallet. */
+async function submitRepairOnChain(
+  payload: {
+    chainId: number;
+    fromVaultAddress: string;
+    toVaultAddress: string;
+    amountHuman: string;
+    decimals?: number;
+  },
+  userAddress: string,
+  sendTransaction: (tx: { to: string; data: string; value?: string }) => Promise<string>,
+  decimalsDefault: number = 18,
+): Promise<{ withdrawHash?: string; depositHash?: string; error?: string }> {
+  const iface = new ethers.utils.Interface(ERC4626_ABI);
+  const decimals = payload.decimals ?? decimalsDefault;
+  const amountWei = ethers.utils.parseUnits(payload.amountHuman, decimals);
+  try {
+    const withdrawData = iface.encodeFunctionData('withdraw', [
+      amountWei,
+      userAddress,
+      userAddress,
+    ]);
+    const withdrawHash = await sendTransaction({
+      to: payload.fromVaultAddress,
+      data: withdrawData,
+    });
+    const depositData = iface.encodeFunctionData('deposit', [amountWei, userAddress]);
+    const depositHash = await sendTransaction({
+      to: payload.toVaultAddress,
+      data: depositData,
+    });
+    return { withdrawHash, depositHash };
+  } catch (e: any) {
+    return { error: e?.message || 'On-chain repair failed' };
+  }
+}
+
 const GOALS = [
   { id: 'FORTRESS', label: 'Fortress' },
   { id: 'BALANCED', label: 'Balanced' },
@@ -119,15 +277,33 @@ const LEVELS = [
   { id: 'AUTO_BOUNDED', label: 'Auto' },
 ];
 
+// USDC (or main stable) per chain for spend permission
+const DEFAULT_TOKEN_BY_CHAIN: Record<number, string> = {
+  1: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+  137: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',
+  42161: '0xaf88d065e77c8cC2239327C5Bb45045926D470c77',
+  11155111: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238', // Sepolia USDC
+};
+
 export default function DeFiAutopilotScreen() {
   const { data, loading, refetch } = useQuery(AUTOPILOT_QUERY, {
     fetchPolicy: 'network-only',
   });
+  const wallet = useWallet();
+  const { address, chainId, signTypedData, sendTransaction, isConnected } = wallet;
 
   const [updatePolicy] = useMutation(UPDATE_POLICY);
   const [toggleAutopilot] = useMutation(TOGGLE_AUTOPILOT);
   const [executeRepair, { loading: executingRepair }] = useMutation(EXECUTE_REPAIR);
   const [revertAutopilotMove, { loading: revertingMove }] = useMutation(REVERT_MOVE);
+  const [submitSpendPermission, { loading: grantingPermission }] = useMutation(SUBMIT_SPEND_PERMISSION);
+  const [getTypedData] = useLazyQuery(GET_SPEND_PERMISSION_TYPED_DATA);
+  const [getRepairAuthTypedData] = useLazyQuery(GET_REPAIR_AUTH_TYPED_DATA);
+  const [getForwarderNonce] = useLazyQuery(GET_FORWARDER_NONCE);
+  const [submitRepairViaRelayer, { loading: submittingViaRelayer }] = useMutation(SUBMIT_REPAIR_VIA_RELAYER);
+
+  const [submittingOnChain, setSubmittingOnChain] = useState(false);
+  const relayerConfigured = !!status?.relayerConfigured;
 
   const status = data?.autopilotStatus;
   const policy = status?.policy;
@@ -185,14 +361,177 @@ export default function DeFiAutopilotScreen() {
     }
   };
 
-  const handleExecuteRepair = async (repairId: string) => {
+  const handleExecuteRepair = useCallback(async (repairId: string) => {
     try {
-      await executeRepair({ variables: { repairId } });
+      const result = await executeRepair({ variables: { repairId } });
+      const receipt = result.data?.executeRepair?.receipt;
+      const executionPayload = result.data?.executeRepair?.executionPayload as Record<string, unknown> | null | undefined;
       await refetch();
-    } catch (error) {
+      if (receipt && !receipt.success) {
+        Alert.alert('Repair failed', receipt.message || 'Unknown error');
+        return;
+      }
+      if (executionPayload && isConnected && address) {
+        const chainIdNum = (executionPayload.chainId as number) || chainId;
+        if (chainIdNum !== chainId) {
+          Alert.alert(
+            'Wrong network',
+            `Repair is on chain ${chainIdNum}. Switch your wallet to that network and run Execute again, or submit the move manually.`,
+          );
+          return;
+        }
+        setSubmittingOnChain(true);
+        try {
+          const outcome = await submitRepairOnChain(
+            {
+              chainId: chainIdNum,
+              fromVaultAddress: (executionPayload.fromVaultAddress as string) || '',
+              toVaultAddress: (executionPayload.toVaultAddress as string) || '',
+              amountHuman: (executionPayload.amountHuman as string) || '0',
+              decimals: executionPayload.decimals as number | undefined,
+            },
+            address,
+            (tx) => sendTransaction({ ...tx, from: address }),
+            18,
+          );
+          if (outcome.error) {
+            Alert.alert('On-chain repair failed', outcome.error);
+          } else if (outcome.withdrawHash || outcome.depositHash) {
+            Alert.alert(
+              'Repair submitted',
+              `Withdraw: ${outcome.withdrawHash || '—'}\nDeposit: ${outcome.depositHash || '—'}`,
+            );
+          }
+        } finally {
+          setSubmittingOnChain(false);
+        }
+      }
+    } catch (error: any) {
       logger.error('Execute repair error:', error);
+      Alert.alert('Error', error?.message || 'Execute repair failed');
     }
-  };
+  }, [executeRepair, refetch, isConnected, address, chainId, sendTransaction]);
+
+  const handleGrantSpendPermission = useCallback(async () => {
+    if (!isConnected || !address || chainId == null) {
+      Alert.alert('Wallet required', 'Connect your wallet to grant spend permission.');
+      return;
+    }
+    const tokenAddress = DEFAULT_TOKEN_BY_CHAIN[chainId] || DEFAULT_TOKEN_BY_CHAIN[1];
+    const maxAmountWei = '500000000'; // 500 USDC (6 decimals)
+    const validUntilSeconds = Math.floor(Date.now() / 1000) + 30 * 24 * 3600;
+    const nonce = Date.now().toString();
+    try {
+      const { data: typedDataRes } = await getTypedData({
+        variables: {
+          chainId,
+          maxAmountWei,
+          tokenAddress,
+          validUntilSeconds,
+          nonce,
+        },
+      });
+      const typedData = typedDataRes?.spendPermissionTypedData as Record<string, unknown> | null | undefined;
+      if (!typedData) {
+        Alert.alert('Error', 'Could not get spend permission data.');
+        return;
+      }
+      const signature = await signTypedData(typedData);
+      const { data: submitRes } = await submitSpendPermission({
+        variables: {
+          wallet_address: address,
+          chain_id: chainId,
+          max_amount_wei: maxAmountWei,
+          token_address: tokenAddress,
+          valid_until_seconds: validUntilSeconds,
+          nonce,
+          signature,
+          raw_typed_data: typedData,
+        },
+      });
+      const ok = submitRes?.submitSpendPermission?.ok;
+      const message = submitRes?.submitSpendPermission?.message;
+      if (ok) {
+        Alert.alert('Spend permission granted', message || 'You can now auto-approve repairs within the limit.');
+        refetch();
+      } else {
+        Alert.alert('Failed', message || 'Could not store spend permission.');
+      }
+    } catch (e: any) {
+      logger.error('Grant spend permission error:', e);
+      Alert.alert('Error', e?.message || 'Grant spend permission failed');
+    }
+  }, [isConnected, address, chainId, getTypedData, signTypedData, submitSpendPermission, refetch]);
+
+  const handleSubmitViaRelayer = useCallback(async (repairId: string) => {
+    if (!isConnected || !address || chainId == null) {
+      Alert.alert('Wallet required', 'Connect your wallet first.');
+      return;
+    }
+    try {
+      const execResult = await executeRepair({ variables: { repairId } });
+      const executionPayload = execResult.data?.executeRepair?.executionPayload as Record<string, unknown> | null | undefined;
+      const withinSpendPermission = !!executionPayload?.withinSpendPermission;
+      if (!executionPayload || !withinSpendPermission || !relayerConfigured) {
+        Alert.alert(
+          'Relayer not available',
+          withinSpendPermission ? 'Relayer is not configured on the server.' : 'This repair is outside your spend permission; sign in wallet instead.',
+        );
+        return;
+      }
+      const chainIdNum = (executionPayload.chainId as number) || chainId;
+      const fromVault = (executionPayload.fromVaultAddress as string) || '';
+      const toVault = (executionPayload.toVaultAddress as string) || '';
+      const amountHuman = (executionPayload.amountHuman as string) || '0';
+      const decimals = (executionPayload.decimals as number) ?? 18;
+      const amountWei = ethers.utils.parseUnits(amountHuman, decimals).toString();
+      const deadline = Math.floor(Date.now() / 1000) + 900; // 15 min
+      const { data: nonceData } = await getForwarderNonce({
+        variables: { chainId: chainIdNum, userAddress: address },
+      });
+      const nonce = nonceData?.repairForwarderNonce ?? 0;
+      const { data: typedDataRes } = await getRepairAuthTypedData({
+        variables: {
+          chainId: chainIdNum,
+          fromVault,
+          toVault,
+          amountWei,
+          deadline,
+          nonce,
+        },
+      });
+      const typedData = typedDataRes?.repairAuthorizationTypedData as Record<string, unknown> | null | undefined;
+      if (!typedData) {
+        Alert.alert('Error', 'Could not get repair authorization data.');
+        return;
+      }
+      const signature = await signTypedData(typedData);
+      const { data: submitRes } = await submitRepairViaRelayer({
+        variables: {
+          userAddress: address,
+          chainId: chainIdNum,
+          fromVault,
+          toVault,
+          amountWei,
+          deadline,
+          nonce,
+          signature,
+        },
+      });
+      const ok = submitRes?.submitRepairViaRelayer?.success;
+      const txHash = submitRes?.submitRepairViaRelayer?.txHash;
+      const message = submitRes?.submitRepairViaRelayer?.message;
+      if (ok && txHash) {
+        Alert.alert('Repair submitted', `Tx: ${txHash}`);
+        refetch();
+      } else {
+        Alert.alert('Relayer failed', message || 'Could not submit via relayer.');
+      }
+    } catch (e: any) {
+      logger.error('Submit via relayer error:', e);
+      Alert.alert('Error', e?.message || 'Submit via relayer failed.');
+    }
+  }, [isConnected, address, chainId, relayerConfigured, executeRepair, getForwarderNonce, getRepairAuthTypedData, signTypedData, submitRepairViaRelayer, refetch]);
 
   const openProof = (proof: any) => {
     setActiveProof(proof);
@@ -408,6 +747,20 @@ export default function DeFiAutopilotScreen() {
             <Icon name="check" size={18} color="#FFFFFF" />
             <Text style={styles.primaryBtnText}>Save Intent</Text>
           </TouchableOpacity>
+
+          {isConnected && (
+            <TouchableOpacity
+              style={[styles.ghostBtn, { marginTop: 12 }]}
+              onPress={handleGrantSpendPermission}
+              disabled={grantingPermission}
+              activeOpacity={0.85}
+            >
+              <Icon name="lock" size={16} color={UI.colors.primary || '#6366F1'} />
+              <Text style={styles.ghostBtnText}>
+                {grantingPermission ? 'Signing in wallet…' : 'Grant spend permission (EIP-712)'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* REPAIR QUEUE */}
@@ -461,6 +814,12 @@ export default function DeFiAutopilotScreen() {
                   </Text>
                 )}
 
+                {repair.options?.length > 0 && (
+                  <Text style={styles.alertOptions}>
+                    Alternatives: {repair.options.map((o: any) => o.variant?.replace('_', ' ') || o.variant).join(' · ')}
+                  </Text>
+                )}
+
                 <View style={styles.alertActions}>
                   <TouchableOpacity
                     style={styles.ghostBtn}
@@ -471,15 +830,28 @@ export default function DeFiAutopilotScreen() {
                     <Text style={styles.ghostBtnText}>Why this move</Text>
                   </TouchableOpacity>
 
+                  {relayerConfigured && (
+                    <TouchableOpacity
+                      style={[styles.ghostBtn, submittingViaRelayer && styles.btnDisabled]}
+                      onPress={() => handleSubmitViaRelayer(repair.id)}
+                      disabled={submittingViaRelayer || executingRepair || submittingOnChain}
+                      activeOpacity={0.85}
+                    >
+                      <Icon name="send" size={16} color={UI.colors.primary || '#6366F1'} />
+                      <Text style={styles.ghostBtnText}>
+                        {submittingViaRelayer ? 'Submitting…' : 'One-tap (relayer pays gas)'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity
-                    style={[styles.primaryBtn, executingRepair && styles.btnDisabled]}
+                    style={[styles.primaryBtn, (executingRepair || submittingOnChain) && styles.btnDisabled]}
                     onPress={() => handleExecuteRepair(repair.id)}
-                    disabled={executingRepair}
+                    disabled={executingRepair || submittingOnChain}
                     activeOpacity={0.9}
                   >
-                    <Icon name={executingRepair ? 'loader' : 'zap'} size={18} color="#FFFFFF" />
+                    <Icon name={executingRepair || submittingOnChain ? 'loader' : 'zap'} size={18} color="#FFFFFF" />
                     <Text style={styles.primaryBtnText}>
-                      {executingRepair ? 'Executing…' : 'Execute 1-Tap Repair'}
+                      {submittingOnChain ? 'Confirm in wallet…' : executingRepair ? 'Executing…' : 'Execute 1-Tap Repair'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -988,6 +1360,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#64748B',
     lineHeight: 18,
+  },
+  alertOptions: {
+    marginTop: 6,
+    fontSize: 12,
+    color: '#6366F1',
+    fontWeight: '500',
   },
   alertActions: {
     marginTop: 14,

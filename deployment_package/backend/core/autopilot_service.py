@@ -90,6 +90,49 @@ def _spend_permission_active(policy: Dict[str, Any]) -> bool:
     return True
 
 
+def _symbol_to_decimals(symbol: Optional[str]) -> int:
+    """Map common token symbols to ERC-20 decimals. Default 18."""
+    if not symbol:
+        return 18
+    s = (symbol or '').upper()
+    if s in ('USDC', 'USDT', 'DAI', 'BUSD', 'TUSD', 'FRAX', 'GUSD'):
+        return 6
+    if s in ('WBTC', 'WETH'):
+        return 18
+    return 18
+
+
+def _has_valid_eip712_spend_permission(
+    user,
+    wallet_address: str,
+    chain_id: int,
+    amount_wei: int,
+) -> bool:
+    """True if user has a valid DeFiSpendPermission for this wallet/chain and amount <= max."""
+    if not user or not wallet_address:
+        return False
+    try:
+        from .defi_models import DeFiSpendPermission
+        now = timezone.now()
+        perms = DeFiSpendPermission.objects.filter(
+            user=user,
+            wallet_address__iexact=wallet_address.strip(),
+            chain_id=chain_id,
+            valid_until__gt=now,
+        )
+        for p in perms:
+            try:
+                max_wei = int(p.max_amount_wei)
+                if amount_wei <= max_wei:
+                    return True
+            except (ValueError, TypeError):
+                continue
+        return False
+    except Exception as e:
+        logger.warning(f"EIP-712 spend permission check failed: {e}")
+        return False
+
+
 def grant_spend_permission(user, hours: int = 24) -> Dict[str, Any]:
     if not user:
         return DEFAULT_POLICY
@@ -223,6 +266,89 @@ def _find_repair_target(pool) -> Optional[Dict[str, Any]]:
     return best
 
 
+def _find_repair_options(
+    pool,
+    current_audit,
+    user,
+    max_drawdown: float,
+    guardrails: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """
+    Return three repair options for this position: FORTRESS (best Calmar),
+    BALANCED (best overall score), YIELD_MAX (highest APY within policy).
+    """
+    from .defi_models import DeFiPool
+
+    candidates = DeFiPool.objects.filter(
+        symbol=pool.symbol,
+        chain=pool.chain,
+        is_active=True,
+    ).exclude(id=pool.id)
+
+    valid = []
+    for candidate in candidates:
+        audit_data = _pool_audit(candidate)
+        if not audit_data:
+            continue
+        audit = audit_data['audit']
+        if audit.recommendation.value == 'EXIT':
+            continue
+        latest = candidate.yield_snapshots.order_by('-timestamp').first()
+        gate_ok, gate_meta = policy_gate(candidate, latest, guardrails)
+        valid.append({
+            'pool': candidate,
+            'audit': audit,
+            'audit_data': audit_data,
+            'gate_ok': gate_ok,
+            'gate_meta': gate_meta,
+            'policy_alignment': audit.risk.max_drawdown <= max_drawdown and gate_ok,
+        })
+
+    if not valid:
+        return []
+
+    apy_delta = lambda v: v['audit'].apy - current_audit.apy
+    calmar_improvement = lambda v: v['audit'].risk.calmar_ratio - current_audit.risk.calmar_ratio
+
+    fortress = max(valid, key=lambda v: v['audit'].risk.calmar_ratio)
+    balanced = max(valid, key=lambda v: v['audit'].overall_score)
+    yield_candidates = [v for v in valid if v['policy_alignment']]
+    yield_max = max(yield_candidates, key=lambda v: v['audit'].apy) if yield_candidates else balanced
+
+    def option_dict(variant: str, choice: Dict) -> Dict[str, Any]:
+        a = choice['audit']
+        p = choice['pool']
+        delta = apy_delta(choice)
+        return {
+            'variant': variant,
+            'to_vault': a.vault_address,
+            'to_pool_id': str(p.id),
+            'estimated_apy_delta': delta,
+            'proof': {
+                'calmar_improvement': calmar_improvement(choice),
+                'integrity_check': {
+                    'altman_z_score': a.integrity.altman_z_score,
+                    'beneish_m_score': a.integrity.beneish_m_score,
+                    'is_erc4626_compliant': a.integrity.is_erc4626_compliant,
+                },
+                'tvl_stability_check': a.risk.tvl_stability >= 0.7,
+                'policy_alignment': choice['policy_alignment'],
+                'explanation': a.explanation,
+                'policy_version': guardrails.get('version', ''),
+                'guardrails': choice.get('gate_meta', {}),
+            },
+        }
+
+    options = []
+    seen_ids = set()
+    for variant, choice in [('FORTRESS', fortress), ('BALANCED', balanced), ('YIELD_MAX', yield_max)]:
+        pid = str(choice['pool'].id)
+        if pid not in seen_ids:
+            seen_ids.add(pid)
+            options.append(option_dict(variant, choice))
+    return options[:3]
+
+
 def _strategy_suggestions_as_repairs(user) -> List[Dict[str, Any]]:
     """
     Convert StrategyEvaluation rotation suggestions into repair-action format
@@ -296,6 +422,7 @@ def _strategy_suggestions_as_repairs(user) -> List[Dict[str, Any]]:
                 'from_pool_id': str(suggestion.get('current_pool_id', '')),
                 'to_pool_id': str(suggested_pool_id),
                 'source': 'strategy_engine',
+                'options': [],
             })
 
         return repair_format_items
@@ -416,7 +543,8 @@ def get_pending_repairs(user) -> List[Dict[str, Any]]:
                 continue
 
             repair_id = f"{position.id}:{target['pool'].id}"
-            repairs.append({
+            options = _find_repair_options(pool, current_audit, user, max_drawdown, guardrails)
+            repair_entry = {
                 'id': repair_id,
                 'from_vault': current_audit.vault_address,
                 'to_vault': target_audit.vault_address,
@@ -438,7 +566,29 @@ def get_pending_repairs(user) -> List[Dict[str, Any]]:
                 'from_pool_id': str(pool.id),
                 'to_pool_id': str(target['pool'].id),
                 'source': 'risk_scoring',
-            })
+                'options': options,
+            }
+            repairs.append(repair_entry)
+            try:
+                from .defi_models import DeFiRepairDecision
+                DeFiRepairDecision.objects.create(
+                    user=user,
+                    position=position,
+                    from_pool=pool,
+                    to_pool=target['pool'],
+                    repair_id=repair_id,
+                    decision_type='suggested',
+                    inputs={
+                        'current_apy': current_audit.apy,
+                        'target_apy': target_audit.apy,
+                        'max_drawdown': max_drawdown,
+                    },
+                    explanation=target_audit.explanation or '',
+                    expected_apy_delta=apy_delta,
+                    policy_version=policy_version or '',
+                )
+            except Exception as e:
+                logger.warning(f"Decision ledger write (suggested) failed: {e}")
 
         # Merge strategy engine rotation suggestions into the repair queue.
         # Skip strategy suggestions for positions already covered by risk repairs.
@@ -501,6 +651,7 @@ def seed_demo_repair(user) -> Dict[str, Any]:
             'risk': {'policy_alignment': True, 'calmar_improvement': 0.6},
             'executor': {'type': 'erc4626_one_tx', 'one_tx': True},
         },
+        'options': [],
     }
 
     cache.set(_demo_key(user.id), demo, timeout=3600)
@@ -546,12 +697,25 @@ def execute_repair(user, repair_id: str) -> Dict[str, Any]:
         amount = position.staked_amount if position else Decimal('0')
         amount_usd = position.staked_value_usd if position else Decimal('0')
 
+        from_pool = DeFiPool.objects.filter(id=repair.get('from_pool_id')).first()
+        to_pool = DeFiPool.objects.filter(id=repair.get('to_pool_id')).first()
+        decimals = _symbol_to_decimals(from_pool.symbol if from_pool else None)
+        amount_wei = int(amount * (10 ** decimals)) if amount else 0
+        wallet_address = (position.wallet_address or '') if position else ''
+        chain_id_for_perm = from_pool.chain_id if from_pool else 0
+        eip712_auto_approved = _has_valid_eip712_spend_permission(
+            user, wallet_address, chain_id_for_perm, amount_wei
+        )
+
         policy = get_autopilot_policy(user)
-        allow_auto_spend = policy.get('level') == 'AUTO_SPEND' and _spend_permission_active(policy)
+        allow_auto_spend = (
+            (policy.get('level') == 'AUTO_SPEND' and _spend_permission_active(policy))
+            or eip712_auto_approved
+        )
         txn_status = 'confirmed' if allow_auto_spend else 'pending'
         confirmed_at = timezone.now() if allow_auto_spend else None
 
-        pool = DeFiPool.objects.filter(id=repair.get('from_pool_id')).first()
+        pool = from_pool
         if pool:
             DeFiTransaction.objects.create(
                 user=user,
@@ -572,17 +736,57 @@ def execute_repair(user, repair_id: str) -> Dict[str, Any]:
             'executed_at': timezone.now().isoformat(),
         })
 
+        try:
+            from .defi_models import DeFiRepairDecision
+            DeFiRepairDecision.objects.create(
+                user=user,
+                position=position,
+                from_pool=from_pool,
+                to_pool=to_pool,
+                repair_id=repair_id,
+                decision_type='executed',
+                inputs={'repair': repair.get('proof', {})},
+                explanation=(repair.get('proof') or {}).get('explanation', ''),
+                expected_apy_delta=repair.get('estimated_apy_delta'),
+                policy_version=(repair.get('proof') or {}).get('policy_version', ''),
+                executed_at=timezone.now(),
+                tx_hash=repair.get('tx_hash') or f"repair_{timezone.now().timestamp():.0f}",
+            )
+        except Exception as e:
+            logger.warning(f"Decision ledger write (executed) failed: {e}")
+
+        # Build execution payload for client to submit on-chain (WalletConnect)
+        execution_payload = None
+        if from_pool and to_pool and position:
+            amount_human = str(amount)
+            execution_payload = {
+                'chainId': from_pool.chain_id,
+                'fromPoolId': str(from_pool.id),
+                'toPoolId': str(to_pool.id),
+                'fromVaultAddress': from_pool.pool_address or '',
+                'toVaultAddress': to_pool.pool_address or '',
+                'amountHuman': amount_human,
+                'decimals': decimals,
+                'withinSpendPermission': eip712_auto_approved,
+                'steps': [
+                    {'type': 'redeem', 'vaultAddress': from_pool.pool_address or '', 'amountHuman': amount_human},
+                    {'type': 'deposit', 'vaultAddress': to_pool.pool_address or '', 'amountHuman': amount_human},
+                ],
+            }
+
         if allow_auto_spend:
             return {
                 'success': True,
                 'tx_hash': None,
                 'message': 'Repair executed within spend permission. On-chain execution in progress.',
+                'execution_payload': execution_payload,
             }
 
         return {
             'success': True,
             'tx_hash': None,
             'message': 'Repair queued. Approve the on-chain transaction in your wallet.',
+            'execution_payload': execution_payload,
         }
     except Exception as e:
         return {'success': False, 'message': f'Failed to queue repair: {e}'}

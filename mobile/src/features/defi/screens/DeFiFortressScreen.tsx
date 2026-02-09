@@ -569,7 +569,12 @@ export default function DeFiFortressScreen() {
       {/* ---- DeFi Fortress 101 Card ---- */}
       <Pressable
         style={({ pressed }) => [styles.educationCard, pressed && { opacity: 0.9 }]}
-        onPress={() => navigation.navigate('Learn')}
+        onPress={() =>
+          navigation.navigate('Learn', {
+            screen: 'LearnMain',
+            params: { initialPathId: 'defiBasics' },
+          })
+        }
       >
         <View style={styles.educationLeft}>
           <Feather name="shield" size={24} color="#10B981" />
@@ -590,7 +595,12 @@ export default function DeFiFortressScreen() {
           { borderColor: '#C4B5FD', backgroundColor: '#EDE9FE' },
           pressed && { opacity: 0.9 },
         ]}
-        onPress={() => navigation.navigate('Learn')}
+        onPress={() =>
+          navigation.navigate('Learn', {
+            screen: 'LearnMain',
+            params: { initialPathId: 'defiAdvanced' },
+          })
+        }
       >
         <View style={[styles.educationLeft, { backgroundColor: '#DDD6FE' }]}>
           <Feather name="zap" size={24} color="#7C3AED" />

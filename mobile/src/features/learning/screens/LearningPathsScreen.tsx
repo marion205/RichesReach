@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
 View,
 Text,
@@ -9,6 +9,7 @@ Dimensions,
 Modal,
 Alert,
 } from 'react-native';
+import { useRoute } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { LEARNING_PATHS, LearningModule } from '../../../shared/learningPaths';
 import EducationalTooltip from '../../../components/common/EducationalTooltip';
@@ -30,11 +31,20 @@ const ProgressBar = ({ value = 0, tint = '#007AFF' }) => (
 
 const { width } = Dimensions.get('window');
 const LearningPathsScreen: React.FC = () => {
-const [selectedPath, setSelectedPath] = useState<string | null>(null);
-const [selectedModule, setSelectedModule] = useState<LearningModule | null>(null);
-const [showModuleModal, setShowModuleModal] = useState(false);
-const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
-const [userAnswers, setUserAnswers] = useState<{[key: string]: number}>({});
+  const route = useRoute();
+  const initialPathId = (route.params as { initialPathId?: string } | undefined)?.initialPathId;
+  const [selectedPath, setSelectedPath] = useState<string | null>(initialPathId || null);
+  const [selectedModule, setSelectedModule] = useState<LearningModule | null>(null);
+  const [showModuleModal, setShowModuleModal] = useState(false);
+  const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
+  const [userAnswers, setUserAnswers] = useState<{[key: string]: number}>({});
+
+  useEffect(() => {
+    if (initialPathId && LEARNING_PATHS[initialPathId as keyof typeof LEARNING_PATHS]) {
+      setSelectedPath(initialPathId);
+    }
+  }, [initialPathId]);
+
 const handlePathSelect = (pathId: string) => {
 setSelectedPath(pathId);
 };

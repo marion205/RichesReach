@@ -34,7 +34,7 @@ export async function connectWallet(chainIdWC: string) {
   const { uri, approval } = await c.connect({
     requiredNamespaces: {
       eip155: {
-        methods: ['eth_sendTransaction', 'eth_signTypedData', 'personal_sign'],
+        methods: ['eth_sendTransaction', 'eth_signTypedData', 'eth_signTypedData_v4', 'personal_sign'],
         chains: [chainIdWC],
         events: ['accountsChanged', 'chainChanged'],
       },
@@ -142,6 +142,29 @@ export async function sendTx(params: {
     request: { method: 'eth_sendTransaction', params: [tx] },
   })) as string;
   return hash;
+}
+
+/**
+ * Sign EIP-712 typed data (e.g. spend permission) via WalletConnect.
+ * Uses eth_signTypedData_v4. typedData is the full JSON object from getSpendPermissionTypedData.
+ */
+export async function signTypedData(params: {
+  client: SignClient;
+  session: WcSession;
+  chainIdWC: string;
+  account: string; // eip155:chainId:0x...
+  typedData: Record<string, unknown>;
+}): Promise<string> {
+  const { client: c, session, chainIdWC, account, typedData } = params;
+  const signature = (await c.request({
+    topic: session.topic,
+    chainId: chainIdWC,
+    request: {
+      method: 'eth_signTypedData_v4',
+      params: [account, JSON.stringify(typedData)],
+    },
+  })) as string;
+  return signature;
 }
 
 // ---- Internal helpers ----

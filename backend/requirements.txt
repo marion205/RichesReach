@@ -56,6 +56,9 @@ pytest-asyncio>=0.21.0
 
 # Security
 cryptography>=41.0.0
+eth-account>=0.10.0
+eth-utils>=2.3.0
+web3>=6.0.0
 
 # AWS (Polly TTS, Secrets Manager, KMS, etc.)
 boto3>=1.28.0

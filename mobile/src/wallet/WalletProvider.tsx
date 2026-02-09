@@ -12,6 +12,7 @@ import {
   restoreSession,
   disconnectWallet,
   sendTx,
+  signTypedData as wcSignTypedData,
   initWC,
 } from '../blockchain/wallet/walletConnect';
 import { getReadProvider } from '../blockchain/web3Service';
@@ -38,6 +39,8 @@ interface WalletContextValue {
   switchChain: (chainId: number) => void;
   /** Sign a message */
   signMessage: (message: string) => Promise<string>;
+  /** Sign EIP-712 typed data (e.g. spend permission) */
+  signTypedData: (typedData: Record<string, unknown>) => Promise<string>;
   /** Send a raw transaction */
   sendTransaction: (tx: any) => Promise<string>;
   /** Convenience booleans */
@@ -62,6 +65,7 @@ export const useWallet = () => {
       disconnect: async () => {},
       switchChain: () => {},
       signMessage: async () => { throw new Error('Wallet not connected'); },
+      signTypedData: async () => { throw new Error('Wallet not connected'); },
       sendTransaction: async () => { throw new Error('Wallet not connected'); },
       isConnected: false,
       address: null,
@@ -187,6 +191,22 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     return signature as string;
   }, [wcClient, wcSession, address, chainId]);
 
+  // ---- Sign EIP-712 typed data ----
+  const signTypedData = useCallback(async (typedData: Record<string, unknown>): Promise<string> => {
+    if (!wcClient || !wcSession || !address) {
+      throw new Error('Wallet not connected');
+    }
+    const chainWC = `eip155:${chainId || 11155111}`;
+    const account = `${chainWC}:${address}`;
+    return wcSignTypedData({
+      client: wcClient,
+      session: wcSession,
+      chainIdWC: chainWC,
+      account,
+      typedData,
+    });
+  }, [wcClient, wcSession, address, chainId]);
+
   // ---- Send transaction ----
   const sendTransaction = useCallback(async (tx: any): Promise<string> => {
     if (!wcClient || !wcSession) {
@@ -211,6 +231,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     disconnect,
     switchChain,
     signMessage,
+    signTypedData,
     sendTransaction,
     isConnected: !!address && !!wcSession,
     address,

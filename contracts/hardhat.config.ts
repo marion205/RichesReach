@@ -19,6 +19,13 @@ const config: HardhatUserConfig = {
     hardhat: {
       chainId: 1337,
     },
+    localhost: {
+      url: "http://127.0.0.1:8545",
+      chainId: 1337,
+      accounts: process.env.PRIVATE_KEY
+        ? [process.env.PRIVATE_KEY]
+        : undefined, // use default Hardhat accounts when node is running
+    },
     polygonAmoy: {
       url: process.env.POLYGON_AMOY_RPC_URL || "https://rpc-amoy.polygon.technology",
       accounts: process.env.PRIVATE_KEY && process.env.PRIVATE_KEY !== "your_test_private_key_here" && process.env.PRIVATE_KEY.length === 64 ? [process.env.PRIVATE_KEY] : [],

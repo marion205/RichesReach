@@ -224,12 +224,13 @@ class RevokeAutopilotSpendPermission(graphene.Mutation):
 
 
 class ExecuteRepair(graphene.Mutation):
-    """Execute a pending repair action."""
+    """Execute a pending repair action. Returns receipt + executionPayload for client to submit on-chain."""
 
     class Arguments:
         repair_id = graphene.String(required=True)
 
     receipt = graphene.Field(TransactionReceiptType)
+    execution_payload = graphene.JSONString(description='Chain tx payload: chainId, from/to vaults, amount, steps')
 
     @login_required
     def mutate(self, info, repair_id):
@@ -241,8 +242,135 @@ class ExecuteRepair(graphene.Mutation):
                 success=result.get('success', False),
                 tx_hash=result.get('tx_hash'),
                 message=result.get('message', ''),
-            )
+            ),
+            execution_payload=result.get('execution_payload'),
         )
+
+
+class SubmitRepairViaRelayer(graphene.Mutation):
+    """Submit repair via relayer: user signed RepairAuthorization; relayer pays gas and submits."""
+
+    class Arguments:
+        user_address = graphene.String(required=True)
+        chain_id = graphene.Int(required=True)
+        from_vault = graphene.String(required=True)
+        to_vault = graphene.String(required=True)
+        amount_wei = graphene.String(required=True)
+        deadline = graphene.Int(required=True)
+        nonce = graphene.Int(required=True)
+        signature = graphene.String(required=True)
+
+    success = graphene.Boolean()
+    tx_hash = graphene.String()
+    message = graphene.String()
+
+    @login_required
+    def mutate(
+        self, info,
+        user_address,
+        chain_id,
+        from_vault,
+        to_vault,
+        amount_wei,
+        deadline,
+        nonce,
+        signature,
+    ):
+        from .repair_relayer import submit_repair_via_relayer, is_relayer_configured
+        if not is_relayer_configured():
+            return SubmitRepairViaRelayer(
+                success=False, tx_hash=None, message="Relayer not configured.",
+            )
+        try:
+            amount = int(amount_wei)
+        except (ValueError, TypeError):
+            return SubmitRepairViaRelayer(
+                success=False, tx_hash=None, message="Invalid amountWei.",
+            )
+        result = submit_repair_via_relayer(
+            chain_id=chain_id,
+            user_address=user_address,
+            from_vault=from_vault,
+            to_vault=to_vault,
+            amount_wei=amount,
+            deadline=deadline,
+            nonce=nonce,
+            signature=signature,
+        )
+        return SubmitRepairViaRelayer(
+            success=result.get("success", False),
+            tx_hash=result.get("tx_hash"),
+            message=result.get("message", ""),
+        )
+
+
+class SubmitSessionAuthorization(graphene.Mutation):
+    """Submit EIP-712 signed session authorization (session can request repairs within bounds)."""
+
+    class Arguments:
+        session_id = graphene.String(required=True)
+        wallet_address = graphene.String(required=True)
+        chain_id = graphene.Int(required=True)
+        max_amount_wei = graphene.String(required=True)
+        valid_until_seconds = graphene.Int(required=True)
+        nonce = graphene.String(required=True)
+        signature = graphene.String(required=True)
+        raw_typed_data = graphene.JSONString()
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(
+        self, info,
+        session_id,
+        wallet_address,
+        chain_id,
+        max_amount_wei,
+        valid_until_seconds,
+        nonce,
+        signature,
+        raw_typed_data=None,
+    ):
+        from django.utils import timezone
+        from .defi_models import DeFiSessionAuthorization
+        from .eip712_session_authorization import (
+            get_session_authorization_typed_data,
+            verify_session_signature,
+        )
+        user = info.context.user
+        try:
+            typed_data = raw_typed_data or get_session_authorization_typed_data(
+                session_id=session_id,
+                wallet_address=wallet_address,
+                chain_id=chain_id,
+                max_amount_wei=max_amount_wei,
+                valid_until=valid_until_seconds,
+                nonce=nonce,
+            )
+            if not verify_session_signature(wallet_address, typed_data, signature):
+                return SubmitSessionAuthorization(ok=False, message='Invalid signature.')
+            valid_until = timezone.datetime.fromtimestamp(valid_until_seconds, tz=timezone.utc)
+            DeFiSessionAuthorization.objects.update_or_create(
+                session_id=session_id,
+                defaults={
+                    'user': user,
+                    'wallet_address': wallet_address,
+                    'chain_id': chain_id,
+                    'max_amount_wei': max_amount_wei,
+                    'valid_until': valid_until,
+                    'nonce': nonce,
+                    'raw_typed_data': typed_data,
+                    'signature': signature,
+                },
+            )
+            return SubmitSessionAuthorization(
+                ok=True,
+                message=f'Session {session_id} authorized until {valid_until.isoformat()}.',
+            )
+        except Exception as e:
+            logger.error(f"SubmitSessionAuthorization error: {e}")
+            return SubmitSessionAuthorization(ok=False, message=str(e))
 
 
 class RevertAutopilotMove(graphene.Mutation):
@@ -304,6 +432,101 @@ class SeedAutopilotDemo(graphene.Mutation):
                 ),
             )
         )
+
+
+class SubmitSpendPermission(graphene.Mutation):
+    """Submit EIP-712 signed spend permission. Client signs getSpendPermissionTypedData then calls this.
+    Accepts both snake_case and camelCase argument names for schema compatibility."""
+
+    class Arguments:
+        wallet_address = graphene.String(required=False)
+        chain_id = graphene.Int(required=False)
+        max_amount_wei = graphene.String(required=False)
+        token_address = graphene.String(required=False)
+        valid_until_seconds = graphene.Int(required=False)
+        nonce = graphene.String(required=False)
+        signature = graphene.String(required=False)
+        raw_typed_data = graphene.JSONString(required=False)
+        # CamelCase for GraphQL clients (schema exposes walletAddress, etc.)
+        walletAddress = graphene.String(required=False)
+        chainId = graphene.Int(required=False)
+        maxAmountWei = graphene.String(required=False)
+        tokenAddress = graphene.String(required=False)
+        validUntilSeconds = graphene.Int(required=False)
+        rawTypedData = graphene.JSONString(required=False)
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(
+        self, info,
+        wallet_address=None,
+        chain_id=None,
+        max_amount_wei=None,
+        token_address=None,
+        valid_until_seconds=None,
+        nonce=None,
+        signature=None,
+        raw_typed_data=None,
+        walletAddress=None,
+        chainId=None,
+        maxAmountWei=None,
+        tokenAddress=None,
+        validUntilSeconds=None,
+        rawTypedData=None,
+    ):
+        from django.utils import timezone
+        from .defi_models import DeFiSpendPermission
+        from .eip712_spend_permission import (
+            get_spend_permission_typed_data,
+            verify_signature,
+        )
+
+        # Normalize: accept snake_case or camelCase
+        wallet_address = wallet_address or walletAddress
+        chain_id = chain_id if chain_id is not None else chainId
+        max_amount_wei = max_amount_wei or maxAmountWei
+        token_address = token_address or tokenAddress
+        valid_until_seconds = valid_until_seconds if valid_until_seconds is not None else validUntilSeconds
+        raw_typed_data = raw_typed_data or rawTypedData
+        # nonce and signature have no camelCase alias (same in both conventions)
+
+        if not all([wallet_address, chain_id is not None, max_amount_wei, token_address,
+                    valid_until_seconds is not None, nonce, signature]):
+            return SubmitSpendPermission(ok=False, message='Missing required arguments.')
+
+        user = info.context.user
+        try:
+            typed_data = raw_typed_data or get_spend_permission_typed_data(
+                chain_id=chain_id,
+                max_amount_wei=max_amount_wei,
+                token_address=token_address,
+                valid_until_seconds=valid_until_seconds,
+                nonce=nonce,
+            )
+            if not verify_signature(wallet_address, typed_data, signature):
+                return SubmitSpendPermission(ok=False, message='Invalid signature.')
+            # valid_until_seconds is absolute Unix timestamp (matches EIP-712 message)
+            valid_until = timezone.datetime.fromtimestamp(valid_until_seconds, tz=timezone.utc)
+            DeFiSpendPermission.objects.create(
+                user=user,
+                wallet_address=wallet_address,
+                chain_id=chain_id,
+                max_amount_wei=max_amount_wei,
+                token_address=token_address,
+                valid_until=valid_until,
+                nonce=nonce,
+                raw_typed_data=typed_data,
+                signature=signature,
+            )
+            return SubmitSpendPermission(
+                ok=True,
+                message=f'Spend permission stored until {valid_until.isoformat()}.',
+            )
+        except Exception as e:
+            logger.error(f"SubmitSpendPermission error: {e}")
+            return SubmitSpendPermission(ok=False, message=str(e))
 
 
 class MarkAlertRead(graphene.Mutation):
@@ -868,10 +1091,14 @@ class DefiMutations(graphene.ObjectType):
     grant_autopilot_spend_permission = GrantAutopilotSpendPermission.Field()
     revoke_autopilot_spend_permission = RevokeAutopilotSpendPermission.Field()
     execute_repair = ExecuteRepair.Field()
+    submit_repair_via_relayer = SubmitRepairViaRelayer.Field()
+    submit_session_authorization = SubmitSessionAuthorization.Field()
     seed_autopilot_demo = SeedAutopilotDemo.Field()
     revert_autopilot_move = RevertAutopilotMove.Field()
     mark_alert_read = MarkAlertRead.Field()
     dismiss_alert = DismissAlert.Field()
+    submit_spend_permission = SubmitSpendPermission.Field()
+    submitSpendPermission = SubmitSpendPermission.Field()
     # CamelCase aliases for GraphQL schema
     defiSupply = DefiSupply.Field()
     defiBorrow = DefiBorrow.Field()
@@ -884,7 +1111,10 @@ class DefiMutations(graphene.ObjectType):
     grantAutopilotSpendPermission = GrantAutopilotSpendPermission.Field()
     revokeAutopilotSpendPermission = RevokeAutopilotSpendPermission.Field()
     executeRepair = ExecuteRepair.Field()
+    submitRepairViaRelayer = SubmitRepairViaRelayer.Field()
+    submitSessionAuthorization = SubmitSessionAuthorization.Field()
     seedAutopilotDemo = SeedAutopilotDemo.Field()
     revertAutopilotMove = RevertAutopilotMove.Field()
     markAlertRead = MarkAlertRead.Field()
     dismissAlert = DismissAlert.Field()
+    submitSpendPermission = SubmitSpendPermission.Field()

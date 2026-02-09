@@ -18,6 +18,8 @@ from .autopilot_types import (
     AutopilotPolicyType,
     RepairActionType,
     RepairProofType,
+    RepairOptionType,
+    RepairOptionVariant,
     LastMoveType,
 )
 
@@ -142,6 +144,22 @@ class RiskMetricsType(graphene.ObjectType):
     tvl_stability = graphene.Float()
 
 
+class FortressAlternativeType(graphene.ObjectType):
+    """Best Fortress-grade vault for an asset (getFortressAlternative query)."""
+    id = graphene.String()
+    protocol = graphene.String()
+    chain = graphene.String()
+    symbol = graphene.String()
+    pool_address = graphene.String()
+    apy = graphene.Float()
+    tvl = graphene.Float()
+    overall_score = graphene.Float()
+    recommendation = graphene.String()
+    explanation = graphene.String()
+    integrity = graphene.Field(FinancialIntegrityType)
+    risk_metrics = graphene.Field(RiskMetricsType)
+
+
 class VaultAuditType(graphene.ObjectType):
     """Risk Guardian audit for a vault"""
     vault_address = graphene.String()
@@ -215,6 +233,8 @@ class DeFiPositionSummaryType(graphene.ObjectType):
     current_apy = graphene.Float()
     rewards_earned = graphene.Float()
     health_factor = graphene.Float()
+    health_status = graphene.String(description='green | amber | red')
+    health_reason = graphene.String()
     is_active = graphene.Boolean()
 
 
@@ -264,6 +284,95 @@ class DefiQueries(graphene.ObjectType):
         VaultAuditType,
         poolId=graphene.String(required=True),
         description="Get Risk Guardian audit for a pool (camelCase alias)"
+    )
+
+    fortress_alternative = graphene.List(
+        FortressAlternativeType,
+        asset=graphene.String(required=True),
+        chain=graphene.String(),
+        limit=graphene.Int(),
+        description="Best Fortress-grade vault(s) for the given asset (e.g. USDC)"
+    )
+    fortressAlternative = graphene.List(
+        FortressAlternativeType,
+        asset=graphene.String(required=True),
+        chain=graphene.String(),
+        limit=graphene.Int(),
+        description="Best Fortress-grade vault(s) (camelCase alias)"
+    )
+
+    spend_permission_typed_data = graphene.Field(
+        graphene.JSONString,
+        chainId=graphene.Int(required=True),
+        maxAmountWei=graphene.String(required=True),
+        tokenAddress=graphene.String(required=True),
+        validUntilSeconds=graphene.Int(required=True),
+        nonce=graphene.String(required=True),
+        description="EIP-712 typed data for signing spend permission (eth_signTypedData_v4)",
+    )
+    spendPermissionTypedData = graphene.Field(
+        graphene.JSONString,
+        chainId=graphene.Int(required=True),
+        maxAmountWei=graphene.String(required=True),
+        tokenAddress=graphene.String(required=True),
+        validUntilSeconds=graphene.Int(required=True),
+        nonce=graphene.String(required=True),
+        description="EIP-712 typed data (camelCase alias)",
+    )
+
+    repair_authorization_typed_data = graphene.Field(
+        graphene.JSONString,
+        chainId=graphene.Int(required=True),
+        fromVault=graphene.String(required=True),
+        toVault=graphene.String(required=True),
+        amountWei=graphene.String(required=True),
+        deadline=graphene.Int(required=True),
+        nonce=graphene.Int(required=True),
+        description="EIP-712 typed data for RepairForwarder (relayer flow)",
+    )
+    repairAuthorizationTypedData = graphene.Field(
+        graphene.JSONString,
+        chainId=graphene.Int(required=True),
+        fromVault=graphene.String(required=True),
+        toVault=graphene.String(required=True),
+        amountWei=graphene.String(required=True),
+        deadline=graphene.Int(required=True),
+        nonce=graphene.Int(required=True),
+        description="EIP-712 typed data (camelCase alias)",
+    )
+
+    session_authorization_typed_data = graphene.Field(
+        graphene.JSONString,
+        chainId=graphene.Int(required=True),
+        sessionId=graphene.String(required=True),
+        walletAddress=graphene.String(required=True),
+        maxAmountWei=graphene.String(required=True),
+        validUntilSeconds=graphene.Int(required=True),
+        nonce=graphene.String(required=True),
+        description="EIP-712 typed data for session key (session can request repairs within bounds)",
+    )
+    sessionAuthorizationTypedData = graphene.Field(
+        graphene.JSONString,
+        chainId=graphene.Int(required=True),
+        sessionId=graphene.String(required=True),
+        walletAddress=graphene.String(required=True),
+        maxAmountWei=graphene.String(required=True),
+        validUntilSeconds=graphene.Int(required=True),
+        nonce=graphene.String(required=True),
+        description="EIP-712 typed data (camelCase alias)",
+    )
+
+    repair_forwarder_nonce = graphene.Field(
+        graphene.Int,
+        chainId=graphene.Int(required=True),
+        userAddress=graphene.String(required=True),
+        description="Current nonce for user on RepairForwarder (for relayer flow)",
+    )
+    repairForwarderNonce = graphene.Field(
+        graphene.Int,
+        chainId=graphene.Int(required=True),
+        userAddress=graphene.String(required=True),
+        description="Current nonce (camelCase alias)",
     )
 
     autopilot_status = graphene.Field(
@@ -416,6 +525,10 @@ class DefiQueries(graphene.ObjectType):
                     )
 
                 positions_summary = []
+                try:
+                    from .defi_data_service import get_position_health
+                except ImportError:
+                    get_position_health = None
                 for p in positions:
                     latest = p.pool.yield_snapshots.order_by('-timestamp').first() if p.pool else None
                     pool_name = ''
@@ -423,6 +536,15 @@ class DefiQueries(graphene.ObjectType):
                         pool_name = f"{p.pool.protocol.name} {p.pool.symbol}"
                     elif p.pool:
                         pool_name = p.pool.symbol
+                    health_status = 'green'
+                    health_reason = ''
+                    if get_position_health and p.pool:
+                        try:
+                            health = get_position_health(p.pool.id)
+                            health_status = health.get('status', 'green')
+                            health_reason = health.get('reason', '') or ''
+                        except Exception:
+                            pass
                     positions_summary.append(
                         DeFiPositionSummaryType(
                             id=str(p.id),
@@ -435,6 +557,8 @@ class DefiQueries(graphene.ObjectType):
                             current_apy=float(latest.apy_total) if latest else 0.0,
                             rewards_earned=float(p.rewards_earned),
                             health_factor=health_factor,
+                            health_status=health_status,
+                            health_reason=health_reason,
                             is_active=p.is_active,
                         )
                     )
@@ -587,8 +711,132 @@ class DefiQueries(graphene.ObjectType):
         return DefiQueries.resolve_vault_audit(self, info, poolId)
 
     @login_required
+    def resolve_fortress_alternative(self, info, asset, chain='all', limit=5):
+        """Best Fortress-grade vault(s) for the given asset."""
+        try:
+            from .defi_data_service import get_fortress_alternative
+            rows = get_fortress_alternative(asset=asset, chain=chain or 'all', limit=limit or 5)
+            out = []
+            for r in rows:
+                integrity = r.get('integrity') or {}
+                risk = r.get('riskMetrics') or {}
+                out.append(FortressAlternativeType(
+                    id=r.get('id', ''),
+                    protocol=r.get('protocol', ''),
+                    chain=r.get('chain', ''),
+                    symbol=r.get('symbol', ''),
+                    pool_address=r.get('poolAddress', ''),
+                    apy=r.get('apy', 0),
+                    tvl=r.get('tvl', 0),
+                    overall_score=r.get('overallScore', 0),
+                    recommendation=r.get('recommendation', ''),
+                    explanation=r.get('explanation', ''),
+                    integrity=FinancialIntegrityType(
+                        altman_z_score=integrity.get('altmanZScore'),
+                        beneish_m_score=integrity.get('beneishMScore'),
+                        is_erc4626_compliant=integrity.get('isErc4626Compliant', False),
+                    ),
+                    risk_metrics=RiskMetricsType(
+                        calmar_ratio=risk.get('calmarRatio'),
+                        max_drawdown=risk.get('maxDrawdown'),
+                        volatility=risk.get('volatility'),
+                        tvl_stability=risk.get('tvlStability'),
+                    ),
+                ))
+            return out
+        except Exception as e:
+            logger.warning(f"fortress_alternative error: {e}")
+            return []
+
+    def resolve_fortressAlternative(self, info, asset, chain='all', limit=5):
+        return DefiQueries.resolve_fortress_alternative(self, info, asset, chain, limit)
+
+    @login_required
+    def resolve_spend_permission_typed_data(
+        self, info, chainId, maxAmountWei, tokenAddress, validUntilSeconds, nonce
+    ):
+        """Return EIP-712 typed data for the client to sign (eth_signTypedData_v4)."""
+        try:
+            from .eip712_spend_permission import get_spend_permission_typed_data
+            return get_spend_permission_typed_data(
+                chain_id=chainId,
+                max_amount_wei=maxAmountWei,
+                token_address=tokenAddress,
+                valid_until_seconds=validUntilSeconds,
+                nonce=nonce,
+            )
+        except Exception as e:
+            logger.warning(f"spend_permission_typed_data error: {e}")
+            return None
+
+    def resolve_spendPermissionTypedData(
+        self, info, chainId, maxAmountWei, tokenAddress, validUntilSeconds, nonce
+    ):
+        return DefiQueries.resolve_spend_permission_typed_data(
+            self, info, chainId, maxAmountWei, tokenAddress, validUntilSeconds, nonce
+        )
+
+    @login_required
+    def resolve_repair_authorization_typed_data(
+        self, info, chainId, fromVault, toVault, amountWei, deadline, nonce
+    ):
+        try:
+            from .eip712_repair_authorization import get_repair_authorization_typed_data
+            return get_repair_authorization_typed_data(
+                from_vault=fromVault,
+                to_vault=toVault,
+                amount_wei=amountWei,
+                deadline=deadline,
+                nonce=nonce,
+                chain_id=chainId,
+            )
+        except Exception as e:
+            logger.warning(f"repair_authorization_typed_data error: {e}")
+            return None
+
+    def resolve_repairAuthorizationTypedData(
+        self, info, chainId, fromVault, toVault, amountWei, deadline, nonce
+    ):
+        return DefiQueries.resolve_repair_authorization_typed_data(
+            self, info, chainId, fromVault, toVault, amountWei, deadline, nonce
+        )
+
+    @login_required
+    def resolve_session_authorization_typed_data(
+        self, info, chainId, sessionId, walletAddress, maxAmountWei, validUntilSeconds, nonce
+    ):
+        try:
+            from .eip712_session_authorization import get_session_authorization_typed_data
+            return get_session_authorization_typed_data(
+                session_id=sessionId,
+                wallet_address=walletAddress,
+                chain_id=chainId,
+                max_amount_wei=maxAmountWei,
+                valid_until=validUntilSeconds,
+                nonce=nonce,
+            )
+        except Exception as e:
+            logger.warning(f"session_authorization_typed_data error: {e}")
+            return None
+
+    def resolve_sessionAuthorizationTypedData(
+        self, info, chainId, sessionId, walletAddress, maxAmountWei, validUntilSeconds, nonce
+    ):
+        return DefiQueries.resolve_session_authorization_typed_data(
+            self, info, chainId, sessionId, walletAddress, maxAmountWei, validUntilSeconds, nonce
+        )
+
+    def resolve_repair_forwarder_nonce(self, info, chainId, userAddress):
+        from .repair_relayer import get_forwarder_nonce
+        return get_forwarder_nonce(chainId, userAddress)
+
+    def resolve_repairForwarderNonce(self, info, chainId, userAddress):
+        return DefiQueries.resolve_repair_forwarder_nonce(self, info, chainId, userAddress)
+
+    @login_required
     def resolve_autopilot_status(self, info):
         from .autopilot_service import get_autopilot_status
+        from .repair_relayer import is_relayer_configured
 
         status = get_autopilot_status(info.context.user)
         policy = status.get('policy') or {}
@@ -596,6 +844,7 @@ class DefiQueries(graphene.ObjectType):
         return AutopilotStatusType(
             enabled=bool(status.get('enabled')),
             last_evaluated_at=status.get('last_evaluated_at'),
+            relayer_configured=is_relayer_configured(),
             policy=AutopilotPolicyType(
                 target_apy=policy.get('target_apy'),
                 max_drawdown=policy.get('max_drawdown'),
@@ -624,8 +873,32 @@ class DefiQueries(graphene.ObjectType):
         from .autopilot_service import get_pending_repairs
 
         repairs = get_pending_repairs(info.context.user)
-        return [
-            RepairActionType(
+        result = []
+        for r in repairs:
+            opt_list = r.get('options') or []
+            options = [
+                RepairOptionType(
+                    variant=opt.get('variant', 'BALANCED'),
+                    to_vault=opt.get('to_vault', ''),
+                    to_pool_id=opt.get('to_pool_id', ''),
+                    estimated_apy_delta=opt.get('estimated_apy_delta'),
+                    proof=RepairProofType(
+                        calmar_improvement=(opt.get('proof') or {}).get('calmar_improvement'),
+                        integrity_check=FinancialIntegrityType(
+                            altman_z_score=((opt.get('proof') or {}).get('integrity_check') or {}).get('altman_z_score'),
+                            beneish_m_score=((opt.get('proof') or {}).get('integrity_check') or {}).get('beneish_m_score'),
+                            is_erc4626_compliant=((opt.get('proof') or {}).get('integrity_check') or {}).get('is_erc4626_compliant'),
+                        ),
+                        tvl_stability_check=(opt.get('proof') or {}).get('tvl_stability_check'),
+                        policy_alignment=(opt.get('proof') or {}).get('policy_alignment'),
+                        explanation=(opt.get('proof') or {}).get('explanation'),
+                        policy_version=(opt.get('proof') or {}).get('policy_version'),
+                        guardrails=(opt.get('proof') or {}).get('guardrails'),
+                    ),
+                )
+                for opt in opt_list
+            ]
+            result.append(RepairActionType(
                 id=r['id'],
                 from_vault=r['from_vault'],
                 to_vault=r['to_vault'],
@@ -636,6 +909,7 @@ class DefiQueries(graphene.ObjectType):
                 to_pool_id=r.get('to_pool_id'),
                 execution_plan=r.get('execution_plan'),
                 agent_trace=r.get('agent_trace'),
+                options=options,
                 proof=RepairProofType(
                     calmar_improvement=r['proof'].get('calmar_improvement'),
                     integrity_check=FinancialIntegrityType(
@@ -649,9 +923,8 @@ class DefiQueries(graphene.ObjectType):
                     policy_version=r['proof'].get('policy_version'),
                     guardrails=r['proof'].get('guardrails'),
                 ),
-            )
-            for r in repairs
-        ]
+            ))
+        return result
 
     def resolve_pendingRepairs(self, info):
         return DefiQueries.resolve_pending_repairs(self, info)
@@ -687,12 +960,14 @@ class DefiQueries(graphene.ObjectType):
         'core.defi_mutations.YieldPoolType',
         chain=graphene.String(),
         limit=graphene.Int(),
-        description="Get top yield opportunities from live DefiLlama data"
+        minCalmar=graphene.Float(),
+        description="Get top yield opportunities from live DefiLlama data; optional minCalmar filters to Fortress-grade"
     )
     topYields = graphene.List(
         'core.defi_mutations.YieldPoolType',
         chain=graphene.String(),
         limit=graphene.Int(),
+        minCalmar=graphene.Float(),
         description="Get top yield opportunities (camelCase alias)"
     )
 
@@ -725,17 +1000,24 @@ class DefiQueries(graphene.ObjectType):
     )
 
     @login_required
-    def resolve_top_yields(self, info, chain='all', limit=20):
-        """Get top yield opportunities from live DefiLlama data"""
+    def resolve_top_yields(self, info, chain='all', limit=20, minCalmar=None):
+        """Get top yield opportunities from live DefiLlama data; optional minCalmar filters to Fortress-grade."""
         from .defi_mutations import YieldPoolType
 
         try:
             from .defi_data_service import get_cached_yields
-            yields = get_cached_yields(chain=chain or 'all', limit=limit)
+            fetch_limit = limit * 3 if minCalmar is not None else limit
+            yields = get_cached_yields(chain=chain or 'all', limit=fetch_limit)
 
             if yields:
-                return [
-                    YieldPoolType(
+                built = []
+                for y in yields:
+                    audit = _build_yield_audit(y)
+                    if minCalmar is not None and audit is not None:
+                        calmar = (audit.get('risk') or {}).get('calmarRatio')
+                        if calmar is None or calmar < minCalmar:
+                            continue
+                    built.append(YieldPoolType(
                         id=y.get('id', ''),
                         protocol=y.get('protocol', ''),
                         chain=y.get('chain', ''),
@@ -744,10 +1026,9 @@ class DefiQueries(graphene.ObjectType):
                         apy=y.get('apy', 0),
                         tvl=y.get('tvl', 0),
                         risk=y.get('risk', 0.5),
-                        audit=_build_yield_audit(y),
-                    )
-                    for y in yields
-                ][:limit]
+                        audit=audit,
+                    ))
+                return built[:limit]
         except Exception as e:
             logger.warning(f"Could not fetch live yields, using fallback: {e}")
 
@@ -760,9 +1041,9 @@ class DefiQueries(graphene.ObjectType):
             )
         ][:limit]
 
-    def resolve_topYields(self, info, chain='all', limit=20):
+    def resolve_topYields(self, info, chain='all', limit=20, minCalmar=None):
         """CamelCase alias for top_yields"""
-        return DefiQueries.resolve_top_yields(self, info, chain, limit)
+        return DefiQueries.resolve_top_yields(self, info, chain, limit, minCalmar)
 
     @login_required
     def resolve_ai_yield_optimizer(self, info, userRiskTolerance=0.5, chain="ethereum", limit=8):

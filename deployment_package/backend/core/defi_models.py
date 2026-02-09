@@ -368,3 +368,127 @@ class DeFiNotificationPreferences(models.Model):
     def __str__(self):
         status = 'on' if self.push_enabled else 'off'
         return f"DeFi Prefs for {self.user_id} (push={status})"
+
+
+class DeFiRepairDecision(models.Model):
+    """
+    Decision ledger for Auto-Pilot: every suggested and executed repair is logged
+    for audit trail and outcome attribution (Phase 0 / transparent autonomy).
+    """
+    DECISION_TYPES = [
+        ('suggested', 'Suggested'),
+        ('executed', 'Executed'),
+        ('dismissed', 'Dismissed'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='defi_repair_decisions',
+    )
+    position = models.ForeignKey(
+        'UserDeFiPosition',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='repair_decisions',
+    )
+    from_pool = models.ForeignKey(
+        'DeFiPool',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='repair_decisions_from',
+    )
+    to_pool = models.ForeignKey(
+        'DeFiPool',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='repair_decisions_to',
+    )
+    repair_id = models.CharField(max_length=200, db_index=True)
+    decision_type = models.CharField(max_length=20, choices=DECISION_TYPES, db_index=True)
+    inputs = models.JSONField(default=dict, blank=True)
+    explanation = models.TextField(blank=True, default='')
+    expected_apy_delta = models.FloatField(null=True, blank=True)
+    policy_version = models.CharField(max_length=50, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    executed_at = models.DateTimeField(null=True, blank=True)
+    actual_apy_delta = models.FloatField(null=True, blank=True)
+    tx_hash = models.CharField(max_length=66, blank=True, default='')
+
+    class Meta:
+        db_table = 'defi_repair_decision'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['user', 'decision_type']),
+        ]
+
+    def __str__(self):
+        return f"{self.decision_type} {self.repair_id} for user {self.user_id}"
+
+
+class DeFiSpendPermission(models.Model):
+    """
+    EIP-712 signed spend permission: user signs once to allow Auto-Pilot
+    to execute repairs within bounds (max amount, token, chain, valid until).
+    Stored after client calls submitSpendPermission with signature.
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='defi_spend_permissions',
+    )
+    wallet_address = models.CharField(max_length=66, db_index=True)
+    chain_id = models.IntegerField(db_index=True)
+    max_amount_wei = models.CharField(max_length=78)  # decimal for very large values
+    token_address = models.CharField(max_length=66)
+    valid_until = models.DateTimeField(db_index=True)
+    nonce = models.CharField(max_length=78)
+    raw_typed_data = models.JSONField(default=dict, blank=True)
+    signature = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'defi_spend_permission'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'chain_id', 'valid_until']),
+        ]
+
+    def __str__(self):
+        return f"Spend permission {self.id} user={self.user_id} chain={self.chain_id} until={self.valid_until}"
+
+
+class DeFiSessionAuthorization(models.Model):
+    """
+    EIP-712 session key style: user signs once to authorize a session (by id) to
+    request repairs for a wallet within bounds. Enables headless/relayer flows.
+    """
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='defi_session_authorizations',
+    )
+    session_id = models.CharField(max_length=128, db_index=True, unique=True)
+    wallet_address = models.CharField(max_length=66, db_index=True)
+    chain_id = models.IntegerField(db_index=True)
+    max_amount_wei = models.CharField(max_length=78)
+    valid_until = models.DateTimeField(db_index=True)
+    nonce = models.CharField(max_length=78)
+    raw_typed_data = models.JSONField(default=dict, blank=True)
+    signature = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'defi_session_authorization'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'valid_until']),
+            models.Index(fields=['session_id', 'valid_until']),
+        ]
+
+    def __str__(self):
+        return f"Session {self.session_id} user={self.user_id} until={self.valid_until}"

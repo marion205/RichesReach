@@ -44,6 +44,8 @@ const DEFI_ACCOUNT_QUERY = gql`
         currentApy
         rewardsEarned
         healthFactor
+        healthStatus
+        healthReason
         isActive
       }
     }
@@ -103,13 +105,19 @@ function RotationCard({ suggestion }: { suggestion: RotationSuggestion }) {
 
 function PositionRow({ position }: { position: any }) {
   const apyColor = position.currentApy >= 5 ? '#10B981' : position.currentApy >= 2 ? '#F59E0B' : '#6B7280';
+  const healthStatus = position.healthStatus || 'green';
+  const healthColor = healthStatus === 'green' ? '#10B981' : healthStatus === 'amber' ? '#F59E0B' : '#EF4444';
 
   return (
     <View style={styles.positionRow}>
       <View style={styles.positionLeft}>
-        <Text style={styles.positionSymbol}>{position.poolSymbol}</Text>
+        <View style={styles.positionSymbolRow}>
+          <View style={[styles.healthDot, { backgroundColor: healthColor }]} />
+          <Text style={styles.positionSymbol}>{position.poolSymbol}</Text>
+        </View>
         <Text style={styles.positionProtocol}>
           {position.protocol} · {position.chain}
+          {position.healthReason ? ` · ${position.healthReason}` : ''}
         </Text>
       </View>
       <View style={styles.positionRight}>
@@ -469,6 +477,16 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F3F4F6',
   },
   positionLeft: {},
+  positionSymbolRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  healthDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
   positionSymbol: {
     fontSize: 16,
     fontWeight: '700',

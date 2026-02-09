@@ -4,6 +4,7 @@
 
 - **ERC4626Vault.sol** - ERC-4626 standardized vault with auto-compounding
 - **veREACHToken.sol** - Vote-escrowed REACH token for governance and revenue sharing
+- **RepairForwarder.sol** - Meta-tx forwarder for Auto-Pilot repairs (user signs once; relayer submits and pays gas)
 
 ## 🚀 **Quick Start**
 
@@ -66,6 +67,42 @@ npx hardhat verify --network polygonAmoy <CONTRACT_ADDRESS> <CONSTRUCTOR_ARGS>
 # Deploy to mainnet (after testnet testing)
 npm run deploy:mainnet
 ```
+
+## 🔄 **RepairForwarder (relayer flow)**
+
+Used so the backend relayer can submit repair txs on behalf of users (user signs EIP-712 once; relayer pays gas).
+
+### **1. Start local node** (optional, for local testing)
+```bash
+cd contracts && npx hardhat node
+```
+
+### **2. Deploy RepairForwarder**
+In a **separate terminal** (from project root or `contracts/`):
+```bash
+# Local (requires `npx hardhat node` in another terminal)
+npm run deploy:repair-forwarder:local
+
+# Polygon Amoy testnet
+npm run deploy:repair-forwarder:amoy
+```
+Set `REPAIR_FORWARDER_ADDRESS` in the backend `.env` to the printed address.
+
+### **3. Approve forwarder on a vault**
+Each user must approve the RepairForwarder on each **source** vault (ERC-4626 shares) they want to repair from:
+```bash
+# Local
+VAULT_ADDRESS=0x... npm run approve-forwarder:local
+
+# Amoy testnet
+VAULT_ADDRESS=0x... npm run approve-forwarder:amoy
+```
+- `VAULT_ADDRESS` – the ERC-4626 vault to allow repairs from.
+- Optional: `FORWARDER_ADDRESS` to override the one in `deployments/<network>.json`.
+- Optional: `APPROVE_AMOUNT` (default: max uint256).
+
+Backend relayer also needs: `RELAYER_PRIVATE_KEY`, `RELAYER_RPC_URL` (or `ETHEREUM_RPC_URL`).  
+**Note:** With web3 v7, the relayer must pass an explicit `nonce` when building the transaction (`repair_relayer.py` does this via `get_transaction_count(relayer_acct.address)`).
 
 ## 🧪 **Testing**
 
