@@ -239,6 +239,46 @@ class SeedAutopilotDemo(graphene.Mutation):
         )
 
 
+class MarkAlertRead(graphene.Mutation):
+    """Mark a DeFi alert as read."""
+    class Arguments:
+        alert_id = graphene.String(required=True)
+
+    ok = graphene.Boolean()
+
+    @login_required
+    def mutate(self, info, alert_id):
+        try:
+            from .defi_models import DeFiAlert
+            updated = DeFiAlert.objects.filter(
+                id=alert_id,
+                user=info.context.user,
+            ).update(is_read=True)
+            return MarkAlertRead(ok=updated > 0)
+        except Exception:
+            return MarkAlertRead(ok=False)
+
+
+class DismissAlert(graphene.Mutation):
+    """Dismiss a DeFi alert (hide from notification center)."""
+    class Arguments:
+        alert_id = graphene.String(required=True)
+
+    ok = graphene.Boolean()
+
+    @login_required
+    def mutate(self, info, alert_id):
+        try:
+            from .defi_models import DeFiAlert
+            updated = DeFiAlert.objects.filter(
+                id=alert_id,
+                user=info.context.user,
+            ).update(is_dismissed=True)
+            return DismissAlert(ok=updated > 0)
+        except Exception:
+            return DismissAlert(ok=False)
+
+
 def _resolve_wallet(user, wallet_address: str = None) -> str:
     """Resolve wallet address for a user if not provided."""
     if wallet_address:
@@ -761,6 +801,8 @@ class DefiMutations(graphene.ObjectType):
     execute_repair = ExecuteRepair.Field()
     seed_autopilot_demo = SeedAutopilotDemo.Field()
     revert_autopilot_move = RevertAutopilotMove.Field()
+    mark_alert_read = MarkAlertRead.Field()
+    dismiss_alert = DismissAlert.Field()
     # CamelCase aliases for GraphQL schema
     defiSupply = DefiSupply.Field()
     defiBorrow = DefiBorrow.Field()
@@ -773,3 +815,5 @@ class DefiMutations(graphene.ObjectType):
     executeRepair = ExecuteRepair.Field()
     seedAutopilotDemo = SeedAutopilotDemo.Field()
     revertAutopilotMove = RevertAutopilotMove.Field()
+    markAlertRead = MarkAlertRead.Field()
+    dismissAlert = DismissAlert.Field()

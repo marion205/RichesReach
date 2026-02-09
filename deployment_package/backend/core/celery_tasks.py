@@ -411,3 +411,149 @@ def evaluate_strategy_rotations():
     except Exception as e:
         logger.error(f"Error in strategy rotation evaluation: {e}", exc_info=True)
         return {'status': 'failed', 'error': str(e)}
+
+
+# ============================================================
+# DeFi Auto-Pilot Evaluation Task
+# ============================================================
+
+@shared_task(bind=True, max_retries=3)
+def evaluate_autopilot_repairs(self):
+    """
+    Periodic task (every 10 minutes): Evaluate pending repairs for
+    all users with autopilot enabled, create DeFiAlerts, send push
+    notifications, and handle AUTO_BOUNDED auto-preparation.
+
+    Pipeline:
+    1. Scan all users with active DeFi positions
+    2. Skip users without autopilot enabled
+    3. Get pending repairs (risk-triggered + strategy engine unified)
+    4. For new repairs: create DeFiAlert + push notification
+    5. If AUTO_BOUNDED: auto-prepare qualifying repairs
+    6. Check revert window expiry → send reminder
+    """
+    try:
+        from django.contrib.auth import get_user_model
+        from django.utils import timezone as tz
+        from .autopilot_service import (
+            is_autopilot_enabled,
+            get_pending_repairs,
+            get_autopilot_policy,
+            get_last_move,
+            auto_evaluate_and_prepare,
+        )
+        from .defi_models import DeFiAlert, UserDeFiPosition
+        from .autopilot_notification_service import get_autopilot_notification_service
+
+        User = get_user_model()
+        notification_service = get_autopilot_notification_service()
+
+        # Get all users with active DeFi positions
+        user_ids = UserDeFiPosition.objects.filter(
+            is_active=True,
+        ).values_list('user_id', flat=True).distinct()
+
+        stats = {
+            'users_checked': 0,
+            'alerts_created': 0,
+            'auto_prepared': 0,
+            'revert_reminders': 0,
+        }
+
+        for user_id in user_ids:
+            try:
+                user = User.objects.get(id=user_id)
+                if not is_autopilot_enabled(user):
+                    continue
+
+                stats['users_checked'] += 1
+                policy = get_autopilot_policy(user)
+
+                # 1. Get pending repairs and create alerts for new ones
+                repairs = get_pending_repairs(user)
+                for repair in repairs:
+                    repair_id = repair.get('id', '')
+
+                    # Check if alert already exists for this repair
+                    already_alerted = DeFiAlert.objects.filter(
+                        user=user,
+                        repair_id=repair_id,
+                        alert_type='repair_available',
+                    ).exists()
+
+                    if not already_alerted:
+                        DeFiAlert.objects.create(
+                            user=user,
+                            alert_type='repair_available',
+                            severity='medium',
+                            title=(
+                                f"Repair: {repair.get('from_vault', '?')} -> "
+                                f"{repair.get('to_vault', '?')}"
+                            ),
+                            message=(
+                                f"Auto-Pilot found a better vault. "
+                                f"Estimated APY improvement: "
+                                f"+{(repair.get('estimated_apy_delta', 0) * 100):.1f}%"
+                            ),
+                            data=repair,
+                            repair_id=repair_id,
+                        )
+                        stats['alerts_created'] += 1
+
+                        # Send push notification
+                        notification_service.notify_repair_available(user, repair)
+
+                # 2. AUTO_BOUNDED: auto-prepare repairs
+                if policy.get('level') == 'AUTO_BOUNDED':
+                    result = auto_evaluate_and_prepare(user)
+                    stats['auto_prepared'] += result.get('prepared_count', 0)
+
+                # 3. Revert window check (remind if <2 hours remaining)
+                last_move = get_last_move(user)
+                if last_move and last_move.get('can_revert'):
+                    revert_deadline = last_move.get('revert_deadline')
+                    if revert_deadline:
+                        try:
+                            deadline_dt = tz.datetime.fromisoformat(revert_deadline)
+                            hours_remaining = (
+                                deadline_dt - tz.now()
+                            ).total_seconds() / 3600
+
+                            if 0 < hours_remaining < 2:
+                                # Dedup: don't remind if already reminded in last 2h
+                                already_reminded = DeFiAlert.objects.filter(
+                                    user=user,
+                                    alert_type='revert_expiring',
+                                    created_at__gte=tz.now() - tz.timedelta(hours=2),
+                                ).exists()
+                                if not already_reminded:
+                                    DeFiAlert.objects.create(
+                                        user=user,
+                                        alert_type='revert_expiring',
+                                        severity='high',
+                                        title='Revert Window Expiring',
+                                        message=(
+                                            f"Your move can be reverted for "
+                                            f"approximately {hours_remaining:.0f} "
+                                            f"more hour(s)."
+                                        ),
+                                        data=last_move,
+                                    )
+                                    notification_service.notify_revert_window_expiring(
+                                        user, last_move
+                                    )
+                                    stats['revert_reminders'] += 1
+                        except Exception:
+                            pass
+
+            except Exception as e:
+                logger.warning(f"Error evaluating autopilot for user {user_id}: {e}")
+
+        logger.info(f"Autopilot evaluation complete: {stats}")
+        return {'status': 'success', **stats}
+
+    except Exception as e:
+        logger.error(f"Error in autopilot evaluation task: {e}", exc_info=True)
+        if CELERY_AVAILABLE and self.request.retries < self.max_retries:
+            raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))
+        return {'status': 'failed', 'error': str(e)}

@@ -284,6 +284,17 @@ class DefiQueries(graphene.ObjectType):
         description="Get pending Auto-Pilot repair actions (camelCase alias)"
     )
 
+    user_alerts = graphene.List(
+        'core.autopilot_types.DeFiAlertType',
+        limit=graphene.Int(default_value=20),
+        description="Get user's DeFi alerts for notification center",
+    )
+    userAlerts = graphene.List(
+        'core.autopilot_types.DeFiAlertType',
+        limit=graphene.Int(default_value=20),
+        description="Get user's DeFi alerts (camelCase alias)",
+    )
+
     @login_required
     def resolve_defi_reserves(self, info):
         """Get available DeFi reserves (AAVE, etc.)"""
@@ -636,6 +647,31 @@ class DefiQueries(graphene.ObjectType):
 
     def resolve_pendingRepairs(self, info):
         return DefiQueries.resolve_pending_repairs(self, info)
+
+    @login_required
+    def resolve_user_alerts(self, info, limit=20):
+        from .defi_alert_service import get_user_alerts
+        from .autopilot_types import DeFiAlertType
+
+        alerts = get_user_alerts(info.context.user, limit=limit)
+        return [
+            DeFiAlertType(
+                id=a['id'],
+                alert_type=a['alert_type'],
+                severity=a['severity'],
+                title=a['title'],
+                message=a['message'],
+                data=a['data'],
+                repair_id=a.get('repair_id'),
+                is_read=a['is_read'],
+                is_dismissed=a['is_dismissed'],
+                created_at=a['created_at'],
+            )
+            for a in alerts
+        ]
+
+    def resolve_userAlerts(self, info, limit=20):
+        return DefiQueries.resolve_user_alerts(self, info, limit)
 
     # ---- Yield queries (powered by DefiLlama) ----
 

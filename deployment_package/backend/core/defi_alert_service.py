@@ -119,6 +119,10 @@ def check_all_positions():
 
 def _check_health_factor_alerts(position):
     """Check health factor and generate alerts if below thresholds."""
+    # Deduplication: skip if we already sent a health alert recently
+    if _was_alert_sent_recently(user=position.user, alert_type='health_danger', hours=1):
+        return None
+
     # In Phase 2, we use estimated health factor from position data
     # Phase 4 will read on-chain health factor via Aave's getUserAccountData
     from .defi_models import UserDeFiPosition
@@ -225,6 +229,10 @@ def _check_apy_change_alert(position):
     relative_change = abs(current_apy - previous_apy) / previous_apy
 
     if relative_change > APY_CHANGE_THRESHOLD:
+        # Deduplication: skip if we already sent an APY alert recently
+        if _was_alert_sent_recently(user=position.user, alert_type='apy_change', hours=6):
+            return False
+
         direction = 'increased' if current_apy > previous_apy else 'decreased'
         _send_alert(
             user=position.user,
@@ -281,34 +289,62 @@ def _send_alert(user, alert_type: str, message: str, data: dict = None):
     """
     Send a DeFi alert notification.
 
-    In production, this will:
-    1. Create a DeFiAlert record in the database
-    2. Send push notification via Expo Push Notifications
-    3. Update the notification center in-app
-
-    For now (Phase 3), we log and create database records.
+    1. Creates a DeFiAlert record in the database
+    2. Sends push notification via Expo Push Notifications
+    3. Logs the event
     """
     alert_config = ALERT_TYPES.get(alert_type, ALERT_TYPES['health_warning'])
 
     try:
-        # Create alert record in database
-        from .defi_models import DeFiProtocol  # Use existing model for now
-        # In production, create a dedicated DeFiAlert model
+        from .defi_models import DeFiAlert
+
+        # Map alert config priority to severity
+        priority_to_severity = {
+            'low': 'low',
+            'medium': 'medium',
+            'high': 'high',
+            'urgent': 'urgent',
+        }
+        severity = priority_to_severity.get(alert_config['priority'], 'low')
+
+        # 1. Create persistent alert record
+        alert = DeFiAlert.objects.create(
+            user=user,
+            alert_type=alert_type,
+            severity=severity,
+            title=alert_config['title'],
+            message=message,
+            data=data or {},
+        )
 
         logger.info(
-            f"DeFi Alert [{alert_config['priority'].upper()}] "
+            f"DeFi Alert [{severity.upper()}] "
             f"user={user.id if user else 'N/A'} "
             f"type={alert_type}: {message}"
         )
 
-        # TODO Phase 4: Send push notification via Expo
-        # from .notification_service import send_push_notification
-        # send_push_notification(
-        #     user=user,
-        #     title=alert_config['title'],
-        #     body=message,
-        #     data={'type': 'defi_alert', 'alert_type': alert_type, **data},
-        # )
+        # 2. Send push notification
+        try:
+            from .autopilot_notification_service import get_autopilot_notification_service
+            service = get_autopilot_notification_service()
+            prefs = service._get_user_preferences(user)
+
+            if prefs and service._should_notify(prefs, alert_type):
+                service._send_push_notification(
+                    push_token=prefs.push_token,
+                    title=alert_config['title'],
+                    body=message,
+                    data={
+                        'type': 'defi_alert',
+                        'alert_type': alert_type,
+                        'alert_id': str(alert.id),
+                        'screen': 'DeFiAutopilot',
+                        **(data or {}),
+                    },
+                    priority='high' if severity in ('high', 'urgent') else 'default',
+                )
+        except Exception as push_err:
+            logger.warning(f"Push notification failed (alert still saved): {push_err}")
 
         return True
 
@@ -320,20 +356,50 @@ def _send_alert(user, alert_type: str, message: str, data: dict = None):
 def _was_alert_sent_recently(user, alert_type: str, hours: int = 24) -> bool:
     """
     Check if a similar alert was sent recently to avoid notification spam.
-
-    For Phase 3, we use a simple in-memory approach.
-    Phase 4 will query the DeFiAlert database table.
+    Queries the DeFiAlert model for recent alerts of the same type.
     """
-    # Placeholder: always return False until DeFiAlert model is created
-    # This means alerts may repeat, but that's safer than missing critical ones
-    return False
+    try:
+        from .defi_models import DeFiAlert
+        cutoff = timezone.now() - timedelta(hours=hours)
+        return DeFiAlert.objects.filter(
+            user=user,
+            alert_type=alert_type,
+            created_at__gte=cutoff,
+        ).exists()
+    except Exception as e:
+        logger.warning(f"Error checking recent alerts: {e}")
+        # Fail open: safer to send a duplicate than miss a critical alert
+        return False
 
 
-def get_user_alerts(user, limit: int = 20) -> list:
+def get_user_alerts(user, limit: int = 20, include_dismissed: bool = False) -> list:
     """
     Get recent DeFi alerts for a user.
-    Used by the notification center screen.
+    Used by the notification center screen and GraphQL userAlerts query.
     """
-    # Phase 3: Return empty list until DeFiAlert model exists
-    # Phase 4: Query DeFiAlert.objects.filter(user=user).order_by('-created_at')[:limit]
-    return []
+    try:
+        from .defi_models import DeFiAlert
+
+        queryset = DeFiAlert.objects.filter(user=user)
+        if not include_dismissed:
+            queryset = queryset.filter(is_dismissed=False)
+
+        alerts = queryset.order_by('-created_at')[:limit]
+        return [
+            {
+                'id': str(alert.id),
+                'alert_type': alert.alert_type,
+                'severity': alert.severity,
+                'title': alert.title,
+                'message': alert.message,
+                'data': alert.data,
+                'repair_id': alert.repair_id,
+                'is_read': alert.is_read,
+                'is_dismissed': alert.is_dismissed,
+                'created_at': alert.created_at.isoformat(),
+            }
+            for alert in alerts
+        ]
+    except Exception as e:
+        logger.error(f"Error fetching user alerts: {e}")
+        return []

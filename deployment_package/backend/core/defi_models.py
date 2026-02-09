@@ -255,3 +255,116 @@ class DeFiTransaction(models.Model):
 
     def __str__(self):
         return f"{self.action} - {self.amount} on {self.pool.symbol} ({self.status})"
+
+
+class DeFiAlert(models.Model):
+    """
+    Persistent DeFi alert record.
+    Created by defi_alert_service and autopilot_notification_service.
+    Displayed in the mobile notification center and used for deduplication.
+    """
+    ALERT_TYPE_CHOICES = [
+        ('health_warning', 'Health Factor Warning'),
+        ('health_critical', 'Health Factor Critical'),
+        ('health_danger', 'Liquidation Risk'),
+        ('apy_change', 'APY Changed'),
+        ('harvest_ready', 'Rewards Ready'),
+        ('repair_available', 'Repair Available'),
+        ('repair_executed', 'Repair Executed'),
+        ('revert_expiring', 'Revert Window Expiring'),
+        ('policy_breach', 'Policy Breach'),
+    ]
+
+    SEVERITY_CHOICES = [
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+        ('urgent', 'Urgent'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='defi_alerts',
+    )
+    alert_type = models.CharField(max_length=30, choices=ALERT_TYPE_CHOICES, db_index=True)
+    severity = models.CharField(max_length=10, choices=SEVERITY_CHOICES, default='low')
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    data = models.JSONField(default=dict, blank=True)
+    position = models.ForeignKey(
+        'UserDeFiPosition',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='alerts',
+    )
+    pool = models.ForeignKey(
+        'DeFiPool',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='alerts',
+    )
+    repair_id = models.CharField(max_length=100, null=True, blank=True, db_index=True)
+    is_read = models.BooleanField(default=False, db_index=True)
+    is_dismissed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'defi_alert'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', '-created_at']),
+            models.Index(fields=['user', 'alert_type', '-created_at']),
+            models.Index(fields=['user', 'is_read', '-created_at']),
+        ]
+
+    def __str__(self):
+        return f"[{self.severity}] {self.alert_type} for user {self.user_id}: {self.title}"
+
+
+class DeFiNotificationPreferences(models.Model):
+    """
+    User preferences for DeFi and Auto-Pilot push notifications.
+    Replaces the deleted NotificationPreferences model (migration 0037)
+    with DeFi-specific fields.
+    """
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='defi_notification_preferences',
+    )
+    push_token = models.TextField(
+        blank=True,
+        null=True,
+        help_text='Expo push notification token',
+    )
+    push_enabled = models.BooleanField(default=True, db_index=True)
+
+    # DeFi alert categories
+    health_alerts_enabled = models.BooleanField(default=True)
+    apy_alerts_enabled = models.BooleanField(default=True)
+    harvest_alerts_enabled = models.BooleanField(default=True)
+
+    # Autopilot-specific
+    autopilot_alerts_enabled = models.BooleanField(default=True)
+    repair_alerts_enabled = models.BooleanField(default=True)
+    revert_reminder_enabled = models.BooleanField(default=True)
+
+    # Quiet hours
+    quiet_hours_enabled = models.BooleanField(default=False)
+    quiet_hours_start = models.TimeField(null=True, blank=True)
+    quiet_hours_end = models.TimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'defi_notification_preferences'
+        verbose_name = 'DeFi Notification Preferences'
+        verbose_name_plural = 'DeFi Notification Preferences'
+
+    def __str__(self):
+        status = 'on' if self.push_enabled else 'off'
+        return f"DeFi Prefs for {self.user_id} (push={status})"

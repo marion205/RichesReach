@@ -1,6 +1,7 @@
 """Autopilot service for policy storage, repairs, and execution stubs."""
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict
 from typing import Optional, Dict, Any, List
 from django.core.cache import cache
@@ -8,6 +9,8 @@ from django.utils import timezone
 
 from .risk_scoring_service import audit_vault, build_nav_from_apy_series
 from .policy_engine import get_policy, policy_gate
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_POLICY = {
@@ -169,6 +172,88 @@ def _find_repair_target(pool) -> Optional[Dict[str, Any]]:
     return best
 
 
+def _strategy_suggestions_as_repairs(user) -> List[Dict[str, Any]]:
+    """
+    Convert StrategyEvaluation rotation suggestions into repair-action format
+    so they appear in the unified repair queue alongside risk-triggered repairs.
+
+    Strategy engine suggestions are APY-improvement-driven rotations that also
+    pass the policy_gate() guardrails.
+    """
+    try:
+        from .defi_strategy_engine import StrategyEvaluation
+        from .defi_models import DeFiPool
+
+        engine = StrategyEvaluation()
+        suggestions = engine.evaluate_positions(user)
+        guardrails = get_policy()
+
+        repair_format_items: List[Dict[str, Any]] = []
+
+        for suggestion in suggestions:
+            # Only convert 'rotate' suggestions, not 'harvest'
+            if suggestion.get('suggestion_type') != 'rotate':
+                continue
+
+            suggested_pool_id = suggestion.get('suggested_pool_id')
+            if not suggested_pool_id:
+                continue
+
+            # Validate target pool through policy_gate
+            target_pool = DeFiPool.objects.filter(
+                id=suggested_pool_id, is_active=True
+            ).select_related('protocol').first()
+            if not target_pool:
+                continue
+
+            latest_snapshot = target_pool.yield_snapshots.order_by('-timestamp').first()
+            gate_ok, gate_meta = policy_gate(target_pool, latest_snapshot, guardrails)
+            if not gate_ok:
+                continue
+
+            position_id = suggestion.get('position_id', '')
+            repair_id = f"strategy:{position_id}:{suggested_pool_id}"
+
+            # Normalize APY: strategy engine uses percentage (e.g., 8.5),
+            # autopilot repair format uses decimal (e.g., 0.085)
+            current_apy = suggestion.get('current_apy', 0)
+            suggested_apy = suggestion.get('suggested_apy', 0)
+            apy_delta = (suggested_apy - current_apy) / 100.0
+
+            protocol_name = suggestion.get('suggested_pool_protocol', '')
+            pool_symbol = suggestion.get('suggested_pool_symbol', '')
+
+            repair_format_items.append({
+                'id': repair_id,
+                'from_vault': suggestion.get('current_pool_symbol', ''),
+                'to_vault': f"{protocol_name} {pool_symbol}".strip(),
+                'estimated_apy_delta': apy_delta,
+                'gas_estimate': 220000.0,
+                'proof': {
+                    'calmar_improvement': 0.0,
+                    'integrity_check': {
+                        'altman_z_score': 0.0,
+                        'beneish_m_score': 0.0,
+                        'is_erc4626_compliant': target_pool.pool_type in ('vault', 'yield'),
+                    },
+                    'tvl_stability_check': True,
+                    'policy_alignment': gate_ok,
+                    'explanation': suggestion.get('reason', ''),
+                    'policy_version': guardrails.get('version'),
+                    'guardrails': gate_meta,
+                },
+                'from_pool_id': str(suggestion.get('current_pool_id', '')),
+                'to_pool_id': str(suggested_pool_id),
+                'source': 'strategy_engine',
+            })
+
+        return repair_format_items
+
+    except Exception as e:
+        logger.warning(f"Error converting strategy suggestions to repairs: {e}")
+        return []
+
+
 def get_pending_repairs(user) -> List[Dict[str, Any]]:
     if not user or not getattr(user, 'is_authenticated', False):
         return []
@@ -237,7 +322,16 @@ def get_pending_repairs(user) -> List[Dict[str, Any]]:
                 },
                 'from_pool_id': str(pool.id),
                 'to_pool_id': str(target['pool'].id),
+                'source': 'risk_scoring',
             })
+
+        # Merge strategy engine rotation suggestions into the repair queue.
+        # Skip strategy suggestions for positions already covered by risk repairs.
+        existing_from_pools = {r.get('from_pool_id') for r in repairs}
+        strategy_repairs = _strategy_suggestions_as_repairs(user)
+        for sr in strategy_repairs:
+            if sr.get('from_pool_id') not in existing_from_pools:
+                repairs.append(sr)
 
         return repairs
     except Exception:
@@ -306,8 +400,20 @@ def execute_repair(user, repair_id: str) -> Dict[str, Any]:
         }
 
     try:
-        from .defi_models import DeFiTransaction, DeFiPool
+        from .defi_models import DeFiTransaction, DeFiPool, UserDeFiPosition
         from decimal import Decimal
+
+        # Resolve position and pool from repair_id (format: "position_id:pool_id"
+        # or "strategy:position_id:pool_id")
+        parts = repair_id.split(':')
+        position = None
+        if parts[0] == 'strategy' and len(parts) >= 3:
+            position = UserDeFiPosition.objects.filter(id=parts[1]).first()
+        elif len(parts) >= 2:
+            position = UserDeFiPosition.objects.filter(id=parts[0]).first()
+
+        amount = position.staked_amount if position else Decimal('0')
+        amount_usd = position.staked_value_usd if position else Decimal('0')
 
         pool = DeFiPool.objects.filter(id=repair.get('from_pool_id')).first()
         if pool:
@@ -317,8 +423,8 @@ def execute_repair(user, repair_id: str) -> Dict[str, Any]:
                 action='swap',
                 tx_hash=f"repair_{timezone.now().timestamp():.0f}",
                 chain_id=pool.chain_id,
-                amount=Decimal('0'),
-                amount_usd=Decimal('0'),
+                amount=amount,
+                amount_usd=amount_usd,
                 status='pending',
             )
 
@@ -352,3 +458,115 @@ def revert_last_move(user) -> Dict[str, Any]:
         'tx_hash': None,
         'message': 'Revert queued. Approve the on-chain transaction in your wallet.',
     }
+
+
+# ------------------------------------------------------------------
+# AUTO_BOUNDED execution helpers
+# ------------------------------------------------------------------
+
+
+def _daily_spend_check(user, amount_usd: float) -> bool:
+    """
+    Check if a repair amount would exceed the user's 24h spend limit.
+    Returns True if the spend is within limits. Fails closed on error.
+    """
+    policy = get_autopilot_policy(user)
+    spend_limit = float(policy.get('spend_limit_24h', DEFAULT_POLICY['spend_limit_24h']))
+
+    try:
+        from .defi_models import DeFiTransaction
+        cutoff = timezone.now() - timezone.timedelta(hours=24)
+        recent_txns = DeFiTransaction.objects.filter(
+            user=user,
+            created_at__gte=cutoff,
+            status__in=('pending', 'confirmed'),
+        )
+        spent_24h = sum(float(tx.amount_usd) for tx in recent_txns)
+        return (spent_24h + amount_usd) <= spend_limit
+    except Exception as e:
+        logger.warning(f"Error in daily spend check: {e}")
+        return False  # Fail closed: if we can't check, don't auto-spend
+
+
+def auto_evaluate_and_prepare(user) -> Dict[str, Any]:
+    """
+    AUTO_BOUNDED execution: auto-prepare qualifying repairs.
+
+    1. Verify user's autonomy level is AUTO_BOUNDED
+    2. Get pending repairs (risk + strategy engine unified queue)
+    3. Filter repairs within spend_limit_24h
+    4. For qualifying repairs: execute_repair() creates DeFiTransaction + stores last_move
+    5. Create DeFiAlert record + send push notification
+    6. Does NOT sign on-chain -- user must approve via WalletConnect
+
+    Returns dict with 'prepared_count' and 'repairs_prepared' list.
+    """
+    result: Dict[str, Any] = {'prepared_count': 0, 'repairs_prepared': []}
+
+    if not user or not getattr(user, 'is_authenticated', False):
+        return result
+
+    policy = get_autopilot_policy(user)
+    if policy.get('level') != 'AUTO_BOUNDED':
+        return result
+
+    repairs = get_pending_repairs(user)
+    if not repairs:
+        return result
+
+    from .autopilot_notification_service import get_autopilot_notification_service
+    notification_service = get_autopilot_notification_service()
+
+    for repair in repairs:
+        repair_id = repair.get('id', '')
+
+        # Skip demo repairs
+        if repair_id.startswith('demo:'):
+            continue
+
+        # Estimate USD value from position for spend limit check.
+        # Use from_pool_id to look up position value.
+        estimated_usd = 0.0
+        try:
+            from .defi_models import UserDeFiPosition
+            parts = repair_id.split(':')
+            pos_id = parts[1] if parts[0] == 'strategy' and len(parts) >= 3 else parts[0]
+            position = UserDeFiPosition.objects.filter(id=pos_id).first()
+            if position:
+                estimated_usd = float(position.staked_value_usd)
+        except Exception:
+            pass
+
+        if not _daily_spend_check(user, estimated_usd):
+            logger.info(f"Skipping auto repair {repair_id}: exceeds daily spend limit")
+            continue
+
+        # Execute repair (creates DeFiTransaction + stores last_move)
+        exec_result = execute_repair(user, repair_id)
+        if exec_result.get('success'):
+            result['prepared_count'] += 1
+            result['repairs_prepared'].append(repair_id)
+
+            # Create DeFiAlert record
+            try:
+                from .defi_models import DeFiAlert
+                DeFiAlert.objects.create(
+                    user=user,
+                    alert_type='repair_executed',
+                    severity='medium',
+                    title='Auto-Pilot Prepared a Move',
+                    message=(
+                        f"Moved from {repair.get('from_vault', '?')} to "
+                        f"{repair.get('to_vault', '?')}. "
+                        f"Approve in your wallet within 24h."
+                    ),
+                    data=repair,
+                    repair_id=repair_id,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to create DeFiAlert for auto repair: {e}")
+
+            # Send push notification
+            notification_service.notify_repair_executed(user, repair)
+
+    return result

@@ -556,6 +556,7 @@ try:
         RepairActionType,
         RepairProofType,
         TransactionReceiptType,
+        DeFiAlertType,
     )
     schema_types.extend([
         DefiReserveType, DefiAccountType, DefiPositionType,
@@ -571,6 +572,7 @@ try:
         FinancialIntegrityType, AutopilotPolicyType, AutopilotStatusType,
         LastMoveType,
         RepairActionType, RepairProofType, TransactionReceiptType,
+        DeFiAlertType,
     ])
 except ImportError:
     pass

@@ -78,3 +78,17 @@ class TransactionReceiptType(graphene.ObjectType):
     success = graphene.Boolean()
     tx_hash = graphene.String()
     message = graphene.String()
+
+
+class DeFiAlertType(graphene.ObjectType):
+    """GraphQL type for DeFi alerts displayed in the notification center."""
+    id = graphene.String()
+    alert_type = graphene.String()
+    severity = graphene.String()
+    title = graphene.String()
+    message = graphene.String()
+    data = JSONString()
+    repair_id = graphene.String()
+    is_read = graphene.Boolean()
+    is_dismissed = graphene.Boolean()
+    created_at = graphene.String()
