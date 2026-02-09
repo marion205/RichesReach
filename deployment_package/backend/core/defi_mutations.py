@@ -232,6 +232,8 @@ class SeedAutopilotDemo(graphene.Mutation):
                     tvl_stability_check=proof.get('tvl_stability_check'),
                     policy_alignment=proof.get('policy_alignment'),
                     explanation=proof.get('explanation'),
+                    policy_version=proof.get('policy_version'),
+                    guardrails=proof.get('guardrails'),
                 ),
             )
         )

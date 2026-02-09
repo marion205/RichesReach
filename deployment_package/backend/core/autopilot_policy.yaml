@@ -1,0 +1,43 @@
+# RichesReach Auto-Pilot Core Policy Framework
+# Version: 2.1.4
+# Purpose: Bounding Autonomous Wealth Agents
+
+governance:
+  emergency_stop_enabled: true
+  human_in_the_loop_required: true
+  audit_level: "VERBOSE"
+
+risk_thresholds:
+  max_drawdown_limit: 0.08
+  min_protocol_trust_score: 85
+  min_tvl_depth: 100000000
+  max_slippage_tolerance: 0.005
+
+autonomy_levels:
+  notify_only:
+    - protocol_update
+    - yield_fluctuation < 10%
+  approve_moves:
+    - capital_reallocation > 500
+    - cross_chain_bridge_actions
+    - protocol_risk_score_downgrade
+  auto_execute:
+    - rebalance_within_same_protocol
+    - emergency_exit_if_risk_critical
+    - gas_optimization_wait_until: < 30_gwei
+
+rollback_logic:
+  window_duration: 24h
+  automatic_position_tracking: true
+  path_reversal_buffer: 0.02
+  reserve_gas_for_revert: true
+
+verified_protocols:
+  - id: aave_v3
+    tags: [blue_chip, deep_liquidity]
+  - id: compound_v3
+    tags: [conservative, high_audit_score]
+  - id: morpho_blue
+    tags: [high_efficiency, peer_to_peer]
+
+verified_assets: [USDC, USDT, DAI, ETH, WBTC]

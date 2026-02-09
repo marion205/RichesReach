@@ -1,5 +1,6 @@
 """Autopilot GraphQL types shared by queries and mutations."""
 import graphene
+from graphene.types import JSONString
 
 
 AutonomyLevel = graphene.Enum('AutonomyLevel', [
@@ -44,6 +45,8 @@ class RepairProofType(graphene.ObjectType):
     tvl_stability_check = graphene.Boolean()
     policy_alignment = graphene.Boolean()
     explanation = graphene.String()
+    policy_version = graphene.String()
+    guardrails = JSONString()
 
 
 class RepairActionType(graphene.ObjectType):

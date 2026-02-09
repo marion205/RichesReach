@@ -627,6 +627,8 @@ class DefiQueries(graphene.ObjectType):
                     tvl_stability_check=r['proof'].get('tvl_stability_check'),
                     policy_alignment=r['proof'].get('policy_alignment'),
                     explanation=r['proof'].get('explanation'),
+                    policy_version=r['proof'].get('policy_version'),
+                    guardrails=r['proof'].get('guardrails'),
                 ),
             )
             for r in repairs

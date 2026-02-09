@@ -7,6 +7,7 @@ from django.core.cache import cache
 from django.utils import timezone
 
 from .risk_scoring_service import audit_vault, build_nav_from_apy_series
+from .policy_engine import get_policy, policy_gate
 
 
 DEFAULT_POLICY = {
@@ -180,6 +181,8 @@ def get_pending_repairs(user) -> List[Dict[str, Any]]:
 
         policy = get_autopilot_policy(user)
         max_drawdown = policy.get('max_drawdown') or DEFAULT_POLICY['max_drawdown']
+        guardrails = get_policy()
+        policy_version = guardrails.get('version')
 
         positions = UserDeFiPosition.objects.filter(user=user, is_active=True).select_related('pool', 'pool__protocol')
         repairs: List[Dict[str, Any]] = []
@@ -207,6 +210,11 @@ def get_pending_repairs(user) -> List[Dict[str, Any]]:
             policy_alignment = target_audit.risk.max_drawdown <= max_drawdown
             tvl_ok = target_audit.risk.tvl_stability >= 0.7
 
+            latest_snapshot = target['pool'].yield_snapshots.order_by('-timestamp').first()
+            gate_ok, gate_meta = policy_gate(target['pool'], latest_snapshot, guardrails)
+            if not gate_ok:
+                continue
+
             repair_id = f"{position.id}:{target['pool'].id}"
             repairs.append({
                 'id': repair_id,
@@ -222,8 +230,10 @@ def get_pending_repairs(user) -> List[Dict[str, Any]]:
                         'is_erc4626_compliant': target_audit.integrity.is_erc4626_compliant,
                     },
                     'tvl_stability_check': tvl_ok,
-                    'policy_alignment': policy_alignment,
+                    'policy_alignment': policy_alignment and gate_ok,
                     'explanation': target_audit.explanation,
+                    'policy_version': policy_version,
+                    'guardrails': gate_meta,
                 },
                 'from_pool_id': str(pool.id),
                 'to_pool_id': str(target['pool'].id),
@@ -237,6 +247,9 @@ def get_pending_repairs(user) -> List[Dict[str, Any]]:
 def seed_demo_repair(user) -> Dict[str, Any]:
     if not user or not getattr(user, 'is_authenticated', False):
         return {}
+
+    guardrails = get_policy()
+    policy_version = guardrails.get('version')
 
     demo = {
         'id': f"demo:{user.id}",
@@ -254,6 +267,14 @@ def seed_demo_repair(user) -> Dict[str, Any]:
             'tvl_stability_check': True,
             'policy_alignment': True,
             'explanation': 'Demo repair: higher Calmar ratio with stable TVL.',
+            'policy_version': policy_version,
+            'guardrails': {
+                'trust_score': 92.0,
+                'tvl': 890000000.0,
+                'verified': True,
+                'min_trust': 85.0,
+                'min_tvl': 100000000.0,
+            },
         },
     }
 

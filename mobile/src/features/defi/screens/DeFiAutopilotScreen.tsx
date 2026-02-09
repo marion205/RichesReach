@@ -47,6 +47,8 @@ const AUTOPILOT_QUERY = gql`
         tvlStabilityCheck
         policyAlignment
         explanation
+        policyVersion
+        guardrails
         integrityCheck {
           altmanZScore
           beneishMScore
@@ -375,6 +377,16 @@ export default function DeFiAutopilotScreen() {
                 <Text style={styles.modalItem}>
                   Integrity: {activeProof.integrityCheck?.isErc4626Compliant ? 'ERC‑4626 ✅' : 'Unknown'}
                 </Text>
+                {activeProof.policyVersion ? (
+                  <Text style={styles.modalItem}>Policy version: {activeProof.policyVersion}</Text>
+                ) : null}
+                {activeProof.guardrails ? (
+                  <Text style={styles.modalItem}>
+                    Guardrails: Trust {activeProof.guardrails.trust_score ?? '—'} · TVL ${
+                      activeProof.guardrails.tvl ?? '—'
+                    }
+                  </Text>
+                ) : null}
                 <Text style={styles.modalExplanation}>{activeProof.explanation}</Text>
               </View>
             ) : null}
