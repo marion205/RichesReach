@@ -18,7 +18,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ("core", "0054_executionpolicy_hmmtrainingrecord_shadowmodel_and_more"),
+        ("core", "0055_defi_models"),
     ]
 
     operations = [
