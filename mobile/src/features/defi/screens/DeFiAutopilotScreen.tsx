@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,12 @@ import {
   ActivityIndicator,
   Switch,
   Modal,
+  Pressable,
+  Platform,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { gql, useQuery, useMutation } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
+import { LinearGradient } from 'expo-linear-gradient';
 import UI from '../../../shared/constants';
 import logger from '../../../utils/logger';
 
@@ -106,22 +108,22 @@ const REVERT_MOVE = gql`
 `;
 
 const GOALS = [
-  { id: 'FORTRESS', label: 'Steady Growth (Fortress)' },
+  { id: 'FORTRESS', label: 'Fortress' },
   { id: 'BALANCED', label: 'Balanced' },
   { id: 'SPECULATIVE', label: 'Yield Max' },
 ];
 
 const LEVELS = [
-  { id: 'NOTIFY_ONLY', label: 'Notify Only' },
-  { id: 'APPROVE_REPAIRS', label: 'Approve Repairs' },
-  { id: 'AUTO_BOUNDED', label: 'Auto Within Limits' },
+  { id: 'NOTIFY_ONLY', label: 'Notify' },
+  { id: 'APPROVE_REPAIRS', label: 'Approve' },
+  { id: 'AUTO_BOUNDED', label: 'Auto' },
 ];
 
 export default function DeFiAutopilotScreen() {
-  const navigation = useNavigation<any>();
   const { data, loading, refetch } = useQuery(AUTOPILOT_QUERY, {
     fetchPolicy: 'network-only',
   });
+
   const [updatePolicy] = useMutation(UPDATE_POLICY);
   const [toggleAutopilot] = useMutation(TOGGLE_AUTOPILOT);
   const [executeRepair, { loading: executingRepair }] = useMutation(EXECUTE_REPAIR);
@@ -130,6 +132,7 @@ export default function DeFiAutopilotScreen() {
   const status = data?.autopilotStatus;
   const policy = status?.policy;
   const lastMove = status?.lastMove;
+  const pendingRepairs = data?.pendingRepairs || [];
 
   const [enabled, setEnabled] = useState(false);
   const [riskLevel, setRiskLevel] = useState('FORTRESS');
@@ -140,9 +143,8 @@ export default function DeFiAutopilotScreen() {
   const [activeProof, setActiveProof] = useState<any>(null);
 
   useEffect(() => {
-    if (status) {
-      setEnabled(!!status.enabled);
-    }
+    if (status) setEnabled(!!status.enabled);
+
     if (policy) {
       setRiskLevel(policy.riskLevel || 'FORTRESS');
       setDrawdown(Math.round((policy.maxDrawdown || 0.05) * 100));
@@ -151,10 +153,8 @@ export default function DeFiAutopilotScreen() {
     }
   }, [status, policy]);
 
-  const pendingRepairs = data?.pendingRepairs || [];
-
-  const formattedDrawdown = `${drawdown}%`;
-  const formattedTarget = `${targetApy}% APY`;
+  const formattedDrawdown = useMemo(() => `${drawdown}%`, [drawdown]);
+  const formattedTarget = useMemo(() => `${targetApy}% APY`, [targetApy]);
 
   const handleToggle = async (value: boolean) => {
     setEnabled(value);
@@ -211,287 +211,933 @@ export default function DeFiAutopilotScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={UI.colors.primary} />
-        <Text style={styles.loadingText}>Loading Auto-Pilot...</Text>
+        <View style={styles.loadingCard}>
+          <ActivityIndicator size="large" color={UI.colors.primary} />
+          <Text style={styles.loadingText}>Loading Auto-Pilot…</Text>
+          <Text style={styles.loadingSubtext}>Syncing policy + repair queue</Text>
+        </View>
       </View>
     );
   }
 
+  const statusTone = enabled ? 'ACTIVE' : 'PAUSED';
+  const statusBg = enabled ? 'rgba(16, 185, 129, 0.14)' : 'rgba(239, 68, 68, 0.14)';
+  const statusFg = enabled ? '#10B981' : '#EF4444';
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Auto-Pilot</Text>
-          <Text style={styles.subtitle}>Protecting your wealth in real-time.</Text>
-        </View>
-        <Switch value={enabled} onValueChange={handleToggle} />
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>The Intent</Text>
-
-        <Text style={styles.label}>What is your goal?</Text>
-        <View style={styles.chipRow}>
-          {GOALS.map((goal) => (
-            <TouchableOpacity
-              key={goal.id}
-              style={[styles.chip, riskLevel === goal.id && styles.chipActive]}
-              onPress={() => setRiskLevel(goal.id)}
-            >
-              <Text style={[styles.chipText, riskLevel === goal.id && styles.chipTextActive]}>
-                {goal.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={styles.label}>Maximum Tolerance</Text>
-        <View style={styles.stepperRow}>
-          <TouchableOpacity
-            style={styles.stepperButton}
-            onPress={() => setDrawdown(Math.max(2, drawdown - 1))}
-          >
-            <Icon name="minus" size={16} color={UI.colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.stepperValue}>{formattedDrawdown}</Text>
-          <TouchableOpacity
-            style={styles.stepperButton}
-            onPress={() => setDrawdown(Math.min(15, drawdown + 1))}
-          >
-            <Icon name="plus" size={16} color={UI.colors.text} />
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.subtext}>
-          If a pool drops more than {formattedDrawdown} from its peak, we trigger an immediate repair.
-        </Text>
-
-        <Text style={styles.label}>Target Yield</Text>
-        <View style={styles.stepperRow}>
-          <TouchableOpacity
-            style={styles.stepperButton}
-            onPress={() => setTargetApy(Math.max(2, targetApy - 1))}
-          >
-            <Icon name="minus" size={16} color={UI.colors.text} />
-          </TouchableOpacity>
-          <Text style={styles.stepperValue}>{formattedTarget}</Text>
-          <TouchableOpacity
-            style={styles.stepperButton}
-            onPress={() => setTargetApy(Math.min(20, targetApy + 1))}
-          >
-            <Icon name="plus" size={16} color={UI.colors.text} />
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.label}>Autonomy Level</Text>
-        <View style={styles.chipRow}>
-          {LEVELS.map((level) => (
-            <TouchableOpacity
-              key={level.id}
-              style={[styles.chip, autonomyLevel === level.id && styles.chipActive]}
-              onPress={() => setAutonomyLevel(level.id)}
-            >
-              <Text style={[styles.chipText, autonomyLevel === level.id && styles.chipTextActive]}>
-                {level.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <TouchableOpacity style={styles.primaryButton} onPress={handleSavePolicy}>
-          <Text style={styles.primaryButtonText}>Save Intent</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Active Repair Queue</Text>
-
-        {pendingRepairs.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>All clear.</Text>
-            <Text style={styles.emptyText}>Your positions are within your policy.</Text>
-          </View>
-        ) : (
-          pendingRepairs.map((repair: any) => (
-            <View key={repair.id} style={styles.repairCard}>
-              <Text style={styles.repairTitle}>⚠️ Action Required</Text>
-              <Text style={styles.repairSubtitle}>
-                {repair.fromVault} → {repair.toVault}
-              </Text>
-              <Text style={styles.repairDesc}>{repair.proof?.explanation}</Text>
-              <View style={styles.repairActions}>
-                <TouchableOpacity
-                  style={styles.secondaryButton}
-                  onPress={() => openProof(repair.proof)}
-                >
-                  <Text style={styles.secondaryButtonText}>Why this move?</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.primaryButton}
-                  onPress={() => handleExecuteRepair(repair.id)}
-                  disabled={executingRepair}
-                >
-                  <Text style={styles.primaryButtonText}>
-                    {executingRepair ? 'Executing...' : 'Execute 1‑Tap Repair'}
-                  </Text>
-                </TouchableOpacity>
+    <View style={styles.screen}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* HERO HEADER */}
+        <LinearGradient
+          colors={[
+            UI.colors.primary ? `${UI.colors.primary}22` : 'rgba(99,102,241,0.14)',
+            'rgba(255,255,255,0)',
+          ]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.hero}
+        >
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroTitleBlock}>
+              <Text style={styles.heroTitle}>Auto-Pilot</Text>
+              <View
+                style={[
+                  styles.statusPill,
+                  { backgroundColor: statusBg, borderColor: `${statusFg}33` },
+                ]}
+              >
+                <View style={[styles.statusDot, { backgroundColor: statusFg }]} />
+                <Text style={[styles.statusText, { color: statusFg }]}>{statusTone}</Text>
               </View>
             </View>
-          ))
-        )}
-      </View>
 
-      {lastMove ? (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Last Move</Text>
-          <Text style={styles.repairSubtitle}>{lastMove.fromVault} → {lastMove.toVault}</Text>
-          <Text style={styles.repairDesc}>Executed at {lastMove.executedAt}</Text>
-          <View style={styles.repairActions}>
+            <View style={styles.heroToggle}>
+              <Text style={styles.toggleLabel}>{enabled ? 'On' : 'Off'}</Text>
+              <Switch
+                value={enabled}
+                onValueChange={handleToggle}
+                trackColor={{
+                  false: 'rgba(148,163,184,0.45)',
+                  true: `${UI.colors.primary || '#6366F1'}66`,
+                }}
+                thumbColor={Platform.OS === 'android' ? '#FFFFFF' : undefined}
+              />
+            </View>
+          </View>
+
+          <Text style={styles.heroSubtitle}>Protecting your wealth in real-time.</Text>
+
+          {/* QUICK STATS */}
+          <View style={styles.statRow}>
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>Target</Text>
+              <Text style={styles.statValue}>{formattedTarget}</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>Drawdown</Text>
+              <Text style={styles.statValue}>{formattedDrawdown}</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>Mode</Text>
+              <Text style={styles.statValue}>
+                {LEVELS.find((l) => l.id === autonomyLevel)?.label ?? 'Notify'}
+              </Text>
+            </View>
+          </View>
+        </LinearGradient>
+
+        {/* INTENT */}
+        <View style={styles.card}>
+          <View style={styles.cardTitleRow}>
+            <View style={styles.iconBadge}>
+              <Icon name="sliders" size={18} color={UI.colors.primary || '#6366F1'} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>The Intent</Text>
+              <Text style={styles.cardSubtitle}>Set rules once. Auto-Pilot enforces them.</Text>
+            </View>
+          </View>
+
+          <Text style={styles.label}>Goal</Text>
+          <View style={styles.segmentRow}>
+            {GOALS.map((goal) => {
+              const active = riskLevel === goal.id;
+              return (
+                <TouchableOpacity
+                  key={goal.id}
+                  style={[
+                    styles.segment,
+                    active && {
+                      backgroundColor: UI.colors.primary || '#6366F1',
+                      borderColor: UI.colors.primary || '#6366F1',
+                    },
+                  ]}
+                  onPress={() => setRiskLevel(goal.id)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                    {goal.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <Text style={styles.label}>Maximum Tolerance</Text>
+          <View style={styles.stepper}>
             <TouchableOpacity
-              style={styles.secondaryButton}
+              style={styles.stepBtn}
+              onPress={() => setDrawdown(Math.max(2, drawdown - 1))}
+              activeOpacity={0.8}
+            >
+              <Icon name="minus" size={18} color={UI.colors.text || '#0F172A'} />
+            </TouchableOpacity>
+
+            <View style={styles.stepCenter}>
+              <Text style={styles.stepValue}>{formattedDrawdown}</Text>
+              <Text style={styles.stepHint}>max peak-to-trough</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.stepBtn}
+              onPress={() => setDrawdown(Math.min(15, drawdown + 1))}
+              activeOpacity={0.8}
+            >
+              <Icon name="plus" size={18} color={UI.colors.text || '#0F172A'} />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.helperText}>
+            If a pool drops more than <Text style={styles.helperEmph}>{formattedDrawdown}</Text>{' '}
+            from peak, we trigger an immediate repair.
+          </Text>
+
+          <Text style={styles.label}>Target Yield</Text>
+          <View style={styles.stepper}>
+            <TouchableOpacity
+              style={styles.stepBtn}
+              onPress={() => setTargetApy(Math.max(2, targetApy - 1))}
+              activeOpacity={0.8}
+            >
+              <Icon name="minus" size={18} color={UI.colors.text || '#0F172A'} />
+            </TouchableOpacity>
+
+            <View style={styles.stepCenter}>
+              <Text style={styles.stepValue}>{formattedTarget}</Text>
+              <Text style={styles.stepHint}>desired annual yield</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.stepBtn}
+              onPress={() => setTargetApy(Math.min(20, targetApy + 1))}
+              activeOpacity={0.8}
+            >
+              <Icon name="plus" size={18} color={UI.colors.text || '#0F172A'} />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.label}>Autonomy</Text>
+          <View style={styles.segmentRow}>
+            {LEVELS.map((level) => {
+              const active = autonomyLevel === level.id;
+              return (
+                <TouchableOpacity
+                  key={level.id}
+                  style={[
+                    styles.segment,
+                    active && {
+                      backgroundColor: UI.colors.primary || '#6366F1',
+                      borderColor: UI.colors.primary || '#6366F1',
+                    },
+                  ]}
+                  onPress={() => setAutonomyLevel(level.id)}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                    {level.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <TouchableOpacity style={styles.primaryBtn} onPress={handleSavePolicy} activeOpacity={0.9}>
+            <Icon name="check" size={18} color="#FFFFFF" />
+            <Text style={styles.primaryBtnText}>Save Intent</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* REPAIR QUEUE */}
+        <View style={styles.card}>
+          <View style={styles.cardTitleRow}>
+            <View style={styles.iconBadge}>
+              <Icon name="shield" size={18} color={UI.colors.primary || '#6366F1'} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTitle}>Active Repair Queue</Text>
+              <Text style={styles.cardSubtitle}>
+                Only shows actions that improve safety + policy alignment.
+              </Text>
+            </View>
+          </View>
+
+          {pendingRepairs.length === 0 ? (
+            <View style={styles.empty}>
+              <View style={styles.emptyIcon}>
+                <Icon name="check-circle" size={20} color="#10B981" />
+              </View>
+              <Text style={styles.emptyTitle}>All clear</Text>
+              <Text style={styles.emptyText}>Your positions are within policy.</Text>
+            </View>
+          ) : (
+            pendingRepairs.map((repair: any) => (
+              <View key={repair.id} style={styles.alertCard}>
+                <View style={styles.alertHeader}>
+                  <View style={styles.alertLeft}>
+                    <View style={styles.alertBadge}>
+                      <Icon name="alert-triangle" size={16} color="#DC2626" />
+                      <Text style={styles.alertBadgeText}>Action Required</Text>
+                    </View>
+                    <Text style={styles.alertRoute}>
+                      {repair.fromVault} <Text style={{ color: '#94A3B8' }}>→</Text> {repair.toVault}
+                    </Text>
+                  </View>
+                  <View style={styles.alertMeta}>
+                    <Text style={styles.alertMetaText}>
+                      ΔAPY{' '}
+                      {repair.estimatedApyDelta != null
+                        ? `${Number(repair.estimatedApyDelta).toFixed(2)}%`
+                        : '—'}
+                    </Text>
+                  </View>
+                </View>
+
+                {!!repair.proof?.explanation && (
+                  <Text style={styles.alertDesc} numberOfLines={3}>
+                    {repair.proof.explanation}
+                  </Text>
+                )}
+
+                <View style={styles.alertActions}>
+                  <TouchableOpacity
+                    style={styles.ghostBtn}
+                    onPress={() => openProof(repair.proof)}
+                    activeOpacity={0.85}
+                  >
+                    <Icon name="info" size={16} color={UI.colors.primary || '#6366F1'} />
+                    <Text style={styles.ghostBtnText}>Why this move</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.primaryBtn, executingRepair && styles.btnDisabled]}
+                    onPress={() => handleExecuteRepair(repair.id)}
+                    disabled={executingRepair}
+                    activeOpacity={0.9}
+                  >
+                    <Icon name={executingRepair ? 'loader' : 'zap'} size={18} color="#FFFFFF" />
+                    <Text style={styles.primaryBtnText}>
+                      {executingRepair ? 'Executing…' : 'Execute 1-Tap Repair'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))
+          )}
+        </View>
+
+        {/* LAST MOVE */}
+        {lastMove ? (
+          <View style={styles.card}>
+            <View style={styles.cardTitleRow}>
+              <View style={styles.iconBadge}>
+                <Icon name="clock" size={18} color={UI.colors.primary || '#6366F1'} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>Last Move</Text>
+                <Text style={styles.cardSubtitle}>Undo is available only within the revert window.</Text>
+              </View>
+            </View>
+
+            <View style={styles.lastMoveRow}>
+              <Text style={styles.lastMoveRoute}>
+                {lastMove.fromVault} <Text style={{ color: '#94A3B8' }}>→</Text> {lastMove.toVault}
+              </Text>
+              <Text style={styles.lastMoveTime}>Executed at {lastMove.executedAt}</Text>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.secondaryBtn,
+                (!lastMove.canRevert || revertingMove) && styles.btnDisabled,
+              ]}
               onPress={handleRevertMove}
               disabled={!lastMove.canRevert || revertingMove}
+              activeOpacity={0.9}
             >
-              <Text style={styles.secondaryButtonText}>
-                {lastMove.canRevert ? (revertingMove ? 'Reverting...' : 'Revert This Move') : 'Revert Unavailable'}
+              <Icon name="corner-up-left" size={18} color="#0F172A" />
+              <Text style={styles.secondaryBtnText}>
+                {lastMove.canRevert ? (revertingMove ? 'Reverting…' : 'Revert This Move') : 'Revert Unavailable'}
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
-      ) : null}
+        ) : null}
 
-      <Modal visible={proofOpen} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Proof Drawer</Text>
+        <View style={{ height: 28 }} />
+      </ScrollView>
+
+      {/* PROOF DRAWER (BOTTOM SHEET) */}
+      <Modal visible={proofOpen} transparent animationType="fade" onRequestClose={() => setProofOpen(false)}>
+        <Pressable style={styles.sheetOverlay} onPress={() => setProofOpen(false)}>
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <View style={styles.sheetHandle} />
+
+            <View style={styles.sheetTitleRow}>
+              <Text style={styles.sheetTitle}>Proof</Text>
+              <TouchableOpacity onPress={() => setProofOpen(false)} style={styles.sheetClose} activeOpacity={0.8}>
+                <Icon name="x" size={18} color="#0F172A" />
+              </TouchableOpacity>
+            </View>
+
             {activeProof ? (
-              <View>
-                <Text style={styles.modalItem}>
-                  Calmar Improvement: {activeProof.calmarImprovement?.toFixed(2) || '0.00'}
-                </Text>
-                <Text style={styles.modalItem}>
-                  TVL Stability: {activeProof.tvlStabilityCheck ? 'Stable ✅' : 'Unstable'}
-                </Text>
-                <Text style={styles.modalItem}>
-                  Policy Match: {activeProof.policyAlignment ? 'Within limits ✅' : 'Outside limits'}
-                </Text>
-                <Text style={styles.modalItem}>
-                  Integrity: {activeProof.integrityCheck?.isErc4626Compliant ? 'ERC‑4626 ✅' : 'Unknown'}
-                </Text>
-                {activeProof.policyVersion ? (
-                  <Text style={styles.modalItem}>Policy version: {activeProof.policyVersion}</Text>
-                ) : null}
-                {activeProof.guardrails ? (
-                  <Text style={styles.modalItem}>
-                    Guardrails: Trust {activeProof.guardrails.trust_score ?? '—'} · TVL ${
-                      activeProof.guardrails.tvl ?? '—'
-                    }
+              <View style={styles.sheetBody}>
+                <View style={styles.kvRow}>
+                  <Text style={styles.kLabel}>Calmar improvement</Text>
+                  <Text style={styles.kValue}>{activeProof.calmarImprovement?.toFixed(2) || '0.00'}</Text>
+                </View>
+
+                <View style={styles.kvRow}>
+                  <Text style={styles.kLabel}>TVL stability</Text>
+                  <Text style={styles.kValue}>{activeProof.tvlStabilityCheck ? 'Stable ✅' : 'Unstable'}</Text>
+                </View>
+
+                <View style={styles.kvRow}>
+                  <Text style={styles.kLabel}>Policy match</Text>
+                  <Text style={styles.kValue}>{activeProof.policyAlignment ? 'Within limits ✅' : 'Outside limits'}</Text>
+                </View>
+
+                <View style={styles.kvRow}>
+                  <Text style={styles.kLabel}>Integrity</Text>
+                  <Text style={styles.kValue}>
+                    {activeProof.integrityCheck?.isErc4626Compliant ? 'ERC-4626 ✅' : 'Unknown'}
                   </Text>
+                </View>
+
+                {activeProof.policyVersion ? (
+                  <View style={styles.kvRow}>
+                    <Text style={styles.kLabel}>Policy version</Text>
+                    <Text style={styles.kValue}>{activeProof.policyVersion}</Text>
+                  </View>
                 ) : null}
-                <Text style={styles.modalExplanation}>{activeProof.explanation}</Text>
+
+                {activeProof.guardrails ? (
+                  <View style={styles.kvRow}>
+                    <Text style={styles.kLabel}>Guardrails</Text>
+                    <Text style={styles.kValue}>
+                      Trust {activeProof.guardrails.trust_score ?? '—'} · TVL ${activeProof.guardrails.tvl ?? '—'}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {!!activeProof.explanation && (
+                  <View style={styles.explainBox}>
+                    <Text style={styles.explainText}>{activeProof.explanation}</Text>
+                  </View>
+                )}
               </View>
             ) : null}
-            <TouchableOpacity style={styles.secondaryButton} onPress={() => setProofOpen(false)}>
-              <Text style={styles.secondaryButtonText}>Close</Text>
+
+            <TouchableOpacity style={styles.secondaryBtn} onPress={() => setProofOpen(false)} activeOpacity={0.9}>
+              <Icon name="chevron-down" size={18} color="#0F172A" />
+              <Text style={styles.secondaryBtnText}>Close</Text>
             </TouchableOpacity>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: UI.colors.background },
-  content: { padding: 20, paddingBottom: 60 },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
+  screen: {
+    flex: 1,
+    backgroundColor: UI.colors.background || '#F7F9FC',
   },
-  title: { fontSize: 26, fontWeight: '700', color: UI.colors.text },
-  subtitle: { fontSize: 14, color: UI.colors.textSecondary, marginTop: 4 },
-  section: {
-    backgroundColor: UI.colors.surface,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
+  container: {
+    flex: 1,
+    backgroundColor: UI.colors.background || '#F7F9FC',
+  },
+  content: {
+    padding: 18,
+    paddingBottom: 70,
+  },
+
+  /* HERO */
+  hero: {
+    borderRadius: 24,
+    padding: 18,
     borderWidth: 1,
-    borderColor: UI.colors.border,
+    borderColor: 'rgba(148,163,184,0.28)',
+    backgroundColor: UI.colors.surface || '#FFFFFF',
+    overflow: 'hidden',
+    marginBottom: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+    elevation: 3,
   },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: UI.colors.text, marginBottom: 12 },
-  label: { fontSize: 14, fontWeight: '600', color: UI.colors.text, marginTop: 10 },
-  subtext: { fontSize: 12, color: UI.colors.textSecondary, marginTop: 6 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  chip: {
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  heroTitleBlock: {
+    flex: 1,
+    gap: 10,
+  },
+  heroTitle: {
+    fontSize: 30,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+    color: UI.colors.text || '#0F172A',
+  },
+  heroSubtitle: {
+    marginTop: 10,
+    fontSize: 14,
+    color: UI.colors.textSecondary || '#64748B',
+    lineHeight: 20,
+  },
+  heroToggle: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  toggleLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+
+  /* STATUS */
+  statusPill: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: UI.colors.border,
-    backgroundColor: UI.colors.background,
   },
-  chipActive: { backgroundColor: UI.colors.primary, borderColor: UI.colors.primary },
-  chipText: { fontSize: 12, color: UI.colors.text },
-  chipTextActive: { color: '#fff' },
-  stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 },
-  stepperButton: {
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+
+  /* STATS */
+  statRow: {
+    marginTop: 14,
+    flexDirection: 'row',
+    gap: 10,
+  },
+  statCard: {
+    flex: 1,
+    borderRadius: 16,
+    padding: 12,
+    backgroundColor: 'rgba(241,245,249,0.65)',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.22)',
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 6,
+  },
+  statValue: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+
+  /* CARD */
+  card: {
+    backgroundColor: UI.colors.surface || '#FFFFFF',
+    borderRadius: 24,
+    padding: 18,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.28)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+    elevation: 3,
+  },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 14,
+  },
+  iconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(99,102,241,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(99,102,241,0.18)',
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+  cardSubtitle: {
+    marginTop: 4,
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 18,
+  },
+
+  label: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginTop: 14,
+    marginBottom: 8,
+    letterSpacing: 0.2,
+  },
+
+  /* SEGMENTS */
+  segmentRow: {
+    flexDirection: 'row',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  segment: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.35)',
+  },
+  segmentText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#334155',
+    letterSpacing: 0.1,
+  },
+  segmentTextActive: {
+    color: '#FFFFFF',
+  },
+
+  /* STEPPER */
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 18,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.28)',
+    backgroundColor: '#F8FAFC',
+  },
+  stepBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EEF2F7',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.24)',
+  },
+  stepCenter: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    paddingHorizontal: 10,
+  },
+  stepValue: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+  stepHint: {
+    marginTop: 4,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  helperText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 18,
+  },
+  helperEmph: {
+    color: '#0F172A',
+    fontWeight: '800',
+  },
+
+  /* BUTTONS */
+  primaryBtn: {
+    marginTop: 16,
+    backgroundColor: UI.colors.primary || '#6366F1',
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 10,
+    shadowColor: UI.colors.primary || '#6366F1',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  primaryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 0.2,
+  },
+  secondaryBtn: {
+    marginTop: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.38)',
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  secondaryBtnText: {
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  ghostBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(99,102,241,0.30)',
+    backgroundColor: 'rgba(99,102,241,0.08)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  ghostBtnText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: UI.colors.primary || '#6366F1',
+  },
+  btnDisabled: {
+    opacity: 0.6,
+  },
+
+  /* EMPTY */
+  empty: {
+    alignItems: 'center',
+    paddingVertical: 26,
+  },
+  emptyIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(16,185,129,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.20)',
+    marginBottom: 10,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  emptyText: {
+    marginTop: 6,
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+
+  /* ALERT CARD */
+  alertCard: {
+    marginTop: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.22)',
+    backgroundColor: '#FFFFFF',
+    padding: 14,
+    overflow: 'hidden',
+  },
+  alertHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  alertLeft: {
+    flex: 1,
+    gap: 10,
+  },
+  alertBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(239,68,68,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(239,68,68,0.18)',
+  },
+  alertBadgeText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#DC2626',
+    letterSpacing: 0.2,
+  },
+  alertRoute: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: -0.1,
+  },
+  alertMeta: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 14,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.22)',
+  },
+  alertMetaText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  alertDesc: {
+    marginTop: 10,
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 18,
+  },
+  alertActions: {
+    marginTop: 14,
+    flexDirection: 'row',
+    gap: 10,
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+
+  /* LAST MOVE */
+  lastMoveRow: {
+    marginTop: 6,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.22)',
+  },
+  lastMoveRoute: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  lastMoveTime: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+
+  /* LOADING */
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: UI.colors.background || '#F7F9FC',
+    padding: 22,
+  },
+  loadingCard: {
+    width: '100%',
+    maxWidth: 380,
+    borderRadius: 24,
+    padding: 22,
+    alignItems: 'center',
+    backgroundColor: UI.colors.surface || '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.28)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 18,
+    elevation: 4,
+  },
+  loadingText: {
+    marginTop: 14,
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  loadingSubtext: {
+    marginTop: 6,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+
+  /* SHEET */
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15,23,42,0.45)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.28)',
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 48,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(148,163,184,0.45)',
+    marginBottom: 12,
+  },
+  sheetTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  sheetTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: -0.2,
+  },
+  sheetClose: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
-    borderColor: UI.colors.border,
-    backgroundColor: UI.colors.background,
+    borderColor: 'rgba(148,163,184,0.25)',
   },
-  stepperValue: { fontSize: 16, fontWeight: '700', color: UI.colors.text },
-  primaryButton: {
-    marginTop: 16,
-    backgroundColor: UI.colors.primary,
-    paddingVertical: 12,
-    borderRadius: 12,
+  sheetBody: {
+    paddingTop: 6,
+    paddingBottom: 2,
+    gap: 10,
+  },
+  kvRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  primaryButtonText: { color: '#fff', fontWeight: '600' },
-  secondaryButton: {
+    justifyContent: 'space-between',
+    gap: 10,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: UI.colors.border,
-    backgroundColor: UI.colors.background,
-  },
-  secondaryButtonText: { color: UI.colors.text, fontWeight: '600' },
-  repairCard: {
-    borderWidth: 1,
-    borderColor: UI.colors.border,
-    borderRadius: 14,
-    padding: 14,
-    marginTop: 12,
-    backgroundColor: UI.colors.background,
-  },
-  repairTitle: { fontSize: 14, fontWeight: '700', color: UI.colors.error },
-  repairSubtitle: { fontSize: 13, fontWeight: '600', color: UI.colors.text, marginTop: 6 },
-  repairDesc: { fontSize: 12, color: UI.colors.textSecondary, marginTop: 4 },
-  repairActions: { flexDirection: 'row', gap: 10, marginTop: 12, flexWrap: 'wrap' },
-  emptyState: { alignItems: 'center', paddingVertical: 20 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: UI.colors.text },
-  emptyText: { fontSize: 12, color: UI.colors.textSecondary, marginTop: 4 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 10, color: UI.colors.textSecondary },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    padding: 20,
-  },
-  modalCard: {
-    backgroundColor: UI.colors.surface,
     borderRadius: 16,
-    padding: 20,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.22)',
   },
-  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 12, color: UI.colors.text },
-  modalItem: { fontSize: 13, color: UI.colors.text, marginBottom: 6 },
-  modalExplanation: { fontSize: 12, color: UI.colors.textSecondary, marginTop: 8 },
+  kLabel: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#64748B',
+    letterSpacing: 0.2,
+  },
+  kValue: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  explainBox: {
+    marginTop: 6,
+    borderRadius: 16,
+    padding: 12,
+    backgroundColor: 'rgba(99,102,241,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(99,102,241,0.22)',
+  },
+  explainText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#334155',
+    lineHeight: 18,
+  },
 });
