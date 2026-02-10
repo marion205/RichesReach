@@ -84,6 +84,21 @@ def submit_repair_via_relayer(
         return {"success": False, "message": "Relayer not configured (RELAYER_PRIVATE_KEY, REPAIR_FORWARDER_ADDRESS, RPC)."}
 
     try:
+        from web3 import Web3
+        w3 = Web3(Web3.HTTPProvider(os.environ.get("RELAYER_RPC_URL") or os.environ.get("ETHEREUM_RPC_URL")))
+        # Circuit breaker: pause relayer when gas spikes (e.g. 300% in 5 min)
+        try:
+            current_gas_wei = w3.eth.gas_price
+            current_gwei = float(current_gas_wei) / 1e9
+            from .defi_circuit_breaker import relayer_submission_allowed, record_gas_for_relayer
+            allowed = relayer_submission_allowed(chain_id, current_gwei)
+            if not allowed.get("allowed"):
+                return {"success": False, "message": allowed.get("reason", "Relayer paused.")}
+            record_gas_for_relayer(chain_id, current_gwei)
+        except Exception as e:
+            logger.warning(f"Relayer circuit breaker check failed: {e}")
+            # Proceed without gas check if Redis/cache unavailable
+
         from .eip712_repair_authorization import verify_repair_signature, get_repair_authorization_typed_data
         typed_data = get_repair_authorization_typed_data(
             from_vault, to_vault, str(amount_wei), deadline, nonce, chain_id
@@ -92,8 +107,6 @@ def submit_repair_via_relayer(
             return {"success": False, "message": "Invalid repair signature."}
 
         v, r_bytes, s_bytes = _signature_to_vrs(signature)
-        from web3 import Web3
-        w3 = Web3(Web3.HTTPProvider(os.environ.get("RELAYER_RPC_URL") or os.environ.get("ETHEREUM_RPC_URL")))
         forwarder_address = os.environ.get("REPAIR_FORWARDER_ADDRESS")
         relayer_acct = w3.eth.account.from_key(os.environ["RELAYER_PRIVATE_KEY"])
         contract = w3.eth.contract(

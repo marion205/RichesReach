@@ -4,6 +4,7 @@ Tests for DeFi EIP-712 spend permission, execution payload decimals, and repair 
 from decimal import Decimal
 from unittest.mock import Mock, patch
 from django.test import TestCase
+from graphene import ResolveInfo
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
@@ -134,6 +135,19 @@ class HasValidEIP712SpendPermissionTests(TestCase):
         )
 
 
+class _FakeCache:
+    """In-memory cache so tests don't require Redis."""
+
+    def __init__(self):
+        self._data = {}
+
+    def get(self, key, default=None):
+        return self._data.get(key, default)
+
+    def set(self, key, value, timeout=None):
+        self._data[key] = value
+
+
 class ExecuteRepairPayloadTests(TestCase):
     """Test execute_repair returns execution_payload with decimals and withinSpendPermission."""
 
@@ -171,9 +185,9 @@ class ExecuteRepairPayloadTests(TestCase):
             wallet_address=self.wallet,
             staked_amount=Decimal('100.5'),
             staked_value_usd=Decimal('100.5'),
-            current_apy=Decimal('0.05'),
+            realized_apy=0.05,
         )
-        set_autopilot_enabled(self.user, True)
+        # Do not call set_autopilot_enabled here: it would use Redis. We do it inside the test with a fake cache.
 
     def test_execution_payload_includes_decimals(self):
         # repair_id format: position_id:to_pool_id (target pool for the move)
@@ -187,8 +201,11 @@ class ExecuteRepairPayloadTests(TestCase):
             'estimated_apy_delta': 0.5,
             'proof': {},
         }]
-        with patch('core.autopilot_service.get_pending_repairs', return_value=fake_repairs):
-            result = execute_repair(self.user, repair_id)
+        fake_cache = _FakeCache()
+        with patch('core.autopilot_service.cache', fake_cache):
+            set_autopilot_enabled(self.user, True)
+            with patch('core.autopilot_service.get_pending_repairs', return_value=fake_repairs):
+                result = execute_repair(self.user, repair_id)
 
         self.assertTrue(result.get('success'))
         payload = result.get('execution_payload')
@@ -197,7 +214,27 @@ class ExecuteRepairPayloadTests(TestCase):
         self.assertEqual(payload['decimals'], 6)  # USDC
         self.assertIn('withinSpendPermission', payload)
         self.assertIn('amountHuman', payload)
-        self.assertEqual(payload['amountHuman'], '100.5')
+        self.assertEqual(float(payload['amountHuman']), 100.5)
+
+
+def _make_resolve_info(user):
+    """Build a minimal ResolveInfo so @login_required finds it (no StopIteration)."""
+    ctx = Mock()
+    ctx.user = user
+    return ResolveInfo(
+        field_name='mutate',
+        field_nodes=[],
+        return_type=Mock(),
+        parent_type=Mock(),
+        path=Mock(),
+        schema=Mock(),
+        fragments={},
+        root_value=None,
+        operation=Mock(),
+        variable_values={},
+        context=ctx,
+        is_awaitable=False,
+    )
 
 
 class SubmitSpendPermissionMutationTests(TestCase):
@@ -209,11 +246,9 @@ class SubmitSpendPermissionMutationTests(TestCase):
             password='testpass123',
             name='Submit Perm User',
         )
-        self.info = Mock()
-        self.info.context = Mock()
-        self.info.context.user = self.user
+        self.info = _make_resolve_info(self.user)
 
-    @patch('core.defi_mutations.verify_signature')
+    @patch('core.eip712_spend_permission.verify_signature')
     def test_submit_snake_case_success(self, mock_verify):
         mock_verify.return_value = True
         result = SubmitSpendPermission.mutate(
@@ -238,7 +273,7 @@ class SubmitSpendPermissionMutationTests(TestCase):
         self.assertIn('Spend permission stored', result.message)
         self.assertEqual(DeFiSpendPermission.objects.filter(user=self.user).count(), 1)
 
-    @patch('core.defi_mutations.verify_signature')
+    @patch('core.eip712_spend_permission.verify_signature')
     def test_submit_camelCase_success(self, mock_verify):
         mock_verify.return_value = True
         result = SubmitSpendPermission.mutate(

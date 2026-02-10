@@ -10,7 +10,12 @@ from datetime import datetime, time
 from django.utils import timezone
 from django.conf import settings
 
-from .raha_models import NotificationPreferences, RAHASignal, RAHABacktestRun
+from .raha_models import RAHASignal, RAHABacktestRun
+
+try:
+    from .raha_models import NotificationPreferences
+except ImportError:
+    NotificationPreferences = None
 
 logger = logging.getLogger(__name__)
 

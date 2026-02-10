@@ -18,7 +18,15 @@ from ..signal_performance_models import SignalPerformance, DayTradingSignal
 
 User = get_user_model()
 
+LOCMEM_CACHE = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "test-raha-performance",
+    }
+}
 
+
+@override_settings(CACHES=LOCMEM_CACHE)
 class RAHAPerformanceTests(TestCase):
     """Test suite for RAHA performance optimizations"""
     
@@ -307,15 +315,16 @@ class RAHAPerformanceTests(TestCase):
             _ = item.get('strategy_name')
 
 
-@pytest.mark.django_db
-class RAHAPerformanceBenchmarkTests:
+@override_settings(CACHES=LOCMEM_CACHE)
+class RAHAPerformanceBenchmarkTests(TestCase):
     """Benchmark tests to measure performance improvements"""
-    
-    def test_benchmark_raha_signals_query(self, django_user_model):
+
+    def test_benchmark_raha_signals_query(self):
         """Benchmark RAHA signals query performance"""
-        user = django_user_model.objects.create_user(
+        user = User.objects.create_user(
             email='benchmark@example.com',
-            password='testpass123'
+            password='testpass123',
+            name='Benchmark User'
         )
         
         # Create many signals
@@ -355,6 +364,6 @@ class RAHAPerformanceBenchmarkTests:
         query_time = time.time() - start_time
         
         # Should be fast even with 100 signals
-        assert query_time < 0.1, f"Query took {query_time:.3f}s, expected < 0.1s"
-        assert len(result) == 20
+        self.assertLess(query_time, 0.1, f"Query took {query_time:.3f}s, expected < 0.1s")
+        self.assertEqual(len(result), 20)
 

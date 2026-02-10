@@ -503,6 +503,14 @@ const notificationListener = Notifications.addNotificationReceivedListener(notif
       // Trigger Dawn Ritual - emit event that PortfolioScreen can listen to
       const { DeviceEventEmitter } = require('react-native');
       DeviceEventEmitter.emit('openDawnRitual');
+    } else if (data.type === 'autopilot_funds_moved') {
+      // Open DeFi Auto-Pilot and optionally the repair proof (tap to see the proof)
+      try {
+        const { globalNavigate } = require('../../../navigation/NavigationService');
+        globalNavigate('DeFiAutopilot', { repairId: data.repair_id || data.repairId });
+      } catch (e) {
+        logger.warn('Push deep link DeFiAutopilot failed', e);
+      }
     }
   });
 return {

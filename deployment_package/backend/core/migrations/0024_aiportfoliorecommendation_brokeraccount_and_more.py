@@ -828,54 +828,8 @@ class Migration(migrations.Migration):
                 "ordering": ["-created_at"],
             },
         ),
-        migrations.RemoveField(
-            model_name="creditaction",
-            name="user",
-        ),
-        migrations.RemoveField(
-            model_name="creditcard",
-            name="user",
-        ),
-        migrations.RemoveField(
-            model_name="creditprojection",
-            name="user",
-        ),
-        migrations.RemoveField(
-            model_name="creditscore",
-            name="user",
-        ),
-        migrations.RemoveField(
-            model_name="familygroup",
-            name="owner",
-        ),
-        migrations.RemoveField(
-            model_name="familymember",
-            name="family_group",
-        ),
-        migrations.RemoveField(
-            model_name="familyinvite",
-            name="family_group",
-        ),
-        migrations.RemoveField(
-            model_name="orbsyncevent",
-            name="family_group",
-        ),
-        migrations.RemoveField(
-            model_name="familyinvite",
-            name="accepted_by",
-        ),
-        migrations.RemoveField(
-            model_name="familyinvite",
-            name="invited_by",
-        ),
-        migrations.RemoveField(
-            model_name="familymember",
-            name="user",
-        ),
-        migrations.RemoveField(
-            model_name="orbsyncevent",
-            name="user",
-        ),
+        # Removed RemoveField ops for credit/family models to avoid state inconsistency
+        # (NewCreditScore/NewFamilyMember missing fields). DeleteModel below drops tables.
         migrations.RenameIndex(
             model_name="bankaccount",
             new_name="bank_accoun_user_id_5b6c03_idx",

@@ -2,7 +2,6 @@
 Unit tests for RAHA GraphQL queries and mutations
 """
 import unittest
-import pytest
 from django.test import TestCase
 from django.contrib.auth import get_user_model
 from graphene.test import Client
@@ -10,14 +9,17 @@ from decimal import Decimal
 
 from core.schema import schema
 from core import raha_models
-if not hasattr(raha_models, 'NotificationPreferences'):
-    pytest.skip("NotificationPreferences model not available", allow_module_level=True)
 
-from core.raha_models import Strategy, StrategyVersion, UserStrategySettings, RAHASignal, RAHABacktestRun, NotificationPreferences, StrategyBlend
+_raha_models_available = hasattr(raha_models, 'NotificationPreferences')
+if _raha_models_available:
+    from core.raha_models import Strategy, StrategyVersion, UserStrategySettings, RAHASignal, RAHABacktestRun, NotificationPreferences, StrategyBlend
+else:
+    Strategy = StrategyVersion = UserStrategySettings = RAHASignal = RAHABacktestRun = NotificationPreferences = StrategyBlend = None
 
 User = get_user_model()
 
 
+@unittest.skipUnless(_raha_models_available, "NotificationPreferences model not available")
 class TestRAHAGraphQLQueries(TestCase):
     """Test RAHA GraphQL queries"""
     
@@ -171,6 +173,7 @@ class TestRAHAGraphQLQueries(TestCase):
         self.assertIn('data', result)
 
 
+@unittest.skipUnless(_raha_models_available, "NotificationPreferences model not available")
 class TestRAHAGraphQLMutations(TestCase):
     """Test RAHA GraphQL mutations"""
     

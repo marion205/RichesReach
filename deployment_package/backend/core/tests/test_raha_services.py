@@ -3,7 +3,6 @@ Unit tests for RAHA services
 Tests strategy engine, backtest service, and notification service
 """
 import unittest
-import pytest
 from unittest.mock import Mock, patch, MagicMock
 from decimal import Decimal
 from datetime import date, timedelta
@@ -12,10 +11,13 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from core import raha_models
-if not hasattr(raha_models, 'NotificationPreferences'):
-    pytest.skip("NotificationPreferences model not available", allow_module_level=True)
 
-from core.raha_models import Strategy, StrategyVersion, UserStrategySettings, RAHASignal, RAHABacktestRun, NotificationPreferences
+try:
+    from core.raha_models import Strategy, StrategyVersion, UserStrategySettings, RAHASignal, RAHABacktestRun, NotificationPreferences
+except (ImportError, AttributeError):
+    Strategy = StrategyVersion = UserStrategySettings = RAHASignal = RAHABacktestRun = NotificationPreferences = None
+_raha_models_available = NotificationPreferences is not None
+
 from core.raha_strategy_engine import RAHAStrategyEngine
 from core.raha_backtest_service import RAHABacktestService
 from core.raha_notification_service import RAHANotificationService
@@ -23,6 +25,7 @@ from core.raha_notification_service import RAHANotificationService
 User = get_user_model()
 
 
+@unittest.skipUnless(_raha_models_available, "NotificationPreferences model not available")
 class TestRAHAStrategyEngine(TestCase):
     """Test RAHA Strategy Engine"""
     
@@ -110,6 +113,7 @@ class TestRAHAStrategyEngine(TestCase):
         self.assertGreater(atr, 0)
 
 
+@unittest.skipUnless(_raha_models_available, "NotificationPreferences model not available")
 class TestRAHABacktestService(TestCase):
     """Test RAHA Backtest Service"""
     
@@ -206,6 +210,7 @@ class TestRAHABacktestService(TestCase):
         self.assertGreater(metrics['win_rate'], 0)
 
 
+@unittest.skipUnless(_raha_models_available, "NotificationPreferences model not available")
 class TestRAHANotificationService(TestCase):
     """Test RAHA Notification Service"""
     

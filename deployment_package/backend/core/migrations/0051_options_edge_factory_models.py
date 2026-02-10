@@ -64,30 +64,10 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "Options Regime Snapshots",
             },
         ),
-        migrations.RemoveField(
-            model_name="dailybriefcompletion",
-            name="brief",
-        ),
-        migrations.RemoveField(
-            model_name="dailybriefcompletion",
-            name="user",
-        ),
-        migrations.AlterUniqueTogether(
-            name="userachievement",
-            unique_together=None,
-        ),
-        migrations.RemoveField(
-            model_name="userachievement",
-            name="user",
-        ),
-        migrations.RemoveField(
-            model_name="userprogress",
-            name="user",
-        ),
-        migrations.RemoveField(
-            model_name="userstreak",
-            name="user",
-        ),
+        # Removed RemoveField/AlterUniqueTogether ops for DailyBriefCompletion,
+        # UserAchievement, UserProgress, UserStreak — these tables are dropped
+        # entirely by DeleteModel below, so RemoveField is redundant and
+        # causes state inconsistency.
         migrations.CreateModel(
             name="OptionsPortfolio",
             fields=[

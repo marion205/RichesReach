@@ -101,6 +101,7 @@ class AutopilotStatusType(graphene.ObjectType):
     policy = graphene.Field(AutopilotPolicyType)
     last_move = graphene.Field(LastMoveType)
     relayer_configured = graphene.Boolean(description="True if relayer can submit repairs (user signs once)")
+    relayer_paused_chain_ids = graphene.List(graphene.Int, description="Chain IDs where relayer is paused (e.g. gas spike)")
 
 
 class TransactionReceiptType(graphene.ObjectType):

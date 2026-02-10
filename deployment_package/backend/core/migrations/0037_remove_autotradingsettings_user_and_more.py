@@ -10,26 +10,10 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveField(
-            model_name="autotradingsettings",
-            name="user",
-        ),
-        migrations.RemoveField(
-            model_name="mlmodel",
-            name="strategy_version",
-        ),
-        migrations.RemoveField(
-            model_name="mlmodel",
-            name="user",
-        ),
-        migrations.RemoveField(
-            model_name="notificationpreferences",
-            name="user",
-        ),
-        migrations.RemoveField(
-            model_name="strategyblend",
-            name="user",
-        ),
+        # Removed RemoveField ops for AutoTradingSettings, MLModel,
+        # NotificationPreferences, StrategyBlend — these tables are dropped
+        # entirely by DeleteModel below, so RemoveField is redundant and
+        # causes state inconsistency.
         migrations.RemoveIndex(
             model_name="rahabacktestrun",
             name="raha_backtest_user_strategy_status_idx",

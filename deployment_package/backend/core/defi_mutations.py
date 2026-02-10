@@ -259,6 +259,7 @@ class SubmitRepairViaRelayer(graphene.Mutation):
         deadline = graphene.Int(required=True)
         nonce = graphene.Int(required=True)
         signature = graphene.String(required=True)
+        repair_id = graphene.String(description="Optional repair id for audit trail and push notification")
 
     success = graphene.Boolean()
     tx_hash = graphene.String()
@@ -275,6 +276,7 @@ class SubmitRepairViaRelayer(graphene.Mutation):
         deadline,
         nonce,
         signature,
+        repair_id=None,
     ):
         from .repair_relayer import submit_repair_via_relayer, is_relayer_configured
         if not is_relayer_configured():
@@ -297,11 +299,98 @@ class SubmitRepairViaRelayer(graphene.Mutation):
             nonce=nonce,
             signature=signature,
         )
-        return SubmitRepairViaRelayer(
-            success=result.get("success", False),
-            tx_hash=result.get("tx_hash"),
-            message=result.get("message", ""),
-        )
+        success = result.get("success", False)
+        tx_hash = result.get("tx_hash")
+        message = result.get("message", "")
+
+        # Audit trail + push: update DeFiRepairDecision with tx_hash and send "funds moved" notification
+        if success and repair_id and info.context.user:
+            try:
+                from .defi_models import DeFiRepairDecision
+                from .autopilot_service import get_last_move
+                from .autopilot_notification_service import get_autopilot_notification_service
+
+                user = info.context.user
+                decision = (
+                    DeFiRepairDecision.objects.filter(
+                        user=user, repair_id=repair_id, decision_type='executed'
+                    ).order_by('-executed_at').first()
+                )
+                if decision and tx_hash:
+                    decision.tx_hash = tx_hash
+                    decision.save(update_fields=['tx_hash'])
+                last_move = get_last_move(user)
+                if last_move and last_move.get('id') == repair_id:
+                    amount_usd = None
+                    if decision and getattr(decision, 'position', None) and decision.position:
+                        try:
+                            amount_usd = float(decision.position.staked_value_usd or 0)
+                        except (TypeError, ValueError):
+                            pass
+                    notification_service = get_autopilot_notification_service()
+                    notification_service.notify_funds_moved(
+                        user,
+                        repair_id=repair_id,
+                        from_vault=last_move.get('from_vault', '?'),
+                        to_vault=last_move.get('to_vault', '?'),
+                        amount_usd=amount_usd,
+                        tx_hash=tx_hash,
+                    )
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning("Audit/push after relayer success: %s", e)
+
+        return SubmitRepairViaRelayer(success=success, tx_hash=tx_hash, message=message)
+
+
+class ReportRepairExecutedOnChain(graphene.Mutation):
+    """Report that a repair was executed on-chain by the user's wallet (for audit + push)."""
+
+    class Arguments:
+        repair_id = graphene.String(required=True)
+        tx_hash = graphene.String(required=True)
+
+    ok = graphene.Boolean()
+    message = graphene.String()
+
+    @login_required
+    def mutate(self, info, repair_id, tx_hash):
+        user = info.context.user
+        try:
+            from .defi_models import DeFiRepairDecision
+            from .autopilot_service import get_last_move
+            from .autopilot_notification_service import get_autopilot_notification_service
+
+            decision = (
+                DeFiRepairDecision.objects.filter(
+                    user=user, repair_id=repair_id, decision_type='executed'
+                ).order_by('-executed_at').first()
+            )
+            if not decision:
+                return ReportRepairExecutedOnChain(ok=False, message='Repair decision not found.')
+            decision.tx_hash = tx_hash
+            decision.save(update_fields=['tx_hash'])
+            last_move = get_last_move(user)
+            amount_usd = None
+            if decision.position:
+                try:
+                    amount_usd = float(decision.position.staked_value_usd or 0)
+                except (TypeError, ValueError):
+                    pass
+            notification_service = get_autopilot_notification_service()
+            notification_service.notify_funds_moved(
+                user,
+                repair_id=repair_id,
+                from_vault=last_move.get('from_vault', '?') if last_move else '?',
+                to_vault=last_move.get('to_vault', '?') if last_move else '?',
+                amount_usd=amount_usd,
+                tx_hash=tx_hash,
+            )
+            return ReportRepairExecutedOnChain(ok=True, message='Recorded and notification sent.')
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("ReportRepairExecutedOnChain failed: %s", e)
+            return ReportRepairExecutedOnChain(ok=False, message=str(e))
 
 
 class SubmitSessionAuthorization(graphene.Mutation):
@@ -332,7 +421,7 @@ class SubmitSessionAuthorization(graphene.Mutation):
         signature,
         raw_typed_data=None,
     ):
-        from django.utils import timezone
+        from datetime import datetime, timezone as dt_tz
         from .defi_models import DeFiSessionAuthorization
         from .eip712_session_authorization import (
             get_session_authorization_typed_data,
@@ -350,7 +439,7 @@ class SubmitSessionAuthorization(graphene.Mutation):
             )
             if not verify_session_signature(wallet_address, typed_data, signature):
                 return SubmitSessionAuthorization(ok=False, message='Invalid signature.')
-            valid_until = timezone.datetime.fromtimestamp(valid_until_seconds, tz=timezone.utc)
+            valid_until = datetime.fromtimestamp(valid_until_seconds, tz=dt_tz.utc)
             DeFiSessionAuthorization.objects.update_or_create(
                 session_id=session_id,
                 defaults={
@@ -476,7 +565,7 @@ class SubmitSpendPermission(graphene.Mutation):
         validUntilSeconds=None,
         rawTypedData=None,
     ):
-        from django.utils import timezone
+        from datetime import datetime, timezone as dt_tz
         from .defi_models import DeFiSpendPermission
         from .eip712_spend_permission import (
             get_spend_permission_typed_data,
@@ -508,7 +597,7 @@ class SubmitSpendPermission(graphene.Mutation):
             if not verify_signature(wallet_address, typed_data, signature):
                 return SubmitSpendPermission(ok=False, message='Invalid signature.')
             # valid_until_seconds is absolute Unix timestamp (matches EIP-712 message)
-            valid_until = timezone.datetime.fromtimestamp(valid_until_seconds, tz=timezone.utc)
+            valid_until = datetime.fromtimestamp(valid_until_seconds, tz=dt_tz.utc)
             DeFiSpendPermission.objects.create(
                 user=user,
                 wallet_address=wallet_address,
@@ -1092,6 +1181,7 @@ class DefiMutations(graphene.ObjectType):
     revoke_autopilot_spend_permission = RevokeAutopilotSpendPermission.Field()
     execute_repair = ExecuteRepair.Field()
     submit_repair_via_relayer = SubmitRepairViaRelayer.Field()
+    report_repair_executed_on_chain = ReportRepairExecutedOnChain.Field()
     submit_session_authorization = SubmitSessionAuthorization.Field()
     seed_autopilot_demo = SeedAutopilotDemo.Field()
     revert_autopilot_move = RevertAutopilotMove.Field()
@@ -1112,6 +1202,7 @@ class DefiMutations(graphene.ObjectType):
     revokeAutopilotSpendPermission = RevokeAutopilotSpendPermission.Field()
     executeRepair = ExecuteRepair.Field()
     submitRepairViaRelayer = SubmitRepairViaRelayer.Field()
+    reportRepairExecutedOnChain = ReportRepairExecutedOnChain.Field()
     submitSessionAuthorization = SubmitSessionAuthorization.Field()
     seedAutopilotDemo = SeedAutopilotDemo.Field()
     revertAutopilotMove = RevertAutopilotMove.Field()

@@ -212,6 +212,52 @@ class AutopilotNotificationService:
             priority='high',
         )
 
+    def notify_funds_moved(
+        self,
+        user,
+        repair_id: str,
+        from_vault: str,
+        to_vault: str,
+        amount_usd: Optional[float] = None,
+        tx_hash: Optional[str] = None,
+    ) -> bool:
+        """
+        Notify user that their funds were moved to a safer vault (on-chain execution done).
+        Message: "We moved your funds to a safer vault (Saves $X in potential drawdown). Tap to see the proof."
+        """
+        prefs = self._get_user_preferences(user)
+        if not self._should_notify(prefs, 'repair_executed'):
+            return False
+
+        if amount_usd is not None and amount_usd > 0:
+            try:
+                savings_str = f"${amount_usd:,.0f}"
+            except (TypeError, ValueError):
+                savings_str = None
+        else:
+            savings_str = None
+
+        title = "Funds moved to safer vault"
+        if savings_str:
+            body = f"We moved your funds to a safer vault (Saves {savings_str} in potential drawdown). Tap to see the proof."
+        else:
+            body = f"We moved your funds from {from_vault} to {to_vault}. Tap to see the proof."
+
+        data = {
+            'type': 'autopilot_funds_moved',
+            'repair_id': repair_id,
+            'screen': 'DeFiAutopilot',
+            'tx_hash': tx_hash or '',
+        }
+
+        return self._send_push_notification(
+            push_token=prefs.push_token,
+            title=title,
+            body=body,
+            data=data,
+            priority='high',
+        )
+
     def notify_revert_window_expiring(self, user, last_move: Dict[str, Any]) -> bool:
         """
         Notify user that the 24h revert window is expiring soon (<2 hours left).

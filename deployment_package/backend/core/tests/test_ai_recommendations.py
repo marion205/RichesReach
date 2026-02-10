@@ -2,7 +2,7 @@
 Test AI Recommendations resolver performance and functionality
 """
 import time
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.contrib.auth import get_user_model
 from core.models import Stock, IncomeProfile
 from core.premium_types import PremiumQueries
@@ -12,7 +12,15 @@ import logging
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
+LOCMEM_CACHE = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "test-ai-recommendations",
+    }
+}
 
+
+@override_settings(CACHES=LOCMEM_CACHE)
 class AIRecommendationsTestCase(TestCase):
     """Tests for AI Recommendations resolver"""
     

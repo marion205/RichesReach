@@ -837,14 +837,19 @@ class DefiQueries(graphene.ObjectType):
     def resolve_autopilot_status(self, info):
         from .autopilot_service import get_autopilot_status
         from .repair_relayer import is_relayer_configured
+        from .defi_circuit_breaker import is_relayer_paused
 
         status = get_autopilot_status(info.context.user)
         policy = status.get('policy') or {}
         last_move = status.get('last_move') or {}
+        # Chains we support for relayer (Base, Arbitrum, etc.)
+        _relayer_chains = (1, 137, 42161, 8453, 11155111)
+        relayer_paused_chain_ids = [c for c in _relayer_chains if is_relayer_paused(c)] if is_relayer_configured() else []
         return AutopilotStatusType(
             enabled=bool(status.get('enabled')),
             last_evaluated_at=status.get('last_evaluated_at'),
             relayer_configured=is_relayer_configured(),
+            relayer_paused_chain_ids=relayer_paused_chain_ids,
             policy=AutopilotPolicyType(
                 target_apy=policy.get('target_apy'),
                 max_drawdown=policy.get('max_drawdown'),

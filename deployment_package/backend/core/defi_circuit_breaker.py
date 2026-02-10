@@ -12,8 +12,9 @@ Every DeFi mutation checks the circuit breaker before proceeding.
 
 Part of Phase 4: Mainnet Migration
 """
-import logging
 import json
+import logging
+import os
 from datetime import timedelta
 from django.utils import timezone
 
@@ -39,6 +40,13 @@ HALF_OPEN_TX_LIMIT_USD = 100  # In half-open state, max $100 per tx
 
 # Redis key prefix
 REDIS_PREFIX = 'defi:circuit_breaker'
+
+# ---- Relayer-specific: pause when gas spikes (e.g. 300% in 5 min) ----
+RELAYER_REDIS_PREFIX = 'defi:relayer'
+RELAYER_GAS_SPIKE_MULTIPLIER = float(os.environ.get('RELAYER_GAS_SPIKE_MULTIPLIER', '3.0'))   # 300%
+RELAYER_GAS_WINDOW_SECONDS = int(os.environ.get('RELAYER_GAS_WINDOW_SECONDS', '300'))         # 5 min
+RELAYER_PAUSED_TTL_SECONDS = int(os.environ.get('RELAYER_PAUSED_TTL_SECONDS', '900'))         # 15 min
+RELAYER_BASELINE_MIN_AGE_SECONDS = 240  # require baseline at least 4 min old to detect spike
 
 
 def _get_redis():
@@ -283,3 +291,135 @@ def _record_event(event_type: str, reason: str, triggered_by: str, chain_id: int
         )
     except Exception as e:
         logger.warning(f"Could not record circuit breaker event: {e}")
+
+
+# ---- Relayer: pause on gas spike (e.g. 300% in 5 min) ----
+
+def is_relayer_paused(chain_id: int) -> bool:
+    """True if relayer submissions are paused for this chain (e.g. due to gas spike)."""
+    cache = _get_redis()
+    if not cache:
+        return False
+    try:
+        key = f'{RELAYER_REDIS_PREFIX}:paused:{chain_id}'
+        return cache.get(key) == '1'
+    except Exception as e:
+        logger.warning(f"Error reading relayer paused state: {e}")
+        return False
+
+
+def set_relayer_paused(chain_id: int, reason: str = 'gas_spike', ttl_seconds: int = None):
+    """Pause relayer submissions for this chain. Uses RELAYER_PAUSED_TTL_SECONDS by default."""
+    cache = _get_redis()
+    ttl = ttl_seconds if ttl_seconds is not None else RELAYER_PAUSED_TTL_SECONDS
+    if cache:
+        try:
+            cache.set(f'{RELAYER_REDIS_PREFIX}:paused:{chain_id}', '1', timeout=ttl)
+            logger.warning(f"Relayer paused for chain_id={chain_id}: {reason} (ttl={ttl}s)")
+        except Exception as e:
+            logger.error(f"Failed to set relayer paused state: {e}")
+
+
+def record_gas_for_relayer(chain_id: int, gas_gwei: float):
+    """Store a gas sample for relayer spike detection. Keeps last RELAYER_GAS_WINDOW_SECONDS."""
+    cache = _get_redis()
+    if not cache:
+        return
+    try:
+        key = f'{RELAYER_REDIS_PREFIX}:gas_history:{chain_id}'
+        now = timezone.now()
+        entry = json.dumps({'ts': now.timestamp(), 'gwei': gas_gwei})
+        cache.lpush(key, entry)
+        # Trim: keep only entries within RELAYER_GAS_WINDOW_SECONDS (index 0 = newest)
+        try:
+            all_entries = cache.lrange(key, 0, -1)
+            if not all_entries:
+                return
+            cutoff = now.timestamp() - RELAYER_GAS_WINDOW_SECONDS
+            rightmost_to_keep = -1
+            for i in range(len(all_entries) - 1, -1, -1):
+                try:
+                    data = json.loads(all_entries[i])
+                    if data.get('ts', 0) >= cutoff:
+                        rightmost_to_keep = i
+                        break
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            if rightmost_to_keep >= 0:
+                cache.ltrim(key, 0, rightmost_to_keep)
+        except Exception:
+            pass
+    except Exception as e:
+        logger.warning(f"Error recording relayer gas sample: {e}")
+
+
+def _get_relayer_baseline_gwei(chain_id: int):
+    """Return (baseline_gwei, age_seconds) of oldest sample in window, or (None, None)."""
+    cache = _get_redis()
+    if not cache:
+        return None, None
+    try:
+        key = f'{RELAYER_REDIS_PREFIX}:gas_history:{chain_id}'
+        entries = cache.lrange(key, 0, -1)
+        if not entries:
+            return None, None
+        now = timezone.now().timestamp()
+        oldest_gwei = None
+        oldest_ts = None
+        for raw in entries:
+            try:
+                data = json.loads(raw)
+                ts = data.get('ts')
+                gwei = data.get('gwei')
+                if ts is not None and gwei is not None:
+                    if oldest_ts is None or ts < oldest_ts:
+                        oldest_ts = ts
+                        oldest_gwei = gwei
+            except (json.JSONDecodeError, TypeError):
+                continue
+        if oldest_gwei is None or oldest_ts is None:
+            return None, None
+        age = now - oldest_ts
+        return float(oldest_gwei), age
+    except Exception as e:
+        logger.warning(f"Error getting relayer gas baseline: {e}")
+        return None, None
+
+
+def check_relayer_gas_spike(chain_id: int, current_gwei: float) -> bool:
+    """
+    True if current gas is a spike vs baseline (e.g. >= 300% of gas from 5 min ago).
+    Call record_gas_for_relayer after this (whether spike or not) to keep history.
+    """
+    baseline, age = _get_relayer_baseline_gwei(chain_id)
+    if baseline is None or age is None:
+        return False
+    if age < RELAYER_BASELINE_MIN_AGE_SECONDS:
+        return False
+    return current_gwei >= (RELAYER_GAS_SPIKE_MULTIPLIER * baseline)
+
+
+def relayer_submission_allowed(chain_id: int, current_gas_gwei: float) -> dict:
+    """
+    Check if relayer can submit on this chain: not paused and no gas spike.
+    Returns dict with allowed (bool), reason (str).
+    If allowed is False, caller should not submit. If True, caller should call
+    record_gas_for_relayer(chain_id, current_gas_gwei) after a successful submit (or anyway to build history).
+    """
+    if is_relayer_paused(chain_id):
+        return {
+            'allowed': False,
+            'reason': 'Relayer is temporarily paused for this chain (e.g. high gas). Try again later or submit the repair from your wallet.',
+        }
+    if is_halted(chain_id):
+        return {
+            'allowed': False,
+            'reason': 'DeFi operations are temporarily halted on this chain. Try again later.',
+        }
+    if check_relayer_gas_spike(chain_id, current_gas_gwei):
+        set_relayer_paused(chain_id, reason=f'gas spike: {current_gas_gwei:.0f} gwei >= {RELAYER_GAS_SPIKE_MULTIPLIER}x baseline')
+        return {
+            'allowed': False,
+            'reason': 'Gas has spiked on this chain. Relayer submissions are paused to protect you. Try again later or submit the repair from your wallet.',
+        }
+    return {'allowed': True, 'reason': ''}
