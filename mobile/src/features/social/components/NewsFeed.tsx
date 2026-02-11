@@ -11,7 +11,7 @@ import {
   FlatList,
   Platform,
 } from 'react-native';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
+import { Video, ResizeMode } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import { NewsItem } from '../types/news';
 import NewsService from '../services/NewsService';
@@ -24,6 +24,7 @@ const NewsFeed: React.FC = () => {
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoDurations, setVideoDurations] = useState<{[key: string]: number}>({});
+  const [videoLoading, setVideoLoading] = useState<{[key: string]: boolean}>({});
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -103,13 +104,10 @@ const NewsFeed: React.FC = () => {
 
   const handleVideoPress = async (newsItem: NewsItem) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    
     if (selectedNews?.id === newsItem.id) {
-      // Same video - toggle play/pause or restart if finished
       if (isPlaying) {
         setIsPlaying(false);
       } else {
-        // Check if video finished - if so, restart from beginning
         const videoRef = videoRefs.current[newsItem.id];
         if (videoRef) {
           try {
@@ -128,7 +126,6 @@ const NewsFeed: React.FC = () => {
         }
       }
     } else {
-      // Different video - start new one
       setSelectedNews(newsItem);
       setIsPlaying(true);
     }
@@ -200,13 +197,11 @@ const NewsFeed: React.FC = () => {
                 />
               )}
 
-              {/* Only render video when it should be playing */}
+              {/* Video: expo-av (switch to expo-video after native rebuild) */}
               {(isSelected && isPlaying) && (
                 <Video
                   ref={(ref) => {
-                    if (ref) {
-                      videoRefs.current[item.id] = ref;
-                    }
+                    if (ref) videoRefs.current[item.id] = ref;
                   }}
                   source={{ uri: item.videoUrl }}
                   style={[styles.absFill, { zIndex: 2 }]}
@@ -217,27 +212,21 @@ const NewsFeed: React.FC = () => {
                   isMuted={false}
                   onPlaybackStatusUpdate={(status) => {
                     if (status.isLoaded) {
-                      // Store duration when video loads
-                      if (status.durationMillis && !videoDurations[item.id]) {
-                        setVideoDurations(prev => ({
-                          ...prev,
-                          [item.id]: status.durationMillis || 0
-                        }));
+                      if (status.durationMillis != null && videoDurations[item.id] == null) {
+                        setVideoDurations((prev) => ({ ...prev, [item.id]: status.durationMillis || 0 }));
                       }
-                      // Auto-pause when video finishes
-                      if (status.didJustFinish) {
-                        setIsPlaying(false);
-                      }
+                      if (status.didJustFinish) setIsPlaying(false);
                     }
                   }}
-                  onError={(err) => logger.error(`Video ${item.id} error:`, err)}
-                  onLoadStart={() => {}}
+                  onError={(err) => {
+                    setVideoLoading((prev) => ({ ...prev, [item.id]: false }));
+                    logger.error(`Video ${item.id} error:`, err);
+                  }}
+                  onLoadStart={() => setVideoLoading((prev) => ({ ...prev, [item.id]: true }))}
                   onLoad={(status) => {
-                    if (status.isLoaded && status.durationMillis) {
-                      setVideoDurations(prev => ({
-                        ...prev,
-                        [item.id]: status.durationMillis || 0
-                      }));
+                    setVideoLoading((prev) => ({ ...prev, [item.id]: false }));
+                    if (status.isLoaded && (status as any).durationMillis) {
+                      setVideoDurations((prev) => ({ ...prev, [item.id]: (status as any).durationMillis || 0 }));
                     }
                   }}
                 />
@@ -251,21 +240,18 @@ const NewsFeed: React.FC = () => {
               )}
               <View style={[styles.durationBadge, { zIndex: 3 }]} pointerEvents="none">
                 <Text style={styles.videoDuration}>
-                  {videoDurations[item.id] 
+                  {videoDurations[item.id] != null
                     ? `${Math.floor(videoDurations[item.id] / 60000)}:${Math.floor((videoDurations[item.id] % 60000) / 1000).toString().padStart(2, '0')}`
-                    : '2:45'
+                    : '—'
                   }
-                </Text>
-                {/* Debug duration */}
-                <Text style={[styles.videoDuration, { fontSize: 10, color: '#ff0000' }]}>
-                  {videoDurations[item.id] ? `${videoDurations[item.id]}ms` : 'no duration'}
                 </Text>
               </View>
               
-              {/* Debug overlay */}
-              {(isSelected && isPlaying) && (
-                <View style={[styles.debugOverlay, { zIndex: 10 }]} pointerEvents="none">
-                  <Text style={styles.debugText}>VIDEO PLAYING</Text>
+              {/* Loading spinner while video is loading/decoding */}
+              {(isSelected && isPlaying) && videoLoading[item.id] && (
+                <View style={[styles.videoLoadingOverlay, { zIndex: 10 }]} pointerEvents="none">
+                  <ActivityIndicator size="large" color="#FFFFFF" />
+                  <Text style={styles.videoLoadingText}>Loading video…</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -286,7 +272,7 @@ const NewsFeed: React.FC = () => {
         </TouchableOpacity>
       );
     },
-    [selectedNews, isPlaying]
+    [selectedNews, isPlaying, videoLoading, videoDurations]
   );
 
   const renderCategoryTabs = () => (
@@ -482,16 +468,13 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   videoDuration: { fontSize: 12, color: '#fff', fontWeight: '600' },
-  debugOverlay: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: 'rgba(255,0,0,0.8)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+  videoLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  debugText: { fontSize: 12, color: '#fff', fontWeight: 'bold' },
+  videoLoadingText: { fontSize: 12, color: '#fff', marginTop: 8, fontWeight: '600' },
 
   newsContent: { fontSize: 12, color: '#6c757d', lineHeight: 16, marginBottom: 6 },
   newsFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

@@ -15,9 +15,11 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Share,
 } from 'react-native';
 import { useQuery, useMutation, gql } from '@apollo/client';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { globalNavigate } from '../navigation/NavigationService';
 import NewsFeed from '../features/social/components/NewsFeed';
 
@@ -580,13 +582,19 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
         <View style={styles.userInfo}>
           <View style={styles.usernameRow}>
             <Text style={styles.username}>{item.user.username}</Text>
-            {item.user.verified && <Ionicons name="checkmark-circle" size={16} color="#007bff" />}
+            {item.user.verified && (
+              <View style={styles.verifiedBadge}>
+                <Ionicons name="checkmark-circle" size={14} color="#6366F1" />
+              </View>
+            )}
           </View>
           <Text style={styles.userStats}>
-            {item.user.followerCount.toLocaleString()} followers • {item.user.winRate}% win rate
+            {item.user.followerCount.toLocaleString()} followers · {item.user.winRate}% win
           </Text>
         </View>
-        <Text style={styles.timestamp}>{formatTimestamp(item.timestamp)}</Text>
+        <View style={styles.timestampPill}>
+          <Text style={styles.timestamp}>{formatTimestamp(item.timestamp)}</Text>
+        </View>
       </View>
 
       {/* Post Content */}
@@ -596,29 +604,31 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
       {item.tradeData && (
         <View style={styles.tradeCard}>
           <View style={styles.tradeHeader}>
-            <Text style={styles.tradeSymbol}>{item.tradeData.symbol}</Text>
-            <View style={[
-              styles.tradeSide,
-              { backgroundColor: item.tradeData.side === 'BUY' ? '#00ff88' : '#ff4444' }
-            ]}>
-              <Text style={styles.tradeSideText}>{item.tradeData.side}</Text>
+            <View style={styles.tradeSymbolWrap}>
+              <Text style={styles.tradeSymbol}>{item.tradeData.symbol}</Text>
+              <View style={[
+                styles.tradeSide,
+                { backgroundColor: item.tradeData.side === 'BUY' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)' }
+              ]}>
+                <Text style={[styles.tradeSideText, { color: item.tradeData.side === 'BUY' ? '#10B981' : '#EF4444' }]}>{item.tradeData.side}</Text>
+              </View>
             </View>
-          </View>
-          <View style={styles.tradeDetails}>
-            <Text style={styles.tradeDetail}>
-              {item.tradeData.quantity} shares @ ${item.tradeData.price}
-            </Text>
             <Text style={[
               styles.tradePnl,
               { color: getPerformanceColor(item.tradeData.pnl) }
             ]}>
-              P&L: ${item.tradeData.pnl.toFixed(2)}
+              {item.tradeData.pnl >= 0 ? '+' : ''}${item.tradeData.pnl.toFixed(2)}
             </Text>
           </View>
+          <Text style={styles.tradeDetail}>
+            {item.tradeData.quantity} shares @ ${item.tradeData.price}
+          </Text>
           <TouchableOpacity
             style={styles.copyButton}
             onPress={() => handleCopyTrade(item.id, 1000)}
+            activeOpacity={0.85}
           >
+            <Ionicons name="copy-outline" size={14} color="#FFFFFF" />
             <Text style={styles.copyButtonText}>Copy Trade</Text>
           </TouchableOpacity>
         </View>
@@ -627,7 +637,6 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
       {/* Performance Stats */}
       {item.performance && (
         <View style={styles.performanceCard}>
-          <Text style={styles.performanceTitle}>Performance</Text>
           <View style={styles.performanceStats}>
             <View style={styles.performanceStat}>
               <Text style={styles.performanceLabel}>Return</Text>
@@ -635,15 +644,17 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
                 styles.performanceValue,
                 { color: getPerformanceColor(item.performance.totalReturn) }
               ]}>
-                {item.performance.totalReturn.toFixed(1)}%
+                {item.performance.totalReturn > 0 ? '+' : ''}{item.performance.totalReturn.toFixed(1)}%
               </Text>
             </View>
+            <View style={styles.performanceDivider} />
             <View style={styles.performanceStat}>
               <Text style={styles.performanceLabel}>Win Rate</Text>
               <Text style={styles.performanceValue}>
                 {item.performance.winRate.toFixed(1)}%
               </Text>
             </View>
+            <View style={styles.performanceDivider} />
             <View style={styles.performanceStat}>
               <Text style={styles.performanceLabel}>Sharpe</Text>
               <Text style={styles.performanceValue}>
@@ -659,16 +670,34 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
         <TouchableOpacity
           style={styles.actionButton}
           onPress={() => handleLikePost(item.id)}
+          activeOpacity={0.7}
         >
-          <Ionicons name="heart-outline" size={20} color="#8e8e93" />
+          <Ionicons name="heart-outline" size={18} color="#64748B" />
           <Text style={styles.actionText}>{item.likes}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
-          <Ionicons name="chatbubble-outline" size={20} color="#8e8e93" />
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={() => Alert.alert('Comments', `View and add comments for this post. (${item.comments} comments)`, [{ text: 'OK' }])}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="chatbubble-outline" size={18} color="#64748B" />
           <Text style={styles.actionText}>{item.comments}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton}>
-          <Ionicons name="share-outline" size={20} color="#8e8e93" />
+        <TouchableOpacity
+          style={styles.actionButton}
+          onPress={async () => {
+            try {
+              await Share.share({
+                message: item.content || `Check out this trade from RichesReach${item.tradeData ? `: ${item.tradeData.side} ${item.tradeData.quantity} ${item.tradeData.symbol} @ $${item.tradeData.price}` : ''}`,
+                title: 'RichesReach',
+              });
+            } catch {
+              Alert.alert('Share', 'Sharing is not available.');
+            }
+          }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="share-outline" size={18} color="#64748B" />
           <Text style={styles.actionText}>{item.shares}</Text>
         </TouchableOpacity>
       </View>
@@ -679,14 +708,19 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
     <TouchableOpacity
       style={styles.traderCard}
       onPress={() => onTraderSelect?.(item)}
+      activeOpacity={0.85}
     >
       <View style={styles.traderHeader}>
-        <Image source={{ uri: item.avatar }} style={styles.traderAvatar} />
+        <View style={styles.traderAvatarWrap}>
+          <Image source={{ uri: item.avatar }} style={styles.traderAvatar} />
+          {item.verified && (
+            <View style={styles.traderVerifiedDot}>
+              <Ionicons name="checkmark" size={8} color="#FFFFFF" />
+            </View>
+          )}
+        </View>
         <View style={styles.traderInfo}>
-          <View style={styles.traderNameRow}>
-            <Text style={styles.traderName}>{item.username}</Text>
-            {item.verified && <Ionicons name="checkmark-circle" size={16} color="#007bff" />}
-          </View>
+          <Text style={styles.traderName}>{item.username}</Text>
           <Text style={styles.traderFollowers}>
             {item.followerCount.toLocaleString()} followers
           </Text>
@@ -694,29 +728,33 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
         <TouchableOpacity
           style={styles.followButton}
           onPress={() => handleFollowTrader(item.id)}
+          activeOpacity={0.85}
         >
+          <Ionicons name="person-add-outline" size={14} color="#FFFFFF" />
           <Text style={styles.followButtonText}>Follow</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.traderPerformance}>
         <View style={styles.traderStat}>
-          <Text style={styles.traderStatLabel}>Total Return</Text>
+          <Text style={styles.traderStatLabel}>Return</Text>
           <Text style={[
             styles.traderStatValue,
             { color: getPerformanceColor(item.performance.totalReturn) }
           ]}>
-            {item.performance.totalReturn.toFixed(1)}%
+            {item.performance.totalReturn > 0 ? '+' : ''}{item.performance.totalReturn.toFixed(1)}%
           </Text>
         </View>
+        <View style={styles.traderStatDivider} />
         <View style={styles.traderStat}>
           <Text style={styles.traderStatLabel}>Win Rate</Text>
           <Text style={styles.traderStatValue}>
             {item.performance.winRate.toFixed(1)}%
           </Text>
         </View>
+        <View style={styles.traderStatDivider} />
         <View style={styles.traderStat}>
-          <Text style={styles.traderStatLabel}>Sharpe Ratio</Text>
+          <Text style={styles.traderStatLabel}>Sharpe</Text>
           <Text style={styles.traderStatValue}>
             {item.performance.sharpeRatio.toFixed(2)}
           </Text>
@@ -728,17 +766,19 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
         {item.recentTrades.slice(0, 3).map((trade, index) => (
           <View key={index} style={styles.recentTrade}>
             <Text style={styles.recentTradeSymbol}>{trade.symbol}</Text>
-            <Text style={[
-              styles.recentTradeSide,
-              { color: trade.side === 'BUY' ? '#00ff88' : '#ff4444' }
-            ]}>
-              {trade.side}
-            </Text>
+            <View style={[styles.recentTradeSidePill, { backgroundColor: trade.side === 'BUY' ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)' }]}>
+              <Text style={[
+                styles.recentTradeSide,
+                { color: trade.side === 'BUY' ? '#10B981' : '#EF4444' }
+              ]}>
+                {trade.side}
+              </Text>
+            </View>
             <Text style={[
               styles.recentTradePnl,
               { color: getPerformanceColor(trade.pnl) }
             ]}>
-              ${trade.pnl.toFixed(2)}
+              {trade.pnl >= 0 ? '+' : ''}${trade.pnl.toFixed(2)}
             </Text>
           </View>
         ))}
@@ -889,44 +929,65 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Social Trading</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <TouchableOpacity style={styles.headerButton}>
-            <Ionicons name="search-outline" size={24} color="#1a1a1a" />
+      <LinearGradient
+        colors={['#0F172A', '#1E293B', '#1E3A5F']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
+        <View style={styles.headerContent}>
+          <View style={styles.headerLeft}>
+            <View style={styles.headerIconWrap}>
+              <Ionicons name="people" size={20} color="#818CF8" />
+            </View>
+            <View>
+              <Text style={styles.headerTitle}>Social Trading</Text>
+              <Text style={styles.headerSubtitle}>Connect · Copy · Profit</Text>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={styles.headerButton}
+            onPress={() => setActiveTab('traders')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="search-outline" size={22} color="#94A3B8" />
           </TouchableOpacity>
         </View>
-      </View>
+      </LinearGradient>
 
       {/* Tab Navigation */}
       <View style={styles.tabContainer}>
         {[
-          { key: 'feed', label: 'Feed', icon: 'home-outline' },
-          { key: 'traders', label: 'Top Traders', icon: 'trophy-outline' },
-          { key: 'signals', label: 'Signals', icon: 'trending-up-outline' },
-          { key: 'news', label: 'News', icon: 'newspaper-outline' },
-        ].map((tab) => (
-          <TouchableOpacity
-            key={tab.key}
-            style={[
-              styles.tabButton,
-              activeTab === tab.key && styles.activeTabButton,
-            ]}
-            onPress={() => setActiveTab(tab.key as any)}
-          >
-            <Ionicons
-              name={tab.icon as any}
-              size={20}
-              color={activeTab === tab.key ? '#007AFF' : '#8e8e93'}
-            />
-            <Text style={[
-              styles.tabText,
-              activeTab === tab.key && styles.activeTabText,
-            ]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+          { key: 'feed', label: 'Feed', icon: 'home-outline', activeIcon: 'home' },
+          { key: 'traders', label: 'Traders', icon: 'trophy-outline', activeIcon: 'trophy' },
+          { key: 'signals', label: 'Signals', icon: 'trending-up-outline', activeIcon: 'trending-up' },
+          { key: 'news', label: 'News', icon: 'newspaper-outline', activeIcon: 'newspaper' },
+        ].map((tab) => {
+          const isActive = activeTab === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={[
+                styles.tabButton,
+                isActive && styles.activeTabButton,
+              ]}
+              onPress={() => setActiveTab(tab.key as any)}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={(isActive ? tab.activeIcon : tab.icon) as any}
+                size={18}
+                color={isActive ? '#FFFFFF' : '#64748B'}
+              />
+              <Text style={[
+                styles.tabText,
+                isActive && styles.activeTabText,
+              ]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {/* Tab Content */}
@@ -941,97 +1002,141 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#F8FAFC',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#fff',
+    backgroundColor: '#F8FAFC',
   },
   loadingText: {
-    color: '#1a1a1a',
-    marginTop: 10,
+    color: '#0F172A',
+    marginTop: 12,
     fontSize: 16,
+    fontWeight: '600',
   },
+
+  /* ============ HEADER ============ */
   header: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 18,
+  },
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: '#f8f9fa',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e5ea',
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(129,140,248,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(129,140,248,0.25)',
   },
   headerTitle: {
     fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+    fontWeight: '900',
+    color: '#F1F5F9',
+    letterSpacing: -0.3,
+  },
+  headerSubtitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#94A3B8',
+    marginTop: 2,
   },
   headerButton: {
-    padding: 5,
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
   },
+
+  /* ============ TABS ============ */
   tabContainer: {
     flexDirection: 'row',
-    backgroundColor: '#f8f9fa',
-    paddingHorizontal: 20,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e5ea',
+    borderBottomColor: 'rgba(148,163,184,0.15)',
   },
   tabButton: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 15,
-    marginHorizontal: 5,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'transparent',
+    gap: 6,
   },
   activeTabButton: {
-    borderBottomWidth: 2,
-    borderBottomColor: '#007AFF',
+    backgroundColor: '#6366F1',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
   },
   tabText: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#8e8e93',
-    fontWeight: '500',
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '700',
   },
   activeTabText: {
-    color: '#007AFF',
-    fontWeight: 'bold',
+    color: '#FFFFFF',
+    fontWeight: '800',
   },
+
+  /* ============ CONTENT ============ */
   content: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#F8FAFC',
   },
+
+  /* ============ POST CARD ============ */
   postCard: {
-    backgroundColor: '#fff',
-    marginHorizontal: 20,
-    marginVertical: 10,
-    borderRadius: 12,
-    padding: 15,
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginVertical: 6,
+    borderRadius: 20,
+    padding: 16,
     borderWidth: 1,
-    borderColor: '#e5e5ea',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    borderColor: 'rgba(148,163,184,0.15)',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
   },
   postHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
+    gap: 10,
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginRight: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: 'rgba(99,102,241,0.15)',
   },
   userInfo: {
     flex: 1,
@@ -1039,34 +1144,54 @@ const styles = StyleSheet.create({
   usernameRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
   },
   username: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginRight: 5,
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  verifiedBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(99,102,241,0.10)',
   },
   userStats: {
     fontSize: 12,
-    color: '#8e8e93',
+    color: '#94A3B8',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  timestampPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
   },
   timestamp: {
-    fontSize: 12,
-    color: '#8e8e93',
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '700',
   },
   postContent: {
-    fontSize: 16,
-    color: '#1a1a1a',
+    fontSize: 15,
+    color: '#0F172A',
     lineHeight: 22,
-    marginBottom: 15,
+    marginBottom: 12,
+    fontWeight: '500',
   },
+
+  /* TRADE CARD */
   tradeCard: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#e5e5ea',
+    borderColor: 'rgba(148,163,184,0.15)',
   },
   tradeHeader: {
     flexDirection: 'row',
@@ -1074,20 +1199,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 8,
   },
+  tradeSymbolWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   tradeSymbol: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: -0.2,
   },
   tradeSide: {
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 4,
+    borderRadius: 8,
   },
   tradeSideText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#000',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   tradeDetails: {
     flexDirection: 'row',
@@ -1095,132 +1226,182 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   tradeDetail: {
-    fontSize: 14,
-    color: '#ccc',
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '600',
+    marginBottom: 10,
   },
   tradePnl: {
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '900',
   },
   copyButton: {
-    backgroundColor: '#007bff',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
+    backgroundColor: '#6366F1',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 12,
     alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
   },
   copyButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
+
+  /* PERFORMANCE */
   performanceCard: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
     padding: 12,
-    marginBottom: 10,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#e5e5ea',
+    borderColor: 'rgba(148,163,184,0.12)',
   },
   performanceTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
     marginBottom: 8,
   },
   performanceStats: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-around',
   },
   performanceStat: {
     alignItems: 'center',
+    flex: 1,
+  },
+  performanceDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: 'rgba(148,163,184,0.20)',
   },
   performanceLabel: {
-    fontSize: 12,
-    color: '#8e8e93',
+    fontSize: 10,
+    color: '#94A3B8',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
     marginBottom: 4,
   },
   performanceValue: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+    fontWeight: '900',
+    color: '#0F172A',
   },
+
+  /* POST ACTIONS */
   postActions: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    paddingTop: 10,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#e5e5ea',
+    borderTopColor: 'rgba(148,163,184,0.12)',
   },
   actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    gap: 6,
   },
   actionText: {
-    marginLeft: 5,
-    fontSize: 14,
-    color: '#8e8e93',
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '700',
   },
+
+  /* ============ TRADERS ============ */
   tradersContainer: {
     flex: 1,
   },
   periodSelector: {
     flexDirection: 'row',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e5ea',
+    borderBottomColor: 'rgba(148,163,184,0.12)',
   },
   periodButton: {
-    paddingHorizontal: 15,
+    paddingHorizontal: 18,
     paddingVertical: 8,
-    marginRight: 10,
-    borderRadius: 20,
-    backgroundColor: '#e5e5ea',
+    borderRadius: 10,
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
-    borderColor: '#d1d1d6',
+    borderColor: 'rgba(148,163,184,0.20)',
   },
   activePeriodButton: {
-    backgroundColor: '#007bff',
+    backgroundColor: '#6366F1',
+    borderColor: '#6366F1',
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
   periodButtonText: {
-    fontSize: 14,
-    color: '#1a1a1a',
-    fontWeight: '500',
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '700',
   },
   activePeriodButtonText: {
-    fontWeight: 'bold',
+    color: '#FFFFFF',
+    fontWeight: '800',
   },
   traderCard: {
-    backgroundColor: '#fff',
-    marginHorizontal: 20,
-    marginVertical: 10,
-    borderRadius: 12,
-    padding: 15,
+    backgroundColor: '#FFFFFF',
+    marginHorizontal: 16,
+    marginVertical: 6,
+    borderRadius: 20,
+    padding: 16,
     borderWidth: 1,
-    borderColor: '#e5e5ea',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    borderColor: 'rgba(148,163,184,0.15)',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
   },
   traderHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 14,
+    gap: 12,
+  },
+  traderAvatarWrap: {
+    position: 'relative',
   },
   traderAvatar: {
     width: 50,
     height: 50,
-    borderRadius: 25,
-    marginRight: 15,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: 'rgba(99,102,241,0.15)',
+  },
+  traderVerifiedDot: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#6366F1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
   traderInfo: {
     flex: 1,
@@ -1230,102 +1411,132 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   traderName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginRight: 5,
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
   },
   traderFollowers: {
-    fontSize: 14,
-    color: '#8e8e93',
+    fontSize: 13,
+    color: '#94A3B8',
+    fontWeight: '600',
+    marginTop: 2,
   },
   followButton: {
-    backgroundColor: '#007bff',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 20,
+    backgroundColor: '#6366F1',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: '#6366F1',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
   },
   followButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
   traderPerformance: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-around',
-    marginBottom: 15,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e5ea',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e5ea',
+    marginBottom: 14,
+    paddingVertical: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.12)',
   },
   traderStat: {
     alignItems: 'center',
+    flex: 1,
+  },
+  traderStatDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: 'rgba(148,163,184,0.20)',
   },
   traderStatLabel: {
-    fontSize: 12,
-    color: '#8e8e93',
+    fontSize: 10,
+    color: '#94A3B8',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
     marginBottom: 4,
   },
   traderStatValue: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '900',
+    color: '#0F172A',
   },
   recentTrades: {
-    marginTop: 10,
+    marginTop: 4,
   },
   recentTradesTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
     marginBottom: 8,
   },
   recentTrade: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 5,
+    paddingVertical: 6,
   },
   recentTradeSymbol: {
     fontSize: 14,
-    color: '#1a1a1a',
-    fontWeight: '500',
+    color: '#0F172A',
+    fontWeight: '700',
+    flex: 1,
+  },
+  recentTradeSidePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginHorizontal: 8,
   },
   recentTradeSide: {
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   recentTradePnl: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '800',
+    minWidth: 70,
+    textAlign: 'right',
   },
+
+  /* ============ SIGNALS ============ */
   signalsContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 8,
   },
   comingSoon: {
-    fontSize: 18,
-    color: '#8e8e93',
+    fontSize: 16,
+    color: '#94A3B8',
     fontStyle: 'italic',
   },
-  // Signal styles
   signalCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#e5e5ea',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    borderColor: 'rgba(148,163,184,0.15)',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
   },
   signalHeader: {
     flexDirection: 'row',
@@ -1336,94 +1547,115 @@ const styles = StyleSheet.create({
   signalSymbol: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
   signalSymbolText: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
-    marginRight: 8,
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: -0.2,
   },
   signalType: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    paddingHorizontal: 8,
+    fontSize: 11,
+    fontWeight: '800',
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 4,
+    borderRadius: 8,
+    overflow: 'hidden',
+    letterSpacing: 0.3,
   },
   longSignal: {
-    backgroundColor: '#00ff88',
-    color: '#000',
+    backgroundColor: 'rgba(16,185,129,0.15)',
+    color: '#10B981',
   },
   shortSignal: {
-    backgroundColor: '#ff4444',
-    color: '#fff',
+    backgroundColor: 'rgba(239,68,68,0.15)',
+    color: '#EF4444',
   },
   signalScore: {
     alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: 'rgba(16,185,129,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.15)',
   },
   signalScoreText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#34C759',
+    fontWeight: '900',
+    color: '#10B981',
   },
   signalScoreLabel: {
-    fontSize: 12,
-    color: '#8e8e93',
+    fontSize: 9,
+    color: '#10B981',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
   },
   signalPrices: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 12,
-    paddingVertical: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#e5e5ea',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e5e5ea',
+    paddingVertical: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    paddingHorizontal: 8,
   },
   priceItem: {
     alignItems: 'center',
     flex: 1,
   },
   priceLabel: {
-    fontSize: 12,
-    color: '#8e8e93',
+    fontSize: 10,
+    color: '#94A3B8',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
     marginBottom: 4,
   },
   priceValue: {
     fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1a1a1a',
+    fontWeight: '800',
+    color: '#0F172A',
   },
   signalReasoning: {
     fontSize: 14,
-    color: '#1a1a1a',
+    color: '#334155',
     marginBottom: 12,
     lineHeight: 20,
+    fontWeight: '500',
   },
   hftBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#34C759',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    backgroundColor: 'rgba(16,185,129,0.12)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
     alignSelf: 'flex-start',
     marginBottom: 12,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.20)',
   },
   hftText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#000',
-    marginLeft: 4,
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#10B981',
   },
   signalFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(148,163,184,0.12)',
   },
   signalTimeframe: {
     fontSize: 12,
-    color: '#8e8e93',
+    color: '#94A3B8',
+    fontWeight: '600',
   },
   signalActions: {
     flexDirection: 'row',
@@ -1432,24 +1664,27 @@ const styles = StyleSheet.create({
   likeButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    gap: 4,
   },
   likeCount: {
     fontSize: 12,
-    color: '#8e8e93',
-    marginLeft: 4,
+    color: '#64748B',
+    fontWeight: '700',
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: 48,
   },
   emptyText: {
     fontSize: 16,
-    color: '#8e8e93',
-    fontStyle: 'italic',
+    color: '#94A3B8',
+    fontWeight: '600',
   },
 });
 

@@ -84,6 +84,25 @@ numberOfLines={1}
 News
 </Text>
 </TouchableOpacity>
+<TouchableOpacity
+style={[styles.tab, feedType === 'social' && styles.activeTab]}
+onPress={() => onFeedTypeChange('social')}
+>
+<Icon 
+name="message-circle"
+size={18} 
+color={feedType === 'social' ? '#34C759' : '#8E8E93'} 
+/>
+<Text 
+style={[
+styles.tabLabel,
+feedType === 'social' && styles.activeTabLabel
+]}
+numberOfLines={1}
+>
+Social
+</Text>
+</TouchableOpacity>
 </View>
 );
 };

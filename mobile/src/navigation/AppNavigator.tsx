@@ -406,9 +406,9 @@ function LearnStack() {
 }
 
 function CommunityStack() {
-  // Use the SocialTrading screen with video news built-in; default to News tab
+  // Use the SocialTrading screen with video news built-in; default to Feed tab
   const CommunityMain = () => (
-    <SocialTrading userId={'me'} initialTab={'news'} />
+    <SocialTrading userId={'me'} initialTab={'feed'} />
   );
   const StackNavigator = Stack.Navigator as any;
   return (

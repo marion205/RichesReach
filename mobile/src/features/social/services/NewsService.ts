@@ -26,7 +26,7 @@ class NewsService {
   private baseUrl: string = 'https://newsapi.org/v2';
 
   constructor() {
-    this.apiKey = process.env.EXPO_PUBLIC_NEWS_API_KEY || '';
+    this.apiKey = process.env.EXPO_PUBLIC_NEWS_API_KEY || '94a335c7316145f79840edd62f77e11e';
     if (!this.apiKey) {
       logger.warn('News API key missing. Set EXPO_PUBLIC_NEWS_API_KEY to enable live news.');
     }
@@ -155,8 +155,8 @@ class NewsService {
       category: this.categorizeNews(article?.title ?? '', article?.description ?? ''),
       stockSymbol: this.extractStockSymbol(article?.title ?? ''),
       stockChange: this.generateMockStockChange(),
-      hasVideo: Math.random() > 0.7, // 30% chance of having video
-      videoUrl: Math.random() > 0.7 ? this.getMockVideoUrl() : undefined,
+      hasVideo: false, // No video until we have real news video sources (API doesn't provide video URLs)
+      videoUrl: undefined,
       thumbnailUrl: article?.urlToImage || this.getDefaultThumbnail(),
       content: (article?.description || article?.content) ?? '',
       readTime: this.calculateReadTime(article?.content ?? article?.description ?? ''),
@@ -209,14 +209,13 @@ class NewsService {
     return Math.random() * 10 - 5; // Random change between -5% and +5%
   }
 
+  /** Direct-playable HTTPS MP4 URLs (H.264/AAC). sample-videos.com often fails (redirects, no range). */
   private getMockVideoUrl(): string {
     const videos = [
-      'https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_1mb.mp4',
-      'https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_2mb.mp4',
-      'https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_5mb.mp4',
-      'https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_10mb.mp4',
-      'https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_20mb.mp4',
-      'https://sample-videos.com/zip/10/mp4/SampleVideo_1280x720_30mb.mp4',
+      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+      'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+      'https://d23dyxeqlo5psv.cloudfront.net/big_buck_bunny.mp4',
     ];
     return videos[Math.floor(Math.random() * videos.length)];
   }

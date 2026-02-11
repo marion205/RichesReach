@@ -866,6 +866,9 @@ const renderContent = () => {
   if (feedType === 'news') {
     return <FinancialNews limit={15} />;
   }
+  if (feedType === 'social') {
+    return RedditList;
+  }
   return RedditList;
 };
 return (

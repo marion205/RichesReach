@@ -5,9 +5,9 @@
     "version": "1.0.2",
     "sdkVersion": "54.0.0",
     "extra": {
-      "sentryDsn": "https://986e30c1cf6c0e86b0c62f2b1d6b7bd8@o4510341346295808.ingest.us.sentry.io/4510341350359040",
-      "environment": "production",
-      "releaseVersion": "1.0.0"
+      "eas": {
+        "projectId": "48317b83-0094-4d6b-8315-c0c2f3a373fa"
+      }
     },
     "jsEngine": "hermes",
     "orientation": "portrait",
@@ -57,11 +57,6 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "extra": {
-      "eas": {
-        "projectId": "48317b83-0094-4d6b-8315-c0c2f3a373fa"
-      }
-    },
     "plugins": [
       "expo-dev-client",
       "expo-image-picker",
@@ -71,7 +66,8 @@
           "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone to record voice input for AI-powered financial assistance."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-video"
     ]
   }
 }

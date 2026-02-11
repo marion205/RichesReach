@@ -80,6 +80,7 @@
     "expo-sharing": "~14.0.8",
     "expo-speech": "~14.0.7",
     "expo-status-bar": "~3.0.8",
+    "expo-video": "~3.0.15",
     "expo-web-browser": "^15.0.8",
     "graphql": "^16.11.0",
     "lodash-es": "^4.17.21",
