@@ -247,7 +247,12 @@ class AnalyticsQuery(graphene.ObjectType):
         if not user or getattr(user, "is_anonymous", True):
             return []
         try:
-            portfolios_data = PortfolioService.get_user_portfolios(user)
+            from django.db.utils import OperationalError
+            try:
+                portfolios_data = PortfolioService.get_user_portfolios(user)
+            except OperationalError as e:
+                logger.warning("Portfolio / analytics unavailable (e.g. missing table): %s", e)
+                return []
             if not portfolios_data or not portfolios_data.get("portfolios"):
                 return []
             all_holdings = []

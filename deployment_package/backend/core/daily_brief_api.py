@@ -104,35 +104,60 @@ class ProgressResponse(BaseModel):
 
 # Helper function to get user from token
 async def get_user_from_token(request: Request) -> Optional[User]:
-    """Extract user from Authorization token"""
+    """Extract user from Authorization token (JWT or dev-token)."""
     if not DJANGO_AVAILABLE:
         return None
-    
+
     try:
         auth_header = request.headers.get("Authorization", "")
         if not auth_header:
             return None
-        
+
         token = None
         if auth_header.startswith("Token "):
             token = auth_header.replace("Token ", "")
         elif auth_header.startswith("Bearer "):
             token = auth_header.replace("Bearer ", "")
-        
+
         if not token:
             return None
-        
-        # Try to get user from token (adjust based on your auth system)
+
+        User = get_user_model()
+
+        # Dev tokens: use same logic as core.authentication.get_user_from_token
+        if token.startswith("dev-token-"):
+            user = await sync_to_async(User.objects.filter(email='demo@example.com').first)()
+            if not user:
+                user = await sync_to_async(User.objects.first)()
+            if user:
+                return user
+            # No users at all: get_or_create demo so daily brief works
+            user, _ = await sync_to_async(User.objects.get_or_create)(
+                email='demo@example.com',
+                defaults={'name': 'Demo User'}
+            )
+            user.set_password('demo123')
+            await sync_to_async(user.save)()
+            return user
+
+        # JWT: graphql_jwt
         try:
             from graphql_jwt.shortcuts import get_user_by_token
             user = await sync_to_async(get_user_by_token)(token)
             return user
         except Exception:
-            # Fallback: try to get demo user
-            User = get_user_model()
             user = await sync_to_async(User.objects.filter(email='demo@example.com').first)()
             if not user:
                 user = await sync_to_async(User.objects.first)()
+            if user:
+                return user
+            # Token present but invalid and no users: get_or_create demo for dev UX
+            user, _ = await sync_to_async(User.objects.get_or_create)(
+                email='demo@example.com',
+                defaults={'name': 'Demo User'}
+            )
+            user.set_password('demo123')
+            await sync_to_async(user.save)()
             return user
     except Exception as e:
         logger.error(f"Error getting user from token: {e}")

@@ -4,6 +4,7 @@ Provides REST endpoints for login/logout
 """
 import json
 import logging
+import os
 from django.http import JsonResponse
 from django.views import View
 from django.views.decorators.csrf import csrf_exempt
@@ -104,24 +105,23 @@ class LoginView(View):
                             }
                         )
                         if created:
-                            # Development fallback - use environment variable
-                            demo_password = os.getenv('DEV_DEMO_USER_PASSWORD', None)
-                            if not demo_password:
-                                import secrets
-                                demo_password = secrets.token_urlsafe(16)
-                                logger.warning("DEV_DEMO_USER_PASSWORD not set, generated random password")
+                            # Development: use env or fixed default so app can log in
+                            demo_password = os.getenv('DEV_DEMO_USER_PASSWORD', 'demo123')
                             user.set_password(demo_password)
                             user.save()
                             logger.info("Created demo user for development")
                         else:
-                            # Ensure password is set correctly (only in development)
-                            demo_password = os.getenv('DEV_DEMO_USER_PASSWORD', None)
-                            if demo_password and not user.check_password(demo_password):
+                            # Sync password: env var or default demo123 so app can log in
+                            demo_password = os.getenv('DEV_DEMO_USER_PASSWORD', 'demo123')
+                            if not user.check_password(demo_password):
                                 user.set_password(demo_password)
                                 user.save()
-                                logger.info("Reset demo user password")
-                        # In development, allow login with demo@example.com regardless of password
-                        logger.info("Using demo user for development (dev mode)")
+                                logger.info("Reset demo user password to dev default")
+                        # Accept request if password matches the demo user's current password
+                        if user.check_password(password):
+                            logger.info("Using demo user for development (dev mode)")
+                        else:
+                            user = None
                     else:
                         user = None
                 except Exception as e:

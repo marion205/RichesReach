@@ -126,6 +126,14 @@ except ImportError as e:
     DAWN_RITUAL_AVAILABLE = False
     logging.warning(f"Dawn Ritual API not available: {e}")
 
+# Import Daily Brief API
+try:
+    from core.daily_brief_api import router as daily_brief_router
+    DAILY_BRIEF_AVAILABLE = True
+except ImportError as e:
+    DAILY_BRIEF_AVAILABLE = False
+    logging.warning(f"Daily Brief API not available: {e}")
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
@@ -184,6 +192,10 @@ if AI_OPTIONS_AVAILABLE:
 # Include Dawn Ritual (Ritual Dawn) router
 if DAWN_RITUAL_AVAILABLE:
     app.include_router(dawn_ritual_router)
+
+# Include Daily Brief router (so /api/daily-brief/today is handled by FastAPI, not Django)
+if DAILY_BRIEF_AVAILABLE:
+    app.include_router(daily_brief_router)
 
 # Note: FastAPI routes (defined with @app.get/post/etc) are registered here
 # Django will be mounted later, after all FastAPI routes are defined
@@ -2185,44 +2197,47 @@ async def get_market_quotes(symbols: str = None):
         # Try to import market data service
         try:
             from core.market_data_api_service import MarketDataAPIService
-            market_data_service = MarketDataAPIService()
             MARKET_DATA_AVAILABLE = True
         except Exception as e:
             logger.warning(f"MarketDataAPIService not available: {e}")
             MARKET_DATA_AVAILABLE = False
-            market_data_service = None
         
         quotes = []
         
-        # If market data service is available, use it
-        if MARKET_DATA_AVAILABLE and market_data_service:
-            tasks = [market_data_service.get_stock_quote(symbol) for symbol in symbol_list]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            for symbol, result in zip(symbol_list, results):
-                if isinstance(result, Exception):
-                    logger.warning(f"Error fetching quote for {symbol}: {result}")
-                    quotes.append(_get_mock_quote(symbol))
-                    continue
-                
-                quote_data = result or {}
-                if quote_data:
-                    quotes.append({
-                        "symbol": symbol,
-                        "price": quote_data.get("price", 0.0),
-                        "change": quote_data.get("change", 0.0),
-                        "changePercent": quote_data.get("change_percent", 0.0),
-                        "volume": quote_data.get("volume", 0),
-                        "high": quote_data.get("high", 0.0),
-                        "low": quote_data.get("low", 0.0),
-                        "open": quote_data.get("open", 0.0),
-                        "previousClose": quote_data.get("previous_close", 0.0),
-                        "timestamp": quote_data.get("timestamp", ""),
-                    })
-                else:
-                    quotes.append(_get_mock_quote(symbol))
-            
-            logger.info(f"✅ [Quotes API] Returning {len(quotes)} quotes")
+        # If market data service is available, use it (as context manager so session is closed)
+        if MARKET_DATA_AVAILABLE:
+            try:
+                async with MarketDataAPIService() as market_data_service:
+                    tasks = [market_data_service.get_stock_quote(symbol) for symbol in symbol_list]
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+                    
+                    for symbol, result in zip(symbol_list, results):
+                        if isinstance(result, Exception):
+                            logger.warning(f"Error fetching quote for {symbol}: {result}")
+                            quotes.append(_get_mock_quote(symbol))
+                            continue
+                        
+                        quote_data = result or {}
+                        if quote_data:
+                            quotes.append({
+                                "symbol": symbol,
+                                "price": quote_data.get("price", 0.0),
+                                "change": quote_data.get("change", 0.0),
+                                "changePercent": quote_data.get("change_percent", 0.0),
+                                "volume": quote_data.get("volume", 0),
+                                "high": quote_data.get("high", 0.0),
+                                "low": quote_data.get("low", 0.0),
+                                "open": quote_data.get("open", 0.0),
+                                "previousClose": quote_data.get("previous_close", 0.0),
+                                "timestamp": quote_data.get("timestamp", ""),
+                            })
+                        else:
+                            quotes.append(_get_mock_quote(symbol))
+                    
+                    logger.info(f"✅ [Quotes API] Returning {len(quotes)} quotes")
+            except Exception as e:
+                logger.warning("⚠️ [Quotes API] MarketDataAPIService error, using mock: %s", e)
+                quotes = [_get_mock_quote(symbol) for symbol in symbol_list]
         else:
             # Fallback to mock data if service unavailable
             logger.warning("⚠️ [Quotes API] MarketDataAPIService unavailable, using mock data")

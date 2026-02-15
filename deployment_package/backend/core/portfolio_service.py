@@ -17,7 +17,7 @@ class PortfolioService:
         # Optimize: Use select_related to reduce database queries
         holdings = Portfolio.objects.filter(user=user).select_related('stock').only(
             'id', 'shares', 'average_price', 'current_price', 'notes', 'created_at', 'updated_at',
-            'stock__symbol', 'stock__name', 'stock__exchange'
+            'stock__symbol', 'stock__company_name'
         )
         # Group holdings by portfolio name (stored in notes)
         portfolios = {}
