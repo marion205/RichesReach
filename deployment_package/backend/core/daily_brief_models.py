@@ -265,3 +265,30 @@ class DailyBriefCompletion(models.Model):
     def __str__(self):
         return f"{self.user.email} - {self.brief.date} ({self.time_spent_seconds}s)"
 
+
+class RitualDawnCompletion(models.Model):
+    """Tracks Ritual Dawn completions: what the user committed to (for analytics and follow-through)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='ritual_dawn_completions')
+    date = models.DateField(default=timezone.now, db_index=True)
+
+    # What the user committed to (e.g. "review_aapl", "no_action", or action_label from the ritual)
+    action_taken = models.CharField(max_length=255, default='', blank=True)
+    # A/B: which greeting variant was shown (e.g. "morning_0", "streak_1") for completion-rate analysis
+    greeting_key = models.CharField(max_length=64, blank=True, default='')
+
+    completed_at = models.DateTimeField(auto_now_add=True)
+    followed_through_at = models.DateTimeField(null=True, blank=True, help_text="When user opened the target screen (e.g. StockDetail for committed symbol)")
+
+    class Meta:
+        db_table = 'ritual_dawn_completions'
+        unique_together = ['user', 'date']
+        ordering = ['-date']
+        indexes = [
+            models.Index(fields=['user', 'date']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.date} - {self.action_taken or 'no_action'}"
+

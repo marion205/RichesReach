@@ -1,58 +1,32 @@
 /**
- * Dawn Ritual Screen
- * Full-screen experience for the daily dawn ritual
+ * Dawn Ritual Screen (Ritual Dawn)
+ * Full-screen modal wrapper for the tactical morning check-in.
  */
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Modal, StyleSheet } from 'react-native';
+import React from 'react';
+import { Modal } from 'react-native';
 import { DawnRitual } from '../components/DawnRitual';
 
 interface DawnRitualScreenProps {
   visible: boolean;
-  onComplete?: (transactionsSynced: number) => void;
+  onComplete?: (result: { syncedTransactions: number; actionTaken: string }) => void;
   onClose?: () => void;
+  onNavigate?: (screen: string, params?: Record<string, unknown>) => void;
 }
 
 export const DawnRitualScreen: React.FC<DawnRitualScreenProps> = ({
   visible,
   onComplete,
   onClose,
+  onNavigate,
 }) => {
-  const [isComplete, setIsComplete] = useState(false);
-  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (closeTimeoutRef.current) {
-        clearTimeout(closeTimeoutRef.current);
-        closeTimeoutRef.current = null;
-      }
-    };
-  }, []);
-
-  const handleComplete = (transactionsSynced: number) => {
-    setIsComplete(true);
-    // Auto-close after 2 seconds
-    if (closeTimeoutRef.current) {
-      clearTimeout(closeTimeoutRef.current);
-    }
-    closeTimeoutRef.current = setTimeout(() => {
-      if (onComplete) {
-        onComplete(transactionsSynced);
-      }
-      if (onClose) {
-        onClose();
-      }
-      setIsComplete(false);
-      closeTimeoutRef.current = null;
-    }, 2000);
+  const handleComplete = (result: { syncedTransactions: number; actionTaken: string }) => {
+    onComplete?.(result);
+    onClose?.();
   };
 
   const handleSkip = () => {
-    if (onClose) {
-      onClose();
-    }
+    onClose?.();
   };
 
   return (
@@ -66,8 +40,8 @@ export const DawnRitualScreen: React.FC<DawnRitualScreenProps> = ({
         visible={visible}
         onComplete={handleComplete}
         onSkip={handleSkip}
+        onNavigate={onNavigate}
       />
     </Modal>
   );
 };
-

@@ -38,6 +38,7 @@ import SmartMoneyFlowChart from '../../../components/charts/SmartMoneyFlowChart'
 import { useQuery, gql } from '@apollo/client';
 import { ChartAnnotations } from '../../../components/common/ChartAnnotations';
 import RustSentimentWidget from '../../../components/rust/RustSentimentWidget';
+import { dawnRitualService } from '../../rituals/services/DawnRitualService';
 
 const { width } = Dimensions.get('window');
 
@@ -1379,6 +1380,13 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
 
   useEffect(() => {
     fetchStockData();
+  }, [symbol]);
+
+  // Ritual Dawn follow-through: if user committed "I'll review AAPL today", record that they opened StockDetail
+  useEffect(() => {
+    if (symbol?.trim()) {
+      dawnRitualService.recordFollowThrough('StockDetail', { symbol: symbol.trim() });
+    }
   }, [symbol]);
 
   useEffect(() => {

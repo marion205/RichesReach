@@ -118,6 +118,14 @@ except ImportError as e:
     AI_OPTIONS_AVAILABLE = False
     logging.warning(f"AI Options API not available: {e}")
 
+# Import Dawn Ritual (Ritual Dawn) API
+try:
+    from core.dawn_ritual_api import router as dawn_ritual_router
+    DAWN_RITUAL_AVAILABLE = True
+except ImportError as e:
+    DAWN_RITUAL_AVAILABLE = False
+    logging.warning(f"Dawn Ritual API not available: {e}")
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
@@ -172,6 +180,10 @@ app.add_middleware(RequestLoggingMiddleware)
 # Include AI Options router
 if AI_OPTIONS_AVAILABLE:
     app.include_router(ai_options_router)
+
+# Include Dawn Ritual (Ritual Dawn) router
+if DAWN_RITUAL_AVAILABLE:
+    app.include_router(dawn_ritual_router)
 
 # Note: FastAPI routes (defined with @app.get/post/etc) are registered here
 # Django will be mounted later, after all FastAPI routes are defined

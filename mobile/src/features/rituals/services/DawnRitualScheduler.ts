@@ -47,8 +47,8 @@ class DawnRitualScheduler {
       await Notifications.scheduleNotificationAsync({
         identifier: DAWN_RITUAL_NOTIFICATION_ID,
         content: {
-          title: '🌅 Dawn Ritual',
-          body: 'Time to sync your transactions and awaken your wealth!',
+          title: 'Ritual Dawn',
+          body: 'Your portfolio moved overnight. 60 seconds to clarity.',
           data: {
             type: 'dawn_ritual',
             action: 'open_ritual',

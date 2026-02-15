@@ -126,3 +126,6 @@ free_mac_space.sh
 
 # iOS backup directory
 mobile/ios-backup/
+
+# Expo local state
+mobile/.expo/

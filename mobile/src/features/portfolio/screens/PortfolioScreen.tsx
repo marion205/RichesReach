@@ -687,12 +687,16 @@ return (
     {/* Dawn Ritual Modal */}
     <DawnRitualScreen
       visible={showDawnRitual}
-      onComplete={async (transactionsSynced) => {
+      onComplete={async (result) => {
         const { dawnRitualScheduler } = await import('../../rituals/services/DawnRitualScheduler');
         await dawnRitualScheduler.markPerformed();
         setShowDawnRitual(false);
       }}
       onClose={() => setShowDawnRitual(false)}
+      onNavigate={(screen, params) => {
+        setShowDawnRitual(false);
+        go(screen, params);
+      }}
     />
     {/* Credit Quest Modal */}
     {showCreditQuest && (
@@ -937,9 +941,9 @@ Advanced options strategies and market sentiment
           <View style={styles.actionContent}>
             <Icon name="sunrise" size={24} color="#FF9500" />
             <View style={styles.actionText}>
-              <Text style={[styles.actionTitle, { color: '#FF9500' }]}>🌅 Dawn Ritual</Text>
+              <Text style={[styles.actionTitle, { color: '#FF9500' }]}>Ritual Dawn</Text>
               <Text style={styles.actionDescription}>
-                Start your daily wealth awakening ritual (30s)
+                Your tactical morning check-in
               </Text>
             </View>
             <Icon name="chevron-right" size={20} color="#8E8E93" />
