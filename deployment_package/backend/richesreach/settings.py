@@ -465,6 +465,19 @@ CELERY_BEAT_SCHEDULE = {
 'task': 'core.celery_tasks.train_hmm_regime_task',
 'schedule': crontab(day_of_month=1, hour=2, minute=0),  # Monthly 1st at 2 AM
 },
+# --- Trust-First DeFi: outcome tracking & portfolio drawdown ---
+'check-repair-outcomes': {
+'task': 'core.celery_tasks.check_repair_outcomes_task',
+'schedule': 43200.0,  # Every 12h - post-mortem on executed repairs 7+ days old
+},
+'check-portfolio-drawdowns': {
+'task': 'core.celery_tasks.check_portfolio_drawdowns_task',
+'schedule': 900.0,  # Every 15 min - portfolio-level stop-loss & crisis de-risk
+},
+'evaluate-autopilot-repairs': {
+'task': 'core.celery_tasks.evaluate_autopilot_repairs',
+'schedule': 600.0,  # Every 10 min - pending repairs, alerts, AUTO_BOUNDED prep
+},
 }
 # Channels Configuration
 CHANNEL_LAYERS = {

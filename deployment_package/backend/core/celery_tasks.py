@@ -557,3 +557,40 @@ def evaluate_autopilot_repairs(self):
         if CELERY_AVAILABLE and self.request.retries < self.max_retries:
             raise self.retry(exc=e, countdown=60 * (2 ** self.request.retries))
         return {'status': 'failed', 'error': str(e)}
+
+
+# ============================================================
+# Trust-First: Repair outcome tracking & portfolio drawdown
+# ============================================================
+
+@shared_task
+def check_repair_outcomes_task():
+    """
+    Periodic task (every 12h): Evaluate executed repairs that are 7+ days old.
+    Fills actual_apy_delta, outcome_status, outcome_report (post-mortem).
+    """
+    try:
+        from .repair_outcome_tracker import RepairOutcomeTracker
+        tracker = RepairOutcomeTracker()
+        result = tracker.check_pending_outcomes()
+        logger.info(f"Repair outcome check: {result}")
+        return {'status': 'success', **result}
+    except Exception as e:
+        logger.error(f"Error in repair outcome check: {e}", exc_info=True)
+        return {'status': 'failed', 'error': str(e)}
+
+
+@shared_task
+def check_portfolio_drawdowns_task():
+    """
+    Periodic task (e.g. every 15 min): Portfolio-level drawdown and crisis de-risk.
+    Triggers alerts and crisis derisk engine when max_drawdown_limit is breached.
+    """
+    try:
+        from .portfolio_risk_monitor import check_all_portfolio_drawdowns
+        result = check_all_portfolio_drawdowns()
+        logger.info(f"Portfolio drawdown check: {result}")
+        return {'status': 'success', **result}
+    except Exception as e:
+        logger.error(f"Error in portfolio drawdown check: {e}", exc_info=True)
+        return {'status': 'failed', 'error': str(e)}

@@ -17,6 +17,7 @@ Part of Phase 4: Mainnet Migration
 import logging
 from decimal import Decimal
 from datetime import timedelta
+from typing import Optional
 from django.utils import timezone
 from django.db.models import Sum
 
@@ -297,6 +298,22 @@ def validate_transaction(
                 return ValidationResult(False, f"Risk Guardian: {risk_audit['explanation']}")
             if risk_audit['recommendation'] == 'REBALANCE':
                 warnings.append(f"Risk Guardian: {risk_audit['explanation']}")
+
+    # 8c. Oracle risk check (stablecoin peg + oracle freshness)
+    if pool:
+        oracle_check = _check_oracle_risk(pool, chain_id)
+        if not oracle_check.is_valid:
+            return oracle_check
+        if oracle_check.warnings:
+            warnings.extend(oracle_check.warnings)
+
+    # 8d. Slippage estimate check
+    if pool and tx_type in ('deposit', 'withdraw'):
+        slippage_check = _check_slippage_estimate(pool, float(amount))
+        if not slippage_check.is_valid:
+            return slippage_check
+        if slippage_check.warnings:
+            warnings.extend(slippage_check.warnings)
 
     # 9. Health factor check for borrows
     if tx_type == 'borrow':
@@ -885,6 +902,103 @@ def _update_position(user, pool, wallet_address: str, action: str, amount: Decim
 
 
 # ---- Admin / Diagnostic Helpers ----
+
+# ---- Oracle Risk Check (Gap 3) ----
+
+def _check_oracle_risk(pool, chain_id: int) -> ValidationResult:
+    """
+    Check oracle health: stablecoin peg integrity and oracle data freshness.
+    Part of Trust-First Framework: Gap 3.
+    """
+    try:
+        from .oracle_risk_service import get_oracle_risk_service
+
+        service = get_oracle_risk_service()
+        assessment = service.assess_pool_oracle_risk(pool, chain_id)
+
+        if not assessment['is_valid']:
+            return ValidationResult(False, assessment['reason'])
+
+        return ValidationResult(True, warnings=assessment.get('warnings', []))
+
+    except ImportError:
+        logger.debug("Oracle risk service not available, skipping check")
+        return ValidationResult(True)
+    except Exception as e:
+        logger.warning(f"Oracle risk check error (non-blocking): {e}")
+        return ValidationResult(True, warnings=['Could not verify oracle health.'])
+
+
+# ---- Slippage Estimate Check (Gap 5) ----
+
+def _check_slippage_estimate(pool, amount_usd: float) -> ValidationResult:
+    """
+    Estimate slippage for a trade based on pool TVL and type.
+    Blocks trades that would exceed the policy slippage tolerance.
+    Part of Trust-First Framework: Gap 5.
+    """
+    try:
+        # Lending and staking pools have negligible slippage
+        if hasattr(pool, 'pool_type') and pool.pool_type in ('lending', 'staking', 'vault'):
+            return ValidationResult(True)
+
+        # Get latest TVL for the pool
+        latest_tvl = _get_pool_latest_tvl(pool)
+        if not latest_tvl or latest_tvl <= 0:
+            return ValidationResult(True, warnings=[
+                'Could not estimate slippage — TVL data unavailable.'
+            ])
+
+        # Estimate price impact for AMM/LP pools
+        # Simple constant-product model: impact ≈ amount / (2 * TVL)
+        estimated_slippage = amount_usd / (2.0 * latest_tvl)
+
+        # Get policy threshold
+        max_slippage = _get_slippage_tolerance()
+
+        if estimated_slippage > max_slippage:
+            return ValidationResult(
+                False,
+                f'Estimated slippage ({estimated_slippage:.2%}) exceeds '
+                f'your max tolerance ({max_slippage:.2%}). '
+                f'Consider reducing trade size or waiting for deeper liquidity.'
+            )
+
+        if estimated_slippage > max_slippage * 0.7:
+            return ValidationResult(True, warnings=[
+                f'Elevated slippage estimate ({estimated_slippage:.2%}). '
+                f'Trade size is large relative to pool liquidity.'
+            ])
+
+        return ValidationResult(True)
+
+    except Exception as e:
+        logger.warning(f"Slippage estimate error (non-blocking): {e}")
+        return ValidationResult(True)
+
+
+def _get_pool_latest_tvl(pool) -> Optional[float]:
+    """Get the latest TVL for a pool from yield snapshots."""
+    try:
+        latest = pool.yield_snapshots.order_by('-timestamp').values_list(
+            'tvl_usd', flat=True
+        ).first()
+        return float(latest) if latest is not None else None
+    except Exception:
+        return None
+
+
+def _get_slippage_tolerance() -> float:
+    """Get max slippage tolerance from policy config."""
+    try:
+        from .policy_engine import get_policy
+        policy = get_policy()
+        return float(
+            policy.get('risk_thresholds', {}).get('max_slippage_tolerance', 0.005)
+        )
+    except Exception:
+        return 0.005  # Default 0.5%
+
 
 def get_validation_status() -> dict:
     """

@@ -21,6 +21,7 @@ from .autopilot_types import (
     RepairOptionType,
     RepairOptionVariant,
     LastMoveType,
+    CircuitBreakerStatusType,
 )
 
 logger = logging.getLogger(__name__)
@@ -837,7 +838,7 @@ class DefiQueries(graphene.ObjectType):
     def resolve_autopilot_status(self, info):
         from .autopilot_service import get_autopilot_status
         from .repair_relayer import is_relayer_configured
-        from .defi_circuit_breaker import is_relayer_paused
+        from .defi_circuit_breaker import is_relayer_paused, get_circuit_state
 
         status = get_autopilot_status(info.context.user)
         policy = status.get('policy') or {}
@@ -845,11 +846,21 @@ class DefiQueries(graphene.ObjectType):
         # Chains we support for relayer (Base, Arbitrum, etc.)
         _relayer_chains = (1, 137, 42161, 8453, 11155111)
         relayer_paused_chain_ids = [c for c in _relayer_chains if is_relayer_paused(c)] if is_relayer_configured() else []
+        cb_state = get_circuit_state()
+        circuit_breaker = CircuitBreakerStatusType(
+            state=cb_state.get('state', 'CLOSED'),
+            reason=cb_state.get('reason') or '',
+            triggered_at=cb_state.get('triggered_at'),
+            triggered_by=cb_state.get('triggered_by'),
+            chain_id=cb_state.get('chain_id'),
+            auto_resume_at=cb_state.get('auto_resume_at'),
+        )
         return AutopilotStatusType(
             enabled=bool(status.get('enabled')),
             last_evaluated_at=status.get('last_evaluated_at'),
             relayer_configured=is_relayer_configured(),
             relayer_paused_chain_ids=relayer_paused_chain_ids,
+            circuit_breaker=circuit_breaker,
             policy=AutopilotPolicyType(
                 target_apy=policy.get('target_apy'),
                 max_drawdown=policy.get('max_drawdown'),
@@ -897,6 +908,9 @@ class DefiQueries(graphene.ObjectType):
                         tvl_stability_check=(opt.get('proof') or {}).get('tvl_stability_check'),
                         policy_alignment=(opt.get('proof') or {}).get('policy_alignment'),
                         explanation=(opt.get('proof') or {}).get('explanation'),
+                        if_then=(opt.get('proof') or {}).get('if_then'),
+                        plain_summary=(opt.get('proof') or {}).get('plain_summary'),
+                        before_after=(opt.get('proof') or {}).get('before_after'),
                         policy_version=(opt.get('proof') or {}).get('policy_version'),
                         guardrails=(opt.get('proof') or {}).get('guardrails'),
                     ),
@@ -918,13 +932,16 @@ class DefiQueries(graphene.ObjectType):
                 proof=RepairProofType(
                     calmar_improvement=r['proof'].get('calmar_improvement'),
                     integrity_check=FinancialIntegrityType(
-                        altman_z_score=r['proof']['integrity_check'].get('altman_z_score'),
-                        beneish_m_score=r['proof']['integrity_check'].get('beneish_m_score'),
-                        is_erc4626_compliant=r['proof']['integrity_check'].get('is_erc4626_compliant'),
+                        altman_z_score=(r['proof'].get('integrity_check') or {}).get('altman_z_score'),
+                        beneish_m_score=(r['proof'].get('integrity_check') or {}).get('beneish_m_score'),
+                        is_erc4626_compliant=(r['proof'].get('integrity_check') or {}).get('is_erc4626_compliant'),
                     ),
                     tvl_stability_check=r['proof'].get('tvl_stability_check'),
                     policy_alignment=r['proof'].get('policy_alignment'),
                     explanation=r['proof'].get('explanation'),
+                    if_then=r['proof'].get('if_then'),
+                    plain_summary=r['proof'].get('plain_summary'),
+                    before_after=r['proof'].get('before_after'),
                     policy_version=r['proof'].get('policy_version'),
                     guardrails=r['proof'].get('guardrails'),
                 ),

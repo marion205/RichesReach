@@ -168,6 +168,17 @@ def trip_breaker(
     # Record in database for audit trail
     _record_event('TRIP', reason, triggered_by, chain_id)
 
+    # Trust-First Gap 4: Active de-risking — evaluate crisis response (reduce exposure)
+    try:
+        from .crisis_derisk_engine import CrisisDeriskEngine
+        engine = CrisisDeriskEngine()
+        engine.evaluate_crisis_response(
+            trigger_type=triggered_by,
+            chain_id=chain_id,
+        )
+    except Exception as e:
+        logger.warning("Crisis de-risk evaluation after trip failed (circuit still open): %s", e)
+
     return state
 
 

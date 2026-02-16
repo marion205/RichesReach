@@ -12,6 +12,7 @@ import {
   Platform,
   Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { gql, useQuery, useMutation, useLazyQuery } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,12 +22,21 @@ import logger from '../../../utils/logger';
 import { useWallet } from '../../../wallet/WalletProvider';
 import { useRoute } from '@react-navigation/native';
 
+const AUTO_SPEND_NOTICE_KEY = 'defi_autopilot_auto_spend_notice_seen';
+
 const AUTOPILOT_QUERY = gql`
   query AutopilotCommand {
     autopilotStatus {
       enabled
       relayerConfigured
       relayerPausedChainIds
+      circuitBreaker {
+        state
+        reason
+        triggeredAt
+        triggeredBy
+        autoResumeAt
+      }
       lastEvaluatedAt
       lastMove {
         id
@@ -60,6 +70,9 @@ const AUTOPILOT_QUERY = gql`
         proof {
           calmarImprovement
           explanation
+          ifThen
+          plainSummary
+          beforeAfter
           policyAlignment
         }
       }
@@ -68,6 +81,9 @@ const AUTOPILOT_QUERY = gql`
         tvlStabilityCheck
         policyAlignment
         explanation
+        ifThen
+        plainSummary
+        beforeAfter
         policyVersion
         guardrails
         integrityCheck {
@@ -364,6 +380,7 @@ export default function DeFiAutopilotScreen() {
   const [autonomyLevel, setAutonomyLevel] = useState('NOTIFY_ONLY');
   const [proofOpen, setProofOpen] = useState(false);
   const [activeProof, setActiveProof] = useState<any>(null);
+  const [autoSpendNoticeVisible, setAutoSpendNoticeVisible] = useState(false);
 
   useEffect(() => {
     if (status) setEnabled(!!status.enabled);
@@ -375,6 +392,28 @@ export default function DeFiAutopilotScreen() {
       setAutonomyLevel(policy.level || 'NOTIFY_ONLY');
     }
   }, [status, policy]);
+
+  // One-time AUTO_SPEND notice: show when user has AUTO_SPEND + spend permission and hasn't seen it
+  useEffect(() => {
+    if (!policy?.level || policy.level !== 'AUTO_SPEND' || !policy.spendPermissionEnabled) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const seen = await AsyncStorage.getItem(AUTO_SPEND_NOTICE_KEY);
+        if (!cancelled && !seen) setAutoSpendNoticeVisible(true);
+      } catch {
+        if (!cancelled) setAutoSpendNoticeVisible(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [policy?.level, policy?.spendPermissionEnabled]);
+
+  const dismissAutoSpendNotice = useCallback(async () => {
+    setAutoSpendNoticeVisible(false);
+    try {
+      await AsyncStorage.setItem(AUTO_SPEND_NOTICE_KEY, '1');
+    } catch {}
+  }, []);
 
   // Deep link from push: open proof for repairId when opened via "Tap to see the proof"
   const deepLinkRepairId = route.params?.repairId;
@@ -649,6 +688,28 @@ export default function DeFiAutopilotScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        {/* CRISIS BANNER: DeFi paused when circuit breaker is OPEN */}
+        {status?.circuitBreaker?.state === 'OPEN' ? (
+          <View style={styles.crisisBanner}>
+            <Icon name="alert-triangle" size={20} color="#FEF3C7" />
+            <View style={styles.crisisBannerText}>
+              <Text style={styles.crisisBannerTitle}>DeFi paused</Text>
+              <Text style={styles.crisisBannerReason}>
+                {status.circuitBreaker.reason || 'System maintenance'}
+              </Text>
+              {status.circuitBreaker.autoResumeAt ? (
+                <Text style={styles.crisisBannerHint}>
+                  May resume automatically. Check back later.
+                </Text>
+              ) : (
+                <Text style={styles.crisisBannerHint}>
+                  No new repairs until an admin resumes.
+                </Text>
+              )}
+            </View>
+          </View>
+        ) : null}
+
         {/* HERO HEADER */}
         <LinearGradient
           colors={['#0F172A', '#1E293B', '#1E3A5F']}
@@ -1229,12 +1290,48 @@ export default function DeFiAutopilotScreen() {
                   </>
                 ) : null}
 
-                {!!activeProof.explanation && (
+                {activeProof.beforeAfter?.current && activeProof.beforeAfter?.target ? (
+                  <>
+                    <View style={styles.kvDivider} />
+                    <View style={styles.explainBox}>
+                      <View style={[styles.explainAccent, { backgroundColor: '#6366F1' }]} />
+                      <View style={styles.explainContent}>
+                        <Text style={styles.explainLabel}>Before → After</Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
+                          <View>
+                            <Text style={[styles.explainText, { fontWeight: '600', marginBottom: 4 }]}>Current</Text>
+                            <Text style={styles.explainText}>Calmar {activeProof.beforeAfter.current.calmar}</Text>
+                            <Text style={styles.explainText}>Max DD {activeProof.beforeAfter.current.max_drawdown}</Text>
+                            <Text style={styles.explainText}>TVL stability {activeProof.beforeAfter.current.tvl_stability}</Text>
+                            <Text style={styles.explainText}>APY {activeProof.beforeAfter.current.apy}</Text>
+                          </View>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={[styles.explainText, { fontWeight: '600', marginBottom: 4 }]}>Target</Text>
+                            <Text style={styles.explainText}>Calmar {activeProof.beforeAfter.target.calmar}</Text>
+                            <Text style={styles.explainText}>Max DD {activeProof.beforeAfter.target.max_drawdown}</Text>
+                            <Text style={styles.explainText}>TVL stability {activeProof.beforeAfter.target.tvl_stability}</Text>
+                            <Text style={styles.explainText}>APY {activeProof.beforeAfter.target.apy}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  </>
+                ) : null}
+
+                {(!!activeProof.plainSummary || !!activeProof.ifThen || !!activeProof.explanation) && (
                   <View style={styles.explainBox}>
                     <View style={styles.explainAccent} />
                     <View style={styles.explainContent}>
-                      <Text style={styles.explainLabel}>Analysis</Text>
-                      <Text style={styles.explainText}>{activeProof.explanation}</Text>
+                      <Text style={styles.explainLabel}>Why this repair</Text>
+                      <Text style={styles.explainText}>
+                        {activeProof.plainSummary || activeProof.ifThen || activeProof.explanation}
+                      </Text>
+                      {!!activeProof.ifThen && activeProof.plainSummary && activeProof.ifThen !== activeProof.plainSummary && (
+                        <Text style={[styles.explainText, { marginTop: 8 }]}>{activeProof.ifThen}</Text>
+                      )}
+                      {!!activeProof.explanation && (activeProof.explanation !== (activeProof.plainSummary || activeProof.ifThen)) && (
+                        <Text style={[styles.explainText, { marginTop: 8, opacity: 0.9 }]}>{activeProof.explanation}</Text>
+                      )}
                     </View>
                   </View>
                 )}
@@ -1250,6 +1347,22 @@ export default function DeFiAutopilotScreen() {
             <TouchableOpacity style={styles.secondaryBtn} onPress={() => setProofOpen(false)} activeOpacity={0.9}>
               <Icon name="chevron-down" size={18} color="#0F172A" />
               <Text style={styles.secondaryBtnText}>Close</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* AUTO_SPEND first-time notice */}
+      <Modal visible={autoSpendNoticeVisible} transparent animationType="fade">
+        <Pressable style={styles.sheetOverlay} onPress={dismissAutoSpendNotice}>
+          <Pressable style={styles.autoSpendNoticeCard} onPress={() => {}}>
+            <Icon name="zap" size={28} color="#6366F1" style={{ marginBottom: 12 }} />
+            <Text style={styles.autoSpendNoticeTitle}>Auto-Pilot will execute repairs for you</Text>
+            <Text style={styles.autoSpendNoticeBody}>
+              With Auto-Spend on and your spend permission granted, Auto-Pilot can execute repairs within your limits without asking each time. You’ll still get alerts for each move.
+            </Text>
+            <TouchableOpacity style={styles.primaryBtn} onPress={dismissAutoSpendNotice} activeOpacity={0.9}>
+              <Text style={styles.primaryBtnText}>Got it</Text>
             </TouchableOpacity>
           </Pressable>
         </Pressable>
@@ -1271,6 +1384,56 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 0,
     paddingBottom: 70,
+  },
+
+  crisisBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: '#92400E',
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  crisisBannerText: { flex: 1 },
+  crisisBannerTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FEF3C7',
+    marginBottom: 4,
+  },
+  crisisBannerReason: {
+    fontSize: 13,
+    color: '#FDE68A',
+    marginBottom: 4,
+  },
+  crisisBannerHint: {
+    fontSize: 12,
+    color: '#FCD34D',
+    opacity: 0.9,
+  },
+
+  autoSpendNoticeCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    marginHorizontal: 24,
+    maxWidth: 400,
+    alignSelf: 'center',
+  },
+  autoSpendNoticeTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  autoSpendNoticeBody: {
+    fontSize: 14,
+    color: '#475569',
+    lineHeight: 22,
+    marginBottom: 20,
+    textAlign: 'center',
   },
 
   /* ============ HERO ============ */

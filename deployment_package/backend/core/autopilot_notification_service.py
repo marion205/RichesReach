@@ -286,6 +286,45 @@ class AutopilotNotificationService:
             priority='high',
         )
 
+    def notify_portfolio_drawdown(self, user, drawdown_data: Dict[str, Any]) -> bool:
+        """
+        Notify user that their portfolio drawdown has exceeded the limit.
+        Part of Trust-First Framework: Gap 1 — Portfolio Stop-Loss.
+        """
+        prefs = self._get_user_preferences(user)
+        if not self._should_notify(prefs, 'policy_breach'):
+            return False
+
+        drawdown_pct = drawdown_data.get('drawdown_pct', 0)
+        limit = drawdown_data.get('max_drawdown_limit', 0.08)
+        current_value = drawdown_data.get('current_value', 0)
+        hwm = drawdown_data.get('high_water_mark', 0)
+
+        title = "Portfolio Drawdown Alert"
+        body = (
+            f"Your portfolio has drawn down {drawdown_pct:.1%} "
+            f"from its peak of ${hwm:,.0f}. "
+            f"This exceeds your {limit:.0%} safety limit. "
+            f"Auto-Pilot is evaluating protective actions."
+        )
+
+        data = {
+            'type': 'portfolio_drawdown',
+            'screen': 'DeFiAutopilot',
+            'drawdown_pct': drawdown_pct,
+            'current_value': current_value,
+            'high_water_mark': hwm,
+        }
+
+        return self._send_push_notification(
+            push_token=prefs.push_token,
+            title=title,
+            body=body,
+            data=data,
+            priority='high',
+            sound='default',
+        )
+
     def notify_policy_breach(self, user, breach_details: Dict[str, Any]) -> bool:
         """
         Notify user of a policy guardrail breach (position drifted outside limits).

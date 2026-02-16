@@ -52,6 +52,9 @@ class RepairProofType(graphene.ObjectType):
     tvl_stability_check = graphene.Boolean()
     policy_alignment = graphene.Boolean()
     explanation = graphene.String()
+    if_then = graphene.String(description='Plain-English IF/THEN explanation')
+    plain_summary = graphene.String(description='Short plain-English summary')
+    before_after = JSONString(description='Current vs target: calmar, max_drawdown, tvl_stability, apy')
     policy_version = graphene.String()
     guardrails = JSONString()
 
@@ -95,6 +98,16 @@ class LastMoveType(graphene.ObjectType):
     revert_deadline = graphene.String()
 
 
+class CircuitBreakerStatusType(graphene.ObjectType):
+    """Circuit breaker state for crisis explainer UI."""
+    state = graphene.String(description='CLOSED | OPEN | HALF_OPEN')
+    reason = graphene.String()
+    triggered_at = graphene.String()
+    triggered_by = graphene.String()
+    chain_id = graphene.Int()
+    auto_resume_at = graphene.String()
+
+
 class AutopilotStatusType(graphene.ObjectType):
     enabled = graphene.Boolean()
     last_evaluated_at = graphene.String()
@@ -102,6 +115,7 @@ class AutopilotStatusType(graphene.ObjectType):
     last_move = graphene.Field(LastMoveType)
     relayer_configured = graphene.Boolean(description="True if relayer can submit repairs (user signs once)")
     relayer_paused_chain_ids = graphene.List(graphene.Int, description="Chain IDs where relayer is paused (e.g. gas spike)")
+    circuit_breaker = graphene.Field(CircuitBreakerStatusType, description="DeFi halt status for crisis banner")
 
 
 class TransactionReceiptType(graphene.ObjectType):

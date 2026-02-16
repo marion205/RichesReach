@@ -400,25 +400,44 @@ def _strategy_suggestions_as_repairs(user) -> List[Dict[str, Any]]:
             protocol_name = suggestion.get('suggested_pool_protocol', '')
             pool_symbol = suggestion.get('suggested_pool_symbol', '')
 
+            reason = suggestion.get('reason', '')
+            proof = {
+                'calmar_improvement': 0.0,
+                'integrity_check': {
+                    'altman_z_score': 0.0,
+                    'beneish_m_score': 0.0,
+                    'is_erc4626_compliant': target_pool.pool_type in ('vault', 'yield'),
+                },
+                'tvl_stability_check': True,
+                'policy_alignment': gate_ok,
+                'explanation': reason,
+                'policy_version': guardrails.get('version'),
+                'guardrails': gate_meta,
+            }
+            # Plain-English summary for strategy-driven rotations
+            try:
+                from .proof_narrator import get_proof_narrator
+                narrator = get_proof_narrator()
+                current_apy = suggestion.get('current_apy', 0)
+                suggested_apy = suggestion.get('suggested_apy', 0)
+                apy_diff_pct = suggested_apy - current_apy
+                proof['plain_summary'] = (
+                    f"We found a higher-yield option. {protocol_name} {pool_symbol} offers "
+                    f"{apy_diff_pct:+.1f}% APY vs your current position."
+                )
+                proof['if_then'] = (
+                    f"If you're comfortable with this protocol's risk profile, "
+                    f"then moving here could improve your yield by about {apy_diff_pct:.1f}%."
+                )
+            except Exception:
+                pass
             repair_format_items.append({
                 'id': repair_id,
                 'from_vault': suggestion.get('current_pool_symbol', ''),
                 'to_vault': f"{protocol_name} {pool_symbol}".strip(),
                 'estimated_apy_delta': apy_delta,
                 'gas_estimate': 220000.0,
-                'proof': {
-                    'calmar_improvement': 0.0,
-                    'integrity_check': {
-                        'altman_z_score': 0.0,
-                        'beneish_m_score': 0.0,
-                        'is_erc4626_compliant': target_pool.pool_type in ('vault', 'yield'),
-                    },
-                    'tvl_stability_check': True,
-                    'policy_alignment': gate_ok,
-                    'explanation': suggestion.get('reason', ''),
-                    'policy_version': guardrails.get('version'),
-                    'guardrails': gate_meta,
-                },
+                'proof': proof,
                 'from_pool_id': str(suggestion.get('current_pool_id', '')),
                 'to_pool_id': str(suggested_pool_id),
                 'source': 'strategy_engine',
@@ -544,25 +563,71 @@ def get_pending_repairs(user) -> List[Dict[str, Any]]:
 
             repair_id = f"{position.id}:{target['pool'].id}"
             options = _find_repair_options(pool, current_audit, user, max_drawdown, guardrails)
+            proof = {
+                'calmar_improvement': calmar_improvement,
+                'integrity_check': {
+                    'altman_z_score': target_audit.integrity.altman_z_score,
+                    'beneish_m_score': target_audit.integrity.beneish_m_score,
+                    'is_erc4626_compliant': target_audit.integrity.is_erc4626_compliant,
+                },
+                'tvl_stability_check': tvl_ok,
+                'policy_alignment': policy_alignment and gate_ok,
+                'explanation': target_audit.explanation,
+                'policy_version': policy_version,
+                'guardrails': gate_meta,
+            }
+            # Trust-First: add plain-English if_then and plain_summary via Proof Narrator
+            try:
+                from .proof_narrator import get_proof_narrator
+                narrator = get_proof_narrator()
+                risk_metrics = {
+                    'calmar_ratio': current_audit.risk.calmar_ratio,
+                    'max_drawdown': current_audit.risk.max_drawdown,
+                    'tvl_stability': current_audit.risk.tvl_stability,
+                    'volatility': getattr(current_audit.risk, 'volatility', 0),
+                }
+                config = {
+                    'min_calmar_hold': 1.0,
+                    'min_calmar_rebalance': 0.6,
+                    'max_drawdown_hold': 0.07,
+                    'max_drawdown_rebalance': 0.12,
+                    'min_tvl_stability_hold': 0.70,
+                    'min_tvl_stability_rebalance': 0.50,
+                }
+                current_pool_info = {
+                    'protocol': getattr(pool.protocol, 'name', '') or '',
+                    'symbol': getattr(pool, 'symbol', '') or '',
+                    'apy': current_audit.apy,
+                }
+                target_pool_info = {
+                    'protocol': getattr(target['pool'].protocol, 'name', '') or '',
+                    'symbol': getattr(target['pool'], 'symbol', '') or '',
+                    'apy': target_audit.apy,
+                    'risk_metrics': {
+                        'calmar_ratio': target_audit.risk.calmar_ratio,
+                        'max_drawdown': target_audit.risk.max_drawdown,
+                        'tvl_stability': target_audit.risk.tvl_stability,
+                    },
+                }
+                narrated = narrator.narrate_repair(
+                    risk_metrics=risk_metrics,
+                    config=config,
+                    recommendation=current_audit.recommendation.value,
+                    current_pool_info=current_pool_info,
+                    target_pool_info=target_pool_info,
+                )
+                proof['if_then'] = narrated.get('if_then', '')
+                proof['plain_summary'] = narrated.get('plain_summary', '')
+                proof['before_after'] = narrated.get('before_after', {})
+            except Exception as e:
+                logger.debug("Proof narrator skipped for repair %s: %s", repair_id, e)
             repair_entry = {
                 'id': repair_id,
                 'from_vault': current_audit.vault_address,
                 'to_vault': target_audit.vault_address,
                 'estimated_apy_delta': apy_delta,
                 'gas_estimate': 220000.0,
-                'proof': {
-                    'calmar_improvement': calmar_improvement,
-                    'integrity_check': {
-                        'altman_z_score': target_audit.integrity.altman_z_score,
-                        'beneish_m_score': target_audit.integrity.beneish_m_score,
-                        'is_erc4626_compliant': target_audit.integrity.is_erc4626_compliant,
-                    },
-                    'tvl_stability_check': tvl_ok,
-                    'policy_alignment': policy_alignment and gate_ok,
-                    'explanation': target_audit.explanation,
-                    'policy_version': policy_version,
-                    'guardrails': gate_meta,
-                },
+                'proof': proof,
                 'from_pool_id': str(pool.id),
                 'to_pool_id': str(target['pool'].id),
                 'source': 'risk_scoring',

@@ -416,6 +416,9 @@ class DeFiRepairDecision(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     executed_at = models.DateTimeField(null=True, blank=True)
     actual_apy_delta = models.FloatField(null=True, blank=True)
+    outcome_status = models.CharField(max_length=32, blank=True, default='')  # beneficial | neutral | underperformed
+    outcome_report = models.JSONField(default=dict, blank=True)  # post-mortem
+    outcome_checked_at = models.DateTimeField(null=True, blank=True)
     tx_hash = models.CharField(max_length=66, blank=True, default='')
 
     class Meta:
