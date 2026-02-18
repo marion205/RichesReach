@@ -390,10 +390,11 @@ function InvestStack() {
 function LearnStack() {
   const StackNavigator = Stack.Navigator as any;
   return (
-    <StackNavigator screenOptions={{ headerShown: false }}>
+    <StackNavigator screenOptions={{ headerShown: false }} initialRouteName="tutor">
+      {/* Duolingo-style Learn (original) - default when opening Learn tab */}
+      <Stack.Screen name="tutor" component={TutorScreen} />
       <Stack.Screen name="LearnMain" component={require('../features/learning/screens/LearningPathsScreen').default} />
       {/* Legacy alias */}
-      <Stack.Screen name="tutor" component={TutorScreen} />
       <Stack.Screen name="learning-paths" component={require('../features/learning/screens/LearningPathsScreen').default} />
       {/* Explicit learning routes for deep links from Home */}
       <Stack.Screen name="tutor-ask-explain" component={TutorAskExplainScreen} />
@@ -642,32 +643,12 @@ export default function AppNavigator() {
             listeners={({ navigation }) => ({
               tabPress: (e) => {
                 logger.log('Learn tab pressed');
-                // Prevent default navigation and ensure we go to LearnMain
-                const state = navigation.getState();
-                const learnRoute = state?.routes?.find((r: any) => r.name === 'Learn');
-                if (learnRoute?.state) {
-                  const currentRoute = learnRoute.state.routes?.[learnRoute.state.index || 0];
-                  logger.log('Current Learn stack route:', currentRoute?.name);
-                  if (currentRoute?.name !== 'LearnMain') {
-                    (e as any).preventDefault();
-                    // Navigate to LearnMain
-                    logger.log('Navigating to LearnMain from:', currentRoute?.name);
-                    navigation.navigate('Learn', { 
-                      screen: 'LearnMain',
-                      params: undefined 
-                    });
-                  } else {
-                    logger.log('Already on LearnMain, allowing default navigation');
-                  }
-                } else {
-                  // If no state, navigate to LearnMain
-                  (e as any).preventDefault();
-                  logger.log('No Learn stack state, navigating to LearnMain');
-                  navigation.navigate('Learn', { 
-                    screen: 'LearnMain',
-                    params: undefined 
-                  });
-                }
+                // Always go to the original Duolingo-style Learn screen (tutor), not Learning Paths or DeFi
+                (e as any).preventDefault();
+                navigation.navigate('Learn', {
+                  screen: 'tutor',
+                  params: undefined,
+                });
               },
             })}
           />
