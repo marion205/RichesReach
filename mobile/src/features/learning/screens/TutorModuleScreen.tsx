@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, ActivityIndicator, Alert } from 'react-native';
+import { useRoute } from '@react-navigation/native';
 import { tutorModule, DynamicContentResponse } from '../../../services/aiClient';
 
 export default function TutorModuleScreen() {
+  const route = useRoute<any>();
   const [userId] = useState('demo-user');
-  const [topic, setTopic] = useState('Risk Management');
+  const [topic, setTopic] = useState(route.params?.topic ?? 'Risk Management');
   const [data, setData] = useState<DynamicContentResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);

@@ -89,6 +89,8 @@ export type ScreenName =
   | 'oracle-insights'
   | 'voice-ai'
   | 'blockchain-integration'
+  | 'nft-detail'
+  | 'nft-journey'
   | 'theme-settings'
   | 'connectivity-test'
   | 'sentry-test'

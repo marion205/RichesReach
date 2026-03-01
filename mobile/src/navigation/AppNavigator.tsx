@@ -144,6 +144,8 @@ import DynamicContentScreen from '../features/personalization/screens/DynamicCon
 import ARNextMovePreview from '../features/ar/ARNextMovePreview';
 import WellnessDashboardScreen from '../features/portfolio/screens/WellnessDashboardScreen';
 import BridgeScreen from '../features/blockchain/screens/BridgeScreen';
+import NFTDetailScreen from '../features/blockchain/screens/NFTDetailScreen';
+import NFTJourneyScreen from '../features/blockchain/screens/NFTJourneyScreen';
 import SecurityFortress from '../components/SecurityFortress';
 import ViralGrowthSystem from '../components/ViralGrowthSystem';
 import OnboardingScreen from '../features/auth/screens/OnboardingScreen';
@@ -236,6 +238,8 @@ function HomeStack() {
       <Stack.Screen name="voice-ai" component={VoiceAIAssistant} />
       <Stack.Screen name="blockchain-integration" component={BlockchainIntegration} />
       <Stack.Screen name="bridge-screen" component={BridgeScreen} options={{ headerShown: true, title: 'Cross-Chain Bridge' }} />
+      <Stack.Screen name="nft-detail" component={NFTDetailScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="nft-journey" component={NFTJourneyScreen} options={{ headerShown: false }} />
       <Stack.Screen name="market-commentary" component={MarketCommentaryScreen} />
       <Stack.Screen name="ai-trading-coach" component={AITradingCoachScreen} />
       <Stack.Screen name="daily-voice-digest" component={DailyVoiceDigestScreen} />
@@ -352,6 +356,8 @@ function InvestStack() {
       <Stack.Screen name="ar-preview" component={ARNextMovePreview} options={{ headerShown: false }} />
       <Stack.Screen name="blockchain-integration" component={BlockchainIntegration} options={{ headerShown: false }} />
       <Stack.Screen name="bridge-screen" component={BridgeScreen} options={{ headerShown: true, title: 'Cross-Chain Bridge' }} />
+      <Stack.Screen name="nft-detail" component={NFTDetailScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="nft-journey" component={NFTJourneyScreen} options={{ headerShown: false }} />
       <Stack.Screen name="wellness-dashboard" component={WellnessDashboardScreen} options={{ headerShown: false }} />
       
       {/* Swing Trading screens */}

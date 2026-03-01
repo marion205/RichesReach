@@ -611,11 +611,8 @@ export default function BlockchainIntegration({
 
               <View style={styles.nftContent}>
                 <NFTGallery
-                  walletAddress={undefined} // Would get from connected wallet
+                  walletAddress={walletAddress ?? undefined}
                   chain="ethereum"
-                  onNFTSelect={(nft) => {
-                    Alert.alert('NFT Selected', `Selected: ${nft.name || `#${nft.tokenId}`}`);
-                  }}
                 />
               </View>
             </>

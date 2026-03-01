@@ -17,6 +17,29 @@ export const GET_USER_NFTS = gql`
       }
       floorPrice
       lastSalePrice
+      educationContent {
+        story
+        raritySummary
+        lesson
+        glossary {
+          term
+          definition
+        }
+        confidence
+        source
+      }
+      utilityData {
+        perks
+        officialLinks {
+          label
+          url
+        }
+      }
+      risk {
+        level
+        reasons
+        recommendedAction
+      }
     }
   }
 `;

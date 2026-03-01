@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { useRoute } from '@react-navigation/native';
 import { tutorAsk, tutorExplain, AskResponse, ExplainResponse } from '../../../services/aiClient';
 
 export default function TutorAskExplainScreen() {
+  const route = useRoute<any>();
   const [userId] = useState('demo-user');
   const [mode, setMode] = useState<'ask'|'explain'>('ask');
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(route.params?.initialQuestion ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [output, setOutput] = useState<AskResponse | ExplainResponse | null>(null);
