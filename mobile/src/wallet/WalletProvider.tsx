@@ -31,8 +31,8 @@ interface WalletContextValue {
   wcSession: any;
   /** EVM state: provider, address, chainId */
   evm: EVMState | null;
-  /** Connect to a wallet. chainIdWC format: "eip155:11155111" */
-  connect: (chainIdWC?: string) => Promise<void>;
+  /** Connect to a wallet. chainIdWC format: "eip155:11155111". onUri is called immediately with the WalletConnect pairing URI so the UI can show a QR / deep-link. */
+  connect: (chainIdWC?: string, onUri?: (uri: string) => void) => Promise<void>;
   /** Disconnect and clear persisted session */
   disconnect: () => Promise<void>;
   /** Switch EVM chain */
@@ -61,7 +61,7 @@ export const useWallet = () => {
       wcClient: null,
       wcSession: null,
       evm: null,
-      connect: async () => { throw new Error('WalletProvider not mounted'); },
+      connect: async (_chainIdWC?: string, _onUri?: (uri: string) => void) => { throw new Error('WalletProvider not mounted'); },
       disconnect: async () => {},
       switchChain: () => {},
       signMessage: async () => { throw new Error('Wallet not connected'); },
@@ -140,9 +140,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     : null;
 
   // ---- Connect ----
-  const connect = useCallback(async (chainIdWC: string = DEFAULT_CHAIN_WC) => {
+  const connect = useCallback(async (
+    chainIdWC: string = DEFAULT_CHAIN_WC,
+    onUri?: (uri: string) => void,
+  ) => {
     try {
-      const result = await connectWallet(chainIdWC);
+      const result = await connectWallet(chainIdWC, onUri);
       setWcClient(result.client);
       setWcSession(result.session);
       setAddress(result.address);

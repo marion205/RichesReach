@@ -18,6 +18,9 @@ import {
   StyleSheet,
   RefreshControl,
   ActivityIndicator,
+  Modal,
+  Linking,
+  Clipboard,
 } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
@@ -244,7 +247,7 @@ function EmptyPositions({ onDeposit }: { onDeposit: () => void }) {
 
 // ---------- Not Connected State ----------
 
-function WalletNotConnected({ onConnect }: { onConnect: () => void }) {
+function WalletNotConnected({ onConnect, connecting }: { onConnect: () => void; connecting: boolean }) {
   return (
     <View style={styles.emptyState}>
       <View style={[styles.emptyIconBg, { backgroundColor: '#DBEAFE' }]}>
@@ -255,11 +258,16 @@ function WalletNotConnected({ onConnect }: { onConnect: () => void }) {
         Connect a wallet to view and manage your DeFi positions.
       </Text>
       <Pressable
-        style={({ pressed }) => [styles.emptyBtn, { backgroundColor: '#3B82F6' }, pressed && { opacity: 0.85 }]}
+        style={({ pressed }) => [styles.emptyBtn, { backgroundColor: '#3B82F6' }, (pressed || connecting) && { opacity: 0.85 }]}
         onPress={onConnect}
+        disabled={connecting}
       >
-        <Feather name="link-2" size={18} color="#FFFFFF" />
-        <Text style={styles.emptyBtnText}>Connect Wallet</Text>
+        {connecting ? (
+          <ActivityIndicator size="small" color="#FFFFFF" />
+        ) : (
+          <Feather name="link-2" size={18} color="#FFFFFF" />
+        )}
+        <Text style={styles.emptyBtnText}>{connecting ? 'Preparing...' : 'Connect Wallet'}</Text>
       </Pressable>
     </View>
   );
@@ -271,6 +279,8 @@ export default function DeFiPositionsScreen() {
   const navigation = useNavigation<any>();
   const { isConnected, address, connect } = useWallet();
   const [refreshing, setRefreshing] = useState(false);
+  const [wcUri, setWcUri] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
 
   const {
     data: accountData,
@@ -299,10 +309,21 @@ export default function DeFiPositionsScreen() {
   }, [refetch]);
 
   const handleConnect = useCallback(async () => {
+    setConnecting(true);
+    setWcUri(null);
     try {
-      await connect();
+      await connect(undefined, (uri) => {
+        // URI is ready — show the modal so the user can open their wallet
+        setWcUri(uri);
+        setConnecting(false);
+      });
+      // Session approved — close modal
+      setWcUri(null);
     } catch (e) {
       logger.error('Wallet connect error from positions:', e);
+      setWcUri(null);
+    } finally {
+      setConnecting(false);
     }
   }, [connect]);
 
@@ -342,7 +363,7 @@ export default function DeFiPositionsScreen() {
       >
         {/* Not connected state */}
         {!isConnected ? (
-          <WalletNotConnected onConnect={handleConnect} />
+          <WalletNotConnected onConnect={handleConnect} connecting={connecting} />
         ) : loading && !account ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#10B981" />
@@ -443,6 +464,58 @@ export default function DeFiPositionsScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* WalletConnect pairing modal */}
+      <Modal
+        visible={!!wcUri}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setWcUri(null)}
+      >
+        <View style={styles.wcOverlay}>
+          <View style={styles.wcCard}>
+            <View style={styles.wcHeader}>
+              <Feather name="link" size={22} color="#3B82F6" />
+              <Text style={styles.wcTitle}>Connect Wallet</Text>
+            </View>
+
+            <Text style={styles.wcInstructions}>
+              Open your wallet app and scan or paste this connection code:
+            </Text>
+
+            {/* Deep-link button — opens MetaMask / Rainbow etc. directly */}
+            <Pressable
+              style={({ pressed }) => [styles.wcDeepLinkBtn, pressed && { opacity: 0.8 }]}
+              onPress={() => wcUri && Linking.openURL(`metamask://wc?uri=${encodeURIComponent(wcUri)}`)}
+            >
+              <Feather name="smartphone" size={18} color="#fff" />
+              <Text style={styles.wcDeepLinkText}>Open in MetaMask</Text>
+            </Pressable>
+
+            {/* Copy URI fallback */}
+            <Pressable
+              style={({ pressed }) => [styles.wcCopyBtn, pressed && { opacity: 0.8 }]}
+              onPress={() => {
+                if (wcUri) {
+                  Clipboard.setString(wcUri);
+                }
+              }}
+            >
+              <Feather name="copy" size={16} color="#3B82F6" />
+              <Text style={styles.wcCopyText}>Copy connection code</Text>
+            </Pressable>
+
+            <Text style={styles.wcUriPreview} numberOfLines={2}>{wcUri}</Text>
+
+            <Text style={styles.wcWaiting}>Waiting for wallet approval...</Text>
+            <ActivityIndicator size="small" color="#3B82F6" style={{ marginBottom: 8 }} />
+
+            <Pressable style={styles.wcCancelBtn} onPress={() => setWcUri(null)}>
+              <Text style={styles.wcCancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -823,5 +896,92 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6366F1',
     lineHeight: 16,
+  },
+
+  // WalletConnect modal
+  wcOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  wcCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  wcHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  wcTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  wcInstructions: {
+    fontSize: 14,
+    color: '#6B7280',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  wcDeepLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#3B82F6',
+    borderRadius: 14,
+    paddingVertical: 14,
+    marginBottom: 12,
+  },
+  wcDeepLinkText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  wcCopyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    borderRadius: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  wcCopyText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3B82F6',
+  },
+  wcUriPreview: {
+    fontSize: 10,
+    color: '#9CA3AF',
+    fontFamily: 'monospace',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 16,
+  },
+  wcWaiting: {
+    fontSize: 13,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  wcCancelBtn: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    marginTop: 4,
+  },
+  wcCancelText: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    fontWeight: '600',
   },
 });

@@ -5120,15 +5120,20 @@ async def graphql_endpoint(request: Request):
             else:
                 # Create new item
                 item_id = f"mock-{symbol}-{len(_mock_watchlist_store) + 1}"
-                # Mock price data - in real app, this would come from market data service
-                mock_prices = {
-                    "AAPL": {"price": 189.0, "change": 9.0, "changePercent": 0.05},
-                    "TSLA": {"price": 245.0, "change": -12.0, "changePercent": -0.047},
-                    "MSFT": {"price": 420.0, "change": 15.0, "changePercent": 0.037},
-                    "GOOGL": {"price": 145.0, "change": 2.5, "changePercent": 0.018},
-                    "NVDA": {"price": 495.0, "change": 25.0, "changePercent": 0.053},
-                }
-                price_data = mock_prices.get(symbol, {"price": 150.0, "change": 0.0, "changePercent": 0.0})
+                # Fetch live price from market data service
+                price_data = {"price": 0.0, "change": 0.0, "changePercent": 0.0}
+                if _market_data_service:
+                    try:
+                        quote = await _market_data_service.get_stock_quote(symbol)
+                        if quote:
+                            price_data = {
+                                "price": quote.get("price", 0.0),
+                                "change": quote.get("change", 0.0),
+                                "changePercent": quote.get("changePercent", 0.0),
+                            }
+                            print(f"✅ Live price fetched for {symbol}: ${price_data['price']}")
+                    except Exception as e:
+                        print(f"⚠️ Could not fetch live price for {symbol}: {e}")
                 
                 watchlist_item = {
                     "id": item_id,
@@ -5194,28 +5199,55 @@ async def graphql_endpoint(request: Request):
             change = quote_data.get("change", 0.0) if quote_data else 0.0
             change_percent = quote_data.get("changePercent", 0.0) if quote_data else 0.0
             
-            # Calculate support/resistance (simple mock - in real app, use technical analysis)
-            support_level = current_price * 0.95
-            resistance_level = current_price * 1.05
-            
-            # Mock technical indicators
-            rsi = 55.0  # Neutral RSI
-            macd = 0.5
-            macd_histogram = 0.1
-            
-            # Calculate simple moving averages (mock)
-            moving_avg_50 = current_price * 0.98
-            moving_avg_200 = current_price * 0.95
-            
-            # Mock sentiment
-            sentiment_score = 0.6  # Slightly positive
-            
-            # Mock peers
-            tech_peers = ["MSFT", "GOOGL", "AMZN", "NVDA", "META"]
-            finance_peers = ["JPM", "BAC", "WFC", "GS", "MS"]
-            peers_list = tech_peers if metadata.get("sector") == "Technology" else finance_peers[:3]
-            if symbol in peers_list:
-                peers_list = [p for p in peers_list if p != symbol]
+            # Fetch enriched technical data from market data service
+            technicals_raw = None
+            if _market_data_service:
+                try:
+                    technicals_raw = await _market_data_service.get_technical_indicators(symbol)
+                except Exception as e:
+                    print(f"⚠️ Could not fetch technical indicators for {symbol}: {e}")
+
+            # RSI: use real value, fall back to price-momentum estimate
+            rsi = (technicals_raw.get("rsi") if technicals_raw else None)
+            if rsi is None:
+                # Derive a rough RSI proxy from change_percent: 0% → 50, ±5% → ±25pts
+                rsi = max(10.0, min(90.0, 50.0 + (change_percent * 500)))
+
+            # MACD
+            macd = (technicals_raw.get("macd") if technicals_raw else None) or round(change * 0.05, 4)
+            macd_histogram = (technicals_raw.get("macdHistogram") if technicals_raw else None) or round(macd * 0.2, 4)
+
+            # Moving averages: use real values or derive from current price + change
+            moving_avg_50 = (technicals_raw.get("sma50") if technicals_raw else None) or round(current_price / (1 + change_percent * 0.4), 2)
+            moving_avg_200 = (technicals_raw.get("sma200") if technicals_raw else None) or round(current_price / (1 + change_percent * 0.8), 2)
+
+            # Support / resistance: use ATR-based levels if available, else ±1 ATR proxy
+            atr_proxy = current_price * 0.03  # 3% as a reasonable default ATR
+            support_level = (technicals_raw.get("support") if technicals_raw else None) or round(current_price - atr_proxy, 2)
+            resistance_level = (technicals_raw.get("resistance") if technicals_raw else None) or round(current_price + atr_proxy, 2)
+
+            # Sentiment: derive from change_percent when no real data available
+            # Positive day → bullish lean; use real news sentiment if service provides it
+            sentiment_score = (technicals_raw.get("sentimentScore") if technicals_raw else None)
+            if sentiment_score is None:
+                sentiment_score = round(max(0.1, min(0.9, 0.5 + change_percent * 2)), 2)
+
+            # Peers: sector-aware lookup from metadata
+            sector = metadata.get("sector", "")
+            _sector_peers = {
+                "Technology":         ["AAPL", "MSFT", "GOOGL", "NVDA", "META", "AMZN"],
+                "Consumer Cyclical":  ["AMZN", "TSLA", "HD", "MCD", "NKE", "SBUX"],
+                "Healthcare":         ["JNJ", "UNH", "PFE", "MRK", "ABBV", "LLY"],
+                "Financials":         ["JPM", "BAC", "WFC", "GS", "MS", "BLK"],
+                "Energy":             ["XOM", "CVX", "COP", "SLB", "EOG", "PXD"],
+                "Communication":      ["GOOGL", "META", "NFLX", "DIS", "T", "VZ"],
+                "Industrials":        ["BA", "CAT", "GE", "HON", "UPS", "LMT"],
+                "Utilities":          ["NEE", "DUK", "SO", "D", "AEP", "EXC"],
+                "Real Estate":        ["AMT", "PLD", "CCI", "EQIX", "PSA", "SPG"],
+                "Materials":          ["LIN", "APD", "ECL", "DD", "NEM", "FCX"],
+                "Consumer Staples":   ["PG", "KO", "PEP", "WMT", "COST", "CL"],
+            }
+            peers_list = [p for p in _sector_peers.get(sector, ["SPY", "QQQ", "IWM", "DIA"]) if p != symbol][:5]
             
             # Build technical data object (used by alias technicals: technical)
             technical_data = {

@@ -65,6 +65,81 @@ const C = {
   border: '#2A2A2A',
 };
 
+const DEMO_NFTS: NFT[] = [
+  {
+    id: 'demo-1',
+    tokenId: '4201',
+    contractAddress: '0xBC4CA0EdA7647A8aB7C2061c2E118A18a936f13D',
+    name: 'Bored Ape #4201',
+    description: 'A unique ape from the Bored Ape Yacht Club collection.',
+    imageUrl: 'https://ipfs.io/ipfs/QmRRPWG96cmgTn2qSzjwr2qvfNEuhunv6FNeMFGa9bx6mQ',
+    collectionName: 'Bored Ape Yacht Club',
+    chain: 'ethereum',
+    floorPrice: 14.29,
+    lastSalePrice: 16.5,
+  },
+  {
+    id: 'demo-2',
+    tokenId: '7804',
+    contractAddress: '0xb47e3cd837dDF8e4c57F05d70Ab865de6e193BBB',
+    name: 'CryptoPunk #7804',
+    description: 'One of the original 10,000 CryptoPunks.',
+    imageUrl: 'https://www.larvalabs.com/public/images/cryptopunks/punk7804.png',
+    collectionName: 'CryptoPunks',
+    chain: 'ethereum',
+    floorPrice: 44.95,
+    lastSalePrice: 48.0,
+  },
+  {
+    id: 'demo-3',
+    tokenId: '1337',
+    contractAddress: '0x60E4d786628Fea6478F785A6d7e704777c86a7c6',
+    name: 'Mutant Ape #1337',
+    description: 'A mutant ape from the MAYC collection.',
+    imageUrl: 'https://ipfs.io/ipfs/QmPbxeGcXhYQQNgsC6a36dDyYUcHgMLnGKnF8pVFmGsvqi',
+    collectionName: 'Mutant Ape Yacht Club',
+    chain: 'ethereum',
+    floorPrice: 3.12,
+    lastSalePrice: 3.5,
+  },
+  {
+    id: 'demo-4',
+    tokenId: '9921',
+    contractAddress: '0x49cF6f5d44E70224e2E23fDcdd2C053F30aDA28B',
+    name: 'CloneX #9921',
+    description: 'A next-gen avatar from RTFKT x Nike.',
+    imageUrl: 'https://clonex-assets.rtfkt.com/images/9921.png',
+    collectionName: 'CloneX',
+    chain: 'ethereum',
+    floorPrice: 1.85,
+    lastSalePrice: 2.1,
+  },
+  {
+    id: 'demo-5',
+    tokenId: '3820',
+    contractAddress: '0x8a90CAb2b38dba80c64b7734e58Ee1dB38B8992e',
+    name: 'Doodle #3820',
+    description: 'A hand-drawn doodle from the Doodles collection.',
+    imageUrl: 'https://ipfs.io/ipfs/QmPMc4tcBsMqLRuCQtPmPe84bpSjrC3Ky7t3JWuHXYB4aS/3820.png',
+    collectionName: 'Doodles',
+    chain: 'ethereum',
+    floorPrice: 1.2,
+    lastSalePrice: 1.4,
+  },
+  {
+    id: 'demo-6',
+    tokenId: '512',
+    contractAddress: '0x1A92f7381B9F03921564a437210bB9396471050C',
+    name: 'Cool Cat #512',
+    description: 'A cool cat just chilling.',
+    imageUrl: 'https://ipfs.io/ipfs/QmTNBQDbggLZdKF1fRgWnXsnRikd52zL5ciNu769g9y9K7/512.png',
+    collectionName: 'Cool Cats',
+    chain: 'polygon',
+    floorPrice: 0.18,
+    lastSalePrice: 0.22,
+  },
+];
+
 export default function NFTGallery({ walletAddress, chain, onNFTSelect }: NFTGalleryProps) {
   const [selectedChain, setSelectedChain] = useState(chain || 'ethereum');
   const [selectedCollection, setSelectedCollection] = useState<string | null>(null);
@@ -76,7 +151,10 @@ export default function NFTGallery({ walletAddress, chain, onNFTSelect }: NFTGal
     errorPolicy: 'all',
   });
 
-  const nfts = data?.userNFTs || [];
+  // Use real data when wallet connected, demo data otherwise
+  const nfts = walletAddress
+    ? (data?.userNFTs || [])
+    : DEMO_NFTS.filter(nft => nft.chain === selectedChain);
   const collections = Array.from(new Set(nfts.map(nft => nft.collectionName)));
 
   const filteredNFTs = selectedCollection
@@ -184,7 +262,7 @@ export default function NFTGallery({ walletAddress, chain, onNFTSelect }: NFTGal
         <View style={styles.emptyContainer}>
           <Icon name="image" size={64} color={C.sub} />
           <Text style={[styles.emptyText, { color: C.sub }]}>
-            {walletAddress ? 'No NFTs found' : 'Connect wallet to view NFTs'}
+            {walletAddress ? 'No NFTs found on this chain' : 'No demo NFTs on this chain'}
           </Text>
         </View>
       ) : (

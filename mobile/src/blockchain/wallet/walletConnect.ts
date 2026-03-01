@@ -1,6 +1,10 @@
 /**
  * WalletConnect v2 Sign Client integration with session persistence.
  * Sessions are saved to AsyncStorage and restored on app relaunch.
+ *
+ * Required: Get a real Project ID from https://cloud.walletconnect.com (free).
+ * Set EXPO_PUBLIC_WALLETCONNECT_PROJECT_ID in .env or the relay will reject with
+ * "Unauthorized: invalid key".
  */
 import SignClient from '@walletconnect/sign-client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,10 +12,27 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const STORAGE_KEY = 'wc_session_v2';
 let client: SignClient | null = null;
 
+/** Placeholder project ID — invalid on WalletConnect relay; replace via env. */
+const PLACEHOLDER_PROJECT_ID = '42421cf8-2df7-45c6-9475-df4f4b115ffc';
+
+function getProjectId(): string {
+  const id =
+    process.env.EXPO_PUBLIC_WALLETCONNECT_PROJECT_ID ??
+    (typeof global !== 'undefined' && (global as any).expo?.config?.extra?.EXPO_PUBLIC_WALLETCONNECT_PROJECT_ID) ??
+    PLACEHOLDER_PROJECT_ID;
+  if (id === PLACEHOLDER_PROJECT_ID && __DEV__) {
+    console.warn(
+      '[WalletConnect] Using placeholder projectId; WebSocket may close with "Unauthorized: invalid key". ' +
+        'Get a free Project ID at https://cloud.walletconnect.com and set EXPO_PUBLIC_WALLETCONNECT_PROJECT_ID in .env'
+    );
+  }
+  return id;
+}
+
 export async function initWC() {
   if (client) return client;
   client = await SignClient.init({
-    projectId: '42421cf8-2df7-45c6-9475-df4f4b115ffc',
+    projectId: getProjectId(),
     relayUrl: 'wss://relay.walletconnect.com',
     metadata: {
       name: 'RichesReach',
@@ -27,9 +48,14 @@ export type WcSession = Awaited<ReturnType<typeof connectWallet>>['session'];
 
 /**
  * Connect to a wallet via WalletConnect.
+ * Calls onUri(uri) as soon as the pairing URI is ready so the caller
+ * can display a QR code or open a deep link — then awaits approval.
  * Saves the session to AsyncStorage for persistence.
  */
-export async function connectWallet(chainIdWC: string) {
+export async function connectWallet(
+  chainIdWC: string,
+  onUri?: (uri: string) => void,
+) {
   const c = await initWC();
   const { uri, approval } = await c.connect({
     requiredNamespaces: {
@@ -41,7 +67,11 @@ export async function connectWallet(chainIdWC: string) {
     },
   });
 
-  // Present QR / deep-link mobile wallet with `uri` in your UI
+  // Surface the URI to the UI immediately so the user can scan / deep-link
+  if (uri && onUri) {
+    onUri(uri);
+  }
+
   const session = await approval();
   const account = session.namespaces.eip155.accounts[0]; // eip155:137:0xabc...
   const address = account.split(':')[2];

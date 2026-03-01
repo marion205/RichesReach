@@ -17,13 +17,16 @@ import {
   Pressable,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useQuery, gql } from '@apollo/client';
+import { useWallet } from '../../../wallet/WalletProvider';
 import ERC4626VaultCard from '../../../components/blockchain/ERC4626VaultCard';
 import { YieldAggregatorService, type UserPosition } from '../../blockchain/services/YieldAggregatorService';
+import intentService from '../../../services/IntentService';
 
 // ---------- GraphQL ----------
 
@@ -72,34 +75,142 @@ interface RotationSuggestion {
   asset: string;
 }
 
-function RotationCard({ suggestion }: { suggestion: RotationSuggestion }) {
+function RotationCard({
+  suggestion,
+  walletAddress,
+  chainId,
+  onRotated,
+}: {
+  suggestion: RotationSuggestion;
+  walletAddress: string | null;
+  chainId: number;
+  onRotated: () => void;
+}) {
+  const [modalVisible, setModalVisible] = useState(false);
+  const [executing, setExecuting] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const handleExecute = useCallback(async () => {
+    if (!walletAddress) return;
+    setExecuting(true);
+    setStatus('idle');
+    try {
+      // CoW Swap rotation: sell current asset token, buy target asset token
+      await intentService.createDeFiRotationSwap(
+        suggestion.asset,           // sellToken (symbol used as identifier)
+        suggestion.suggestedProtocol, // buyToken / target pool identifier
+        '0',                        // amount: aggregator handles sizing on-chain
+        walletAddress,
+        chainId,
+      );
+      setStatus('success');
+      setTimeout(() => {
+        setModalVisible(false);
+        setStatus('idle');
+        onRotated();
+      }, 1800);
+    } catch (e: any) {
+      setStatus('error');
+      setErrorMsg(e?.message || 'Rotation failed. Please try again.');
+    } finally {
+      setExecuting(false);
+    }
+  }, [walletAddress, chainId, suggestion, onRotated]);
+
   return (
-    <View style={styles.rotationCard}>
-      <View style={styles.rotationHeader}>
-        <Ionicons name="swap-horizontal" size={18} color="#F59E0B" />
-        <Text style={styles.rotationTitle}>Strategy Rotation Opportunity</Text>
+    <>
+      <View style={styles.rotationCard}>
+        <View style={styles.rotationHeader}>
+          <Ionicons name="swap-horizontal" size={18} color="#F59E0B" />
+          <Text style={styles.rotationTitle}>Strategy Rotation Opportunity</Text>
+        </View>
+        <Text style={styles.rotationBody}>
+          Your {suggestion.asset} on {suggestion.currentProtocol} is earning{' '}
+          <Text style={{ fontWeight: '700' }}>{suggestion.currentApy.toFixed(1)}%</Text>.
+          {'\n'}Move to {suggestion.suggestedProtocol} for{' '}
+          <Text style={{ fontWeight: '700', color: '#10B981' }}>
+            {suggestion.suggestedApy.toFixed(1)}%
+          </Text>{' '}
+          (+{suggestion.improvement.toFixed(1)}% improvement).
+        </Text>
+        <Pressable
+          style={({ pressed }) => [styles.rotationBtn, pressed && { opacity: 0.8 }]}
+          onPress={() => setModalVisible(true)}
+        >
+          <Text style={styles.rotationBtnText}>Review Rotation</Text>
+        </Pressable>
       </View>
-      <Text style={styles.rotationBody}>
-        Your {suggestion.asset} on {suggestion.currentProtocol} is earning{' '}
-        <Text style={{ fontWeight: '700' }}>{suggestion.currentApy.toFixed(1)}%</Text>.
-        {'\n'}Move to {suggestion.suggestedProtocol} for{' '}
-        <Text style={{ fontWeight: '700', color: '#10B981' }}>
-          {suggestion.suggestedApy.toFixed(1)}%
-        </Text>{' '}
-        (+{suggestion.improvement.toFixed(1)}% improvement).
-      </Text>
-      <Pressable
-        style={({ pressed }) => [styles.rotationBtn, pressed && { opacity: 0.8 }]}
-        onPress={() =>
-          Alert.alert(
-            'Rotate Strategy',
-            `This will withdraw from ${suggestion.currentProtocol} and deposit into ${suggestion.suggestedProtocol}.\n\nCoW Swap will handle any token conversions for MEV-protected, gas-efficient execution.\n\nComing soon!`,
-          )
-        }
+
+      {/* Rotation confirmation modal */}
+      <Modal
+        visible={modalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => !executing && setModalVisible(false)}
       >
-        <Text style={styles.rotationBtnText}>Review Rotation</Text>
-      </Pressable>
-    </View>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="swap-horizontal" size={22} color="#F59E0B" />
+              <Text style={styles.modalTitle}>Rotate Strategy</Text>
+            </View>
+
+            <View style={styles.modalRow}>
+              <View style={styles.modalSide}>
+                <Text style={styles.modalLabel}>From</Text>
+                <Text style={styles.modalProtocol}>{suggestion.currentProtocol}</Text>
+                <Text style={styles.modalApy}>{suggestion.currentApy.toFixed(1)}% APY</Text>
+              </View>
+              <Ionicons name="arrow-forward" size={20} color="#6B7280" />
+              <View style={styles.modalSide}>
+                <Text style={styles.modalLabel}>To</Text>
+                <Text style={[styles.modalProtocol, { color: '#10B981' }]}>{suggestion.suggestedProtocol}</Text>
+                <Text style={[styles.modalApy, { color: '#10B981' }]}>{suggestion.suggestedApy.toFixed(1)}% APY</Text>
+              </View>
+            </View>
+
+            <View style={styles.modalInfoBox}>
+              <Ionicons name="shield-checkmark-outline" size={15} color="#6366F1" />
+              <Text style={styles.modalInfoText}>
+                CoW Swap will handle any token conversions with MEV-protected, gas-efficient execution.
+              </Text>
+            </View>
+
+            {status === 'success' && (
+              <View style={styles.modalSuccess}>
+                <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+                <Text style={styles.modalSuccessText}>Rotation submitted successfully!</Text>
+              </View>
+            )}
+            {status === 'error' && (
+              <Text style={styles.modalErrorText}>{errorMsg}</Text>
+            )}
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalCancelBtn, executing && { opacity: 0.4 }]}
+                onPress={() => setModalVisible(false)}
+                disabled={executing}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalConfirmBtn, executing && { opacity: 0.6 }]}
+                onPress={handleExecute}
+                disabled={executing || status === 'success'}
+              >
+                {executing ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.modalConfirmText}>Confirm Rotation</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -140,13 +251,12 @@ export default function VaultPortfolioScreen() {
   const [rotations, setRotations] = useState<RotationSuggestion[]>([]);
   const [checkingRotations, setCheckingRotations] = useState(false);
 
-  // TODO: Get from wallet context
-  const walletAddress = '';
+  const { address: walletAddress, isConnected, chainId } = useWallet();
 
   const { data, loading, refetch } = useQuery(DEFI_ACCOUNT_QUERY, {
-    variables: { walletAddress: walletAddress || 'not_connected' },
+    variables: { walletAddress: walletAddress ?? '' },
     fetchPolicy: 'cache-and-network',
-    skip: !walletAddress,
+    skip: !isConnected || !walletAddress,
   });
 
   const account = data?.defiAccount;
@@ -260,7 +370,13 @@ export default function VaultPortfolioScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Rotation Opportunities</Text>
           {rotations.map((r) => (
-            <RotationCard key={r.positionId} suggestion={r} />
+            <RotationCard
+              key={r.positionId}
+              suggestion={r}
+              walletAddress={walletAddress ?? null}
+              chainId={chainId ?? 1}
+              onRotated={() => { refetch(); checkRotations(); }}
+            />
           ))}
         </View>
       )}
@@ -299,7 +415,7 @@ export default function VaultPortfolioScreen() {
       </View>
 
       {/* No Wallet Connected State */}
-      {!walletAddress && (
+      {!isConnected && (
         <View style={styles.emptyState}>
           <Ionicons name="wallet-outline" size={48} color="#9CA3AF" />
           <Text style={styles.emptyTitle}>Connect Your Wallet</Text>
@@ -539,6 +655,124 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     fontSize: 14,
+  },
+
+  // Rotation Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  modalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+  },
+  modalSide: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  modalLabel: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  modalProtocol: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  modalApy: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  modalInfoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#EEF2FF',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+  },
+  modalInfoText: {
+    fontSize: 12,
+    color: '#4338CA',
+    flex: 1,
+    lineHeight: 17,
+  },
+  modalSuccess: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  modalSuccessText: {
+    fontSize: 14,
+    color: '#10B981',
+    fontWeight: '600',
+  },
+  modalErrorText: {
+    fontSize: 13,
+    color: '#EF4444',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 4,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  modalConfirmBtn: {
+    flex: 2,
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: '#F59E0B',
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 
   // Footer

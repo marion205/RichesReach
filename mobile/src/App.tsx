@@ -43,6 +43,7 @@ const priceAlertService = expoGoCompatiblePriceAlertService;
 // Screens
 import HomeScreen from './navigation/HomeScreen';
 import AppNavigator from './navigation/AppNavigator';
+import { WalletProvider } from './wallet/WalletProvider';
 import LoginScreen from './features/auth/screens/LoginScreen';
 import CalmGoalSheet from './components/CalmGoalSheet';
 import ForgotPasswordScreen from './features/auth/screens/ForgotPasswordScreen';
@@ -1088,9 +1089,11 @@ export default function App() {
       <SafeAreaProvider>
         <ApolloProvider>
           <AuthProvider>
-            <VoiceProvider>
-              <AppContent />
-            </VoiceProvider>
+            <WalletProvider>
+              <VoiceProvider>
+                <AppContent />
+              </VoiceProvider>
+            </WalletProvider>
           </AuthProvider>
         </ApolloProvider>
       </SafeAreaProvider>

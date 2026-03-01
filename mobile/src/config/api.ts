@@ -14,9 +14,10 @@ import logger from '../utils/logger';
 // Determine localhost address based on platform
 const LOCALHOST = Platform.OS === 'android' ? '10.0.2.2' : '127.0.0.1';
 
-// Your Mac's LAN IP - for physical devices (fallback when env not set or ignored)
-// Should match EXPO_PUBLIC_API_BASE_URL in .env / .env.local. Get current IP: ipconfig getifaddr en0
-const LAN_IP = '192.168.1.246';
+// Your Mac's LAN IP - for physical devices (fallback when env not set or ignored).
+// Must be the IP of the machine running the backend. Get current IP: ipconfig getifaddr en0
+// If GetRAHASignals/GraphQL fetch fails on device, ensure backend is running and reachable at this IP.
+const LAN_IP = process.env.EXPO_PUBLIC_LAN_IP || '192.168.1.246';
 
 // For simulator/emulator, use localhost; for physical devices, use LAN IP
 // In dev mode, prefer localhost for simulator (faster, more reliable)
