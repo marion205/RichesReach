@@ -240,6 +240,9 @@ function HomeStack() {
       <Stack.Screen name="bridge-screen" component={BridgeScreen} options={{ headerShown: true, title: 'Cross-Chain Bridge' }} />
       <Stack.Screen name="nft-detail" component={NFTDetailScreen} options={{ headerShown: false }} />
       <Stack.Screen name="nft-journey" component={NFTJourneyScreen} options={{ headerShown: false }} />
+      {/* Tutor screens reachable from NFT feature in HomeStack */}
+      <Stack.Screen name="tutor-ask-explain" component={TutorAskExplainScreen} options={{ headerShown: true, title: 'Ask Tutor' }} />
+      <Stack.Screen name="tutor-module" component={TutorModuleScreen} options={{ headerShown: true, title: 'Learn' }} />
       <Stack.Screen name="market-commentary" component={MarketCommentaryScreen} />
       <Stack.Screen name="ai-trading-coach" component={AITradingCoachScreen} />
       <Stack.Screen name="daily-voice-digest" component={DailyVoiceDigestScreen} />
@@ -358,6 +361,9 @@ function InvestStack() {
       <Stack.Screen name="bridge-screen" component={BridgeScreen} options={{ headerShown: true, title: 'Cross-Chain Bridge' }} />
       <Stack.Screen name="nft-detail" component={NFTDetailScreen} options={{ headerShown: false }} />
       <Stack.Screen name="nft-journey" component={NFTJourneyScreen} options={{ headerShown: false }} />
+      {/* Tutor screens reachable from NFT feature in InvestStack */}
+      <Stack.Screen name="tutor-ask-explain" component={TutorAskExplainScreen} options={{ headerShown: true, title: 'Ask Tutor' }} />
+      <Stack.Screen name="tutor-module" component={TutorModuleScreen} options={{ headerShown: true, title: 'Learn' }} />
       <Stack.Screen name="wellness-dashboard" component={WellnessDashboardScreen} options={{ headerShown: false }} />
       
       {/* Swing Trading screens */}
