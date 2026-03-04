@@ -47,7 +47,7 @@ describe('AlpacaConnectModal - Test Scenarios', () => {
       expect(getByText('Do you already have an Alpaca account?')).toBeTruthy();
     });
 
-    it('should trigger OAuth flow when user selects "Yes, I have an account"', () => {
+    it('should show authorization disclosure then trigger OAuth when user accepts', () => {
       const onConnect = jest.fn();
       const onClose = jest.fn();
       
@@ -59,11 +59,16 @@ describe('AlpacaConnectModal - Test Scenarios', () => {
         />
       );
 
-      const yesButton = getByText('Yes, I have an account');
-      fireEvent.press(yesButton);
+      fireEvent.press(getByText('Yes, I have an account'));
+      expect(getByText(/Authorize RichesReach/)).toBeTruthy();
+      expect(getByText('DENY')).toBeTruthy();
+      expect(getByText('ACCEPT')).toBeTruthy();
+      expect(onConnect).not.toHaveBeenCalled();
 
+      fireEvent.press(getByText('ACCEPT'));
       expect(onConnect).toHaveBeenCalled();
       expect(alpacaAnalytics.getEvents().some(e => e.event === 'connect_has_account_yes')).toBe(true);
+      expect(alpacaAnalytics.getEvents().some(e => e.event === 'connect_authorization_disclosure_accepted')).toBe(true);
     });
 
     it('should track analytics events for has-account flow', () => {

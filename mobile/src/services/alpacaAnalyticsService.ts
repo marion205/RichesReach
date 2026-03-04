@@ -11,6 +11,8 @@ export interface AlpacaConnectEvent {
     | 'connect_modal_shown'
     | 'connect_has_account_yes'
     | 'connect_has_account_no'
+    | 'connect_authorization_disclosure_accepted'
+    | 'connect_authorization_disclosure_denied'
     | 'connect_oauth_started'
     | 'connect_oauth_success'
     | 'connect_oauth_error'

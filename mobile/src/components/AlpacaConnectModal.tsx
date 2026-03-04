@@ -1,6 +1,7 @@
 /**
  * AlpacaConnectModal - Pre-connect modal for Alpaca OAuth
- * Handles users with/without existing Alpaca accounts
+ * Handles users with/without existing Alpaca accounts.
+ * Includes required Alpaca OAuth partner authorization disclosure before redirect.
  */
 import React, { useState } from 'react';
 import {
@@ -11,15 +12,22 @@ import {
   StyleSheet,
   Linking,
   Alert,
+  ScrollView,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { alpacaAnalytics } from '../services/alpacaAnalyticsService';
 import logger from '../utils/logger';
 
+/** Partner name shown in Alpaca-required authorization disclosure */
+const PARTNER_NAME = 'RichesReach';
+
+/** Alpaca-required authorization disclosure text (compliance) */
+const AUTHORIZATION_DISCLOSURE = `By allowing ${PARTNER_NAME} to access your Alpaca account, you are granting ${PARTNER_NAME} access to your account information and authorization to place transactions at your direction.\n\nAlpaca does not warrant or guarantee that ${PARTNER_NAME} will work as advertised or expected. Before authorizing, learn more about ${PARTNER_NAME}.`;
+
 interface AlpacaConnectModalProps {
   visible: boolean;
   onClose: () => void;
-  onConnect: () => void; // Callback when user confirms they have account
+  onConnect: () => void; // Callback when user accepts disclosure and starts OAuth
 }
 
 export const AlpacaConnectModal: React.FC<AlpacaConnectModalProps> = ({
@@ -28,14 +36,15 @@ export const AlpacaConnectModal: React.FC<AlpacaConnectModalProps> = ({
   onConnect,
 }) => {
   const [hasAccount, setHasAccount] = useState<boolean | null>(null);
+  const [showAuthorizationDisclosure, setShowAuthorizationDisclosure] = useState(false);
 
-  // Track when modal is shown
+  // Track when modal is shown; reset state when modal closes
   React.useEffect(() => {
     if (visible) {
       alpacaAnalytics.track('connect_modal_shown', { action: 'opened' });
     } else {
-      // Reset state when modal closes
       setHasAccount(null);
+      setShowAuthorizationDisclosure(false);
     }
   }, [visible]);
 
@@ -78,8 +87,21 @@ export const AlpacaConnectModal: React.FC<AlpacaConnectModalProps> = ({
   const handleHasAccount = () => {
     alpacaAnalytics.track('connect_has_account_yes');
     setHasAccount(true);
-    onConnect(); // Start OAuth flow
-    onClose(); // Close modal
+    setShowAuthorizationDisclosure(true);
+    // Do not call onConnect() yet — show authorization disclosure first (Alpaca compliance)
+  };
+
+  const handleDisclosureAccept = () => {
+    alpacaAnalytics.track('connect_authorization_disclosure_accepted');
+    setShowAuthorizationDisclosure(false);
+    onConnect();
+    onClose();
+  };
+
+  const handleDisclosureDeny = () => {
+    alpacaAnalytics.track('connect_authorization_disclosure_denied');
+    setShowAuthorizationDisclosure(false);
+    setHasAccount(null);
   };
 
   const handleNoAccount = () => {
@@ -94,6 +116,46 @@ export const AlpacaConnectModal: React.FC<AlpacaConnectModalProps> = ({
   // Don't render anything if not visible (React Native Modal best practice)
   if (!visible) {
     return null;
+  }
+
+  // Alpaca-required authorization disclosure (before OAuth redirect)
+  if (hasAccount === true && showAuthorizationDisclosure) {
+    return (
+      <Modal
+        visible={true}
+        transparent
+        animationType="fade"
+        onRequestClose={handleDisclosureDeny}
+        presentationStyle="overFullScreen"
+      >
+        <View style={styles.overlay}>
+          <View style={[styles.modal, styles.disclosureModal]}>
+            <Text style={styles.disclosureTitle}>Authorize {PARTNER_NAME}</Text>
+            <ScrollView
+              style={styles.disclosureScroll}
+              contentContainerStyle={styles.disclosureScrollContent}
+              showsVerticalScrollIndicator={true}
+            >
+              <Text style={styles.disclosureBody}>{AUTHORIZATION_DISCLOSURE}</Text>
+            </ScrollView>
+            <View style={styles.disclosureButtons}>
+              <TouchableOpacity
+                style={[styles.button, styles.denyButton]}
+                onPress={handleDisclosureDeny}
+              >
+                <Text style={styles.denyButtonText}>DENY</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, styles.acceptButton]}
+                onPress={handleDisclosureAccept}
+              >
+                <Text style={styles.buttonText}>ACCEPT</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
   }
 
   // Initial screen: Ask if user has account
@@ -321,6 +383,49 @@ const styles = StyleSheet.create({
   cancelText: {
     fontSize: 16,
     color: '#999',
+  },
+  // Authorization disclosure (Alpaca OAuth partner compliance)
+  disclosureModal: {
+    maxHeight: '85%',
+  },
+  disclosureTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  disclosureScroll: {
+    maxHeight: 220,
+  },
+  disclosureScrollContent: {
+    paddingVertical: 8,
+  },
+  disclosureBody: {
+    fontSize: 15,
+    color: '#333',
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  disclosureButtons: {
+    flexDirection: 'row',
+    marginTop: 20,
+    gap: 12,
+  },
+  denyButton: {
+    flex: 1,
+    backgroundColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: '#ccc',
+  },
+  denyButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  acceptButton: {
+    flex: 1,
+    backgroundColor: '#007AFF',
   },
 });
 
