@@ -214,9 +214,10 @@ class FSSEngine:
         """
         daily_ret = prices.pct_change()
         
-        # Volume Price Trend (VPT): Cumulative volume-weighted returns
-        # VPT = sum(daily_return * volume) / average_volume
-        vpt = (daily_ret * volumes).rolling(20, min_periods=1).sum() / (volumes.rolling(20, min_periods=1).mean() + 1e-12)
+        # Volume Price Trend (VPT): True cumulative volume-weighted price changes
+        # VPT_t = VPT_{t-1} + Volume_t * daily_return_t  (cumulative from start of series)
+        # Cross-sectional z-scoring normalizes across stocks before combining with other signals
+        vpt = (daily_ret * volumes).cumsum()
         
         # Volume Breakout: current volume / 20-day average
         vol_avg_20 = volumes.rolling(20).mean()
@@ -260,11 +261,14 @@ class FSSEngine:
         vol_pct = vol_20.rank(axis=1, pct=True)  # 0-1, lower vol = lower pct
         low_vol_score = (1.0 - vol_pct) * 100.0
         
-        # Drawdown resilience: max drawdown over lookback
+        # Drawdown resilience: current drawdown from rolling high-water mark.
+        # dd is already the worst-case percentage below the rolling peak within
+        # the lookback window (prices / rolling_max - 1 <= 0). Applying a second
+        # rolling min would create a nested double-window that double-penalises
+        # recoveries. We negate dd so that a larger drawdown maps to a lower score.
         roll_max = prices.rolling(lookback_days).max()
-        dd = (prices / (roll_max + 1e-12)) - 1.0  # Negative values
-        dd_min = dd.rolling(lookback_days).min()  # Most negative
-        dd_score = self.to_0_100_from_z(dd_min.apply(self.zscore, axis=1))
+        dd = (prices / (roll_max + 1e-12)) - 1.0  # Negative values: 0 = at peak, -0.3 = 30% below peak
+        dd_score = self.to_0_100_from_z((-dd).apply(self.zscore, axis=1))
         
         # Balance sheet strength
         if fundamentals_daily and "balance_strength" in fundamentals_daily:
@@ -1015,28 +1019,44 @@ class SafetyFilter:
         ebit: float,
         market_value: float,
         sales: float,
-        total_assets: float
+        total_assets: float,
+        total_liabilities: float = 0.0
     ) -> float:
         """
-        Calculate Altman Z-Score (simplified version).
-        
+        Calculate Altman Z-Score (1968 original formula).
+
         Z = 1.2*(WC/TA) + 1.4*(RE/TA) + 3.3*(EBIT/TA) + 0.6*(MV/TL) + 1.0*(S/TA)
-        
+
+        Where TL = total liabilities (not total assets — critical distinction).
+
         Z > 2.99: Safe
         1.8 < Z < 2.99: Grey zone
         Z < 1.8: Distress zone (blacklist)
         """
         if total_assets == 0:
             return 0.0
-        
+
+        # Use total_liabilities for the MV/TL term as Altman (1968) specifies.
+        # Fall back to total_assets only when total_liabilities is unavailable,
+        # which overstates safety for leveraged companies — log a warning.
+        if total_liabilities > 0:
+            mv_denominator = total_liabilities
+        else:
+            import logging as _logging
+            _logging.getLogger(__name__).warning(
+                "calculate_altman_z_score: total_liabilities not provided; "
+                "falling back to total_assets for MV denominator (overstates Z for leveraged firms)"
+            )
+            mv_denominator = total_assets
+
         z = (
             1.2 * (working_capital / total_assets) +
             1.4 * (retained_earnings / total_assets) +
             3.3 * (ebit / total_assets) +
-            0.6 * (market_value / total_assets) +  # Simplified: using MV instead of MV/TL
+            0.6 * (market_value / mv_denominator) +
             1.0 * (sales / total_assets)
         )
-        
+
         return z
     
     def check_altman_z(

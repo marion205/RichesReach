@@ -154,7 +154,14 @@ class RegimeDetector:
         iv_high_252 = df['iv'].rolling(252, min_periods=20).max()
         iv_low_252 = df['iv'].rolling(252, min_periods=20).min()
         iv_range = iv_high_252 - iv_low_252
-        df['iv_rank'] = (df['iv'] - iv_low_252) / iv_range.replace(0, 1)
+        # When iv_range == 0 the stock had flat IV for the entire window.
+        # Silently dividing by 1 (replace trick) returns a meaningless near-zero
+        # value. Instead return 0.5 (neutral) to avoid false low-IV signals.
+        df['iv_rank'] = np.where(
+            iv_range > 0.001,
+            (df['iv'] - iv_low_252) / iv_range,
+            0.5
+        )
         df['iv_rank'] = df['iv_rank'].clip(0, 1).fillna(0.5)
 
         # 2b. IV acceleration and z-score
@@ -316,7 +323,10 @@ class RegimeDetector:
             return "MEAN_REVERSION"
 
         # --- TREND_UP / TREND_DOWN: Persistent moves (ADX) ---
-        if adx > 18:
+        # ADX > 25 is the standard threshold for a confirmed strong trend.
+        # ADX 18-25 indicates a weak or developing trend; labelling that as
+        # TREND_UP/DOWN creates false signals in choppy markets.
+        if adx > 25:
             if (returns_60d < -0.02 or (sma20_slope < -0.003 and returns_5d < -0.01)) and price_dist < 0.05:
                 return "TREND_DOWN"
             if (returns_60d > 0.03 or sma20_slope > 0.003) and price_dist > -0.015:

@@ -221,8 +221,12 @@ class MLService:
         user_profile: Dict[str, Any],
     ) -> List[Dict[str, Any]]:
         """
-        Score stocks using the production R² model (R² = 0.023)
-        This is the highest-performing model we've developed
+        Score stocks using the production R² model.
+
+        Note: R² = 0.023 — this model explains ~2.3% of forward-return variance.
+        That is weak by institutional standards (typical: 0.15–0.30) and should
+        be treated as one low-confidence signal among several, not a primary
+        ranking driver. Use in combination with FSS and regime signals.
         """
         if not self.production_r2_available or not self.production_r2_model:
             logger.warning(
@@ -295,7 +299,7 @@ class MLService:
                             "ml_confidence": confidence,
                             "ml_reasoning": (
                                 f"Production R² model prediction: "
-                                f"{predicted_return:.3f} return (R² = 0.023)"
+                                f"{predicted_return:.3f} return (low-confidence signal, R² = 0.023)"
                             ),
                             "predicted_return": float(predicted_return),
                             "model_type": "production_r2",
@@ -1063,16 +1067,52 @@ class MLService:
             n_samples = 1000
             np.random.seed(42)
 
-            # Synthetic market data with 20 features
+            # Synthetic market data with 20 features.
+            # Feature semantics (mirrors regime_detector feature engineering):
+            #   0: VIX-proxy / volatility level (z-scored)
+            #   1: 5-day returns (directional momentum)
+            #   2: ADX-proxy (trend strength)
+            #   3: IV rank (relative vol level)
+            #   4: Put/call ratio proxy
+            #   5–19: Additional market micro-structure noise
             X = np.random.randn(n_samples, 20)
-            y = np.random.choice(len(self.regime_labels), n_samples)
+
+            # Encode regime rules so the model learns real decision boundaries
+            # rather than memorising random class distributions.
+            #   early_bull=0, late_bull=1, correction=2, bear=3,
+            #   sideways=4, high_vol=5, recovery=6, bubble=7
+            y = np.full(n_samples, 4, dtype=int)  # default: sideways_consolidation
+
+            # Bear / crash: high vol + negative returns
+            bear_mask = (X[:, 0] > 1.5) & (X[:, 1] < -0.8)
+            y[bear_mask] = 3  # bear_market
+
+            # High volatility: very high vol, mixed direction
+            high_vol_mask = (X[:, 0] > 1.2) & ~bear_mask
+            y[high_vol_mask] = 5  # high_volatility
+
+            # Early bull: strong trend up, moderate vol
+            early_bull_mask = (X[:, 2] > 1.0) & (X[:, 1] > 0.5) & (X[:, 0] < 0.5)
+            y[early_bull_mask] = 0  # early_bull_market
+
+            # Late bull / bubble: strong trend up + rising vol
+            late_bull_mask = (X[:, 2] > 1.0) & (X[:, 1] > 0.5) & (X[:, 0] > 0.5)
+            y[late_bull_mask] = 1  # late_bull_market
+
+            # Correction: mild negative returns after bull
+            correction_mask = (X[:, 1] < -0.3) & (X[:, 1] > -0.8) & (X[:, 0] < 1.2)
+            y[correction_mask] = 2  # correction
+
+            # Recovery: positive returns from low-vol base
+            recovery_mask = (X[:, 1] > 0.3) & (X[:, 0] < -0.5)
+            y[recovery_mask] = 6  # recovery
 
             self.market_regime_model = RandomForestClassifier(
                 **self.model_params["market_regime"]
             )
             self.market_regime_model.fit(X, y)
             logger.info(
-                "Enhanced market regime model trained successfully with 20 features"
+                "Market regime model trained on structured synthetic data with 20 features"
             )
         except Exception as e:
             logger.error(

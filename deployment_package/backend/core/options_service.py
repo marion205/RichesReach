@@ -61,11 +61,26 @@ class OptionsAnalysisService:
             self.polygon_api_key = os.getenv("POLYGON_API_KEY") or os.getenv("EXPO_PUBLIC_POLYGON_API_KEY") or ""
             self.finnhub_api_key = os.getenv("FINNHUB_API_KEY") or "d2rnitpr01qv11lfegugd2rnitpr01qv11lfegv0"
             self.use_real_data = bool(self.polygon_api_key or self.finnhub_api_key)
+            # Risk-free rate: configurable via env var so it can be updated without a deploy.
+            # Set RISK_FREE_RATE to the current annualised 3-month Treasury yield (decimal).
+            self._risk_free_rate: float = float(os.getenv("RISK_FREE_RATE", "0.045"))
         except Exception as e:
             logger.warning(f"Error initializing API keys: {e}")
             self.polygon_api_key = ""
             self.finnhub_api_key = ""
             self.use_real_data = False
+            self._risk_free_rate = 0.045
+
+    def set_risk_free_rate(self, rate: float) -> None:
+        """Update the risk-free rate used in Black-Scholes calculations.
+
+        Call this whenever you refresh Treasury yield data so Greeks stay
+        accurate without restarting the service.
+        """
+        if not (0.0 <= rate <= 0.30):
+            raise ValueError(f"Risk-free rate {rate} is outside plausible range [0, 0.30]")
+        self._risk_free_rate = rate
+        logger.info("Risk-free rate updated to %.4f", rate)
 
     # --------------------------------------------------------------------- #
     # Public API                                                            #
@@ -622,10 +637,12 @@ class OptionsAnalysisService:
         max_loss = net_debit * 100
         breakeven = long_strike + net_debit
 
-        # Probability: Use delta difference
-        long_delta = long_call.get('delta', 0.5)
+        # Probability of profit: the spread profits when the stock finishes above
+        # the breakeven (long_strike + net_debit). The short call delta approximates
+        # P(stock finishes above the short strike), which is a conservative upper
+        # bound — breakeven is below the short strike, so actual PoP >= 1 - short_delta.
         short_delta = short_call.get('delta', 0.3)
-        prob_profit = (long_delta + short_delta) / 2  # Rough approximation
+        prob_profit = min(0.95, max(0.05, 1.0 - short_delta))
 
         if max_profit <= 0:
             return None
@@ -747,8 +764,12 @@ class OptionsAnalysisService:
             lower_breakeven = otm_put_sell.get('strike', 0) - net_credit
             upper_breakeven = otm_call_sell.get('strike', 0) + net_credit
 
-            # Probability: stock stays between short strikes
-            prob_profit = 0.65  # Typical for well-constructed iron condor
+            # Probability: P(lower_short < S_T < upper_short)
+            # ≈ 1 - P(S_T below short put) - P(S_T above short call)
+            # where each short-leg delta approximates the probability of finishing ITM.
+            short_put_delta = abs(otm_put_sell.get('delta', 0.15))
+            short_call_delta = abs(otm_call_sell.get('delta', 0.15))
+            prob_profit = min(0.95, max(0.10, 1.0 - short_put_delta - short_call_delta))
 
             return {
                 "strategy_name": "Iron Condor",
@@ -1089,7 +1110,7 @@ class OptionsAnalysisService:
             T = days_to_exp / 365.0
             S = underlying_price  # Spot price
             K = strike            # Strike price
-            r = 0.045             # Risk-free rate (approximate current Treasury rate)
+            r = self._risk_free_rate  # Configurable via set_risk_free_rate() or RISK_FREE_RATE env var
 
             # Estimate implied volatility from market price, or use historical estimate
             iv = contract.get('implied_volatility', 0)
@@ -1274,14 +1295,24 @@ class OptionsAnalysisService:
         else:
             put_call_ratio = put_volume / max(call_volume, 1)
 
-        # Calculate IV rank from chain if available
+        # Calculate IV rank from chain if available.
+        # True IV rank requires 252-day history (iv_rank = (IV - IV_52w_low) / (IV_52w_high - IV_52w_low)).
+        # Without historical data we use the spread within the current chain as a relative proxy,
+        # falling back to a widened assumed range (10%–70% IV) when the chain is flat.
         iv_rank = 50.0
         if calls or puts:
             all_ivs = [c.get("implied_volatility", 0.25) for c in calls] + [p.get("implied_volatility", 0.25) for p in puts]
             if all_ivs:
                 avg_iv = sum(all_ivs) / len(all_ivs)
-                # Normalize IV to 0-100 rank (simplified)
-                iv_rank = min(100, max(0, (avg_iv - 0.15) / 0.3 * 100))
+                iv_min = min(all_ivs)
+                iv_max = max(all_ivs)
+                iv_range = iv_max - iv_min
+                if iv_range > 0.01:
+                    # Chain-relative rank: where does avg sit within today's chain?
+                    iv_rank = min(100.0, max(0.0, (avg_iv - iv_min) / iv_range * 100.0))
+                else:
+                    # Flat chain: normalise against wider assumed historical range (10%-70%)
+                    iv_rank = min(100.0, max(0.0, (avg_iv - 0.10) / 0.60 * 100.0))
 
         # Calculate skew (put/call IV skew)
         call_ivs = [c.get("implied_volatility", 0.25) for c in calls if c.get("implied_volatility")]
