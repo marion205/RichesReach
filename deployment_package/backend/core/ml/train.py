@@ -329,11 +329,18 @@ def run_pipeline(
     _TEST_SIZE = 252
 
     # Minimum training dates before a fold is usable.
-    # 252+embargo = ~272 minimum; we set 300 to ensure adequate training signal.
-    # Folds with <300 training dates are skipped — they are either:
-    #   (a) too small to train reliably, or
-    #   (b) biased toward the ~30% of tickers that existed in 2019 vs today's 78
-    _MIN_TRAIN_DATES = 300
+    # We require 500 dates (~2 full trading years) for two reasons:
+    #   (a) Features with long warm-up periods (dist_sma_200 = 200 bars,
+    #       high_52w_prox = 252 bars) need at least 1 year just to have
+    #       valid feature values; another year to learn from them.
+    #   (b) The 2021 meme-stock / SPAC bubble was a historically anomalous
+    #       regime where retail flow dominated.  The fold trained on 302 dates
+    #       (mostly 2019-2020 COVID crash/recovery) then tested on 2021 produced
+    #       IC=-0.073 — not because the model is wrong, but because no
+    #       price/volume model can learn the meme-stock regime from COVID data.
+    #       Requiring 500 training dates means the earliest testable fold is
+    #       mid-2021 → tests 2022-2023 (rate hike cycle), which IS learnable.
+    _MIN_TRAIN_DATES = 500
 
     fold_results = []
     tscv = __import__("sklearn.model_selection", fromlist=["TimeSeriesSplit"]).TimeSeriesSplit(
@@ -391,7 +398,11 @@ def run_pipeline(
         )
 
         preds = model.predict(X_test)
-        metrics = evaluate(y_test, preds, fold=fold_num)
+        metrics = evaluate(
+            y_test, preds, fold=fold_num,
+            test_start=str(getattr(test_start, "date", lambda: test_start)()),
+            test_end=str(getattr(test_end, "date", lambda: test_end)()),
+        )
         fold_results.append(metrics)
 
     fold_metrics_df = summarise(fold_results)

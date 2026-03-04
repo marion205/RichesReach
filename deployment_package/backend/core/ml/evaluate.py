@@ -47,6 +47,8 @@ def evaluate(
     y_true: pd.Series | np.ndarray,
     y_pred: np.ndarray,
     fold: int | None = None,
+    test_start: str | None = None,
+    test_end: str | None = None,
 ) -> dict[str, float]:
     """
     Compute all evaluation metrics for one fold.
@@ -59,10 +61,14 @@ def evaluate(
         Model predictions.
     fold : int | None
         Fold number for logging.
+    test_start : str | None
+        ISO date string for start of the test window (for logging / summary).
+    test_end : str | None
+        ISO date string for end of the test window (for logging / summary).
 
     Returns
     -------
-    dict with keys: r2, ic, ic_pvalue, decile_spread, hit_rate
+    dict with keys: r2, ic, ic_pvalue, decile_spread, hit_rate, test_start, test_end
     """
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
@@ -74,7 +80,8 @@ def evaluate(
     if len(y_true) < 10:
         logger.warning("Fold %s: fewer than 10 valid samples — metrics unreliable", fold)
         return {"r2": np.nan, "ic": np.nan, "ic_pvalue": np.nan,
-                "decile_spread": np.nan, "hit_rate": np.nan}
+                "decile_spread": np.nan, "hit_rate": np.nan,
+                "test_start": test_start, "test_end": test_end}
 
     r2 = float(r2_score(y_true, y_pred))
 
@@ -92,12 +99,15 @@ def evaluate(
         "decile_spread": decile_spread,
         "hit_rate": hit_rate,
         "n_samples": int(len(y_true)),
+        "test_start": test_start,
+        "test_end": test_end,
     }
 
     fold_label = f"Fold {fold}" if fold is not None else "Eval"
+    date_range = f" [{test_start}→{test_end}]" if test_start and test_end else ""
     logger.info(
-        "%s: R²=%.4f  IC=%.4f (p=%.3f)  decile_spread=%.4f  hit_rate=%.3f  n=%d",
-        fold_label, r2, ic, ic_pvalue, decile_spread, hit_rate, len(y_true),
+        "%s%s: R²=%.4f  IC=%.4f (p=%.3f)  decile_spread=%.4f  hit_rate=%.3f  n=%d",
+        fold_label, date_range, r2, ic, ic_pvalue, decile_spread, hit_rate, len(y_true),
     )
 
     return result
@@ -141,12 +151,27 @@ def summarise(fold_results: list[dict]) -> pd.DataFrame:
     -------
     pd.DataFrame
         Rows: each fold + a 'mean' and 'std' summary row.
+        Columns include test_start / test_end (string) for interpretability.
     """
     df = pd.DataFrame(fold_results)
     df.index = [f"fold_{i+1}" for i in range(len(df))]
-    summary = pd.concat([
-        df,
-        pd.DataFrame(df.mean()).T.rename(index={0: "mean"}),
-        pd.DataFrame(df.std()).T.rename(index={0: "std"}),
-    ])
-    return summary
+
+    # Separate numeric columns (for mean/std) from string annotation columns
+    str_cols = ["test_start", "test_end"]
+    num_cols = [c for c in df.columns if c not in str_cols]
+
+    num_df = df[num_cols]
+    mean_row = pd.DataFrame(num_df.mean()).T.rename(index={0: "mean"})
+    std_row  = pd.DataFrame(num_df.std()).T.rename(index={0: "std"})
+
+    # mean/std rows get empty string annotations
+    for col in str_cols:
+        if col in df.columns:
+            mean_row[col] = ""
+            std_row[col] = ""
+
+    summary = pd.concat([df, mean_row, std_row])
+    # Reorder: put date columns first for readability
+    ordered_cols = [c for c in str_cols if c in summary.columns] + \
+                   [c for c in summary.columns if c not in str_cols]
+    return summary[ordered_cols]
