@@ -37,16 +37,16 @@ except ImportError as e:
 # Production R² Model import
 try:
     import os
-    import sys
+    from .ml.model_registry import ModelRegistry as _ModelRegistry
 
-    sys.path.append(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )
-    from production_r2_model import ProductionR2Model
-
-    PRODUCTION_R2_AVAILABLE = True
-except ImportError as e:
-    logging.warning(f"Production R² model not available: {e}")
+    PRODUCTION_R2_AVAILABLE = _ModelRegistry.exists()
+    if not PRODUCTION_R2_AVAILABLE:
+        logging.info(
+            "Production R² model not yet trained. "
+            "Run ml.train.run_pipeline() to train and save it."
+        )
+except Exception as e:
+    logging.warning(f"Production R² model registry unavailable: {e}")
     PRODUCTION_R2_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
@@ -70,17 +70,24 @@ class MLService:
         self.stock_scorer = None
         self.scaler = StandardScaler()
 
-        # Initialize production R² model
-        if self.production_r2_available:
-            try:
-                self.production_r2_model = ProductionR2Model()
-                logger.info("Production R² model initialized (R² = 0.023)")
-            except Exception as e:
-                logger.warning(f"Failed to initialize production R² model: {e}")
-                self.production_r2_available = False
-                self.production_r2_model = None
-        else:
-            self.production_r2_model = None
+        # Initialize production ML pipeline (new walk-forward LightGBM model)
+        try:
+            from .ml.model_registry import ModelRegistry
+            self._model_registry = ModelRegistry
+            self.production_r2_available = ModelRegistry.exists()
+            if self.production_r2_available:
+                logger.info("Production ML model available (ml_models/production_r2.pkl)")
+            else:
+                logger.info(
+                    "Production ML model not yet trained — run ml.train.run_pipeline() "
+                    "to build it. Falling back to standard ML scoring."
+                )
+        except Exception as exc:
+            logger.warning("Could not load ModelRegistry: %s", exc)
+            self._model_registry = None
+            self.production_r2_available = False
+
+        self.production_r2_model = None  # kept for backwards-compat attribute access
 
         # Model parameters
         self.model_params = {
@@ -228,105 +235,94 @@ class MLService:
         be treated as one low-confidence signal among several, not a primary
         ranking driver. Use in combination with FSS and regime signals.
         """
-        if not self.production_r2_available or not self.production_r2_model:
-            logger.warning(
-                "Production R² model not available, falling back to standard ML scoring"
+        if not self.production_r2_available or self._model_registry is None:
+            logger.info(
+                "Production ML model not available — falling back to standard ML scoring. "
+                "Train it with: python -m deployment_package.backend.core.ml.train"
             )
             return self.score_stocks_ml(stocks, market_conditions, user_profile)
 
         try:
-            # Extract symbols from stocks
-            symbols = [
-                stock.get("symbol", stock.get("ticker", ""))
-                for stock in stocks
-                if stock.get("symbol") or stock.get("ticker")
-            ]
-
-            if not symbols:
-                logger.warning("No valid symbols found for production R² scoring")
-                return self.score_stocks_ml(stocks, market_conditions, user_profile)
-
-            # Train the production model if not already trained
-            if not self.production_r2_model.is_trained:
-                logger.info("Training production R² model...")
-                train_results = self.production_r2_model.train(symbols)
-                if "error" in train_results:
-                    logger.error(
-                        f"Failed to train production R² model: {train_results['error']}"
-                    )
-                    return self.score_stocks_ml(
-                        stocks, market_conditions, user_profile
-                    )
-                logger.info(
-                    "Production R² model trained successfully (R² = %s)",
-                    train_results.get("train_r2", "unknown"),
-                )
-
-            # Score each stock
-            scored_stocks: List[Dict[str, Any]] = []
-
-            for stock in stocks:
-                symbol = stock.get("symbol", stock.get("ticker", ""))
-                if not symbol:
-                    continue
-
-                try:
-                    # Get predictions for this symbol
-                    pred_results = self.production_r2_model.predict(symbol)
-                    if "error" in pred_results:
-                        logger.warning(
-                            "Error predicting %s: %s",
-                            symbol,
-                            pred_results["error"],
-                        )
-                        # Fallback to standard scoring
-                        scored_stock = self._fallback_stock_scoring(
-                            [stock], market_conditions, user_profile
-                        )[0]
-                    else:
-                        # Use the latest prediction as the ML score
-                        latest_pred = pred_results.get("latest_prediction", {})
-                        predicted_return = latest_pred.get("predicted_return", 0.0)
-                        confidence = latest_pred.get("confidence", "low")
-
-                        # Convert prediction to score (0-10 scale)
-                        # Map predicted return to score: -0.2 to +0.2 maps to 0-10
-                        ml_score = max(0, min(10, 5 + (predicted_return * 25)))
-
-                        scored_stock = {
-                            **stock,
-                            "ml_score": float(ml_score),
-                            "ml_confidence": confidence,
-                            "ml_reasoning": (
-                                f"Production R² model prediction: "
-                                f"{predicted_return:.3f} return (low-confidence signal, R² = 0.023)"
-                            ),
-                            "predicted_return": float(predicted_return),
-                            "model_type": "production_r2",
-                        }
-
-                    scored_stocks.append(scored_stock)
-
-                except Exception as e:
-                    logger.error(
-                        "Error scoring %s with production R² model: %s", symbol, e
-                    )
-                    # Fallback to standard scoring
-                    scored_stock = self._fallback_stock_scoring(
-                        [stock], market_conditions, user_profile
-                    )[0]
-                    scored_stocks.append(scored_stock)
-
-            # Sort by ML score
-            scored_stocks.sort(key=lambda x: x["ml_score"], reverse=True)
-            logger.info(
-                "Scored %d stocks using production R² model", len(scored_stocks)
-            )
-            return scored_stocks
-
-        except Exception as e:
-            logger.error(f"Error in production R² scoring: {e}")
+            import yfinance as yf
+        except ImportError:
+            logger.warning("yfinance not installed — cannot run production ML scoring")
             return self.score_stocks_ml(stocks, market_conditions, user_profile)
+
+        scored_stocks: List[Dict[str, Any]] = []
+
+        # Load model metadata once (avoids re-reading .pkl for each stock)
+        try:
+            meta = self._model_registry.metadata()
+            fold_ic = meta.get("fold_metrics", {}).get("ic", None)
+            horizon = meta.get("horizon", 20)
+        except Exception:
+            meta = {}
+            fold_ic = None
+            horizon = 20
+
+        for stock in stocks:
+            symbol = stock.get("symbol", stock.get("ticker", ""))
+            if not symbol:
+                continue
+
+            try:
+                # Fetch recent history for this ticker (need 252+ rows for features)
+                ticker_df = yf.download(
+                    symbol, period="2y", auto_adjust=True, progress=False
+                )
+                if ticker_df.empty or len(ticker_df) < 100:
+                    raise ValueError(f"Insufficient history for {symbol}")
+
+                # Normalise column names (yfinance returns Title Case)
+                ticker_df.columns = [c.lower() for c in ticker_df.columns]
+
+                # Attach SPY as cross-asset context
+                spy_df = yf.download("SPY", period="2y", auto_adjust=True, progress=False)
+                if not spy_df.empty:
+                    spy_df.columns = [c.lower() for c in spy_df.columns]
+                    ticker_df["spy_close"] = spy_df["close"].reindex(ticker_df.index)
+                    ticker_df["spy_volume"] = spy_df["volume"].reindex(ticker_df.index)
+
+                # Get prediction from registry
+                raw_pred = self._model_registry.predict(ticker_df)
+
+                # Map vol-adjusted prediction to 0-10 score.
+                # Vol-adjusted returns typically range ±2.0 (±2σ), so:
+                # pred=+2.0 → score=10, pred=0 → score=5, pred=-2.0 → score=0
+                ml_score = max(0.0, min(10.0, 5.0 + raw_pred * 2.5))
+
+                # Confidence: based on IC magnitude (if available)
+                if fold_ic is not None and fold_ic > 0.05:
+                    confidence = "medium"
+                elif fold_ic is not None and fold_ic > 0.02:
+                    confidence = "low"
+                else:
+                    confidence = "low"
+
+                scored_stock = {
+                    **stock,
+                    "ml_score": float(ml_score),
+                    "ml_confidence": confidence,
+                    "ml_reasoning": (
+                        f"Walk-forward LightGBM ({horizon}D vol-adj return): "
+                        f"raw signal={raw_pred:.3f}"
+                        + (f", mean OOS IC={fold_ic:.3f}" if fold_ic else "")
+                    ),
+                    "predicted_return": float(raw_pred),
+                    "model_type": "production_lgbm_walkforward",
+                }
+
+            except Exception as exc:
+                logger.warning("Could not score %s with production model: %s", symbol, exc)
+                scored_stock = self._fallback_stock_scoring(
+                    [stock], market_conditions, user_profile
+                )[0]
+
+            scored_stocks.append(scored_stock)
+
+        scored_stocks.sort(key=lambda x: x.get("ml_score", 0), reverse=True)
+        logger.info("Scored %d stocks using production walk-forward ML model", len(scored_stocks))
+        return scored_stocks
 
     def score_stocks_ml(
         self,
