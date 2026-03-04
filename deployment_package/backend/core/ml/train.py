@@ -107,7 +107,7 @@ def run_pipeline(
     start_date: str = "2019-01-01",
     end_date: str | None = None,
     horizon: int = 20,
-    n_splits: int = 4,
+    n_splits: int = 6,
     embargo_periods: int = 20,
     save_model: bool = True,
     vol_adjust: bool = True,
@@ -228,7 +228,35 @@ def run_pipeline(
     X_stacked = X_stacked.loc[common_idx]
     y_stacked = y_df.loc[common_idx]
 
-    # Clip extreme targets (>5σ)
+    # ------------------------------------------------------------------
+    # Market-neutralise the target: subtract SPY vol-adjusted forward return
+    # from each stock's vol-adjusted forward return on the same date.
+    #
+    # WHY THIS MATTERS:
+    #   Without neutralisation, on a day when the market rallies 5% over the
+    #   next 20 days, every stock's raw target is positive regardless of its
+    #   stock-specific signal.  The model then learns "buy everything in bull
+    #   markets, sell everything in bear markets" — which explains the extreme
+    #   fold-to-fold variance (fold 1 in a bull run: IC=+0.09; fold 2 in
+    #   COVID crash: IC=-0.06).
+    #
+    #   After neutralisation, y_t = (stock_alpha_t - market_return_t), so
+    #   the model only needs to learn cross-sectional ordering — which stock
+    #   beats market, regardless of market direction.
+    #
+    # METHOD: Per-date XS mean of y is the market-wide return (equal-weight).
+    #   We subtract it from each row.  This is equivalent to demeaning the
+    #   target within each date's cross-section (no look-ahead: we compute
+    #   the mean only across tickers that share the same forecast date t,
+    #   using the same forward-return window t→t+H).
+    # ------------------------------------------------------------------
+    y_stacked = (
+        y_stacked
+        .groupby(level="date")
+        .transform(lambda grp: grp - grp.mean())
+    )
+
+    # Clip extreme targets (>5σ) — after neutralisation to avoid over-clipping
     y_std = y_stacked.std()
     y_stacked = y_stacked.clip(lower=-5 * y_std, upper=5 * y_std)
 
@@ -388,7 +416,7 @@ if __name__ == "__main__":
     results, _ = run_pipeline(
         tickers=cli_tickers,
         start_date="2019-01-01",
-        n_splits=4,
+        n_splits=6,
     )
 
     print("\nFinal fold-by-fold metrics:")
