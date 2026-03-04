@@ -13,10 +13,11 @@ Trend (3)      : distance from 50/200-day SMA, ADX-14
 Volatility (3) : realised vol 20d/60d, ATR% 14d
 Volume/Flow (3): windowed VPT, windowed OBV, volume z-score 20d
 Cross-asset (4): SPY 21d return, SPY vol 20d, QQQ 21d return, vix_proxy
+Sector rotation (6): 21d momentum of XLK, XLF, XLE, XLV, XLY, XLP
 Alpha (5)      : short-term reversal (1w), 52-week high proximity,
                  idiosyncratic vol, return skewness 20d, vol ratio (5d/60d)
 
-Total: 21 named features — no padding zeros, no ESG, no user-profile.
+Total: 27 named features — no padding zeros, no ESG, no user-profile.
 
 Naming convention: all lowercase with underscores, units in the name
 where non-obvious (e.g. atr_pct, rvol_20d).
@@ -56,6 +57,13 @@ FEATURE_NAMES: list[str] = [
     "spy_rvol_20d",
     "qqq_mom_21d",
     "vix_proxy",
+    # Sector rotation (which sectors are leading — moves stocks independently of market)
+    "xlk_mom_21d",
+    "xlf_mom_21d",
+    "xle_mom_21d",
+    "xlv_mom_21d",
+    "xly_mom_21d",
+    "xlp_mom_21d",
     # Alpha
     "rev_1w",          # short-term 1-week reversal (contrarian signal)
     "high_52w_prox",   # proximity to 52-week high (momentum continuation)
@@ -174,6 +182,21 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
         feat["qqq_mom_21d"] = np.log(qqq_close / qqq_close.shift(21))
     else:
         feat["qqq_mom_21d"] = np.nan
+
+    # ------------------------------------------------------------------
+    # Sector rotation — 21d momentum of sector ETFs (moves stocks independently of market)
+    # DataLoader attaches xlk_close, xlf_close, xle_close, xlv_close, xly_close, xlp_close
+    # ------------------------------------------------------------------
+    for etf, name in [
+        ("xlk", "xlk_mom_21d"), ("xlf", "xlf_mom_21d"), ("xle", "xle_mom_21d"),
+        ("xlv", "xlv_mom_21d"), ("xly", "xly_mom_21d"), ("xlp", "xlp_mom_21d"),
+    ]:
+        col = f"{etf}_close"
+        sec_close = df.get(col)
+        if sec_close is not None and sec_close.notna().sum() > 30:
+            feat[name] = np.log(sec_close / sec_close.shift(21))
+        else:
+            feat[name] = np.nan
 
     # ------------------------------------------------------------------
     # Alpha signals — high-information features that capture stock-specific

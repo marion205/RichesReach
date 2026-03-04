@@ -30,6 +30,9 @@ _MIN_ROWS = 100
 # Market context tickers always fetched alongside the target
 _CONTEXT_TICKERS = ["SPY", "QQQ"]
 
+# Sector ETFs for rotation context (tech, financials, energy, healthcare, consumer disc, staples)
+_SECTOR_ETFS = ["XLK", "XLF", "XLE", "XLV", "XLY", "XLP"]
+
 
 class DataLoader:
     """Fetch adjusted OHLCV for a list of tickers using yfinance."""
@@ -67,7 +70,7 @@ class DataLoader:
 
         end_date = end_date or datetime.utcnow().strftime("%Y-%m-%d")
 
-        all_tickers = list(dict.fromkeys(tickers + _CONTEXT_TICKERS))  # deduplicate, preserve order
+        all_tickers = list(dict.fromkeys(tickers + _CONTEXT_TICKERS + _SECTOR_ETFS))  # deduplicate, preserve order
 
         logger.info("Fetching %d tickers from %s to %s", len(all_tickers), start_date, end_date)
 
@@ -88,9 +91,10 @@ class DataLoader:
         # Normalise to {ticker: single-level-df}
         dfs = self._split_by_ticker(raw, all_tickers)
 
-        # Build context columns from SPY / QQQ
+        # Build context columns from SPY / QQQ and sector ETFs
         spy_df = dfs.get("SPY")
         qqq_df = dfs.get("QQQ")
+        sector_dfs = {etf: dfs.get(etf) for etf in _SECTOR_ETFS}
 
         results: Dict[str, pd.DataFrame] = {}
         for ticker in tickers:
@@ -113,6 +117,15 @@ class DataLoader:
                 df["qqq_close"] = qqq_df["Close"].reindex(df.index)
             else:
                 df["qqq_close"] = np.nan
+
+            # Sector ETF closes for rotation context
+            for etf in _SECTOR_ETFS:
+                sec_df = sector_dfs.get(etf)
+                col = f"{etf.lower()}_close"
+                if sec_df is not None and "Close" in sec_df.columns:
+                    df[col] = sec_df["Close"].reindex(df.index)
+                else:
+                    df[col] = np.nan
 
             # Keep only rows where both ticker close and SPY close are valid
             df = df.dropna(subset=["close", "spy_close"])
