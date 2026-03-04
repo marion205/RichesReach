@@ -117,19 +117,28 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
 
     # ------------------------------------------------------------------
     # Volume / Flow
+    # Note: cumulative VPT and OBV are path-dependent and non-stationary
+    # across tickers — their absolute levels are incomparable between a
+    # $5B stock and a $500B stock.  We use short-window versions instead:
+    #
+    # vpt_20d  : 20-day rolling sum of (daily_log_ret * volume_ratio)
+    #            measures recent institutional participation, not cumulative
+    # obv_slope: slope of 10-day OBV, capturing *direction* of smart money flow
+    # vol_zscore: dollar-volume vs 20-day average (event detection)
     # ------------------------------------------------------------------
 
-    # VPT: cumulative sum of (daily_return * volume) — correct formula
-    # See fss_engine.py fix: no rolling average denominator
-    vpt_raw = (daily_log_ret * volume).cumsum()
-    feat["vpt_zscore"] = _rolling_zscore(vpt_raw, window=252)
+    # VPT-20: recent price-weighted volume flow (stationary, comparable cross-sectionally)
+    vol_avg_20 = volume.rolling(20, min_periods=5).mean().replace(0, np.nan)
+    vol_ratio = volume / vol_avg_20  # normalise by average to be comparable across stocks
+    vpt_20 = (daily_log_ret * vol_ratio).rolling(20, min_periods=10).sum()
+    feat["vpt_zscore"] = vpt_20  # XS z-score applied in train.py; raw signal here is fine
 
-    # OBV: on-balance volume (cumulative, direction from close change)
+    # OBV slope: linear trend of 10-day OBV direction (positive = accumulation)
     direction = np.sign(daily_log_ret).fillna(0)
-    obv_raw = (direction * volume).cumsum()
-    feat["obv_zscore"] = _rolling_zscore(obv_raw, window=252)
+    obv_10 = (direction * vol_ratio).rolling(10, min_periods=5).sum()
+    feat["obv_zscore"] = obv_10  # same — XS z-score applied at training time
 
-    # Volume z-score: how unusual is today's volume vs recent average?
+    # Volume z-score: how unusual is today's dollar-volume vs 20-day average?
     dollar_vol = close * volume
     vol_mean = dollar_vol.rolling(20, min_periods=10).mean()
     vol_std = dollar_vol.rolling(20, min_periods=10).std().replace(0, np.nan)

@@ -72,6 +72,8 @@ class ModelRegistry:
         fold_metrics: dict | None = None,
         n_tickers: int = 0,
         n_rows: int = 0,
+        xs_mean: "pd.Series | None" = None,
+        xs_std: "pd.Series | None" = None,
     ) -> Path:
         """
         Persist the trained model and its feature schema.
@@ -107,6 +109,14 @@ class ModelRegistry:
             "fold_metrics": fold_metrics or {},
             "n_tickers": n_tickers,
             "n_rows": n_rows,
+            # Cross-sectional normalisation parameters (mean + std per feature,
+            # computed across ALL (date, ticker) rows of the training set).
+            # Applied at inference so the model always sees z-scored features,
+            # matching what it was trained on.  Without this, raw features at
+            # inference time are on a completely different scale from the z-scored
+            # features seen during training → train/test distribution mismatch.
+            "xs_mean": xs_mean,   # pd.Series or None
+            "xs_std": xs_std,     # pd.Series or None
         }
 
         joblib.dump(bundle, path)
@@ -167,6 +177,8 @@ class ModelRegistry:
         bundle = ModelRegistry.load(name)
         model = bundle["model"]
         expected_features = bundle["feature_names"]
+        xs_mean: "pd.Series | None" = bundle.get("xs_mean")
+        xs_std: "pd.Series | None" = bundle.get("xs_std")
 
         # Build full feature matrix, take only the most recent row
         feat = build_features(ticker_df)
@@ -176,7 +188,20 @@ class ModelRegistry:
         if missing:
             raise ValueError(f"ModelRegistry.predict: missing features: {missing}")
 
-        X = feat[expected_features].iloc[[-1]]  # shape (1, n_features)
+        X = feat[expected_features].iloc[[-1]].copy()  # shape (1, n_features)
+
+        # Apply stored cross-sectional z-score normalisation so inference features
+        # are on the same scale as training features.  Without this the model sees
+        # raw feature values at inference while it was trained on z-scored values.
+        if xs_mean is not None and xs_std is not None:
+            X = (X - xs_mean[expected_features]) / xs_std[expected_features].replace(0, np.nan)
+            X = X.fillna(0.0)
+        else:
+            logger.warning(
+                "ModelRegistry.predict: no XS normalisation params found in bundle — "
+                "features may be on a different scale from training. "
+                "Retrain with run_pipeline() to fix."
+            )
 
         if X.isnull().any(axis=1).values[0]:
             n_null = X.isnull().sum().sum()
@@ -185,7 +210,7 @@ class ModelRegistry:
                 "model will use LightGBM's native NaN handling", n_null
             )
 
-        pred = model.predict(X)
+        pred = model.predict(X.values)
         return float(pred[0])
 
     # ------------------------------------------------------------------

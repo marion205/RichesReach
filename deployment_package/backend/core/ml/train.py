@@ -54,19 +54,31 @@ logger = logging.getLogger(__name__)
 # Large-cap, liquid names across sectors — good signal-to-noise ratio
 # ---------------------------------------------------------------------------
 DEFAULT_TICKERS = [
-    # Tech
+    # Large-cap Tech (high liquidity, some alpha dispersion)
     "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "AMD", "INTC", "CRM", "ADBE",
+    "ORCL", "CSCO", "TXN", "QCOM", "MU",
     # Finance
-    "JPM", "BAC", "GS", "MS", "V", "MA",
-    # Healthcare
-    "JNJ", "UNH", "PFE", "ABBV",
-    # Consumer
-    "TSLA", "HD", "MCD", "COST", "NKE",
-    # Energy / Industrial
-    "XOM", "CVX", "CAT", "BA",
-    # ETFs (add market context variety)
-    "QQQ", "IWM",
+    "JPM", "BAC", "GS", "MS", "V", "MA", "AXP", "WFC", "C", "BLK",
+    # Healthcare — lower beta, more idiosyncratic movement
+    "JNJ", "UNH", "PFE", "ABBV", "MRK", "LLY", "BMY", "AMGN", "GILD", "CVS",
+    # Consumer Discretionary
+    "TSLA", "HD", "MCD", "COST", "NKE", "SBUX", "TGT", "LOW", "AMZN",
+    # Consumer Staples — low beta, mean-reversion signals work better here
+    "PG", "KO", "PEP", "WMT", "CL", "GIS",
+    # Energy
+    "XOM", "CVX", "COP", "SLB", "EOG",
+    # Industrials
+    "CAT", "BA", "GE", "HON", "MMM", "UPS", "FDX",
+    # Materials & Real Estate (more vol, more alpha)
+    "FCX", "NEM", "AMT", "PLD",
+    # Mid-cap growth (more dispersion than mega-caps)
+    "PANW", "CRWD", "SNOW", "DDOG", "NET", "ZS", "FTNT",
+    "MELI", "SE", "GRAB",
+    # Value / dividend names (different risk factor)
+    "BRK-B", "T", "VZ",
 ]
+# Remove duplicates (AMZN appears twice above) while preserving order
+DEFAULT_TICKERS = list(dict.fromkeys(DEFAULT_TICKERS))
 
 # ---------------------------------------------------------------------------
 # LightGBM hyperparameters
@@ -250,6 +262,13 @@ def run_pipeline(
         .fillna(0.0)   # fill days with only 1 ticker (std=NaN) with 0
     )
 
+    # Store the global (mean, std) of the XS-normalised features so the
+    # inference path can apply the same normalisation to a single ticker.
+    # After XS z-scoring, global mean ≈ 0 and std ≈ 1 by construction,
+    # but storing exact values handles edge cases cleanly.
+    xs_global_mean = X_feat.mean()
+    xs_global_std  = X_feat.std().replace(0, 1.0)
+
     # ------------------------------------------------------------------
     # FIX 3: Date-based walk-forward CV (not positional).
     #
@@ -340,6 +359,8 @@ def run_pipeline(
             fold_metrics=fold_metrics_df.loc["mean"].to_dict() if "mean" in fold_metrics_df.index else {},
             n_tickers=len(valid_tickers),
             n_rows=len(X_final),
+            xs_mean=xs_global_mean,
+            xs_std=xs_global_std,
         )
         logger.info("Model saved to ml_models/production_r2.pkl")
 
