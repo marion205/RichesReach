@@ -85,15 +85,17 @@ DEFAULT_TICKERS = list(dict.fromkeys(DEFAULT_TICKERS))
 # Conservative settings: low learning rate + early stopping prevents overfit
 # ---------------------------------------------------------------------------
 _LGBM_PARAMS = dict(
-    n_estimators=500,
-    learning_rate=0.01,
-    max_depth=5,
-    num_leaves=31,
-    subsample=0.8,
-    colsample_bytree=0.8,
-    reg_alpha=0.1,          # L1 regularisation
-    reg_lambda=1.0,         # L2 regularisation
-    min_child_samples=20,   # avoids overfitting on tiny leaf nodes
+    n_estimators=1000,       # more trees to capture the new alpha features
+    learning_rate=0.005,     # lower LR → more trees, but better generalisation
+    max_depth=4,             # shallower trees reduce overfit on 21 features
+    num_leaves=15,           # fewer leaves → stronger regularisation
+    subsample=0.7,           # row subsampling per tree (bagging)
+    colsample_bytree=0.7,    # column subsampling per tree
+    subsample_freq=1,        # apply row subsampling every tree
+    reg_alpha=0.5,           # stronger L1 → feature selection, sparse trees
+    reg_lambda=2.0,          # stronger L2 → smaller leaf weights
+    min_child_samples=30,    # require more samples per leaf → avoids tiny noisy splits
+    min_child_weight=1e-3,   # minimum sum of hessian in leaf
     random_state=42,
     n_jobs=-1,
     verbose=-1,             # suppress LightGBM training output
@@ -317,7 +319,7 @@ def run_pipeline(
         model.fit(
             X_train, y_train,
             eval_set=[(X_test, y_test)],
-            callbacks=[lgb.early_stopping(stopping_rounds=50, verbose=False)],
+            callbacks=[lgb.early_stopping(stopping_rounds=100, verbose=False)],
         )
 
         preds = model.predict(X_test)
