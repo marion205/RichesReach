@@ -167,22 +167,95 @@ def run_pipeline(
     if not X_parts:
         raise RuntimeError("No tickers produced usable data. Check data fetch and feature build.")
 
-    # Stack: rows = (ticker × date), features = FEATURE_NAMES
-    # We sort by date so walk-forward splits respect time order across tickers
-    X_all = pd.concat(X_parts).sort_index()
-    y_all = pd.concat(y_parts).sort_index()
+    # ------------------------------------------------------------------
+    # FIX 1: Stack with (date, ticker) MultiIndex — NOT sort_index() by date alone.
+    #
+    # The original sort_index() interleaved tickers at the same timestamp:
+    #   row 0: AAPL 2019-01-02
+    #   row 1: MSFT 2019-01-02
+    #   row 2: AAPL 2019-01-03 ...
+    # When TimeSeriesSplit then splits at row N, it cuts through the middle of
+    # a single trading day, so test rows can predate training rows → look-ahead.
+    #
+    # The correct structure: split on unique dates, then flatten for LightGBM.
+    # We keep a parallel date array so the CV can split on dates.
+    # ------------------------------------------------------------------
+    ticker_labels = list(ticker_dfs.keys())  # tickers that survived data fetch
+    valid_tickers = [t for t, X in zip(ticker_labels, X_parts) if len(X) >= 50]
 
-    # Clip extreme target values (>5σ) to reduce the influence of data errors
-    y_std = y_all.std()
-    y_all = y_all.clip(lower=-5 * y_std, upper=5 * y_std)
+    # Attach ticker label to each feature/target part before stacking
+    X_tagged, y_tagged = [], []
+    for ticker, X, y in zip(valid_tickers, X_parts, y_parts):
+        X = X.copy()
+        X["_ticker"] = ticker
+        X_tagged.append(X)
+        y_tagged.append(y.rename(ticker))
+
+    # Stack, creating a (date, ticker) MultiIndex
+    X_stacked = pd.concat(X_tagged)
+    X_stacked.index.name = "date"
+    X_stacked = X_stacked.reset_index().set_index(["date", "_ticker"])
+    X_stacked.index.names = ["date", "ticker"]
+
+    y_stacked = pd.concat(y_tagged)
+    y_stacked.index.name = "date"
+
+    # y needs the same (date, ticker) MultiIndex
+    y_df = pd.concat(
+        [y.to_frame(name="target").assign(ticker=t) for t, y in zip(valid_tickers, y_parts)]
+    ).reset_index().rename(columns={"index": "date"})
+    # Rename the date column robustly
+    date_col = [c for c in y_df.columns if c not in ("target", "ticker")][0]
+    y_df = y_df.rename(columns={date_col: "date"})
+    y_df = y_df.set_index(["date", "ticker"])["target"]
+
+    # Align on common (date, ticker) pairs
+    common_idx = X_stacked.index.intersection(y_df.index)
+    X_stacked = X_stacked.loc[common_idx]
+    y_stacked = y_df.loc[common_idx]
+
+    # Clip extreme targets (>5σ)
+    y_std = y_stacked.std()
+    y_stacked = y_stacked.clip(lower=-5 * y_std, upper=5 * y_std)
 
     logger.info(
-        "Dataset: %d rows × %d features (from %d tickers)",
-        len(X_all), len(FEATURE_NAMES), len(X_parts),
+        "Dataset: %d rows × %d features (from %d tickers, %d unique dates)",
+        len(X_stacked), len(FEATURE_NAMES),
+        len(valid_tickers),
+        X_stacked.index.get_level_values("date").nunique(),
     )
 
     # ------------------------------------------------------------------
-    # Step 5-6: Walk-forward CV
+    # FIX 2: Cross-sectional z-scoring — normalise each feature vs peers
+    # on the same date so the model sees relative strength, not absolute levels.
+    #
+    # e.g. AAPL mom_21d=0.08 in a day where mean=0.05, std=0.02 → z=+1.5
+    #      (strong relative to peers on that day)
+    # This removes market-wide beta from features and lets the model learn
+    # stock-specific alpha signals.
+    # ------------------------------------------------------------------
+    feat_cols = FEATURE_NAMES
+    X_feat = X_stacked[feat_cols].copy()
+
+    def _xs_zscore(group: pd.DataFrame) -> pd.DataFrame:
+        mean = group.mean()
+        std = group.std().replace(0, np.nan)
+        return (group - mean) / std
+
+    # Group by date level, z-score within each cross-section
+    X_feat = (
+        X_feat
+        .groupby(level="date", group_keys=False)
+        .apply(_xs_zscore)
+        .fillna(0.0)   # fill days with only 1 ticker (std=NaN) with 0
+    )
+
+    # ------------------------------------------------------------------
+    # FIX 3: Date-based walk-forward CV (not positional).
+    #
+    # Sort unique dates, split into folds on dates.  All tickers on the same
+    # date always move together between train and test — no cross-ticker leakage.
+    # Embargo: exclude the last `embargo_periods` dates from each training fold.
     # ------------------------------------------------------------------
     try:
         import lightgbm as lgb
@@ -192,17 +265,34 @@ def run_pipeline(
             "and run: pip install lightgbm"
         ) from exc
 
-    X_np = X_all.values
-    y_np = y_all.values
+    unique_dates = sorted(X_feat.index.get_level_values("date").unique())
+    n_dates = len(unique_dates)
+    date_to_pos = {d: i for i, d in enumerate(unique_dates)}
 
     fold_results = []
+    tscv = __import__("sklearn.model_selection", fromlist=["TimeSeriesSplit"]).TimeSeriesSplit(
+        n_splits=n_splits
+    )
 
-    for fold_num, (train_idx, test_idx) in enumerate(
-        walk_forward_splits(len(X_np), n_splits=n_splits, embargo_periods=embargo_periods),
-        start=1,
+    for fold_num, (train_date_pos, test_date_pos) in enumerate(
+        tscv.split(range(n_dates)), start=1
     ):
-        X_train, X_test = X_np[train_idx], X_np[test_idx]
-        y_train, y_test = y_np[train_idx], y_np[test_idx]
+        # Apply embargo: drop last embargo_periods dates from training
+        embargoed_train_pos = train_date_pos[:-embargo_periods] if len(train_date_pos) > embargo_periods else train_date_pos
+        if len(embargoed_train_pos) < 50:
+            logger.warning("Fold %d: too few training dates after embargo — skipping", fold_num)
+            continue
+
+        train_dates = set(unique_dates[i] for i in embargoed_train_pos)
+        test_dates = set(unique_dates[i] for i in test_date_pos)
+
+        train_mask = X_feat.index.get_level_values("date").isin(train_dates)
+        test_mask = X_feat.index.get_level_values("date").isin(test_dates)
+
+        X_train = X_feat[train_mask].values
+        X_test  = X_feat[test_mask].values
+        y_train = y_stacked[train_mask].values
+        y_test  = y_stacked[test_mask].values
 
         model = lgb.LGBMRegressor(**_LGBM_PARAMS)
         model.fit(
@@ -231,11 +321,13 @@ def run_pipeline(
     print()
 
     # ------------------------------------------------------------------
-    # Step 8: Retrain final model on ALL data
+    # Step 8: Retrain final model on ALL data (cross-sectionally normalised)
     # ------------------------------------------------------------------
-    logger.info("Retraining final model on all %d rows ...", len(X_np))
+    X_final = X_feat.values
+    y_final = y_stacked.values
+    logger.info("Retraining final model on all %d rows ...", len(X_final))
     final_model = lgb.LGBMRegressor(**_LGBM_PARAMS)
-    final_model.fit(X_np, y_np)
+    final_model.fit(X_final, y_final)
 
     # ------------------------------------------------------------------
     # Step 9: Save
@@ -243,11 +335,11 @@ def run_pipeline(
     if save_model:
         ModelRegistry.save(
             model=final_model,
-            feature_names=FEATURE_NAMES,
+            feature_names=feat_cols,
             horizon=horizon,
             fold_metrics=fold_metrics_df.loc["mean"].to_dict() if "mean" in fold_metrics_df.index else {},
-            n_tickers=len(X_parts),
-            n_rows=len(X_np),
+            n_tickers=len(valid_tickers),
+            n_rows=len(X_final),
         )
         logger.info("Model saved to ml_models/production_r2.pkl")
 
