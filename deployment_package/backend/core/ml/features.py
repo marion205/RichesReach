@@ -72,6 +72,7 @@ FEATURE_NAMES: list[str] = [
     "ret_skew_20d",    # 20-day return skewness (crash risk / positive skew)
     "vol_ratio",       # rvol_5d / rvol_60d (vol regime: expanding vs contracting)
 ]
+# Earnings features are appended in train.py (FEATURE_NAMES + EARNINGS_FEATURE_NAMES) when building the full X matrix.
 
 
 def build_features(df: pd.DataFrame) -> pd.DataFrame:

@@ -1,6 +1,6 @@
 # Production ML Pipeline — Feature & Performance Reference
 
-## Current feature set (21)
+## Current feature set (21 technical + 3 earnings = 24 when Polygon/Benzinga used)
 
 | Group | Features |
 |---|---|
@@ -10,6 +10,9 @@
 | **Volume / Flow (3)** | `vpt_zscore`, `obv_zscore`, `vol_zscore_20d` |
 | **Cross-asset (4)** | `spy_mom_21d`, `spy_rvol_20d`, `qqq_mom_21d`, `vix_proxy` |
 | **Alpha (5)** | `rev_1w`, `high_52w_prox`, `idio_vol`, `ret_skew_20d`, `vol_ratio` |
+| **Earnings (3, optional)** | `eps_surprise_pct`, `surprise_decay`, `days_since_earnings` |
+
+**Earnings Alpha:** Fetched via `earnings_loader.fetch_earnings()` when `POLYGON_API_KEY` is set. Effective date = next trading day if report after close (anti-leakage). `surprise_decay` = PEAD half-life. If no key, earnings columns = 0.
 
 All features are strictly causal (no look-ahead). Cross-sectional z-scoring
 is applied at training time and the same params are stored in the model bundle

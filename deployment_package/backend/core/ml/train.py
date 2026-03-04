@@ -42,12 +42,17 @@ import pandas as pd
 
 from .cv import walk_forward_splits
 from .data_loader import DataLoader
+from .earnings_loader import fetch_earnings
+from .earnings_features import build_earnings_features, EARNINGS_FEATURE_NAMES
 from .evaluate import evaluate, summarise
-from .features import FEATURE_NAMES, build_features
+from .features import FEATURE_NAMES as TECHNICAL_FEATURE_NAMES, build_features
 from .model_registry import ModelRegistry
 from .targets import build_targets
 
 logger = logging.getLogger(__name__)
+
+# Full feature list: technical (21) + earnings (3) when Polygon/Benzinga data is used
+FEATURE_NAMES = TECHNICAL_FEATURE_NAMES + EARNINGS_FEATURE_NAMES
 
 # ---------------------------------------------------------------------------
 # Default ticker universe for training
@@ -171,7 +176,12 @@ def run_pipeline(
                 logger.warning("%s: only %d aligned rows — skipping", ticker, len(common_idx))
                 continue
 
-            X_parts.append(feat.loc[common_idx])
+            # Optional earnings features (Polygon/Benzinga). If no API key or no data, use zeros.
+            earnings_df = fetch_earnings(ticker, start_date, end_date)
+            earn_feat = build_earnings_features(df, earnings_df)
+            earn_aligned = earn_feat.reindex(common_idx).fillna(0.0)
+            X_ticker = pd.concat([feat.loc[common_idx], earn_aligned], axis=1)[FEATURE_NAMES]
+            X_parts.append(X_ticker)
             y_parts.append(targ.loc[common_idx])
 
         except Exception as exc:

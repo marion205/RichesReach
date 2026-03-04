@@ -47,6 +47,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from .earnings_features import EARNINGS_FEATURE_NAMES
 from .features import build_features, FEATURE_NAMES
 
 logger = logging.getLogger(__name__)
@@ -182,6 +183,11 @@ class ModelRegistry:
 
         # Build full feature matrix, take only the most recent row
         feat = build_features(ticker_df)
+
+        # If model was trained with earnings features, add them (0 when not available at inference)
+        for f in EARNINGS_FEATURE_NAMES:
+            if f in expected_features and f not in feat.columns:
+                feat[f] = 0.0
 
         # Validate feature schema
         missing = [f for f in expected_features if f not in feat.columns]
