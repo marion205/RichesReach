@@ -316,11 +316,29 @@ def run_pipeline(
 
     unique_dates = sorted(X_feat.index.get_level_values("date").unique())
     n_dates = len(unique_dates)
-    date_to_pos = {d: i for i, d in enumerate(unique_dates)}
+
+    # Fixed test size: each fold tests on exactly 252 dates (~1 trading year).
+    # With 1582 total dates and 6 splits of 252:
+    #   fold_1 trains on 1582 - 6×252 =  70 dates (skipped — too small)
+    #   fold_2 trains on 70 + 252      = 322 dates (borderline — skipped if < 252+20 embargo)
+    #   fold_3 trains on 322 + 252     = 574 dates ✓ (~2.3 years)
+    #   fold_4 trains on 574 + 252     = 826 dates ✓ (~3.3 years)
+    #   fold_5 trains on 826 + 252     = 1078 dates ✓ (~4.3 years)
+    #   fold_6 trains on 1078 + 252    = 1330 dates ✓ (~5.3 years)
+    # Net result: 4 clean folds, each testing on exactly 1 calendar year.
+    _TEST_SIZE = 252
+
+    # Minimum training dates before a fold is usable.
+    # 252+embargo = ~272 minimum; we set 300 to ensure adequate training signal.
+    # Folds with <300 training dates are skipped — they are either:
+    #   (a) too small to train reliably, or
+    #   (b) biased toward the ~30% of tickers that existed in 2019 vs today's 78
+    _MIN_TRAIN_DATES = 300
 
     fold_results = []
     tscv = __import__("sklearn.model_selection", fromlist=["TimeSeriesSplit"]).TimeSeriesSplit(
-        n_splits=n_splits
+        n_splits=n_splits,
+        test_size=_TEST_SIZE,  # fixed 1-year test window per fold
     )
 
     for fold_num, (train_date_pos, test_date_pos) in enumerate(
@@ -328,12 +346,34 @@ def run_pipeline(
     ):
         # Apply embargo: drop last embargo_periods dates from training
         embargoed_train_pos = train_date_pos[:-embargo_periods] if len(train_date_pos) > embargo_periods else train_date_pos
-        if len(embargoed_train_pos) < 50:
-            logger.warning("Fold %d: too few training dates after embargo — skipping", fold_num)
+
+        # Skip folds with insufficient training history
+        if len(embargoed_train_pos) < _MIN_TRAIN_DATES:
+            logger.warning(
+                "Fold %d: only %d training dates after embargo (need %d) — skipping "
+                "(early tickers sparse; model would be unreliable)",
+                fold_num, len(embargoed_train_pos), _MIN_TRAIN_DATES,
+            )
             continue
 
         train_dates = set(unique_dates[i] for i in embargoed_train_pos)
         test_dates = set(unique_dates[i] for i in test_date_pos)
+
+        # Log fold date ranges for transparency
+        train_start = min(train_dates)
+        train_end = max(train_dates)
+        test_start = min(test_dates)
+        test_end = max(test_dates)
+        logger.info(
+            "Fold %d: train %s→%s (%d dates), test %s→%s (%d dates)",
+            fold_num,
+            getattr(train_start, "date", lambda: train_start)(),
+            getattr(train_end, "date", lambda: train_end)(),
+            len(train_dates),
+            getattr(test_start, "date", lambda: test_start)(),
+            getattr(test_end, "date", lambda: test_end)(),
+            len(test_dates),
+        )
 
         train_mask = X_feat.index.get_level_values("date").isin(train_dates)
         test_mask = X_feat.index.get_level_values("date").isin(test_dates)
