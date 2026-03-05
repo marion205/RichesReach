@@ -47,6 +47,14 @@ interface Signal {
   targetPrice?: number;
   mlScore: number;
   thesis: string;
+  signalOutput?: {
+    signal: string;      // "Bullish" | "Bearish" | "Neutral"
+    confidence: string;  // "High" | "Medium" | "Low"
+    reasons: string[];
+    regime?: string;
+    fss_score?: number;
+    ml_score?: number;
+  } | string | null;     // backend may return JSON string
   riskRewardRatio?: number;
   daysSinceTriggered: number;
   isLikedByUser: boolean;
@@ -350,6 +358,44 @@ const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigateTo: navigateToPro
           </Text>
         </View>
       )}
+
+      {/* Structured signal output: confidence badge + reasons */}
+      {(() => {
+        // signalOutput may arrive as a JSON string (GraphQL JSONString scalar) or object
+        let so: Signal['signalOutput'] = item.signalOutput;
+        if (typeof so === 'string') {
+          try { so = JSON.parse(so); } catch { so = null; }
+        }
+        if (!so || typeof so !== 'object') return null;
+        const confColour = so.confidence === 'High' ? '#10B981' : so.confidence === 'Low' ? '#EF4444' : '#F59E0B';
+        const reasons: string[] = Array.isArray(so.reasons) ? so.reasons.slice(0, 3) : [];
+        return (
+          <View style={styles.signalOutputBlock}>
+            <View style={styles.signalOutputRow}>
+              <View style={[styles.confidenceBadge, { backgroundColor: confColour + '22' }]}>
+                <Text style={[styles.confidenceBadgeText, { color: confColour }]}>
+                  {so.confidence} Confidence
+                </Text>
+              </View>
+              {so.regime ? (
+                <View style={styles.regimePill}>
+                  <Text style={styles.regimePillText}>{so.regime}</Text>
+                </View>
+              ) : null}
+            </View>
+            {reasons.length > 0 && (
+              <View style={styles.reasonsList}>
+                {reasons.map((r, i) => (
+                  <View key={i} style={styles.reasonRow}>
+                    <Text style={styles.reasonBullet}>·</Text>
+                    <Text style={styles.reasonText}>{r}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        );
+      })()}
 
       <Text style={styles.thesisText} numberOfLines={2}>
         {item.thesis}
@@ -809,6 +855,57 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  // --- Structured signal output block ---
+  signalOutputBlock: {
+    marginBottom: 10,
+  },
+  signalOutputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  confidenceBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  confidenceBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  regimePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: '#EEF2FF',
+  },
+  regimePillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#6366F1',
+  },
+  reasonsList: {
+    gap: 3,
+  },
+  reasonRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 4,
+  },
+  reasonBullet: {
+    fontSize: 14,
+    color: '#9CA3AF',
+    lineHeight: 18,
+    width: 10,
+  },
+  reasonText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#6B7280',
+    lineHeight: 18,
   },
 });
 

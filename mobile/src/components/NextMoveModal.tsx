@@ -10,7 +10,14 @@ interface NextMoveModalProps {
   portfolioValue?: number;
 }
 
-interface Idea { symbol: string; action: 'BUY' | 'HOLD' | 'TRIM'; conviction: 'calm' | 'balanced' | 'bold'; sizePct: number; thesis: string; }
+interface Idea {
+  symbol: string;
+  action: 'BUY' | 'HOLD' | 'TRIM';
+  conviction: 'calm' | 'balanced' | 'bold';
+  sizePct: number;
+  thesis: string;
+  positionThesis?: string;  // Glass Box narrative — why this size
+}
 
 const GET_AI_RECOMMENDATIONS = gql`
   query GetAIRecommendations($profile: ProfileInput, $usingDefaults: Boolean) {
@@ -31,10 +38,12 @@ const GET_AI_RECOMMENDATIONS = gql`
         expectedReturn
         targetPrice
         currentPrice
+        positionThesis
       }
       sellRecommendations {
         symbol
         reasoning
+        positionThesis
       }
       rebalanceSuggestions {
         action
@@ -146,10 +155,12 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
                 expectedReturn
                 targetPrice
                 currentPrice
+                positionThesis
               }
               sellRecommendations {
                 symbol
                 reasoning
+                positionThesis
               }
               rebalanceSuggestions {
                 action
@@ -519,6 +530,7 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
           conviction,
           sizePct,
           thesis: rec.reasoning || `Expected return: ${((rec.expectedReturn || 0) * 100).toFixed(1)}%`,
+          positionThesis: rec.positionThesis || undefined,
         });
       });
     }
@@ -529,9 +541,10 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
         result.push({
           symbol: rec.symbol,
           action: 'TRIM',
-          conviction: 'balanced', // Default for sell recommendations
-          sizePct: -1, // Negative indicates reduction
+          conviction: 'balanced',
+          sizePct: -1,
           thesis: rec.reasoning || 'Consider reducing position',
+          positionThesis: rec.positionThesis || undefined,
         });
       });
     }
@@ -624,22 +637,40 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
                     conviction: convictionValue as 'bold' | 'calm' | 'balanced',
                     sizePct: Math.round(rec.allocation || 0),
                     thesis: rec.reasoning || `Expected return: ${((rec.expectedReturn || 0) * 100).toFixed(1)}%`,
+                    positionThesis: rec.positionThesis || undefined,
                   };
                 });
               })()}
               keyExtractor={(i, index) => `${i.symbol}-${index}`}
-              renderItem={({ item }) => (
-                <View style={styles.row}>
-                  <View style={styles.left}>
-                    <Text style={styles.symbol}>{item.symbol}</Text>
-                    <Text style={styles.thesis}>{item.thesis}</Text>
+              renderItem={({ item }) => {
+                const convictionColour = item.conviction === 'bold' ? '#6366F1' : item.conviction === 'calm' ? '#10B981' : '#F59E0B';
+                const convictionLabel = item.conviction === 'bold' ? 'Bold' : item.conviction === 'calm' ? 'Calm' : 'Balanced';
+                return (
+                  <View style={styles.row}>
+                    <View style={styles.left}>
+                      {/* Symbol + conviction badge on same row */}
+                      <View style={styles.symbolRow}>
+                        <Text style={styles.symbol}>{item.symbol}</Text>
+                        <View style={[styles.convictionPill, { backgroundColor: convictionColour + '1A' }]}>
+                          <Text style={[styles.convictionText, { color: convictionColour }]}>{convictionLabel}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.thesis}>{item.thesis}</Text>
+                      {/* Glass Box position thesis — only when available */}
+                      {!!item.positionThesis && (
+                        <View style={styles.positionThesisBox}>
+                          <Icon name="info" size={11} color="#6366F1" style={{ marginTop: 1 }} />
+                          <Text style={styles.positionThesisText}>{item.positionThesis}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.right}>
+                      <Text style={[styles.action, item.action === 'BUY' ? styles.buy : item.action === 'TRIM' ? styles.trim : styles.hold]}>{item.action}</Text>
+                      {item.sizePct !== 0 && <Text style={styles.size}>{item.sizePct > 0 ? '+' : ''}{item.sizePct}%</Text>}
+                    </View>
                   </View>
-                  <View style={styles.right}>
-                    <Text style={[styles.action, item.action === 'BUY' ? styles.buy : item.action === 'TRIM' ? styles.trim : styles.hold]}>{item.action}</Text>
-                    {item.sizePct !== 0 && <Text style={styles.size}>{item.sizePct > 0 ? '+' : ''}{item.sizePct}%</Text>}
-                  </View>
-                </View>
-              )}
+                );
+              }}
             />
           )}
 
@@ -681,6 +712,23 @@ const styles = StyleSheet.create({
   size: { fontSize: 12, color: '#1C1C1E' },
   footer: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
   disclaimer: { fontSize: 11, color: '#8E8E93' },
+  // Glass Box additions
+  symbolRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
+  convictionPill: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  convictionText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.2 },
+  positionThesisBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 5,
+    marginTop: 6,
+    backgroundColor: '#F5F3FF',
+    borderLeftWidth: 2,
+    borderLeftColor: '#6366F1',
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  positionThesisText: { flex: 1, fontSize: 11, color: '#4B5563', lineHeight: 16 },
 });
 
 

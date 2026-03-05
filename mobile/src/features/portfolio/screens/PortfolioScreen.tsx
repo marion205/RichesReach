@@ -36,6 +36,12 @@ import { DawnRitualScreen } from '../../rituals/screens/DawnRitualScreen';
 import { CreditQuestScreen } from '../../credit/screens/CreditQuestScreen';
 import PortfolioKellyMetricsCard from '../../../components/quant/PortfolioKellyMetricsCard';
 import TransparencyDashboardCard from '../../../components/quant/TransparencyDashboardCard';
+
+const GET_PORTFOLIO_RISK_REPORT = gql`
+  query GetPortfolioRiskReport {
+    portfolioRiskReport
+  }
+`;
 interface PortfolioScreenProps {
 navigateTo?: (screen: string) => void;
 }
@@ -114,6 +120,22 @@ const insets = useSafeAreaInsets();
     fetchPolicy: 'cache-and-network', // Use cache but also fetch fresh data
     notifyOnNetworkStatusChange: true,
   });
+
+  // Portfolio risk report — regime-aware sizing gate + narrative (non-blocking)
+  const { data: riskReportData } = useQuery(GET_PORTFOLIO_RISK_REPORT, {
+    errorPolicy: 'ignore',
+    fetchPolicy: 'cache-and-network',
+  });
+  const riskReport: {
+    regime?: string;
+    gate_multiplier?: number;
+    sizing_down_pct?: number;
+    narrative?: string;
+  } | null = React.useMemo(() => {
+    const raw = riskReportData?.portfolioRiskReport;
+    if (!raw) return null;
+    try { return typeof raw === 'string' ? JSON.parse(raw) : raw; } catch { return null; }
+  }, [riskReportData]);
 
   // Money snapshot hook (for Constellation Orb)
   const { snapshot: baseSnapshot, loading: snapshotLoading, hasBankLinked, refetch: refetchSnapshot, error: snapshotError } = useMoneySnapshot();
@@ -763,6 +785,61 @@ return (
 <View style={{ marginTop: 16, marginBottom: 8, paddingHorizontal: 16 }}>
   <TransparencyDashboardCard limit={50} />
 </View>
+
+{/* Regime-Aware Risk Report — only shown when backend returns data */}
+{riskReport && (
+  <View style={{ marginTop: 16, marginBottom: 8, paddingHorizontal: 16 }}>
+    {(() => {
+      const regimeColour: Record<string, string> = {
+        Expansion: '#10B981',
+        Parabolic: '#F59E0B',
+        Deflation: '#6366F1',
+        Crisis: '#EF4444',
+      };
+      const rc = regimeColour[riskReport.regime ?? ''] ?? '#8E8E93';
+      const gateMultiplier = riskReport.gate_multiplier ?? 1.0;
+      const sizingDown = riskReport.sizing_down_pct ?? 0;
+      const isReduced = gateMultiplier < 1.0;
+      return (
+        <View style={styles.riskReportCard}>
+          {/* Header row */}
+          <View style={styles.riskReportHeader}>
+            <View style={styles.riskReportTitleRow}>
+              <Icon name="shield" size={16} color={rc} />
+              <Text style={styles.riskReportTitle}>Portfolio Risk Report</Text>
+            </View>
+            <View style={[styles.riskRegimePill, { backgroundColor: rc + '22' }]}>
+              <Text style={[styles.riskRegimePillText, { color: rc }]}>
+                {riskReport.regime ?? 'Unknown'}
+              </Text>
+            </View>
+          </View>
+          {/* Metrics row */}
+          <View style={styles.riskMetricsRow}>
+            <View style={styles.riskMetricItem}>
+              <Text style={styles.riskMetricLabel}>Sizing Gate</Text>
+              <Text style={[styles.riskMetricValue, { color: isReduced ? '#EF4444' : '#10B981' }]}>
+                {isReduced ? `${(gateMultiplier * 100).toFixed(0)}%` : 'Full'}
+              </Text>
+            </View>
+            {sizingDown > 0 && (
+              <View style={styles.riskMetricItem}>
+                <Text style={styles.riskMetricLabel}>Reduced By</Text>
+                <Text style={[styles.riskMetricValue, { color: '#EF4444' }]}>
+                  -{sizingDown.toFixed(0)}%
+                </Text>
+              </View>
+            )}
+          </View>
+          {/* Narrative */}
+          {!!riskReport.narrative && (
+            <Text style={styles.riskNarrative}>{riskReport.narrative}</Text>
+          )}
+        </View>
+      );
+    })()}
+  </View>
+)}
 
 {/* Portfolio Holdings - Mid Section */}
 <View style={{ marginTop: 16, marginBottom: 16, paddingHorizontal: 16 }}>
@@ -1430,6 +1507,72 @@ analyticsButtonText: {
     fontSize: 14,
     color: '#8E8E93',
     lineHeight: 20,
+  },
+  // --- Regime-Aware Risk Report card ---
+  riskReportCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  riskReportHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  riskReportTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  riskReportTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1C1C1E',
+  },
+  riskRegimePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  riskRegimePillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  riskMetricsRow: {
+    flexDirection: 'row',
+    gap: 24,
+    marginBottom: 10,
+  },
+  riskMetricItem: {
+    alignItems: 'flex-start',
+  },
+  riskMetricLabel: {
+    fontSize: 11,
+    color: '#8E8E93',
+    fontWeight: '500',
+    marginBottom: 2,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  riskMetricValue: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  riskNarrative: {
+    fontSize: 13,
+    color: '#4B5563',
+    lineHeight: 19,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    paddingTop: 10,
+    marginTop: 2,
   },
 });
 
