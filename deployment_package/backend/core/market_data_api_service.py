@@ -50,15 +50,27 @@ class MarketDataAPIService:
     """
 
     def __init__(self) -> None:
-        # Rate limiting per provider (free-tier friendly defaults)
+        # Rate limiting per provider (requests per minute, free-tier friendly defaults)
         self.rate_limits: Dict[DataProvider, int] = {
-            DataProvider.ALPHA_VANTAGE: 5,    # 5 requests per minute (free tier)
-            DataProvider.FINNHUB: 60,         # 60 requests per minute (free tier)
-            DataProvider.YAHOO_FINANCE: 100,  # estimated
-            DataProvider.QUANDL: 50,          # 50 requests per day (free tier)
-            DataProvider.POLYGON: 5,          # example low limit
-            DataProvider.IEX_CLOUD: 100,       # typical higher limit,
+            DataProvider.ALPHA_VANTAGE: 5,    # 5 req/min on free tier (75/min on premium)
+            DataProvider.FINNHUB: 60,         # 60 req/min on free tier
+            DataProvider.YAHOO_FINANCE: 100,  # no official limit; be conservative
+            DataProvider.QUANDL: 50,          # 50 req/day on free tier
+            DataProvider.POLYGON: 100,        # unlimited on Starter+; 5/min on free Basic
+            DataProvider.IEX_CLOUD: 100,      # depends on plan
         }
+
+        # Preferred provider order for the fallback chain.
+        # Polygon is first: lower latency, reliable uptime, generous rate limits.
+        # Finnhub second: fast free tier (60/min).
+        # Alpha Vantage third: 5/min free tier but broadest fundamental data.
+        # Yahoo Finance last: no auth required, but fragile (scraping-based).
+        self.preferred_provider_order = [
+            DataProvider.POLYGON,
+            DataProvider.FINNHUB,
+            DataProvider.ALPHA_VANTAGE,
+            DataProvider.YAHOO_FINANCE,
+        ]
 
         # Loaded API keys mapped by provider
         self.api_keys: Dict[DataProvider, APIKey] = self._load_api_keys()
@@ -96,8 +108,8 @@ class MarketDataAPIService:
         """Load API keys from environment variables."""
         api_keys: Dict[DataProvider, APIKey] = {}
 
-        # Alpha Vantage
-        alpha_key = os.getenv("ALPHA_VANTAGE_API_KEY")
+        # Alpha Vantage — accept both naming conventions used in different parts of the codebase
+        alpha_key = os.getenv("ALPHAVANTAGE_API_KEY") or os.getenv("ALPHA_VANTAGE_API_KEY")
         if alpha_key:
             api_keys[DataProvider.ALPHA_VANTAGE] = APIKey(
                 provider=DataProvider.ALPHA_VANTAGE,
@@ -230,15 +242,16 @@ class MarketDataAPIService:
                     self.cache[cache_key] = (time.time(), quote)
                     return quote
 
-            # Try other available providers (only implemented ones)
+            # Try other available providers in preferred order (Polygon → Finnhub → AV → Yahoo)
             implemented_providers = {
+                DataProvider.POLYGON,
                 DataProvider.ALPHA_VANTAGE,
                 DataProvider.FINNHUB,
                 DataProvider.YAHOO_FINANCE,
                 DataProvider.IEX_CLOUD,
             }
 
-            for available_provider in self.api_keys.keys():
+            for available_provider in self.preferred_provider_order:
                 if (
                     available_provider != provider
                     and available_provider in implemented_providers
@@ -262,6 +275,8 @@ class MarketDataAPIService:
     ) -> Optional[Dict[str, Any]]:
         """Fetch quote from a specific provider."""
         try:
+            if provider == DataProvider.POLYGON:
+                return await self._fetch_polygon_quote(symbol)
             if provider == DataProvider.ALPHA_VANTAGE:
                 return await self._fetch_alpha_vantage_quote(symbol)
             if provider == DataProvider.FINNHUB:
@@ -280,6 +295,76 @@ class MarketDataAPIService:
                 symbol,
                 e,
             )
+            return None
+
+    async def _fetch_polygon_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch real-time quote from Polygon.io using the previous-close snapshot endpoint.
+
+        Polygon free tier: /v2/aggs/ticker/{symbol}/prev (last trading day OHLCV).
+        Polygon Starter+:  /v2/last/trade/{symbol} (last tick, real-time).
+
+        We use the snapshot endpoint which works on all plan tiers.
+        For real-time last price, the /v2/last/trade endpoint requires Starter+.
+        """
+        api_key = self.api_keys.get(DataProvider.POLYGON)
+        if not api_key or self.session is None:
+            return None
+
+        # Snapshot endpoint: last completed trading day (works on free tier)
+        url = f"https://api.polygon.io/v2/aggs/ticker/{symbol}/prev"
+        params = {
+            "adjusted": "true",
+            "apiKey": api_key.key,
+        }
+
+        async with self.session.get(url, params=params) as response:
+            if response.status != 200:
+                logger.debug("Polygon quote HTTP %d for %s", response.status, symbol)
+                return None
+            data = await response.json()
+
+        results = data.get("results")
+        if not results:
+            # Try the real-time last-trade endpoint as fallback (requires Starter+)
+            url_rt = f"https://api.polygon.io/v2/last/trade/{symbol}"
+            async with self.session.get(url_rt, params={"apiKey": api_key.key}) as rt_resp:
+                if rt_resp.status != 200:
+                    return None
+                rt_data = await rt_resp.json()
+                result = rt_data.get("result", {})
+                price = result.get("p", 0)
+                return {
+                    "symbol": symbol,
+                    "price": float(price),
+                    "change": 0.0,       # last-trade endpoint doesn't return change
+                    "change_percent": 0.0,
+                    "volume": int(result.get("s", 0)),
+                    "provider": "polygon",
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+
+        bar = results[0]
+        try:
+            close = float(bar.get("c", 0))
+            open_ = float(bar.get("o", 0))
+            change = close - open_
+            change_pct = (change / open_ * 100) if open_ else 0.0
+            return {
+                "symbol": symbol,
+                "price": close,
+                "open": open_,
+                "high": float(bar.get("h", 0)),
+                "low": float(bar.get("l", 0)),
+                "change": change,
+                "change_percent": change_pct,
+                "volume": int(bar.get("v", 0)),
+                "vwap": float(bar.get("vw", 0)),
+                "provider": "polygon",
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        except Exception as e:
+            logger.error("Error parsing Polygon quote for %s: %s", symbol, e)
             return None
 
     async def _fetch_alpha_vantage_quote(self, symbol: str) -> Optional[Dict[str, Any]]:
