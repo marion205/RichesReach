@@ -36,6 +36,7 @@ import { DawnRitualScreen } from '../../rituals/screens/DawnRitualScreen';
 import { CreditQuestScreen } from '../../credit/screens/CreditQuestScreen';
 import PortfolioKellyMetricsCard from '../../../components/quant/PortfolioKellyMetricsCard';
 import TransparencyDashboardCard from '../../../components/quant/TransparencyDashboardCard';
+import TradeDebriefScreen from '../../trading/screens/TradeDebriefScreen';
 
 const GET_PORTFOLIO_RISK_REPORT = gql`
   query GetPortfolioRiskReport {
@@ -112,6 +113,9 @@ const insets = useSafeAreaInsets();
   
   // Credit Quest state
   const [showCreditQuest, setShowCreditQuest] = useState(false);
+
+  // Trade Debrief state
+  const [showTradeDebrief, setShowTradeDebrief] = useState(false);
   
   const debugLogTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -152,6 +156,7 @@ const insets = useSafeAreaInsets();
     setShowFamilyManagement(false);
     setShowDawnRitual(false);
     setShowCreditQuest(false);
+    setShowTradeDebrief(false);
     setCelebrateTitle(null);
   }, []); // Only run on mount
   
@@ -435,6 +440,26 @@ setRefreshing(false);
   }
   return holdings;
   }, [portfolios, realTimePrices]);
+
+  // Compute real portfolio analytics from holdings data
+  const portfolioAnalytics = useMemo(() => {
+    if (allHoldings.length === 0) return null;
+    const totalCost = allHoldings.reduce((sum, h) => {
+      const cost = (h.quantity || 0) * (h.currentPrice - (h.changePercent / 100) * h.currentPrice / (1 + h.changePercent / 100) || h.currentPrice);
+      return sum + cost;
+    }, 0);
+    const totalVal = allHoldings.reduce((sum, h) => sum + (h.totalValue || 0), 0);
+    const totalGain = allHoldings.reduce((sum, h) => sum + (h.change || 0), 0);
+    const totalReturn = totalVal > 0 ? (totalGain / (totalVal - totalGain)) * 100 : 0;
+    const worstChange = Math.min(...allHoldings.map(h => h.changePercent || 0));
+    return {
+      totalReturn: isFinite(totalReturn) ? totalReturn : 0,
+      maxDrawdown: worstChange < 0 ? worstChange : 0,
+      holdingsCount: allHoldings.length,
+      gainers: allHoldings.filter(h => (h.change || 0) > 0).length,
+      losers: allHoldings.filter(h => (h.change || 0) < 0).length,
+    };
+  }, [allHoldings]);
 
   // Basic milestones (v1)
   const milestones: Milestone[] = [
@@ -980,7 +1005,29 @@ Place buy/sell orders and manage your trades
 <Icon name="chevron-right" size={20} color="#8E8E93" />
 </View>
 </TouchableOpacity>
-<TouchableOpacity 
+<TouchableOpacity
+  style={[styles.actionButton, { backgroundColor: '#F5F3FF' }]}
+  onPress={() => {
+    try {
+      logger.log('[PortfolioScreen] Trade Debrief button pressed');
+      setShowTradeDebrief(true);
+    } catch (error) {
+      logger.error('[PortfolioScreen] Error opening Trade Debrief:', error);
+    }
+  }}
+>
+  <View style={styles.actionContent}>
+    <Icon name="bar-chart" size={24} color="#6366F1" />
+    <View style={styles.actionText}>
+      <Text style={[styles.actionTitle, { color: '#4338CA' }]}>AI Trade Debrief</Text>
+      <Text style={styles.actionDescription}>
+        Behavioural analysis — where you leave money on the table
+      </Text>
+    </View>
+    <Icon name="chevron-right" size={20} color="#8E8E93" />
+  </View>
+</TouchableOpacity>
+<TouchableOpacity
   style={[styles.actionButton, { backgroundColor: '#FFF8E1' }]}
   onPress={() => {
     try {
@@ -1089,28 +1136,38 @@ Advanced options strategies and market sentiment
       {/* Analytics Section */}
 <View style={styles.analyticsSection}>
 <Text style={styles.analyticsTitle}>Portfolio Analytics</Text>
+{portfolioAnalytics ? (
 <View style={styles.analyticsGrid}>
 <View style={styles.analyticsCard}>
 <Text style={styles.analyticsLabel}>Total Return</Text>
-<Text style={styles.analyticsValue}>+12.5%</Text>
-<Text style={styles.analyticsSubtext}>This month</Text>
+<Text style={[styles.analyticsValue, { color: portfolioAnalytics.totalReturn >= 0 ? '#34C759' : '#FF3B30' }]}>
+  {portfolioAnalytics.totalReturn >= 0 ? '+' : ''}{portfolioAnalytics.totalReturn.toFixed(1)}%
+</Text>
+<Text style={styles.analyticsSubtext}>vs avg cost</Text>
 </View>
 <View style={styles.analyticsCard}>
-<Text style={styles.analyticsLabel}>Sharpe Ratio</Text>
-<Text style={styles.analyticsValue}>1.4</Text>
-<Text style={styles.analyticsSubtext}>Risk-adjusted</Text>
+<Text style={styles.analyticsLabel}>Holdings</Text>
+<Text style={styles.analyticsValue}>{portfolioAnalytics.holdingsCount}</Text>
+<Text style={styles.analyticsSubtext}>positions</Text>
 </View>
 <View style={styles.analyticsCard}>
-<Text style={styles.analyticsLabel}>Volatility</Text>
-<Text style={styles.analyticsValue}>15.8%</Text>
-<Text style={styles.analyticsSubtext}>Annualized</Text>
+<Text style={styles.analyticsLabel}>Gainers</Text>
+<Text style={[styles.analyticsValue, { color: '#34C759' }]}>{portfolioAnalytics.gainers}</Text>
+<Text style={styles.analyticsSubtext}>today</Text>
 </View>
 <View style={styles.analyticsCard}>
-<Text style={styles.analyticsLabel}>Max Drawdown</Text>
-<Text style={styles.analyticsValue}>-5.2%</Text>
-<Text style={styles.analyticsSubtext}>Worst decline</Text>
+<Text style={styles.analyticsLabel}>Worst Hold</Text>
+<Text style={[styles.analyticsValue, { color: portfolioAnalytics.maxDrawdown < 0 ? '#FF3B30' : '#8E8E93' }]}>
+  {portfolioAnalytics.maxDrawdown < 0 ? portfolioAnalytics.maxDrawdown.toFixed(1) + '%' : '—'}
+</Text>
+<Text style={styles.analyticsSubtext}>today</Text>
 </View>
 </View>
+) : (
+<View style={styles.analyticsGrid}>
+  <Text style={{ color: '#8E8E93', fontSize: 14, padding: 12 }}>Add holdings to see analytics</Text>
+</View>
+)}
       <TouchableOpacity 
         style={styles.analyticsButton}
         onPress={() => go('premium-analytics')}
@@ -1137,6 +1194,13 @@ Advanced options strategies and market sentiment
 </ScrollView>
   {/* Celebration Overlay */}
   <MilestoneUnlockOverlay visible={!!celebrateTitle} title={celebrateTitle ?? ''} onClose={() => setCelebrateTitle(null)} />
+
+  {/* Trade Debrief — full-screen modal */}
+  {showTradeDebrief && (
+    <View style={StyleSheet.absoluteFillObject}>
+      <TradeDebriefScreen onBack={() => setShowTradeDebrief(false)} />
+    </View>
+  )}
   </View>
 );
 
