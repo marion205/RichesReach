@@ -162,26 +162,54 @@ class ModelStats:
         regime_gate = _regime_gate_multiplier(regime)
 
         if self.regime_ic:
-            # Exact or partial regime match in regime_ic dict
+            # Preferred path: use regime-specific IC from stratified walk-forward.
+            # Measures "is the model stable within this regime?" independently
+            # of whether the regime itself is favourable (that's regime_gate's job).
             ic_val = self.regime_ic.get(regime)
             if ic_val is None:
-                # Try case-insensitive
+                # Case-insensitive fallback lookup in regime_ic
                 for k, v in self.regime_ic.items():
                     if k.lower() == regime.lower():
                         ic_val = v
                         break
+
             if ic_val is not None:
                 if ic_val <= 0.0:
-                    return 0.0   # signal has no edge in this regime
+                    logger.debug(
+                        "stability_for_regime('%s'): regime_ic=%.4f ≤ 0 → 0.0 "
+                        "(no edge in this regime)",
+                        regime, ic_val,
+                    )
+                    return 0.0
                 eps = 1e-6
                 raw = float(ic_val) / (self.std_ic + eps)
-                return max(0.0, min(1.0, raw))
+                result = max(0.0, min(1.0, raw))
+                logger.debug(
+                    "stability_for_regime('%s'): regime_ic=%.4f / std_ic=%.4f → %.3f "
+                    "(regime-stratified path)",
+                    regime, ic_val, self.std_ic, result,
+                )
+                return result
 
-        # Fallback: global stability with regime-gate floor
+            # regime_ic dict exists but this regime isn't in it — use fallback
+            logger.debug(
+                "stability_for_regime('%s'): regime not found in regime_ic dict "
+                "→ using floor fallback",
+                regime,
+            )
+
+        # Fallback path: global stability floored by regime_gate × 0.8.
+        # Prevents stability from double-penalising the regime — the floor ensures
+        # stability can only add signal on top of what the regime gate already captures.
         global_stab = self.stability_multiplier()
-        # Allow global stability to reduce below regime_gate only by 20%
         floor = regime_gate * 0.8
-        return max(floor, global_stab)
+        result = max(floor, global_stab)
+        logger.debug(
+            "stability_for_regime('%s'): global_stab=%.3f, floor(gate×0.8)=%.3f → %.3f "
+            "(fallback path, regime_ic not populated)",
+            regime, global_stab, floor, result,
+        )
+        return result
 
     def single_fold_dominance(self) -> bool:
         """
@@ -222,26 +250,87 @@ _REGIME_GATE: Dict[str, float] = {
 }
 
 
+# Aliases map variant/shorthand regime labels to canonical _REGIME_GATE keys.
+# Add entries here when upstream regime classifiers use different vocabulary.
+_REGIME_ALIASES: Dict[str, str] = {
+    "bear":           "bear_market",
+    "bull":           "early_bull_market",
+    "risk_off":       "Crisis",
+    "risk off":       "Crisis",
+    "riskoff":        "Crisis",
+    "risk_on":        "Expansion",
+    "risk on":        "Expansion",
+    "riskon":         "Expansion",
+    "high_vol":       "high_volatility",
+    "high vol":       "high_volatility",
+    "sideways":       "sideways_consolidation",
+    "range_bound":    "sideways_consolidation",
+    "late_bull":      "late_bull_market",
+    "early_bull":     "early_bull_market",
+    "parabolic_move": "Parabolic",
+    "bubble":         "bubble_formation",
+    "value":          "value_rotation",
+}
+
+# Minimum input length for substring/partial matching.
+# Prevents "Ex" matching "Expansion" or "C" matching "Crisis".
+_MIN_PARTIAL_MATCH_LEN = 3
+
+
 def _regime_gate_multiplier(regime: str) -> float:
     """
-    Look up the regime gate multiplier.
-    Normalises regime string: case-insensitive, strips whitespace.
-    Falls back to 0.80 for unrecognised regimes.
+    Look up the regime gate multiplier with four-stage resolution:
+
+      1. Exact match (normalised: stripped whitespace, original case)
+      2. Case-insensitive exact match
+      3. Alias map (_REGIME_ALIASES)
+      4. Substring/partial match (input ≥ _MIN_PARTIAL_MATCH_LEN chars)
+      5. Fallback: 0.80 (Unknown / unrecognised)
+
+    Logs which stage fired at DEBUG level for production visibility.
+
+    Returns
+    -------
+    float : gate multiplier in (0, 1]
     """
     clean = regime.strip()
-    # Exact match first
+
+    # Stage 1: exact match (normalised whitespace, original case)
     if clean in _REGIME_GATE:
+        logger.debug("regime_gate: exact match '%s' → %.2f", clean, _REGIME_GATE[clean])
         return _REGIME_GATE[clean]
-    # Case-insensitive match
+
     lower = clean.lower()
+
+    # Stage 2: case-insensitive exact match
     for key, val in _REGIME_GATE.items():
         if key.lower() == lower:
+            logger.debug("regime_gate: case-insensitive '%s' → '%s' → %.2f", clean, key, val)
             return val
-    # Partial match (e.g. "Expansion regime" contains "Expansion")
-    # Guard: require non-empty strings on both sides to avoid "" matching everything
-    for key, val in _REGIME_GATE.items():
-        if lower and key and (key.lower() in lower or lower in key.lower()):
-            return val
+
+    # Stage 3: alias map
+    if lower in _REGIME_ALIASES:
+        canonical = _REGIME_ALIASES[lower]
+        val = _REGIME_GATE.get(canonical, 0.80)
+        logger.debug("regime_gate: alias '%s' → '%s' → %.2f", clean, canonical, val)
+        return val
+
+    # Stage 4: substring/partial match — requires input length ≥ 3.
+    # Normalise underscores ↔ spaces before comparison so "high volatility mkt"
+    # matches "high_volatility" and vice versa.
+    # Prevents single chars / two-letter abbreviations matching unintentionally.
+    if len(lower) >= _MIN_PARTIAL_MATCH_LEN:
+        lower_norm = lower.replace("_", " ")
+        for key, val in _REGIME_GATE.items():
+            key_norm = key.lower().replace("_", " ")
+            if key_norm in lower_norm or lower_norm in key_norm:
+                logger.debug(
+                    "regime_gate: partial match '%s' ~ '%s' → %.2f", clean, key, val
+                )
+                return val
+
+    # Stage 5: fallback
+    logger.debug("regime_gate: no match for '%s' → fallback 0.80", clean)
     return 0.80
 
 
