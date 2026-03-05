@@ -50,13 +50,13 @@ Usage
 -----
     from .position_sizer import VolTargetSizer, SizingInput, ModelStats
 
-    stats = ModelStats(mean_ic=0.014, std_ic=0.037)   # from walk-forward CV
+    # Sizer uses registry stats by default (mean_ic, regime_ic from last train).
     sizer = VolTargetSizer(
         target_vol_pct=0.02,
         max_position_pct=0.08,
-        model_stats=stats,
         regime="Expansion",   # from FSS engine / market regime model
     )
+    # Or pass explicit stats: model_stats=ModelStats.from_registry()
     result = sizer.size(SizingInput(
         symbol="AAPL",
         signal="Bullish",
@@ -111,6 +111,30 @@ class ModelStats:
     std_ic: float = 0.037
     fold_ics: List[float] = field(default_factory=list)
     regime_ic: Dict[str, float] = field(default_factory=dict)
+
+    @classmethod
+    def from_registry(cls, name: str = "production_r2") -> "ModelStats":
+        """
+        Build ModelStats from the saved model bundle (fold_metrics + regime_ic).
+        Use this so sizing stays self-calibrating from the last training run.
+
+        Returns
+        -------
+        ModelStats
+            If no bundle exists (FileNotFoundError), returns ModelStats() with
+            default mean_ic/std_ic and empty regime_ic.
+        """
+        try:
+            from .ml.model_registry import ModelRegistry
+            meta = ModelRegistry.metadata(name)
+            fm = meta.get("fold_metrics") or {}
+            return cls(
+                mean_ic=float(fm.get("ic", 0.014)),
+                std_ic=0.037,  # not stored in bundle yet; fixed default
+                regime_ic=meta.get("regime_ic") or {},
+            )
+        except FileNotFoundError:
+            return cls()
 
     def stability_multiplier(self) -> float:
         """
@@ -484,7 +508,7 @@ class VolTargetSizer:
         Minimum position size once signal clears threshold (default 1%).
     model_stats : ModelStats, optional
         Walk-forward CV statistics used for stability multiplier.
-        Defaults to ModelStats() which uses mean_ic=0.014, std_ic=0.037.
+        Defaults to ModelStats.from_registry() (mean_ic, regime_ic from saved bundle).
     regime : str, optional
         Current market regime for the regime gate.  Can be overridden
         per-stock via SizingInput.regime (stock-level takes priority).
@@ -506,7 +530,7 @@ class VolTargetSizer:
         self.target_vol_pct = target_vol_pct
         self.max_position_pct = max_position_pct
         self.min_position_pct = min_position_pct
-        self.model_stats = model_stats or ModelStats()
+        self.model_stats = model_stats or ModelStats.from_registry()
         self.regime = regime
 
     def size(self, inp: SizingInput) -> SizingResult:
@@ -697,7 +721,7 @@ class KellySizer:
         max_position_pct: float = 0.05,
         regime: str = "Unknown",
     ):
-        self.model_stats = model_stats or ModelStats()
+        self.model_stats = model_stats or ModelStats.from_registry()
         self.b = max(1.01, float(avg_win_loss_ratio))
         self.kelly_fraction = float(kelly_fraction)
         self.max_position_pct = float(max_position_pct)
