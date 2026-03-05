@@ -238,8 +238,9 @@ def _regime_gate_multiplier(regime: str) -> float:
         if key.lower() == lower:
             return val
     # Partial match (e.g. "Expansion regime" contains "Expansion")
+    # Guard: require non-empty strings on both sides to avoid "" matching everything
     for key, val in _REGIME_GATE.items():
-        if key.lower() in lower or lower in key.lower():
+        if lower and key and (key.lower() in lower or lower in key.lower()):
             return val
     return 0.80
 
