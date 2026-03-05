@@ -866,6 +866,46 @@ return (
   </View>
 )}
 
+{/* AI Tools — surfaced here so they're visible without scrolling */}
+<View style={{ marginTop: 16, marginBottom: 8, paddingHorizontal: 16 }}>
+  <Text style={{ fontSize: 16, fontWeight: '700', color: '#1C1C1E', marginBottom: 10 }}>AI Tools</Text>
+  <View style={{ flexDirection: 'row', gap: 12 }}>
+    {/* AI Recommendations */}
+    <TouchableOpacity
+      style={{ flex: 1, backgroundColor: '#F0FDF4', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#BBF7D0' }}
+      onPress={() => {
+        try {
+          logger.log('[PortfolioScreen] AI Recommendations button pressed');
+          go('ai-portfolio');
+        } catch (error) {
+          logger.error('[PortfolioScreen] Error navigating to ai-portfolio:', error);
+          Alert.alert('Navigation Error', 'Could not open AI recommendations. Please try again.');
+        }
+      }}
+    >
+      <Icon name="cpu" size={22} color="#16A34A" />
+      <Text style={{ fontSize: 14, fontWeight: '700', color: '#15803D', marginTop: 8, marginBottom: 2 }}>AI Picks</Text>
+      <Text style={{ fontSize: 12, color: '#4B5563', lineHeight: 16 }}>Personalised recommendations</Text>
+    </TouchableOpacity>
+    {/* AI Trade Debrief */}
+    <TouchableOpacity
+      style={{ flex: 1, backgroundColor: '#F5F3FF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#DDD6FE' }}
+      onPress={() => {
+        try {
+          logger.log('[PortfolioScreen] Trade Debrief tile pressed');
+          setShowTradeDebrief(true);
+        } catch (error) {
+          logger.error('[PortfolioScreen] Error opening Trade Debrief:', error);
+        }
+      }}
+    >
+      <Icon name="bar-chart" size={22} color="#6366F1" />
+      <Text style={{ fontSize: 14, fontWeight: '700', color: '#4338CA', marginTop: 8, marginBottom: 2 }}>Trade Debrief</Text>
+      <Text style={{ fontSize: 12, color: '#4B5563', lineHeight: 16 }}>Coaching on your habits</Text>
+    </TouchableOpacity>
+  </View>
+</View>
+
 {/* Portfolio Holdings - Mid Section */}
 <View style={{ marginTop: 16, marginBottom: 16, paddingHorizontal: 16 }}>
     <PortfolioHoldings
