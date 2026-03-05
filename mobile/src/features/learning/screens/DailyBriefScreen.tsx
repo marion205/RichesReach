@@ -52,13 +52,30 @@ interface DailyBrief {
   achievements_unlocked?: string[];
 }
 
+// Market Brief from /api/market/brief/ — AI-generated trading signals + regime
+interface MarketBriefSignal {
+  ticker: string;
+  signal: string;       // "Bullish" | "Bearish" | "Neutral"
+  confidence: string;   // "High" | "Medium" | "Low"
+  reasons: string[];
+}
+
+interface MarketBrief {
+  regime: string;       // "Expansion" | "Parabolic" | "Deflation" | "Crisis"
+  top_bullish: MarketBriefSignal[];
+  top_bearish: MarketBriefSignal[];
+  narrative: string;
+  generated_at: string;
+  from_cache: boolean;
+}
+
 interface DailyBriefScreenProps {
   navigateTo?: (screen: string, params?: Record<string, unknown>) => void;
 }
 
 interface SectionItem {
   id: string;
-  type: 'header' | 'market_summary' | 'action' | 'lesson' | 'progress' | 'complete';
+  type: 'header' | 'market_summary' | 'market_brief' | 'action' | 'lesson' | 'progress' | 'complete';
   data?: DailyBrief | Record<string, unknown>;
 }
 
@@ -69,6 +86,7 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
   const { token, user } = useAuth();
   const navigation = useNavigation();
   const [brief, setBrief] = useState<DailyBrief | null>(null);
+  const [marketBrief, setMarketBrief] = useState<MarketBrief | null>(null);
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState(false);
   const [sectionsViewed, setSectionsViewed] = useState<Set<string>>(new Set());
@@ -217,12 +235,18 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
   // Build sections for FlatList - must be defined before any conditional returns
   const buildSections = useCallback((): SectionItem[] => {
     if (!brief) return [];
-    
+
     const sections: SectionItem[] = [
       { id: 'header', type: 'header' },
       { id: 'market_summary', type: 'market_summary' },
-      { id: 'action', type: 'action' },
     ];
+
+    // Slot the AI market brief between market summary and the personalised action
+    if (marketBrief) {
+      sections.push({ id: 'market_brief', type: 'market_brief' });
+    }
+
+    sections.push({ id: 'action', type: 'action' });
 
     if (brief.lesson_title && brief.lesson_content) {
       sections.push({ id: 'lesson', type: 'lesson' });
@@ -234,7 +258,7 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
     );
 
     return sections;
-  }, [brief]);
+  }, [brief, marketBrief]);
 
   // Memoize sections to prevent unnecessary re-renders - must be before conditional returns
   const sections = useMemo(() => buildSections(), [buildSections]);
@@ -317,6 +341,15 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
       retryCountRef.current = 0;
       isRetryingRef.current = false;
       setLoading(false);
+
+      // Fetch AI market brief in parallel (non-blocking — failure is silent)
+      fetch(`${API_HTTP}/api/market/brief/`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(mb => { if (mb) setMarketBrief(mb); })
+        .catch(err => logger.log('[DailyBrief] Market brief fetch skipped:', err));
       logger.log('[DailyBrief] ✅ Brief loaded and state updated!');
     } catch (error: any) {
       logger.error('Error loading daily brief:', error);
@@ -663,6 +696,66 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
             <Text style={styles.sectionContent}>{brief.market_summary}</Text>
           </View>
         );
+
+      case 'market_brief': {
+        if (!marketBrief) return null;
+        const regimeColour: Record<string, string> = {
+          Expansion: '#10B981',
+          Parabolic: '#F59E0B',
+          Deflation: '#6366F1',
+          Crisis: '#EF4444',
+        };
+        const regimeColour_ = regimeColour[marketBrief.regime] ?? '#667eea';
+        return (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Icon name="bar-chart-2" size={20} color="#6366F1" />
+              <Text style={styles.sectionTitle}>AI Market Brief</Text>
+              <View style={[styles.regimePill, { backgroundColor: regimeColour_ + '22' }]}>
+                <Text style={[styles.regimePillText, { color: regimeColour_ }]}>
+                  {marketBrief.regime}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.sectionContent}>{marketBrief.narrative}</Text>
+
+            {marketBrief.top_bullish.length > 0 && (
+              <View style={styles.briefSignalGroup}>
+                <Text style={styles.briefSignalGroupLabel}>📈 Top Bullish</Text>
+                {marketBrief.top_bullish.map(s => (
+                  <View key={s.ticker} style={styles.briefSignalRow}>
+                    <Text style={styles.briefSignalTicker}>{s.ticker}</Text>
+                    <View style={[styles.briefConfidencePill, { backgroundColor: '#10B98122' }]}>
+                      <Text style={[styles.briefConfidenceText, { color: '#10B981' }]}>{s.confidence}</Text>
+                    </View>
+                    {s.reasons.length > 0 && (
+                      <Text style={styles.briefSignalReason} numberOfLines={1}>{s.reasons[0]}</Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
+
+            {marketBrief.top_bearish.length > 0 && (
+              <View style={styles.briefSignalGroup}>
+                <Text style={styles.briefSignalGroupLabel}>📉 Top Bearish</Text>
+                {marketBrief.top_bearish.map(s => (
+                  <View key={s.ticker} style={styles.briefSignalRow}>
+                    <Text style={styles.briefSignalTicker}>{s.ticker}</Text>
+                    <View style={[styles.briefConfidencePill, { backgroundColor: '#EF444422' }]}>
+                      <Text style={[styles.briefConfidenceText, { color: '#EF4444' }]}>{s.confidence}</Text>
+                    </View>
+                    {s.reasons.length > 0 && (
+                      <Text style={styles.briefSignalReason} numberOfLines={1}>{s.reasons[0]}</Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+        );
+      }
 
       case 'action':
         return (
@@ -1246,5 +1339,57 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     lineHeight: 24,
+  },
+  // --- AI Market Brief section ---
+  regimePill: {
+    marginLeft: 'auto',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  regimePillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  briefSignalGroup: {
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F5',
+    paddingTop: 12,
+  },
+  briefSignalGroupLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#666',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  briefSignalRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    gap: 8,
+  },
+  briefSignalTicker: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    width: 52,
+  },
+  briefConfidencePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  briefConfidenceText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  briefSignalReason: {
+    flex: 1,
+    fontSize: 13,
+    color: '#666',
   },
 });
