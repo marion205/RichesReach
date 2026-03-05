@@ -95,7 +95,11 @@ class ModelStats:
         Per-fold IC values (in chronological order).  Used to detect
         single-fold dominance (e.g. one fold contributing all positive IC).
     regime_ic : dict[str, float], optional
-        IC by regime label.  Used by the regime gate.
+        IC by regime label.  When provided, stability_for_regime() uses the
+        regime-specific IC mean instead of the global mean, which prevents the
+        regime gate and stability multiplier from double-penalising the same
+        underlying "model degrades in bear regimes" fact.
+        Keys should match _REGIME_GATE keys (e.g. "Crisis", "Expansion").
     """
     mean_ic: float = 0.014
     std_ic: float = 0.037
@@ -104,21 +108,80 @@ class ModelStats:
 
     def stability_multiplier(self) -> float:
         """
-        Penalise strategies that only work in one fold.
+        Global stability: penalise strategies that only work in one fold.
 
         Formula: clamp(mean_ic / (std_ic + ε), 0, 1)
 
         Interpretation:
           mean_ic=0.014, std_ic=0.037 → 0.014/0.037 = 0.38
-            → sizing is at 38% of full — very conservative when std >> mean
-          mean_ic=0.05, std_ic=0.02  → 0.05/0.022 = 2.5 → clamped to 1.0
+            → conservative when std >> mean (regime-fragile signal)
+          mean_ic=0.05, std_ic=0.02   → clamped to 1.0
             → full sizing when signal is consistently positive
+
+        NOTE: Use stability_for_regime() in VolTargetSizer instead of this
+        method when a regime is known, to avoid double-penalising with
+        the regime gate multiplier.
 
         Range: 0.0 – 1.0
         """
         eps = 1e-6
         raw = self.mean_ic / (self.std_ic + eps)
         return max(0.0, min(1.0, raw))
+
+    def stability_for_regime(self, regime: str) -> float:
+        """
+        Regime-aware stability multiplier.  Orthogonalises the stability
+        signal from the regime gate to prevent double-penalising.
+
+        Logic
+        -----
+        Two cases:
+
+        1. regime_ic is populated (preferred):
+           Use the IC for this specific regime as the numerator.
+           This measures "is the model stable *within* this regime?" rather
+           than "is the model stable across all regimes including bear ones?"
+           The regime gate then handles the *current* regime penalty separately.
+
+           If regime_ic[regime] ≤ 0: return 0.0 (no edge in this regime)
+           Otherwise: clamp(regime_ic[regime] / (std_ic + ε), 0, 1)
+
+        2. regime_ic not populated (fallback):
+           Use global stability_multiplier() but clamp its lower bound to
+           the regime gate value.  This prevents the compound product
+           stability × regime_gate from going below regime_gate alone —
+           i.e. the stability penalty can only add information *on top of*
+           what the regime gate already captures, not repeat it.
+
+           Combined floor: max(global_stability, regime_gate × 0.8)
+           The 0.8 factor allows a small additional penalty if the global
+           IC is truly unstable even within the current regime.
+
+        Range: 0.0 – 1.0
+        """
+        regime_gate = _regime_gate_multiplier(regime)
+
+        if self.regime_ic:
+            # Exact or partial regime match in regime_ic dict
+            ic_val = self.regime_ic.get(regime)
+            if ic_val is None:
+                # Try case-insensitive
+                for k, v in self.regime_ic.items():
+                    if k.lower() == regime.lower():
+                        ic_val = v
+                        break
+            if ic_val is not None:
+                if ic_val <= 0.0:
+                    return 0.0   # signal has no edge in this regime
+                eps = 1e-6
+                raw = float(ic_val) / (self.std_ic + eps)
+                return max(0.0, min(1.0, raw))
+
+        # Fallback: global stability with regime-gate floor
+        global_stab = self.stability_multiplier()
+        # Allow global stability to reduce below regime_gate only by 20%
+        floor = regime_gate * 0.8
+        return max(floor, global_stab)
 
     def single_fold_dominance(self) -> bool:
         """
@@ -337,9 +400,14 @@ class VolTargetSizer:
         conf_scale     = _CONFIDENCE_SCALE.get(inp.confidence, 1.0)
         fss_scale      = _fss_multiplier(inp.fss_score)
         ml_scale       = self._ml_scale(inp)
-        stability      = self.model_stats.stability_multiplier()
         regime_str     = inp.regime if inp.regime != "Unknown" else self.regime
         regime_scale   = _regime_gate_multiplier(regime_str)
+        # Use regime-aware stability to avoid double-penalising with regime_scale.
+        # stability_for_regime() measures "is the model stable *within* this regime?"
+        # while regime_scale measures "is this regime favourable for the strategy?"
+        # These are orthogonal questions; using global std_ic for both would penalise
+        # the same "model degrades in bear regimes" fact twice.
+        stability      = self.model_stats.stability_for_regime(regime_str)
         coverage_scale = _COVERAGE_SCALE.get(inp.earnings_coverage, 0.75)
 
         total_scale = (
@@ -355,7 +423,7 @@ class VolTargetSizer:
         notes.append(
             f"Multipliers: dir={base:.2f} × conf({inp.confidence})={conf_scale:.2f} "
             f"× FSS({inp.fss_score:.0f})={fss_scale:.2f} × ML={ml_scale:.2f} "
-            f"× stability={stability:.2f} × regime({regime_str})={regime_scale:.2f} "
+            f"× stability[{regime_str}]={stability:.2f} × regime={regime_scale:.2f} "
             f"× coverage={'✓' if inp.earnings_coverage else '✗'}={coverage_scale:.2f} "
             f"→ total={total_scale:.3f}×"
         )
@@ -367,10 +435,14 @@ class VolTargetSizer:
                 f"already applied ({stability:.2f}×). Consider widening the universe."
             )
 
+        # Coverage note — clarify this is orthogonal to FSS confidence.
+        # FSS confidence measures component confluence (T/F/C/R alignment).
+        # Coverage measures data completeness. They are independent signals.
         if not inp.earnings_coverage:
             notes.append(
-                "⚠ Earnings data missing for this ticker — confidence auto-downweighted "
-                "(coverage multiplier 0.75×). Add to earnings cache to restore full sizing."
+                "⚠ Earnings data unavailable — position size reduced by 25% (coverage=0.75×). "
+                "FSS confidence reflects price/volume signal strength independently. "
+                "Add ticker to earnings cache to restore full sizing."
             )
 
         adjusted_weight = raw_weight * total_scale
@@ -511,10 +583,12 @@ class KellySizer:
             f"= {fractional_kelly:.3f}"
         )
 
-        # Apply stability, regime, coverage, confidence
-        stability      = self.model_stats.stability_multiplier()
+        # Apply regime-aware stability, regime gate, coverage, confidence.
+        # stability_for_regime() is used (not global stability_multiplier()) to
+        # avoid double-penalising with regime_scale — same fix as VolTargetSizer.
         regime_str     = inp.regime if inp.regime != "Unknown" else self.regime
         regime_scale   = _regime_gate_multiplier(regime_str)
+        stability      = self.model_stats.stability_for_regime(regime_str)
         coverage_scale = _COVERAGE_SCALE.get(inp.earnings_coverage, 0.75)
         conf_scale     = _CONFIDENCE_SCALE.get(inp.confidence, 1.0)
 
@@ -523,7 +597,7 @@ class KellySizer:
 
         notes.append(
             f"Scaled: conf({inp.confidence})={conf_scale:.2f} × "
-            f"stability={stability:.2f} × regime={regime_scale:.2f} × "
+            f"stability[{regime_str}]={stability:.2f} × regime={regime_scale:.2f} × "
             f"coverage={coverage_scale:.2f} → {weight:.1%}"
         )
 
