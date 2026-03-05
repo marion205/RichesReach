@@ -331,6 +331,66 @@ class MLService:
 
         scored_stocks.sort(key=lambda x: x.get("ml_score", 0), reverse=True)
         logger.info("Scored %d stocks using production walk-forward ML model", len(scored_stocks))
+
+        # Attach Glass Box position theses — explains why each stock is sized the way it is.
+        # Uses signal_output (already attached above) + regime_ic from model bundle.
+        try:
+            from .glass_box import attach_position_theses
+            from .position_sizer import SizingInput, size_portfolio, VolTargetSizer
+            from .ml.model_registry import ModelRegistry
+
+            # Load regime_ic from model bundle for regime-aware thesis narrative
+            try:
+                regime_ic = ModelRegistry.metadata().get("regime_ic") or {}
+            except Exception:
+                regime_ic = {}
+
+            # Build minimal SizingInputs for the portfolio sizer
+            regime = (scored_stocks[0].get("signal_output") or {}).get("regime", "Unknown") if scored_stocks else "Unknown"
+            sizing_inputs = []
+            for s in scored_stocks:
+                sig_out = s.get("signal_output") or {}
+                try:
+                    inp = SizingInput(
+                        symbol=s.get("symbol", "?"),
+                        signal=sig_out.get("signal", "Neutral"),
+                        confidence=sig_out.get("confidence", "Low"),
+                        fss_score=float(s.get("fss_score") or sig_out.get("fss_score") or 50),
+                        annual_vol=float(s.get("annual_vol") or 0.25),
+                        portfolio_value=100_000.0,   # normalised; weights are ratios
+                        current_price=float(s.get("current_price") or s.get("price") or 100),
+                        ml_score=float(s.get("ml_score") or 5.0),
+                        predicted_return=float(s.get("predicted_return") or 0.0),
+                        regime=regime,
+                        sector=s.get("sector") or "Unknown",
+                        earnings_coverage=bool(s.get("has_earnings_data", False)),
+                    )
+                    sizing_inputs.append(inp)
+                except Exception:
+                    pass
+
+            if sizing_inputs:
+                portfolio_result = size_portfolio(sizing_inputs)
+                symbol_to_signal = {
+                    s.get("symbol", ""): s.get("signal_output")
+                    for s in scored_stocks if s.get("signal_output")
+                }
+                attach_position_theses(portfolio_result, symbol_to_signal, regime_ic=regime_ic)
+
+                # Stitch position_thesis back onto each scored stock dict
+                thesis_map = {
+                    pos.symbol: pos.position_thesis
+                    for pos in portfolio_result.positions
+                    if getattr(pos, "position_thesis", None)
+                }
+                for s in scored_stocks:
+                    sym = s.get("symbol", "")
+                    if sym in thesis_map:
+                        s["position_thesis"] = thesis_map[sym]
+
+        except Exception as glass_exc:
+            logger.debug("glass_box attach skipped: %s", glass_exc)
+
         return scored_stocks
 
     def score_stocks_ml(

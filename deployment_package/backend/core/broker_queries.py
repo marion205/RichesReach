@@ -118,7 +118,20 @@ class BrokerQueries(graphene.ObjectType):
             "coaching paragraph alongside structured stats."
         )
     )
-    
+
+    # Portfolio Risk Report — returns JSON string
+    portfolio_risk_report = graphene.JSONString(
+        regime=graphene.String(
+            description="Market regime to evaluate (e.g. Expansion, Crisis). Defaults to the current detected regime."
+        ),
+        description=(
+            "Regime-aware portfolio risk report: shows how much the system sizes down "
+            "positions in the current regime, the regime gate multiplier, and a stress "
+            "drawdown context narrative. "
+            "Returns JSON: {regime, gate_multiplier, sizing_down_pct, narrative}."
+        )
+    )
+
     def resolve_broker_account(self, info):
         """Get user's broker account"""
         user = getattr(info.context, "user", None)
@@ -325,11 +338,10 @@ class BrokerQueries(graphene.ObjectType):
         try:
             from .trade_debrief_formatter import build_debrief
             output = build_debrief(user, lookback_days=lookback_days)
-
-            # Resolve sector_stats and pattern_flags from the underlying report
-            # (build_debrief returns TradeDebriefOutput; re-run service for structured fields)
-            from .trade_debrief_service import TradeDebriefService
-            report = TradeDebriefService().build_report(user, lookback_days=lookback_days)
+            report = getattr(output, "report", None)
+            if report is None:
+                from .trade_debrief_service import TradeDebriefService
+                report = TradeDebriefService().build_report(user, lookback_days=lookback_days)
 
             sector_stats_gql = [
                 SectorStatsType(
@@ -399,3 +411,43 @@ class BrokerQueries(graphene.ObjectType):
                 lookback_days=lookback_days,
                 generated_at=_tz.now().isoformat(),
             )
+
+    def resolve_portfolio_risk_report(self, info, regime=None):
+        """
+        Return a regime-aware portfolio risk report as a JSON string.
+
+        If regime is not supplied, attempts to detect the current regime from
+        the FSS engine; falls back to "Unknown".
+
+        Returns JSON: {regime, gate_multiplier, sizing_down_pct, narrative}
+        """
+        import json as _json
+        import logging as _logging
+        _log = _logging.getLogger(__name__)
+
+        # Detect regime if not provided
+        if not regime:
+            try:
+                from .ai_service import AIService
+                indicators = AIService()._cached_regime_indicators()
+                regime = indicators.get("regime", "Unknown") if isinstance(indicators, dict) else "Unknown"
+            except Exception:
+                regime = "Unknown"
+
+        try:
+            from .portfolio_risk_report import build_portfolio_risk_report
+            report = build_portfolio_risk_report(regime)
+            return _json.dumps({
+                "regime":          report.regime,
+                "gate_multiplier": report.gate_multiplier,
+                "sizing_down_pct": report.sizing_down_pct,
+                "narrative":       report.narrative,
+            })
+        except Exception as exc:
+            _log.warning("resolve_portfolio_risk_report failed: %s", exc)
+            return _json.dumps({
+                "regime":          regime or "Unknown",
+                "gate_multiplier": 1.0,
+                "sizing_down_pct": 0.0,
+                "narrative":       "Risk report temporarily unavailable.",
+            })

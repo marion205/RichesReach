@@ -44,6 +44,8 @@ from .cv import walk_forward_splits
 from .data_loader import DataLoader
 from .earnings_loader import fetch_earnings
 from .earnings_features import build_earnings_features, EARNINGS_FEATURE_NAMES
+from .analyst_loader import fetch_recommendation
+from .analyst_features import build_analyst_features, ANALYST_FEATURE_NAMES
 from .evaluate import evaluate, summarise
 from .features import FEATURE_NAMES as TECHNICAL_FEATURE_NAMES, build_features
 from .model_registry import ModelRegistry
@@ -51,38 +53,40 @@ from .targets import build_targets
 
 logger = logging.getLogger(__name__)
 
-# Full feature list: technical (22) + earnings (3) when Polygon/Benzinga data is used
-FEATURE_NAMES = TECHNICAL_FEATURE_NAMES + EARNINGS_FEATURE_NAMES
+# Full feature list: technical (22) + earnings (3) + analyst revision (3) = 28
+# analyst_rev_1m  : EPS estimate change (placeholder 0 until estimate revision API)
+# rec_upgrade_score: Finnhub (buy-sell)/total analyst consensus — live when key set
+# fy1_rev_3m      : FY1 EPS revision (placeholder 0 until estimate revision API)
+FEATURE_NAMES = TECHNICAL_FEATURE_NAMES + EARNINGS_FEATURE_NAMES + ANALYST_FEATURE_NAMES
 
 # ---------------------------------------------------------------------------
-# Default ticker universe for training
-# Large-cap, liquid names across sectors — good signal-to-noise ratio
+# Default ticker universe for training (200+ names for lower IC variance)
+# Large-cap, liquid, cross-sector — yfinance supports all; more stocks = more
+# cross-sectional spread and more stable fold IC estimates.
 # ---------------------------------------------------------------------------
 DEFAULT_TICKERS = [
-    # Large-cap Tech (high liquidity, some alpha dispersion)
-    "AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "META", "AMD", "INTC", "CRM", "ADBE",
-    "ORCL", "CSCO", "TXN", "QCOM", "MU",
+    # Large-cap Tech
+    "AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "NVDA", "META", "AMD", "INTC", "CRM", "ADBE",
+    "ORCL", "CSCO", "TXN", "QCOM", "MU", "AVGO", "NOW", "INTU", "AMAT", "LRCX", "KLAC",
+    "SNPS", "CDNS", "MRVL", "ADI", "NXPI", "MCHP", "FTNT", "PANW", "CRWD", "ZS", "DDOG", "NET", "SNOW",
     # Finance
-    "JPM", "BAC", "GS", "MS", "V", "MA", "AXP", "WFC", "C", "BLK",
-    # Healthcare — lower beta, more idiosyncratic movement
-    "JNJ", "UNH", "PFE", "ABBV", "MRK", "LLY", "BMY", "AMGN", "GILD", "CVS",
+    "JPM", "BAC", "GS", "MS", "V", "MA", "AXP", "WFC", "C", "BLK", "SCHW", "BK", "USB", "PNC", "COF", "TFC", "STT", "FITB", "KEY", "HBAN",
+    # Healthcare
+    "JNJ", "UNH", "PFE", "ABBV", "MRK", "LLY", "BMY", "AMGN", "GILD", "CVS", "CI", "HUM", "ELV", "MDT", "ABT", "SYK", "BSX", "ZBH", "ISRG", "DXCM", "REGN", "VRTX", "BIIB", "MRNA", "ILMN", "IQV", "EW", "IDXX", "HCA", "MCK", "CAH", "ABC",
     # Consumer Discretionary
-    "TSLA", "HD", "MCD", "COST", "NKE", "SBUX", "TGT", "LOW", "AMZN",
-    # Consumer Staples — low beta, mean-reversion signals work better here
-    "PG", "KO", "PEP", "WMT", "CL", "GIS",
+    "TSLA", "HD", "MCD", "COST", "NKE", "SBUX", "TGT", "LOW", "AMZN", "BKNG", "MAR", "HLT", "LVS", "MGM", "CMG", "YUM", "DPZ", "DRI", "EBAY", "ETSY", "ROST", "TJX", "F", "GM", "RCL", "CCL", "NCLH", "WYNN", "DHI", "LEN", "PHM", "NVR",
+    # Consumer Staples
+    "PG", "KO", "PEP", "WMT", "CL", "GIS", "KMB", "MDLZ", "K", "SJM", "HSY", "STZ", "BF-B", "MO", "PM", "TAP", "CAG", "CPB", "HRL", "MKC", "SYY", "ADM", "BG",
     # Energy
-    "XOM", "CVX", "COP", "SLB", "EOG",
+    "XOM", "CVX", "COP", "SLB", "EOG", "PXD", "MPC", "VLO", "PSX", "OXY", "HAL", "DVN", "FANG", "HES", "BKR", "KMI", "WMB", "OKE", "APA",
     # Industrials
-    "CAT", "BA", "GE", "HON", "MMM", "UPS", "FDX",
-    # Materials & Real Estate (more vol, more alpha)
-    "FCX", "NEM", "AMT", "PLD",
-    # Mid-cap growth (more dispersion than mega-caps)
-    "PANW", "CRWD", "SNOW", "DDOG", "NET", "ZS", "FTNT",
-    "MELI", "SE", "GRAB",
-    # Value / dividend names (different risk factor)
-    "BRK-B", "T", "VZ",
+    "CAT", "BA", "GE", "HON", "MMM", "UPS", "FDX", "RTX", "LMT", "NOC", "GD", "DE", "CARR", "OTIS", "JCI", "EMR", "ETN", "ITW", "ROK", "PH", "DOV", "IR", "CMI", "PCAR", "WM", "RSG", "FAST", "CTAS", "CSX", "UNP", "NSC", "JBHT", "CHRW", "LUV", "DAL", "UAL", "AAL",
+    # Materials & Real Estate
+    "FCX", "NEM", "AMT", "PLD", "LIN", "APD", "SHW", "ECL", "DD", "DOW", "NUE", "STLD", "VMC", "MLM", "CE", "PPG", "ALB", "EQIX", "PSA", "O", "WELL", "SPG", "AVB", "EQR", "VTR", "DLR", "ARE",
+    # Mid-cap growth / Value
+    "MELI", "SE", "GRAB", "BRK-B", "T", "VZ", "DIS", "NFLX", "CMCSA", "CHTR", "TMUS",
 ]
-# Remove duplicates (AMZN appears twice above) while preserving order
+# Remove duplicates while preserving order
 DEFAULT_TICKERS = list(dict.fromkeys(DEFAULT_TICKERS))
 
 # ---------------------------------------------------------------------------
@@ -217,7 +221,15 @@ def run_pipeline(
             earnings_df = fetch_earnings(ticker, start_date, end_date)
             earn_feat = build_earnings_features(df, earnings_df)
             earn_aligned = earn_feat.reindex(common_idx).fillna(0.0)
-            X_ticker = pd.concat([feat.loc[common_idx], earn_aligned], axis=1)[FEATURE_NAMES]
+
+            # Optional analyst revision features (Finnhub). Uses zeros when key not set.
+            rec_df = fetch_recommendation(ticker)
+            analyst_feat = build_analyst_features(df, rec_df)
+            analyst_aligned = analyst_feat.reindex(common_idx).fillna(0.0)
+
+            X_ticker = pd.concat(
+                [feat.loc[common_idx], earn_aligned, analyst_aligned], axis=1
+            )[FEATURE_NAMES]
             X_parts.append(X_ticker)
             y_parts.append(targ.loc[common_idx])
 
@@ -478,6 +490,7 @@ def run_pipeline(
         reg = r.get("regime", "Unknown")
         regime_ic.setdefault(reg, []).append(r["ic"])
     regime_ic = {k: float(np.mean(v)) for k, v in regime_ic.items()}
+    fold_ics = [float(r["ic"]) for r in fold_results]
 
     # ------------------------------------------------------------------
     # Step 7: Log summary
@@ -510,6 +523,7 @@ def run_pipeline(
             feature_names=feat_cols,
             horizon=horizon,
             fold_metrics=fold_metrics_df.loc["mean"].to_dict() if "mean" in fold_metrics_df.index else {},
+            fold_ics=fold_ics,
             n_tickers=len(valid_tickers),
             n_rows=len(X_final),
             xs_mean=xs_global_mean,

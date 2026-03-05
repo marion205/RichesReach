@@ -332,7 +332,41 @@ class AIRecommendationType(graphene.ObjectType):
     earningsScore = graphene.Float()  # camelCase alias
     insider_score = graphene.Float()
     insiderScore = graphene.Float()  # camelCase alias
-    
+    # Glass Box fields — set when glass_box.attach_position_theses() runs in ml_service
+    position_thesis = graphene.String(
+        description=(
+            "Glass Box narrative: 2–4 sentences explaining exactly why this position "
+            "is sized the way it is (regime IC, sector cap, signal components, earnings coverage)."
+        )
+    )
+    positionThesis = graphene.String()  # camelCase alias
+    # Structured signal output (Signal/Confidence/Reasons) as JSON string
+    signal_output = graphene.JSONString(
+        description="Structured signal: {signal, confidence, reasons, regime, fss_score, ml_score}"
+    )
+    signalOutput = graphene.JSONString()  # camelCase alias
+
+    def resolve_positionThesis(self, info):
+        if isinstance(self, dict):
+            return self.get("positionThesis") or self.get("position_thesis") or None
+        return getattr(self, "positionThesis", None) or getattr(self, "position_thesis", None) or None
+
+    def resolve_signalOutput(self, info):
+        import json as _json
+        raw = None
+        if isinstance(self, dict):
+            raw = self.get("signalOutput") or self.get("signal_output")
+        else:
+            raw = getattr(self, "signalOutput", None) or getattr(self, "signal_output", None)
+        if raw is None:
+            return None
+        if isinstance(raw, str):
+            return raw
+        try:
+            return _json.dumps(raw)
+        except Exception:
+            return None
+
     def resolve_companyName(self, info):
         # Check both camelCase and snake_case
         if isinstance(self, dict):

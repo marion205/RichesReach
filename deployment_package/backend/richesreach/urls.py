@@ -7,6 +7,7 @@ from core.views import graphql_view
 from graphene_django.views import GraphQLView
 from core.daytrading_test_schema import schema as daytrading_test_schema
 from core.market_views import QuotesView
+from core.brief_views import DailyMarketBriefView
 from core.wealth_circles_views import WealthCirclePostsView
 from core.voices_views import VoicesListView, PollySynthesizeView, VoicePreviewView
 from core.ai_options_views import AIOptionsRecommendationsView
@@ -40,6 +41,7 @@ urlpatterns = [
     path('api/auth/alpaca/', include('core.alpaca_oauth_urls')),
     # Market data endpoints
     path('api/market/quotes/', QuotesView.as_view(), name='market_quotes'),
+    path('api/market/brief/', DailyMarketBriefView.as_view(), name='daily_market_brief'),
     # Wealth circles endpoints
     path('api/wealth-circles/<str:circle_id>/posts/', WealthCirclePostsView.as_view(), name='wealth_circle_posts'),
     # Voice/TTS endpoints
