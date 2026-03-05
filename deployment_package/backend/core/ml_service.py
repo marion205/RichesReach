@@ -312,6 +312,15 @@ class MLService:
                     "model_type": "production_lgbm_walkforward",
                 }
 
+                # Attach structured signal output (Signal/Confidence/Reasons)
+                try:
+                    from .signal_formatter import format_signal_from_dicts
+                    scored_stock["signal_output"] = format_signal_from_dicts(
+                        scored_stock, data_source="live"
+                    )
+                except Exception as fmt_exc:
+                    logger.debug("signal_formatter unavailable: %s", fmt_exc)
+
             except Exception as exc:
                 logger.warning("Could not score %s with production model: %s", symbol, exc)
                 scored_stock = self._fallback_stock_scoring(
@@ -454,7 +463,7 @@ class MLService:
 
             # Sort by ML score
             scored_stocks.sort(key=lambda x: x["ml_score"], reverse=True)
-            return scored_stocks
+            return self._attach_signal_outputs(scored_stocks)
 
         except Exception as e:
             logger.error(f"Error in improved ML service / stock scoring: {e}")
@@ -1406,6 +1415,34 @@ class MLService:
             "method": "fallback",
         }
 
+    # -------------------------------------------------------------------------
+    # Signal formatting helper
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def _attach_signal_outputs(
+        stocks: List[Dict[str, Any]],
+        data_source: str = "live",
+    ) -> List[Dict[str, Any]]:
+        """
+        Attach a `signal_output` key (Signal/Confidence/Reasons) to every stock
+        dict in the list.  Safe — never raises; missing keys fall back gracefully.
+        """
+        try:
+            from .signal_formatter import format_signal_from_dicts
+        except ImportError:
+            return stocks
+
+        for stock in stocks:
+            if "signal_output" not in stock:
+                try:
+                    src = "unavailable" if stock.get("fallback_used") else data_source
+                    stock["signal_output"] = format_signal_from_dicts(stock, data_source=src)
+                except Exception as exc:
+                    logger.debug("signal_formatter failed for %s: %s",
+                                 stock.get("symbol", "?"), exc)
+        return stocks
+
     def _fallback_stock_scoring(
         self,
         stocks: List[Dict[str, Any]],
@@ -1438,13 +1475,14 @@ class MLService:
                 {
                     **stock,
                     "ml_score": enhanced_score,
-                    "ml_confidence": 0.6,
+                    "ml_confidence": "low",   # fallback path — no trained model
                     "ml_reasoning": " | ".join(reasoning_parts),
+                    "fallback_used": True,
                 }
             )
 
         scored_stocks.sort(key=lambda x: x["ml_score"], reverse=True)
-        return scored_stocks
+        return self._attach_signal_outputs(scored_stocks, data_source="unavailable")
 
     def _calculate_value_bonus(self, stock: Dict[str, Any]) -> float:
         """Calculate value factor bonus for stock scoring"""

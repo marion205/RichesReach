@@ -539,13 +539,22 @@ class AIService:
         scored = []
         for s in stocks:
             base_score = float(s.get("beginner_friendly_score", 5.0))
-            scored.append({
+            entry = {
                 **s,
                 "ml_score": base_score,
                 "ml_confidence": None,   # No confidence without real ML inference
                 "ml_reasoning": "AI scoring unavailable — showing FSS beginner-friendly score only.",
                 "fallback_used": True,
-            })
+            }
+            # Attach structured signal output even on fallback path
+            try:
+                from .signal_formatter import format_signal_from_dicts
+                entry["signal_output"] = format_signal_from_dicts(
+                    entry, data_source="unavailable"
+                )
+            except Exception:
+                pass
+            scored.append(entry)
         return sorted(scored, key=lambda x: x["ml_score"], reverse=True)
 
     def _get_fallback_market_analysis(self) -> Dict[str, Any]:
