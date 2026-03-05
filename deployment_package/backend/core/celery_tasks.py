@@ -594,3 +594,62 @@ def check_portfolio_drawdowns_task():
     except Exception as e:
         logger.error(f"Error in portfolio drawdown check: {e}", exc_info=True)
         return {'status': 'failed', 'error': str(e)}
+
+
+# ============================================================
+# ML pipeline: earnings data sprint, monthly retrain, daily brief
+# ============================================================
+
+@shared_task
+def run_earnings_sprint_task():
+    """
+    Daily task (6 AM UTC): fetch up to 25 uncached earnings records from
+    Alpha Vantage (free tier limit).  Idempotent — already-cached tickers
+    are skipped automatically.  After ~4 days the full 78-ticker core
+    universe will be covered; after ~8 days the 200-ticker expanded universe.
+    """
+    try:
+        from django.core.management import call_command
+        call_command("run_earnings_sprint")
+        logger.info("Earnings sprint task completed successfully.")
+        return {'status': 'success'}
+    except Exception as e:
+        logger.error(f"Error in earnings sprint task: {e}", exc_info=True)
+        return {'status': 'failed', 'error': str(e)}
+
+
+@shared_task
+def retrain_production_model_task():
+    """
+    Monthly task (2nd of month, 3 AM UTC): run the full walk-forward ML
+    training pipeline and save production_r2.pkl.  Should be scheduled
+    after earnings-sprint-daily has had enough days to fully populate the
+    cache (i.e. run this on the 2nd, not the 1st, to give the 1st-of-month
+    earnings sprint a chance to run first).
+    """
+    try:
+        from django.core.management import call_command
+        # --notify-brief regenerates the daily brief cache with the new model's signals
+        call_command("retrain_production_model", notify_brief=True)
+        logger.info("Production model retrain task completed successfully.")
+        return {'status': 'success'}
+    except Exception as e:
+        logger.error(f"Error in retrain production model task: {e}", exc_info=True)
+        return {'status': 'failed', 'error': str(e)}
+
+
+@shared_task
+def generate_daily_brief_task():
+    """
+    Weekday task (14:30 UTC = 9:30 AM ET, Mon–Fri): regenerate the AI
+    daily market brief cache so the first request of the trading day is
+    served instantly from cache rather than generated on-demand.
+    """
+    try:
+        from django.core.management import call_command
+        call_command("generate_daily_brief")
+        logger.info("Daily market brief cache regenerated successfully.")
+        return {'status': 'success'}
+    except Exception as e:
+        logger.error(f"Error in generate daily brief task: {e}", exc_info=True)
+        return {'status': 'failed', 'error': str(e)}

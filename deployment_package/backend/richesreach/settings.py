@@ -478,6 +478,19 @@ CELERY_BEAT_SCHEDULE = {
 'task': 'core.celery_tasks.evaluate_autopilot_repairs',
 'schedule': 600.0,  # Every 10 min - pending repairs, alerts, AUTO_BOUNDED prep
 },
+# --- ML pipeline: earnings data, retraining, daily brief ---
+'earnings-sprint-daily': {
+'task': 'core.celery_tasks.run_earnings_sprint_task',
+'schedule': crontab(hour=6, minute=0),  # 6 AM UTC daily (free-tier 25 tickers/run)
+},
+'ml-retrain-monthly': {
+'task': 'core.celery_tasks.retrain_production_model_task',
+'schedule': crontab(day_of_month=2, hour=3, minute=0),  # 2nd of month, 3 AM UTC
+},
+'daily-market-brief-generation': {
+'task': 'core.celery_tasks.generate_daily_brief_task',
+'schedule': crontab(hour=14, minute=30, day_of_week='1-5'),  # 9:30 AM ET Mon-Fri
+},
 }
 # Channels Configuration
 CHANNEL_LAYERS = {
