@@ -38,12 +38,10 @@ const GET_AI_RECOMMENDATIONS = gql`
         expectedReturn
         targetPrice
         currentPrice
-        positionThesis
       }
       sellRecommendations {
         symbol
         reasoning
-        positionThesis
       }
       rebalanceSuggestions {
         action
@@ -155,12 +153,10 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
                 expectedReturn
                 targetPrice
                 currentPrice
-                positionThesis
               }
               sellRecommendations {
                 symbol
                 reasoning
-                positionThesis
               }
               rebalanceSuggestions {
                 action
@@ -530,7 +526,7 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
           conviction,
           sizePct,
           thesis: rec.reasoning || `Expected return: ${((rec.expectedReturn || 0) * 100).toFixed(1)}%`,
-          positionThesis: rec.positionThesis || undefined,
+          positionThesis: (rec.position_thesis ?? rec.positionThesis) || undefined,
         });
       });
     }
@@ -544,7 +540,7 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
           conviction: 'balanced',
           sizePct: -1,
           thesis: rec.reasoning || 'Consider reducing position',
-          positionThesis: rec.positionThesis || undefined,
+          positionThesis: (rec.position_thesis ?? rec.positionThesis) || undefined,
         });
       });
     }
@@ -637,7 +633,7 @@ export default function NextMoveModal({ visible, onClose, portfolioValue = 10000
                     conviction: convictionValue as 'bold' | 'calm' | 'balanced',
                     sizePct: Math.round(rec.allocation || 0),
                     thesis: rec.reasoning || `Expected return: ${((rec.expectedReturn || 0) * 100).toFixed(1)}%`,
-                    positionThesis: rec.positionThesis || undefined,
+                    positionThesis: (rec.position_thesis ?? rec.positionThesis) || undefined,
                   };
                 });
               })()}

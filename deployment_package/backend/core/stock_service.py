@@ -1,4 +1,6 @@
 # core/stock_service.py
+# Production overrides live in deployment/richesreach-production/backend/core/stock_service.py
+# (that path is gitignored). Sync any fixes there manually for deploy.
 import os
 import requests
 import json

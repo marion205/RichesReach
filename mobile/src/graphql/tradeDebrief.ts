@@ -11,8 +11,9 @@ export const GET_TRADE_DEBRIEF = gql`
       patternCodes
       sectorStats {
         sector
-        tradeCount
-        winRate
+        trades
+        wins
+        losses
         totalPnl
       }
       patternFlags {

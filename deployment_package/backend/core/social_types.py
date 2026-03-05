@@ -192,6 +192,14 @@ class SwingSignalType(graphene.ObjectType):
     createdBy = graphene.Field(SwingSignalUserType)
     technicalIndicators = graphene.List(TechnicalIndicatorType)
     patterns = graphene.List(PatternRecognitionType)
+    # Structured signal (Signal/Confidence/Reasons/regime) — optional, from ML/signal pipeline
+    signal_output = graphene.JSONString()
+    signalOutput = graphene.JSONString()
+
+    def resolve_signalOutput(self, info):
+        if isinstance(self, dict):
+            return self.get("signalOutput") or self.get("signal_output") or None
+        return getattr(self, "signalOutput", None) or getattr(self, "signal_output", None) or None
 
 
 class SocialQueries(graphene.ObjectType):

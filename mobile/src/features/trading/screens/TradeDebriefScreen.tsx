@@ -15,8 +15,9 @@ import { GET_TRADE_DEBRIEF } from '../../../graphql/tradeDebrief';
 
 interface SectorStat {
   sector: string;
-  tradeCount: number;
-  winRate: number;
+  trades: number;
+  wins: number;
+  losses: number;
   totalPnl: number;
 }
 
@@ -263,8 +264,8 @@ const TradeDebriefScreen: React.FC<TradeDebriefScreenProps> = ({ onBack }) => {
                 <View key={i} style={styles.sectorRow}>
                   <Text style={styles.sectorName}>{s.sector}</Text>
                   <View style={styles.sectorMetrics}>
-                    <Text style={styles.sectorMeta}>{s.tradeCount} trades</Text>
-                    <Text style={styles.sectorMeta}>{(s.winRate * 100).toFixed(0)}% WR</Text>
+                    <Text style={styles.sectorMeta}>{s.trades} trades</Text>
+                    <Text style={styles.sectorMeta}>{s.trades > 0 ? ((s.wins / s.trades) * 100).toFixed(0) : 0}% WR</Text>
                     <Text style={[styles.sectorMeta, { color: pnlColor(s.totalPnl) }]}>
                       {formatPnl(s.totalPnl)}
                     </Text>

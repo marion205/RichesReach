@@ -14,6 +14,8 @@ logger = logging.getLogger(__name__)
 _REDACT_PATTERNS = [
     (re.compile(r"\bapi[_-]?key\s*=\s*['\"]?[\w-]+", re.I), "apiKey=[REDACTED]"),
     (re.compile(r"\bapiKey\s*=\s*[\w-]+", re.I), "apiKey=[REDACTED]"),
+    # Alpha Vantage rate-limit message: "We have detected your API key as XXXXX"
+    (re.compile(r"your\s+API\s+key\s+as\s+[\w-]+", re.I), "your API key as [REDACTED]"),
     (re.compile(r"Authorization:\s*Bearer\s+\S+", re.I), "Authorization: Bearer [REDACTED]"),
     (re.compile(r"token\s*=\s*['\"]?[\w-]+", re.I), "token=[REDACTED]"),
     (re.compile(r"password\s*=\s*['\"]?\S+", re.I), "password=[REDACTED]"),

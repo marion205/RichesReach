@@ -76,6 +76,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
+from statistics import stdev
 from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -128,9 +129,12 @@ class ModelStats:
             from .ml.model_registry import ModelRegistry
             meta = ModelRegistry.metadata(name)
             fm = meta.get("fold_metrics") or {}
+            fold_ics = meta.get("fold_ics") or []
+            std_ic = float(stdev(fold_ics)) if len(fold_ics) > 1 else 0.037
             return cls(
                 mean_ic=float(fm.get("ic", 0.014)),
-                std_ic=0.037,  # not stored in bundle yet; fixed default
+                std_ic=std_ic,
+                fold_ics=fold_ics,
                 regime_ic=meta.get("regime_ic") or {},
             )
         except FileNotFoundError:
@@ -412,6 +416,7 @@ class SizingResult:
       - sizing_summary: one short line for "Why this size?" (e.g. "Sized down due to low regime edge + missing earnings coverage").
       - sizing_notes: expandable bullets (full audit trail).
       - coverage_penalty_applied: True when earnings_coverage was False → show "Data coverage" badge when True.
+      - position_thesis: optional narrative from glass_box.format_position_thesis (set via glass_box.attach_position_theses when signal_output is available).
     """
     symbol: str
     weight: float                 # fraction of portfolio (0.0–max_position_pct)
@@ -424,6 +429,8 @@ class SizingResult:
     # UI / audit: compact summary line + machine-readable flags
     sizing_summary: str = ""      # one-line human text; set by _finalise() from notes
     coverage_penalty_applied: bool = False  # True if earnings_coverage was False
+    # Glass Box: short narrative from glass_box.format_position_thesis (set by caller when signal_output available)
+    position_thesis: str = ""
 
 
 # ---------------------------------------------------------------------------

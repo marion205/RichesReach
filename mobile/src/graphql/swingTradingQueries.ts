@@ -214,7 +214,6 @@ export const GET_SWING_SIGNALS = gql`
       targetPrice
       mlScore
       thesis
-      signalOutput
       riskRewardRatio
       daysSinceTriggered
       isLikedByUser

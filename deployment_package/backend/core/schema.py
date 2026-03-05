@@ -51,7 +51,13 @@ except (ImportError, SyntaxError) as e:
 
 # Import premium queries and mutations
 try:
-    from .premium_types import PremiumQueries, PremiumMutations, ProfileInput, AIRecommendationsType
+    from .premium_types import (
+        PremiumQueries,
+        PremiumMutations,
+        ProfileInput,
+        AIRecommendationsType,
+        AIRecommendationType,
+    )
 except (ImportError, SyntaxError):
     # Create empty classes if premium_types can't be imported
     class PremiumQueries(graphene.ObjectType):
@@ -60,6 +66,7 @@ except (ImportError, SyntaxError):
         pass
     ProfileInput = None
     AIRecommendationsType = None
+    AIRecommendationType = None
 
 # Import other feature modules (optional - create empty if not available)
 try:
@@ -107,12 +114,13 @@ except (ImportError, SyntaxError):
         pass
 
 try:
-    from .social_types import SocialQueries, SocialMutations
+    from .social_types import SocialQueries, SocialMutations, SwingSignalType
 except (ImportError, SyntaxError):
     class SocialQueries(graphene.ObjectType):
         pass
     class SocialMutations(graphene.ObjectType):
         pass
+    SwingSignalType = None
 
 try:
     from .privacy_types import PrivacyQueries, PrivacyMutations
@@ -448,6 +456,10 @@ if ProfileInput:
     pass
 if AIRecommendationsType:
     schema_types.append(AIRecommendationsType)
+if AIRecommendationType:
+    schema_types.append(AIRecommendationType)
+if SwingSignalType:
+    schema_types.append(SwingSignalType)
 if SBLOC_TYPES_AVAILABLE and SBLOCBankType:
     schema_types.append(SBLOCBankType)
     if SBLOCSessionType:

@@ -64,6 +64,8 @@ class TradeDebriefOutput:
     worst_sector: Optional[str] = None
     counterfactual_extra_pnl: float = 0.0
     lookback_days: int = 90
+    # Underlying report (set by build_debrief so callers avoid a second build_report call)
+    report: Optional[Any] = None
 
 
 # ---------------------------------------------------------------------------
@@ -353,6 +355,8 @@ def format_trade_debrief(report) -> TradeDebriefOutput:
 def build_debrief(user, lookback_days: int = 90) -> TradeDebriefOutput:
     """
     Convenience function: build report + format in one call.
+    Attaches the raw report to the output so callers (e.g. GraphQL resolver)
+    can use sector_stats / pattern_flags without running the service twice.
 
     Parameters
     ----------
@@ -362,8 +366,11 @@ def build_debrief(user, lookback_days: int = 90) -> TradeDebriefOutput:
     Returns
     -------
     TradeDebriefOutput
+        With .report set to the TradeDebriefReport used for formatting.
     """
     from .trade_debrief_service import TradeDebriefService
     service = TradeDebriefService()
-    report  = service.build_report(user, lookback_days=lookback_days)
-    return format_trade_debrief(report)
+    report = service.build_report(user, lookback_days=lookback_days)
+    output = format_trade_debrief(report)
+    output.report = report
+    return output

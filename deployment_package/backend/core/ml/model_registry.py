@@ -72,6 +72,7 @@ class ModelRegistry:
         name: str = _DEFAULT_NAME,
         horizon: int = 20,
         fold_metrics: dict | None = None,
+        fold_ics: list[float] | None = None,
         n_tickers: int = 0,
         n_rows: int = 0,
         xs_mean: "pd.Series | None" = None,
@@ -93,6 +94,8 @@ class ModelRegistry:
             The forward-return horizon the model was trained for.
         fold_metrics : dict | None
             Summary statistics from walk-forward CV (r2, ic, etc.).
+        fold_ics : list[float] | None
+            Per-fold IC values; used to compute std_ic in ModelStats.from_registry().
         n_tickers, n_rows : int
             Training dataset size info for the metadata record.
         regime_ic : dict[str, float] | None
@@ -113,6 +116,7 @@ class ModelRegistry:
             "model_type": type(model).__name__,
             "horizon": horizon,
             "fold_metrics": fold_metrics or {},
+            "fold_ics": fold_ics or [],
             "n_tickers": n_tickers,
             "n_rows": n_rows,
             # Cross-sectional normalisation parameters (mean + std per feature,

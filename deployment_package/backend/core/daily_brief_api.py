@@ -167,28 +167,19 @@ async def get_user_from_token(request: Request) -> Optional[User]:
 # Helper function to generate daily brief content
 async def generate_brief_content(user: User, target_date: date) -> Dict[str, Any]:
     """Generate daily brief content based on user profile with real market and portfolio data"""
-
-    # Get user progress — fallback to a safe default if DB unavailable
-    try:
-        progress, _ = await sync_to_async(UserProgress.objects.get_or_create)(
-            user=user,
-            defaults={'current_level': 'beginner', 'confidence_score': 5}
-        )
-    except Exception as exc:
-        logger.error(f"UserProgress.get_or_create failed: {exc}", exc_info=True)
-
-        class _FallbackProgress:
-            current_level = 'beginner'
-            confidence_score = 5
-
-        progress = _FallbackProgress()
-
+    
+    # Get user progress
+    progress, _ = await sync_to_async(UserProgress.objects.get_or_create)(
+        user=user,
+        defaults={'current_level': 'beginner', 'confidence_score': 5}
+    )
+    
     # Fetch real market data
     market_summary = await _generate_real_market_summary()
-
+    
     # Get real portfolio data for personalized actions
     portfolio_data = await _get_user_portfolio_analysis(user)
-
+    
     # Generate personalized action based on real portfolio data and user level
     personalized_result = await _generate_personalized_action(
         user, progress, portfolio_data
@@ -197,7 +188,7 @@ async def generate_brief_content(user: User, target_date: date) -> Dict[str, Any
     action_type = personalized_result['action_type']
     lesson_title = personalized_result.get('lesson_title')
     lesson_content = personalized_result.get('lesson_content')
-
+    
     return {
         'market_summary': market_summary,
         'personalized_action': personalized_action,
@@ -498,7 +489,7 @@ async def _generate_personalized_action(
 @router.get("/today", response_model=DailyBriefResponse)
 async def get_today_brief(
     request: Request,
-    regenerate: bool = Query(False, description="Force regeneration of brief content")
+    regenerate: bool = Query(False, description="Force regeneration of brief content"),
 ):
     """Get today's daily brief for the user
 
@@ -527,74 +518,67 @@ async def get_today_brief(
         )
 
         # ALWAYS regenerate if brief contains old mock data patterns
-        # Check for old mock data patterns to force regeneration
         old_mock_patterns = [
             "Markets are up 0.5% today. The Fed kept interest rates steady",
             "You're 80% in tech stocks",
             "You have $500 in unrealized losses",
             "Your allocation has drifted 5% from your target",
-            "Your portfolio is doing fine—no action needed"  # Another mock pattern
+            "Your portfolio is doing fine—no action needed",
         ]
         market_summary_text = brief.market_summary or ''
         personalized_action_text = brief.personalized_action or ''
         has_old_mock_data = (
-            any(pattern in market_summary_text for pattern in old_mock_patterns) or
-            any(pattern in personalized_action_text for pattern in old_mock_patterns)
+            any(p in market_summary_text for p in old_mock_patterns) or
+            any(p in personalized_action_text for p in old_mock_patterns)
         )
-
-        # Force regeneration if we detect old mock data OR if regenerate is requested
         should_regenerate = created or not brief.market_summary or has_old_mock_data or regenerate
 
         if has_old_mock_data:
-            logger.warning(f"⚠️ Detected old mock data in brief - forcing regeneration")
-            logger.info(f"Market summary: {market_summary_text[:150]}")
-            logger.info(f"Personalized action: {personalized_action_text[:150]}")
+            logger.warning("⚠️ Detected old mock data in brief - forcing regeneration")
 
         if should_regenerate:
-            logger.info(f"Regenerating daily brief for user {user.id} - created={created}, has_old_mock={has_old_mock_data}, regenerate={regenerate}")
-            try:
-                content = await generate_brief_content(user, today)
-            except Exception as gen_exc:
-                logger.error(f"generate_brief_content failed for user {user.id}: {gen_exc}", exc_info=True)
-                # Fall back to safe defaults so the endpoint still returns a usable brief
-                content = {
-                    'market_summary': (
-                        "Markets are active today. Check your portfolio to see how your "
-                        "investments are performing."
-                    ),
-                    'personalized_action': (
-                        "Review your portfolio holdings and consider your long-term goals."
-                    ),
-                    'action_type': 'review',
-                    'lesson_title': None,
-                    'lesson_content': None,
-                    'experience_level': getattr(brief, 'experience_level', None) or 'beginner',
-                }
+            logger.info("Regenerating daily brief for user %s - created=%s, has_old_mock=%s, regenerate=%s",
+                        user.id, created, has_old_mock_data, regenerate)
+            content = await generate_brief_content(user, today)
             brief.market_summary = content['market_summary']
             brief.personalized_action = content['personalized_action']
             brief.action_type = content['action_type']
-            brief.lesson_title = content['lesson_title']
-            brief.lesson_content = content['lesson_content']
+            brief.lesson_title = content.get('lesson_title')
+            brief.lesson_content = content.get('lesson_content')
             brief.experience_level = content['experience_level']
             await sync_to_async(brief.save)()
-            logger.info(f"Daily brief saved - market_summary preview: {brief.market_summary[:100]}...")
+            logger.info("Daily brief regenerated - market_summary preview: %s...", (brief.market_summary or '')[:100])
 
-        # Get streak
-        streak_obj, _ = await sync_to_async(UserStreak.objects.get_or_create)(user=user)
+        # Get streak (defaults for get_or_create so creation never fails)
+        streak_obj, _ = await sync_to_async(UserStreak.objects.get_or_create)(
+            user=user,
+            defaults={'current_streak': 0, 'longest_streak': 0},
+        )
 
-        # Get progress
-        progress, _ = await sync_to_async(UserProgress.objects.get_or_create)(user=user)
+        # Get progress (UserProgress has OneToOne user; provide defaults)
+        progress, _ = await sync_to_async(UserProgress.objects.get_or_create)(
+            user=user,
+            defaults={
+                'current_level': 'beginner',
+                'confidence_score': 5,
+                'weekly_briefs_completed': 0,
+                'weekly_lessons_completed': 0,
+                'weekly_goal': 5,
+                'monthly_lessons_completed': 0,
+                'monthly_goal': 20,
+            },
+        )
 
         return DailyBriefResponse(
             id=str(brief.id),
             date=brief.date.isoformat(),
-            market_summary=brief.market_summary,
-            personalized_action=brief.personalized_action,
-            action_type=brief.action_type,
+            market_summary=brief.market_summary or '',
+            personalized_action=brief.personalized_action or '',
+            action_type=brief.action_type or 'learn_lesson',
             lesson_id=brief.lesson_id,
             lesson_title=brief.lesson_title,
             lesson_content=brief.lesson_content,
-            experience_level=brief.experience_level,
+            experience_level=brief.experience_level or 'beginner',
             is_completed=brief.is_completed,
             streak=streak_obj.current_streak,
             weekly_progress={
@@ -604,12 +588,45 @@ async def get_today_brief(
             },
             confidence_score=progress.confidence_score,
         )
-
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.error(f"get_today_brief failed for user {getattr(user, 'id', '?')}: {exc}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Daily brief unavailable: {type(exc).__name__}: {exc}")
+    except Exception as e:
+        logger.exception("Daily brief /today failed: %s", e)
+        # Return a minimal fallback brief so the app still loads (e.g. if DB tables missing)
+        try:
+            return DailyBriefResponse(
+                id="fallback",
+                date=today.isoformat(),
+                market_summary=(
+                    "Markets are active today. Check your portfolio to see how your investments "
+                    "are performing. (Brief service had an issue—run backend migrations if this persists.)"
+                ),
+                personalized_action="Review your portfolio and stay on track with your long-term goals.",
+                action_type="review_portfolio",
+                lesson_id=None,
+                lesson_title=None,
+                lesson_content=None,
+                experience_level="beginner",
+                is_completed=False,
+                streak=0,
+                weekly_progress={"briefs_completed": 0, "goal": 5, "lessons_completed": 0},
+                confidence_score=5,
+            )
+        except NameError:
+            today = timezone.now().date()
+            return DailyBriefResponse(
+                id="fallback",
+                date=today.isoformat(),
+                market_summary="Markets are active today. Check your portfolio.",
+                personalized_action="Review your portfolio.",
+                action_type="review_portfolio",
+                lesson_id=None,
+                lesson_title=None,
+                lesson_content=None,
+                experience_level="beginner",
+                is_completed=False,
+                streak=0,
+                weekly_progress={"briefs_completed": 0, "goal": 5, "lessons_completed": 0},
+                confidence_score=5,
+            )
 
 
 @router.delete("/today")

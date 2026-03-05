@@ -253,7 +253,7 @@ def _build_reasons(
     if not safety_ok:
         reasons.append(f"⚠ Safety filter: {safety_txt}")
 
-    # --- Component-based reasons ----------------------------------------------
+    # --- Component-based reasons (with raw values for Glass Box) ---------------
     # Trend
     if trend >= _STRONG:
         reasons.append(_trend_reason_bullish(trend))
@@ -261,9 +261,9 @@ def _build_reasons(
         reasons.append(_trend_reason_bearish(trend))
     else:
         if signal == "Bullish":
-            reasons.append("Momentum is building but not yet decisive")
+            reasons.append(f"Momentum is building but not yet decisive (trend {trend:.0f})")
         elif signal == "Bearish":
-            reasons.append("Trend is mixed — no strong directional signal")
+            reasons.append(f"Trend is mixed — no strong directional signal (trend {trend:.0f})")
 
     # Fundamental
     if fundamental >= _STRONG:
@@ -279,9 +279,9 @@ def _build_reasons(
 
     # Risk
     if risk >= _STRONG:
-        reasons.append("Low volatility with resilient price action near recent highs")
+        reasons.append(f"Low volatility with resilient price action near recent highs (risk score {risk:.0f})")
     elif risk <= _WEAK:
-        reasons.append("Elevated volatility or significant drawdown from recent peak")
+        reasons.append(f"Elevated volatility or significant drawdown from recent peak (risk score {risk:.0f})")
 
     # --- Regime context -------------------------------------------------------
     regime_note = _regime_note(regime, signal)
@@ -308,50 +308,50 @@ def _build_reasons(
 
 def _trend_reason_bullish(score: float) -> str:
     if score >= 80:
-        return "Strong price momentum with consistent outperformance vs the market"
+        return f"Strong price momentum with consistent outperformance vs the market (trend {score:.0f})"
     if score >= 65:
-        return "Price above 50-day MA with positive risk-adjusted momentum"
-    return "Upward trend developing — price action improving vs benchmark"
+        return f"Price above 50-day MA with positive risk-adjusted momentum (trend {score:.0f})"
+    return f"Upward trend developing — price action improving vs benchmark (trend {score:.0f})"
 
 
 def _trend_reason_bearish(score: float) -> str:
     if score <= 20:
-        return "Sharp downtrend — stock materially underperforming the market"
+        return f"Sharp downtrend — stock materially underperforming the market (trend {score:.0f})"
     if score <= 35:
-        return "Price below key moving averages with negative momentum"
-    return "Trend weakening — momentum fading relative to benchmark"
+        return f"Price below key moving averages with negative momentum (trend {score:.0f})"
+    return f"Trend weakening — momentum fading relative to benchmark (trend {score:.0f})"
 
 
 def _fundamental_reason_bullish(score: float) -> str:
     if score >= 80:
-        return "Accelerating EPS and strong revenue growth with expanding margins"
+        return f"Accelerating EPS and strong revenue growth with expanding margins (fundamental {score:.0f})"
     if score >= 65:
-        return "Solid earnings growth with improving fundamental backdrop"
-    return "Fundamentals above average — earnings trend is positive"
+        return f"Solid earnings growth with improving fundamental backdrop (fundamental {score:.0f})"
+    return f"Fundamentals above average — earnings trend is positive (fundamental {score:.0f})"
 
 
 def _fundamental_reason_bearish(score: float) -> str:
     if score <= 20:
-        return "Deteriorating fundamentals: EPS deceleration and revenue pressure"
+        return f"Deteriorating fundamentals: EPS deceleration and revenue pressure (fundamental {score:.0f})"
     if score <= 35:
-        return "Earnings growth slowing — fundamental headwinds present"
-    return "Fundamental backdrop mixed — limited earnings catalyst near-term"
+        return f"Earnings growth slowing — fundamental headwinds present (fundamental {score:.0f})"
+    return f"Fundamental backdrop mixed — limited earnings catalyst near-term (fundamental {score:.0f})"
 
 
 def _capital_reason_bullish(score: float) -> str:
     if score >= 80:
-        return "Strong institutional accumulation with high-conviction volume breakout"
+        return f"Strong institutional accumulation with high-conviction volume breakout (capital flow {score:.0f})"
     if score >= 65:
-        return "Volume-price trend shows net institutional buying pressure"
-    return "Positive capital flow — more accumulation than distribution"
+        return f"Volume-price trend shows net institutional buying pressure (capital flow {score:.0f})"
+    return f"Positive capital flow — more accumulation than distribution (capital flow {score:.0f})"
 
 
 def _capital_reason_bearish(score: float) -> str:
     if score <= 20:
-        return "Heavy distribution: volume confirms institutional selling pressure"
+        return f"Heavy distribution: volume confirms institutional selling pressure (capital flow {score:.0f})"
     if score <= 35:
-        return "Capital flow negative — selling volume outweighs buying"
-    return "Volume-price trend weakening — limited buying conviction"
+        return f"Capital flow negative — selling volume outweighs buying (capital flow {score:.0f})"
+    return f"Volume-price trend weakening — limited buying conviction (capital flow {score:.0f})"
 
 
 def _regime_note(regime: str, signal: str) -> Optional[str]:

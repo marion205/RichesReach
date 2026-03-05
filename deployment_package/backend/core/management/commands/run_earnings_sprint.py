@@ -69,9 +69,9 @@ class Command(BaseCommand):
         parser.add_argument(
             "--sleep",
             type=float,
-            default=0.5,
+            default=12.0,
             dest="sleep_between_requests",
-            help="Seconds between API calls (default 0.5, courtesy delay).",
+            help="Seconds between API calls (default 12 = 5 req/min for free tier).",
         )
         parser.add_argument(
             "--auto-retrain",

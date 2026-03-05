@@ -106,10 +106,15 @@ def fetch_earnings(
     if sleep_between_requests > 0:
         time.sleep(sleep_between_requests)
 
-    # Alpha Vantage rate-limit response
+    # Alpha Vantage rate-limit response (redact so API key never appears in logs)
     if "Note" in data or "Information" in data:
         msg = data.get("Note") or data.get("Information", "")
-        logger.warning("Alpha Vantage rate limit hit for %s: %s", ticker, msg[:80])
+        try:
+            from ..security_utils import redact_secrets_for_log
+            msg = redact_secrets_for_log(msg)
+        except Exception:
+            msg = msg[:80].replace("API key as", "API key [REDACTED]")
+        logger.warning("Alpha Vantage rate limit hit for %s: %s", ticker, (msg[:80] if len(msg) > 80 else msg))
         return None
 
     quarterly = data.get("quarterlyEarnings", [])
@@ -200,12 +205,11 @@ def run_earnings_sprint(
     start_date: str = "2010-01-01",
     end_date: str = "2026-12-31",
     use_cache: bool = True,
-    sleep_between_requests: float = 0.5,
+    sleep_between_requests: float = 12.0,
 ) -> dict:
     """
     Fetch earnings for up to max_per_run tickers that are not yet cached.
-    Designed for Alpha Vantage free tier: 25 requests/day → run once per day
-    for 4 days to cover 78 tickers.
+    Designed for Alpha Vantage free tier: 25 requests/day, 5 requests/minute.
 
     Parameters
     ----------
@@ -218,7 +222,7 @@ def run_earnings_sprint(
     use_cache : bool
         If True, skip already-cached tickers and write new results to cache.
     sleep_between_requests : float
-        Seconds between API calls (courtesy delay).
+        Seconds between API calls (default 12 = 5 req/min for free tier).
 
     Returns
     -------
@@ -308,6 +312,12 @@ if __name__ == "__main__":
     parser.add_argument("--start", type=str, default="2010-01-01", help="Start date for filter.")
     parser.add_argument("--end", type=str, default="2026-12-31", help="End date for filter.")
     parser.add_argument(
+        "--sleep",
+        type=float,
+        default=12.0,
+        help="Seconds between API calls (default 12 = 5 req/min free tier).",
+    )
+    parser.add_argument(
         "tickers",
         nargs="*",
         default=None,
@@ -327,7 +337,7 @@ if __name__ == "__main__":
         start_date=args.start,
         end_date=args.end,
         use_cache=True,
-        sleep_between_requests=0.5,
+        sleep_between_requests=args.sleep,
     )
     print(
         f"Earnings sprint: fetched {result['fetched']} (ok={result['ok']}, failed={result['failed']}). "
