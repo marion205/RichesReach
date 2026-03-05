@@ -16,6 +16,73 @@ from .alpaca_broker_service import AlpacaBrokerService, BrokerGuardrails
 alpaca_service = AlpacaBrokerService()
 
 
+# ---------------------------------------------------------------------------
+# Trade Debrief GraphQL type
+# ---------------------------------------------------------------------------
+
+class PatternFlagType(graphene.ObjectType):
+    """A single detected behavioural trading pattern."""
+    code        = graphene.String()
+    severity    = graphene.String()   # "high" | "medium" | "low"
+    description = graphene.String()
+    impact_dollars = graphene.Float()
+
+
+class SectorStatsType(graphene.ObjectType):
+    """Win/loss breakdown per sector."""
+    sector    = graphene.String()
+    trades    = graphene.Int()
+    wins      = graphene.Int()
+    losses    = graphene.Int()
+    total_pnl = graphene.Float()
+    win_rate  = graphene.Float()   # 0–1
+
+
+class TradeDebriefType(graphene.ObjectType):
+    """
+    AI Trade Debrief — structured analysis of the user's trading behaviour.
+
+    Fields
+    ------
+    headline            One-sentence summary of the biggest finding.
+    narrative           3-5 sentence coaching paragraph.
+    top_insight         Single most impactful pattern.
+    recommendations     2-4 actionable bullet points.
+    stats_summary       Key numbers as a JSON string (for flexible UI rendering).
+    pattern_codes       Machine-readable list of detected pattern codes.
+    sector_stats        Per-sector breakdown (win rate, P&L, trade count).
+    pattern_flags       Detailed pattern flag objects.
+    data_source         "broker" | "paper" | "mixed" | "none"
+    has_enough_data     False when fewer than 5 trades in the window.
+    total_trades        Total closed trades in the lookback window.
+    win_rate_pct        Win rate as a percentage (0–100).
+    total_pnl           Total realised P&L in dollars.
+    best_sector         Sector with highest win rate (≥3 trades).
+    worst_sector        Sector with lowest win rate (≥3 trades).
+    counterfactual_extra_pnl  Estimated extra P&L if biases were corrected.
+    lookback_days       Lookback window used.
+    generated_at        ISO-8601 timestamp.
+    """
+    headline               = graphene.String()
+    narrative              = graphene.String()
+    top_insight            = graphene.String()
+    recommendations        = graphene.List(graphene.String)
+    stats_summary          = graphene.JSONString()
+    pattern_codes          = graphene.List(graphene.String)
+    sector_stats           = graphene.List(SectorStatsType)
+    pattern_flags          = graphene.List(PatternFlagType)
+    data_source            = graphene.String()
+    has_enough_data        = graphene.Boolean()
+    total_trades           = graphene.Int()
+    win_rate_pct           = graphene.Float()
+    total_pnl              = graphene.Float()
+    best_sector            = graphene.String()
+    worst_sector           = graphene.String()
+    counterfactual_extra_pnl = graphene.Float()
+    lookback_days          = graphene.Int()
+    generated_at           = graphene.String()
+
+
 class BrokerQueries(graphene.ObjectType):
     """GraphQL queries for broker operations"""
     
@@ -32,12 +99,24 @@ class BrokerQueries(graphene.ObjectType):
         date=graphene.String()
     )
     broker_account_info = graphene.JSONString()  # Returns account info with buying power, etc.
-    
+
     # Trading quote for order placement
     trading_quote = graphene.Field(
         TradingQuoteType,
         symbol=graphene.String(required=True),
         description="Get trading quote (bid/ask) for a symbol"
+    )
+
+    # AI Trade Debrief
+    trade_debrief = graphene.Field(
+        TradeDebriefType,
+        lookback_days=graphene.Int(default_value=90),
+        description=(
+            "AI-powered analysis of the user's trading behaviour over the "
+            "last N days. Surfaces patterns like early-exit bias, sector "
+            "concentration, and momentum-spike buying. Returns an LLM-narrated "
+            "coaching paragraph alongside structured stats."
+        )
     )
     
     def resolve_broker_account(self, info):
@@ -222,3 +301,101 @@ class BrokerQueries(graphene.ObjectType):
             timestamp=datetime.now().isoformat()
         )
 
+    def resolve_trade_debrief(self, info, lookback_days=90):
+        """
+        Build and return an AI Trade Debrief for the authenticated user.
+
+        Analyses real (Alpaca broker) and/or paper trade history, detects
+        behavioural patterns (early-exit bias, sector concentration, etc.),
+        and returns an LLM-narrated coaching report.
+
+        Args:
+            lookback_days: Number of calendar days to look back (default 90).
+
+        Returns:
+            TradeDebriefType or None if user is not authenticated.
+        """
+        import logging as _logging
+        _log = _logging.getLogger(__name__)
+
+        user = getattr(info.context, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
+            return None
+
+        try:
+            from .trade_debrief_formatter import build_debrief
+            output = build_debrief(user, lookback_days=lookback_days)
+
+            # Resolve sector_stats and pattern_flags from the underlying report
+            # (build_debrief returns TradeDebriefOutput; re-run service for structured fields)
+            from .trade_debrief_service import TradeDebriefService
+            report = TradeDebriefService().build_report(user, lookback_days=lookback_days)
+
+            sector_stats_gql = [
+                SectorStatsType(
+                    sector=s.sector,
+                    trades=s.trades,
+                    wins=s.wins,
+                    losses=s.losses,
+                    total_pnl=s.total_pnl,
+                    win_rate=s.win_rate,
+                )
+                for s in report.sector_stats
+            ]
+
+            pattern_flags_gql = [
+                PatternFlagType(
+                    code=f.code,
+                    severity=f.severity,
+                    description=f.description,
+                    impact_dollars=f.impact_dollars,
+                )
+                for f in report.pattern_flags
+            ]
+
+            import json as _json
+            return TradeDebriefType(
+                headline=output.headline,
+                narrative=output.narrative,
+                top_insight=output.top_insight,
+                recommendations=output.recommendations,
+                stats_summary=_json.dumps(output.stats_summary),
+                pattern_codes=output.pattern_codes,
+                sector_stats=sector_stats_gql,
+                pattern_flags=pattern_flags_gql,
+                data_source=output.data_source,
+                has_enough_data=output.has_enough_data,
+                total_trades=output.total_trades,
+                win_rate_pct=output.win_rate_pct,
+                total_pnl=output.total_pnl,
+                best_sector=output.best_sector,
+                worst_sector=output.worst_sector,
+                counterfactual_extra_pnl=output.counterfactual_extra_pnl,
+                lookback_days=output.lookback_days,
+                generated_at=output.generated_at,
+            )
+
+        except Exception as exc:
+            _log.exception("resolve_trade_debrief failed for user %s: %s", user.id, exc)
+            # Return a safe minimal response rather than crashing the whole query
+            from django.utils import timezone as _tz
+            return TradeDebriefType(
+                headline="Debrief temporarily unavailable.",
+                narrative="We couldn't generate your trade debrief right now. Please try again shortly.",
+                top_insight="",
+                recommendations=[],
+                stats_summary="{}",
+                pattern_codes=[],
+                sector_stats=[],
+                pattern_flags=[],
+                data_source="none",
+                has_enough_data=False,
+                total_trades=0,
+                win_rate_pct=0.0,
+                total_pnl=0.0,
+                best_sector=None,
+                worst_sector=None,
+                counterfactual_extra_pnl=0.0,
+                lookback_days=lookback_days,
+                generated_at=_tz.now().isoformat(),
+            )

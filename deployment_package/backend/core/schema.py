@@ -17,6 +17,14 @@ from .types import *
 from .benchmark_types import BenchmarkSeriesType, BenchmarkDataPointType
 from .portfolio_history_types import PortfolioHistoryDataPointType
 from .broker_types import BrokerAccountType, BrokerOrderType, BrokerPositionType
+try:
+    from .broker_queries import TradeDebriefType, SectorStatsType, PatternFlagType
+    TRADE_DEBRIEF_AVAILABLE = True
+except (ImportError, SyntaxError):
+    TRADE_DEBRIEF_AVAILABLE = False
+    TradeDebriefType = None
+    SectorStatsType = None
+    PatternFlagType = None
 
 try:
     from .graphql_repairs_resolvers import (
@@ -530,6 +538,14 @@ try:
     ])
 except ImportError:
     pass
+
+# Add Trade Debrief Types
+if TRADE_DEBRIEF_AVAILABLE and TradeDebriefType:
+    schema_types.extend([
+        TradeDebriefType,
+        SectorStatsType,
+        PatternFlagType,
+    ])
 
 # Add DeFi Types
 try:
