@@ -535,15 +535,16 @@ class AIService:
         }
 
     def _get_fallback_stock_scoring(self, stocks: List[Dict[str, Any]], user_profile: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Fallback stock scoring"""
+        """Fallback stock scoring — ML service unavailable, uses basic FSS score only."""
         scored = []
         for s in stocks:
             base_score = float(s.get("beginner_friendly_score", 5.0))
             scored.append({
                 **s,
                 "ml_score": base_score,
-                "ml_confidence": 0.5,
-                "ml_reasoning": f"Fallback score based on beginner-friendly rating: {base_score}",
+                "ml_confidence": None,   # No confidence without real ML inference
+                "ml_reasoning": "AI scoring unavailable — showing FSS beginner-friendly score only.",
+                "fallback_used": True,
             })
         return sorted(scored, key=lambda x: x["ml_score"], reverse=True)
 

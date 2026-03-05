@@ -6847,7 +6847,7 @@ async def recommend_strategy(request: Request):
                     "trend": "bullish",
                     "current_price": current_price
                 },
-                "confidence_score": 0.75 + (hash(symbol) % 20) / 100,  # Deterministic confidence
+                "confidence_score": None,  # No confidence score without real AI analysis
                 "generated_at": datetime.now().isoformat()
             }
         

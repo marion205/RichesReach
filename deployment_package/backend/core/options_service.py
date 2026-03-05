@@ -59,7 +59,7 @@ class OptionsAnalysisService:
         import os
         try:
             self.polygon_api_key = os.getenv("POLYGON_API_KEY") or os.getenv("EXPO_PUBLIC_POLYGON_API_KEY") or ""
-            self.finnhub_api_key = os.getenv("FINNHUB_API_KEY") or "d2rnitpr01qv11lfegugd2rnitpr01qv11lfegv0"
+            self.finnhub_api_key = os.getenv("FINNHUB_API_KEY") or ""  # Set FINNHUB_API_KEY env var
             self.use_real_data = bool(self.polygon_api_key or self.finnhub_api_key)
             # Risk-free rate: configurable via env var so it can be updated without a deploy.
             # Set RISK_FREE_RATE to the current annualised 3-month Treasury yield (decimal).

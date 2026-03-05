@@ -1,4 +1,5 @@
 # core/stock_service.py
+import os
 import requests
 import json
 import time
@@ -178,7 +179,7 @@ return cached_data
 params = {
 'function': 'GLOBAL_QUOTE',
 'symbol': symbol,
-'apikey': 'K0A7XYLDNXHNQ1WI' # Your API key
+'apikey': os.getenv('ALPHAVANTAGE_API_KEY', '')
 }
 data = self._make_api_request('quote', params)
 if data and 'Global Quote' in data:
@@ -197,7 +198,7 @@ return cached_data
 params = {
 'function': 'OVERVIEW',
 'symbol': symbol,
-'apikey': 'K0A7XYLDNXHNQ1WI'
+'apikey': os.getenv('ALPHAVANTAGE_API_KEY', '')
 }
 data = self._make_api_request('overview', params)
 if data and 'Symbol' in data:
@@ -216,7 +217,7 @@ return cached_data
 params = {
 'function': 'TIME_SERIES_DAILY',
 'symbol': symbol,
-'apikey': 'K0A7XYLDNXHNQ1WI'
+'apikey': os.getenv('ALPHAVANTAGE_API_KEY', '')
 }
 data = self._make_api_request('historical', params)
 if data and 'Time Series (Daily)' in data:
@@ -396,7 +397,7 @@ class AlphaVantageService:
 def __init__(self):
 from .enhanced_api_service import enhanced_api_service
 self.enhanced_api = enhanced_api_service
-self.api_key = 'K0A7XYLDNXHNQ1WI' # Fallback key
+self.api_key = os.getenv('ALPHAVANTAGE_API_KEY', '')  # Set ALPHAVANTAGE_API_KEY env var
 self.base_url = "https://www.alphavantage.co/query"
 self.session = requests.Session()
 self.session.headers.update({
