@@ -184,6 +184,83 @@ def _cache_path(ticker: str) -> Path:
     return _CACHE_DIR / f"{ticker.upper()}_earnings.json"
 
 
+def get_cached_tickers() -> set[str]:
+    """Return set of ticker symbols that have a valid earnings cache file."""
+    if not _CACHE_DIR.exists():
+        return set()
+    out = set()
+    for path in _CACHE_DIR.glob("*_earnings.json"):
+        out.add(path.stem.replace("_earnings", "").upper())
+    return out
+
+
+def run_earnings_sprint(
+    tickers: list[str],
+    max_per_run: int = 25,
+    start_date: str = "2010-01-01",
+    end_date: str = "2026-12-31",
+    use_cache: bool = True,
+    sleep_between_requests: float = 0.5,
+) -> dict:
+    """
+    Fetch earnings for up to max_per_run tickers that are not yet cached.
+    Designed for Alpha Vantage free tier: 25 requests/day → run once per day
+    for 4 days to cover 78 tickers.
+
+    Parameters
+    ----------
+    tickers : list[str]
+        Full universe (e.g. train.DEFAULT_TICKERS).
+    max_per_run : int
+        Max API calls per run (default 25 for free tier).
+    start_date, end_date : str
+        Date range for filtering; cache stores full history.
+    use_cache : bool
+        If True, skip already-cached tickers and write new results to cache.
+    sleep_between_requests : float
+        Seconds between API calls (courtesy delay).
+
+    Returns
+    -------
+    dict
+        {"fetched": N, "ok": n_ok, "failed": n_failed, "remaining": M, "cached_total": C}
+    """
+    cached = get_cached_tickers()
+    uncached = [t for t in tickers if t.upper() not in cached]
+    to_fetch = uncached[:max_per_run]
+    if not to_fetch:
+        return {
+            "fetched": 0,
+            "ok": 0,
+            "failed": 0,
+            "remaining": 0,
+            "cached_total": len(cached),
+        }
+
+    ok = 0
+    failed = 0
+    for i, ticker in enumerate(to_fetch):
+        df = fetch_earnings(
+            ticker,
+            start_date,
+            end_date,
+            use_cache=use_cache,
+            sleep_between_requests=sleep_between_requests,
+        )
+        if df is not None and not df.empty:
+            ok += 1
+        else:
+            failed += 1
+
+    return {
+        "fetched": len(to_fetch),
+        "ok": ok,
+        "failed": failed,
+        "remaining": len(uncached) - len(to_fetch),
+        "cached_total": len(cached) + ok,
+    }
+
+
 def _load_from_cache(ticker: str) -> Optional[pd.DataFrame]:
     path = _cache_path(ticker)
     if not path.exists():
@@ -210,3 +287,53 @@ def _save_to_cache(ticker: str, df: pd.DataFrame) -> None:
         logger.debug("Earnings cached for %s → %s", ticker, path)
     except Exception as e:
         logger.debug("Cache write failed for %s: %s", ticker, e)
+
+
+# ---------------------------------------------------------------------------
+# CLI: run as python -m deployment_package.backend.core.ml.earnings_loader
+# ---------------------------------------------------------------------------
+if __name__ == "__main__":
+    import argparse
+    from .train import DEFAULT_TICKERS
+
+    parser = argparse.ArgumentParser(
+        description="Alpha Vantage earnings sprint: fetch up to N tickers/day, persist to cache."
+    )
+    parser.add_argument(
+        "--max",
+        type=int,
+        default=25,
+        help="Max API requests this run (default 25 for free tier).",
+    )
+    parser.add_argument("--start", type=str, default="2010-01-01", help="Start date for filter.")
+    parser.add_argument("--end", type=str, default="2026-12-31", help="End date for filter.")
+    parser.add_argument(
+        "tickers",
+        nargs="*",
+        default=None,
+        help="Tickers to fetch (default: training universe).",
+    )
+    args = parser.parse_args()
+    tickers = args.tickers or DEFAULT_TICKERS
+
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    if not os.getenv("ALPHAVANTAGE_API_KEY") and not os.getenv("ALPHA_VANTAGE_KEY"):
+        print("Set ALPHAVANTAGE_API_KEY (or ALPHA_VANTAGE_KEY) and re-run.")
+        raise SystemExit(1)
+
+    result = run_earnings_sprint(
+        tickers,
+        max_per_run=args.max,
+        start_date=args.start,
+        end_date=args.end,
+        use_cache=True,
+        sleep_between_requests=0.5,
+    )
+    print(
+        f"Earnings sprint: fetched {result['fetched']} (ok={result['ok']}, failed={result['failed']}). "
+        f"Cached total: {result['cached_total']}. Remaining: {result['remaining']}."
+    )
+    if result["remaining"] > 0:
+        print("Run again tomorrow for the next batch (25/day on free tier).")
+    else:
+        print("Full universe cached. You can retrain with earnings coverage.")
