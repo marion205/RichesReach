@@ -12,7 +12,7 @@ Momentum (3)   : log-returns over 21d, 63d, 126d windows
 Trend (3)      : distance from 50/200-day SMA, ADX-14
 Volatility (3) : realised vol 20d/60d, ATR% 14d
 Volume/Flow (3): windowed VPT, windowed OBV, volume z-score 20d
-Cross-asset (4): SPY 21d return, SPY vol 20d, QQQ 21d return, vix_proxy
+Cross-asset (5): SPY 21d/63d return, SPY vol 20d, QQQ 21d return, vix_proxy
 Alpha (5)      : short-term reversal (1w), 52-week high proximity,
                  idiosyncratic vol, return skewness 20d, vol ratio (5d/60d)
 
@@ -25,7 +25,7 @@ NOTE on sector ETF features (removed):
   that requires a sector mapping table per ticker, which is not yet available.
   Removed until a per-ticker sector assignment is implemented.
 
-Total: 21 named features — no padding zeros, no ESG, no user-profile.
+Total: 22 named features — no padding zeros, no ESG, no user-profile.
 
 Naming convention: all lowercase with underscores, units in the name
 where non-obvious (e.g. atr_pct, rvol_20d).
@@ -60,8 +60,9 @@ FEATURE_NAMES: list[str] = [
     "vpt_zscore",
     "obv_zscore",
     "vol_zscore_20d",
-    # Cross-asset
+    # Cross-asset (regime-style: SPY trend, vol, VIX proxy)
     "spy_mom_21d",
+    "spy_mom_63d",   # medium-term market trend — when to deploy momentum
     "spy_rvol_20d",
     "qqq_mom_21d",
     "vix_proxy",
@@ -172,11 +173,13 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     if spy_close is not None and spy_close.notna().sum() > 30:
         spy_log_ret = np.log(spy_close / spy_close.shift(1))
         feat["spy_mom_21d"] = np.log(spy_close / spy_close.shift(21))
+        feat["spy_mom_63d"] = np.log(spy_close / spy_close.shift(63))  # regime: medium-term trend
         feat["spy_rvol_20d"] = spy_log_ret.rolling(20, min_periods=10).std() * np.sqrt(252)
         # VIX proxy: 20D SPY realised vol scaled to "VIX-like" 0-100 units
         feat["vix_proxy"] = feat["spy_rvol_20d"] * 100.0
     else:
         feat["spy_mom_21d"] = np.nan
+        feat["spy_mom_63d"] = np.nan
         feat["spy_rvol_20d"] = np.nan
         feat["vix_proxy"] = np.nan
 

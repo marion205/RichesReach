@@ -31,6 +31,7 @@ Bundle schema
         "model_type": "lgbm",
         "horizon": 20,
         "fold_metrics": {...},     # mean R², IC, decile spread across CV folds
+        "regime_ic": {...},        # mean IC per regime for ModelStats(regime_ic=...)
         "n_tickers": 50,
         "n_rows": 12000,
     }
@@ -75,6 +76,7 @@ class ModelRegistry:
         n_rows: int = 0,
         xs_mean: "pd.Series | None" = None,
         xs_std: "pd.Series | None" = None,
+        regime_ic: dict[str, float] | None = None,
     ) -> Path:
         """
         Persist the trained model and its feature schema.
@@ -93,6 +95,9 @@ class ModelRegistry:
             Summary statistics from walk-forward CV (r2, ic, etc.).
         n_tickers, n_rows : int
             Training dataset size info for the metadata record.
+        regime_ic : dict[str, float] | None
+            Mean IC per regime (Crisis, Deflation, Expansion, Parabolic, Unknown)
+            for position_sizer.ModelStats. Omitted or empty → sizing uses global IC.
 
         Returns
         -------
@@ -118,6 +123,8 @@ class ModelRegistry:
             # features seen during training → train/test distribution mismatch.
             "xs_mean": xs_mean,   # pd.Series or None
             "xs_std": xs_std,     # pd.Series or None
+            # Regime-stratified IC (mean IC per regime) for position_sizer.ModelStats.
+            "regime_ic": regime_ic or {},
         }
 
         joblib.dump(bundle, path)

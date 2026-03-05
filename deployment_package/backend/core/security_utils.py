@@ -1,13 +1,41 @@
 """
 Security Utilities
-Production-safe helpers for SSL, secrets, and security checks
+Production-safe helpers for SSL, secrets, and security checks.
 """
 import os
+import re
 import ssl
 import logging
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+# Patterns to redact from DEBUG (and below) logs — never log keys, tokens, or full query params.
+_REDACT_PATTERNS = [
+    (re.compile(r"\bapi[_-]?key\s*=\s*['\"]?[\w-]+", re.I), "apiKey=[REDACTED]"),
+    (re.compile(r"\bapiKey\s*=\s*[\w-]+", re.I), "apiKey=[REDACTED]"),
+    (re.compile(r"Authorization:\s*Bearer\s+\S+", re.I), "Authorization: Bearer [REDACTED]"),
+    (re.compile(r"token\s*=\s*['\"]?[\w-]+", re.I), "token=[REDACTED]"),
+    (re.compile(r"password\s*=\s*['\"]?\S+", re.I), "password=[REDACTED]"),
+    (re.compile(r"secret\s*=\s*['\"]?\S+", re.I), "secret=[REDACTED]"),
+    (re.compile(r"[\?&](api[_-]?key|token|auth)=[^&\s]+", re.I), "?apiKey=[REDACTED]"),
+]
+
+
+def redact_secrets_for_log(message: str) -> str:
+    """
+    Redact API keys, tokens, passwords, and auth headers from a string
+    before it is written to logs. Use for any DEBUG (or lower) log
+    that might contain request URLs, headers, or query params.
+
+    Example: logger.debug("Request: %s", redact_secrets_for_log(str(request.headers)))
+    """
+    if not message:
+        return message
+    out = message
+    for pattern, replacement in _REDACT_PATTERNS:
+        out = pattern.sub(replacement, out)
+    return out
 
 
 def get_ssl_context(verify: Optional[bool] = None) -> ssl.SSLContext:

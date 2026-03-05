@@ -32,8 +32,14 @@ Both sizers return a `SizingResult` with:
   - `weight`           : fraction of portfolio to allocate (0.0–1.0)
   - `shares`           : integer share count given portfolio_value + current_price
   - `method`           : "vol_target" | "kelly" | "zero"
-  - `sizing_notes`     : list of plain-English notes explaining the sizing decision
+  - `sizing_notes`     : list of plain-English notes (expandable bullets in UI)
+  - `sizing_summary`   : one-line "Why this size?" for UI
+  - `coverage_penalty_applied`: True when earnings data missing → show "Data coverage" badge
   - `risk_contribution`: expected annualised vol contribution of this position
+
+Logging: DEBUG logs in this module do not include API keys or user secrets.
+If you add logging of request URLs/headers/params elsewhere, use
+security_utils.redact_secrets_for_log() before passing to logger.
 
 Portfolio-level helper `size_portfolio()` enforces:
   - Gross exposure cap (default 95%)
@@ -318,16 +324,23 @@ def _regime_gate_multiplier(regime: str) -> float:
     # Stage 4: substring/partial match — requires input length ≥ 3.
     # Normalise underscores ↔ spaces before comparison so "high volatility mkt"
     # matches "high_volatility" and vice versa.
-    # Prevents single chars / two-letter abbreviations matching unintentionally.
+    # When multiple keys match, prefer LONGEST match (most specific), e.g.
+    # "high vol bull" → "high_volatility" not "bull" / "early_bull_market".
     if len(lower) >= _MIN_PARTIAL_MATCH_LEN:
         lower_norm = lower.replace("_", " ")
+        matches: List[tuple] = []
         for key, val in _REGIME_GATE.items():
             key_norm = key.lower().replace("_", " ")
             if key_norm in lower_norm or lower_norm in key_norm:
-                logger.debug(
-                    "regime_gate: partial match '%s' ~ '%s' → %.2f", clean, key, val
-                )
-                return val
+                matches.append((key, val))
+        if matches:
+            # Longest key first (most specific), then same order as _REGIME_GATE for tie-break
+            best = max(matches, key=lambda m: len(m[0]))
+            logger.debug(
+                "regime_gate: partial match '%s' ~ '%s' (longest of %d) → %.2f",
+                clean, best[0], len(matches), best[1],
+            )
+            return best[1]
 
     # Stage 5: fallback
     logger.debug("regime_gate: no match for '%s' → fallback 0.80", clean)
@@ -368,7 +381,14 @@ class SizingInput:
 
 @dataclass
 class SizingResult:
-    """Output of a sizing calculation."""
+    """
+    Output of a sizing calculation.
+
+    UI presentation (mobile / web / audit):
+      - sizing_summary: one short line for "Why this size?" (e.g. "Sized down due to low regime edge + missing earnings coverage").
+      - sizing_notes: expandable bullets (full audit trail).
+      - coverage_penalty_applied: True when earnings_coverage was False → show "Data coverage" badge when True.
+    """
     symbol: str
     weight: float                 # fraction of portfolio (0.0–max_position_pct)
     shares: int                   # integer share count (floor)
@@ -377,6 +397,9 @@ class SizingResult:
     sizing_notes: List[str] = field(default_factory=list)
     risk_contribution: float = 0.0  # expected annualised vol contribution
     sector: str = "Unknown"
+    # UI / audit: compact summary line + machine-readable flags
+    sizing_summary: str = ""      # one-line human text; set by _finalise() from notes
+    coverage_penalty_applied: bool = False  # True if earnings_coverage was False
 
 
 # ---------------------------------------------------------------------------
@@ -402,6 +425,30 @@ _COVERAGE_SCALE: Dict[bool, float] = {
     True:  1.00,   # earnings data present → no penalty
     False: 0.75,   # earnings data missing → 25% reduction
 }
+
+
+def _build_sizing_summary(notes: List[str], coverage_penalty_applied: bool) -> str:
+    """
+    Build a one-line human summary for UI from sizing_notes.
+    Used as the compact "Why this size?" line; full bullets stay in sizing_notes.
+    """
+    reasons: List[str] = []
+    notes_text = " ".join(notes).lower()
+    if "regime" in notes_text and ("0." in notes_text or "×" in notes_text):
+        reasons.append("regime edge")
+    if coverage_penalty_applied or "earnings data unavailable" in notes_text or "coverage" in notes_text:
+        reasons.append("missing earnings coverage")
+    if "capped at max" in notes_text or "trimmed" in notes_text:
+        reasons.append("exposure cap")
+    if "single-fold" in notes_text:
+        reasons.append("single-fold dominance")
+    if "no position" in notes_text or "zero" in notes_text:
+        return "No position (long-only; signal not bullish)."
+    if "below minimum" in notes_text:
+        return "Sized to zero (signal too weak after multipliers)."
+    if reasons:
+        return "Sized down due to " + " + ".join(reasons) + "."
+    return "Standard vol-target sizing."
 
 def _fss_multiplier(fss_score: float) -> float:
     """Map FSS [40, 80] linearly to [0.85, 1.15]. Flat outside that band."""
@@ -585,6 +632,8 @@ class VolTargetSizer:
                 f"${inp.current_price:.2f} share price"
             )
 
+        coverage_penalty = getattr(inp, "earnings_coverage", True) is False
+        summary = _build_sizing_summary(notes, coverage_penalty)
         return SizingResult(
             symbol=inp.symbol,
             weight=round(weight, 4),
@@ -594,9 +643,13 @@ class VolTargetSizer:
             sizing_notes=notes,
             risk_contribution=round(risk_contribution, 4),
             sector=inp.sector,
+            sizing_summary=summary,
+            coverage_penalty_applied=coverage_penalty,
         )
 
     def _zero(self, inp: SizingInput, notes: List[str]) -> SizingResult:
+        coverage_penalty = getattr(inp, "earnings_coverage", True) is False
+        summary = _build_sizing_summary(notes, coverage_penalty)
         return SizingResult(
             symbol=inp.symbol,
             weight=0.0,
@@ -606,6 +659,8 @@ class VolTargetSizer:
             sizing_notes=notes,
             risk_contribution=0.0,
             sector=inp.sector,
+            sizing_summary=summary,
+            coverage_penalty_applied=coverage_penalty,
         )
 
 
@@ -654,10 +709,13 @@ class KellySizer:
         base = _SIGNAL_BASE.get(inp.signal, 0.0)
         if base == 0.0:
             notes.append(f"Signal={inp.signal} → no position")
+            cov = getattr(inp, "earnings_coverage", True) is False
             return SizingResult(
                 symbol=inp.symbol, weight=0.0, shares=0,
                 dollar_amount=0.0, method="zero", sizing_notes=notes,
                 sector=inp.sector,
+                sizing_summary=_build_sizing_summary(notes, cov),
+                coverage_penalty_applied=cov,
             )
 
         ic = max(0.0, self.model_stats.mean_ic)
@@ -695,6 +753,7 @@ class KellySizer:
         shares = int(math.floor(dollar_amount / inp.current_price)) if inp.current_price > 0 else 0
         risk_contribution = weight * max(inp.annual_vol, 0.0)
 
+        cov = getattr(inp, "earnings_coverage", True) is False
         return SizingResult(
             symbol=inp.symbol,
             weight=round(weight, 4),
@@ -704,6 +763,8 @@ class KellySizer:
             sizing_notes=notes,
             risk_contribution=round(risk_contribution, 4),
             sector=inp.sector,
+            sizing_summary=_build_sizing_summary(notes, cov),
+            coverage_penalty_applied=cov,
         )
 
 
@@ -879,13 +940,18 @@ def _trim_result(
         sizing_notes=result.sizing_notes,
         risk_contribution=round(trimmed * max(inp.annual_vol, 0.0), 4),
         sector=inp.sector,
+        sizing_summary=getattr(result, "sizing_summary", ""),
+        coverage_penalty_applied=getattr(result, "coverage_penalty_applied", False),
     )
 
 
 def _zero_result(inp: SizingInput, notes: List[str]) -> SizingResult:
+    cov = getattr(inp, "earnings_coverage", True) is False
     return SizingResult(
         symbol=inp.symbol, weight=0.0, shares=0,
         dollar_amount=0.0, method="zero",
         sizing_notes=notes, risk_contribution=0.0,
         sector=inp.sector,
+        sizing_summary=_build_sizing_summary(notes, cov),
+        coverage_penalty_applied=cov,
     )

@@ -161,8 +161,10 @@ def summarise(fold_results: list[dict]) -> pd.DataFrame:
     num_cols = [c for c in df.columns if c not in str_cols]
 
     num_df = df[num_cols]
-    mean_row = pd.DataFrame(num_df.mean()).T.rename(index={0: "mean"})
-    std_row  = pd.DataFrame(num_df.std()).T.rename(index={0: "std"})
+    # numeric_only=True is explicit — num_df already contains only numeric columns,
+    # but pandas ≥2.0 emits a FutureWarning if the flag is absent.
+    mean_row = pd.DataFrame(num_df.mean(numeric_only=True)).T.rename(index={0: "mean"})
+    std_row  = pd.DataFrame(num_df.std(numeric_only=True)).T.rename(index={0: "std"})
 
     # mean/std rows get empty string annotations
     for col in str_cols:

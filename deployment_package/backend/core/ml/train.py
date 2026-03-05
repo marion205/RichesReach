@@ -51,7 +51,7 @@ from .targets import build_targets
 
 logger = logging.getLogger(__name__)
 
-# Full feature list: technical (21) + earnings (3) when Polygon/Benzinga data is used
+# Full feature list: technical (22) + earnings (3) when Polygon/Benzinga data is used
 FEATURE_NAMES = TECHNICAL_FEATURE_NAMES + EARNINGS_FEATURE_NAMES
 
 # ---------------------------------------------------------------------------
@@ -86,13 +86,50 @@ DEFAULT_TICKERS = [
 DEFAULT_TICKERS = list(dict.fromkeys(DEFAULT_TICKERS))
 
 # ---------------------------------------------------------------------------
+# Regime labelling for stratified IC (keys match position_sizer._REGIME_GATE)
+# ---------------------------------------------------------------------------
+def _label_regime_for_test_window(
+    test_dates: set,
+    spy_ret_series: pd.Series,
+) -> str:
+    """
+    Label a test date window as a regime using SPY return/vol over that window.
+    Returns one of: Crisis, Deflation, Expansion, Parabolic, Unknown.
+    """
+    if spy_ret_series.empty or len(test_dates) < 20:
+        return "Unknown"
+    try:
+        idx = pd.to_datetime(spy_ret_series.index).normalize()
+        subset = spy_ret_series.copy()
+        subset.index = idx
+        test_idx = pd.to_datetime(list(test_dates)).normalize()
+        sub = subset.reindex(test_idx).dropna()
+        if len(sub) < 20:
+            return "Unknown"
+        mean_ret = float(sub.mean()) * 252
+        ann_vol = float(sub.std()) * np.sqrt(252) if sub.std() > 1e-10 else 0.0
+    except Exception:
+        return "Unknown"
+
+    if mean_ret < -0.12 and ann_vol > 0.22:
+        return "Crisis"
+    if mean_ret < -0.05 and ann_vol < 0.18:
+        return "Deflation"
+    if mean_ret > 0.18:
+        return "Parabolic"
+    if mean_ret > 0.05 and ann_vol < 0.20:
+        return "Expansion"
+    return "Unknown"
+
+
+# ---------------------------------------------------------------------------
 # LightGBM hyperparameters
 # Conservative settings: low learning rate + early stopping prevents overfit
 # ---------------------------------------------------------------------------
 _LGBM_PARAMS = dict(
     n_estimators=1000,       # more trees to capture the new alpha features
     learning_rate=0.005,     # lower LR → more trees, but better generalisation
-    max_depth=4,             # shallower trees reduce overfit on 21 features
+    max_depth=4,             # shallower trees reduce overfit on 22 features
     num_leaves=15,           # fewer leaves → stronger regularisation
     subsample=0.7,           # row subsampling per tree (bagging)
     colsample_bytree=0.7,    # column subsampling per tree
@@ -190,6 +227,22 @@ def run_pipeline(
 
     if not X_parts:
         raise RuntimeError("No tickers produced usable data. Check data fetch and feature build.")
+
+    # ------------------------------------------------------------------
+    # SPY series for regime labelling (date -> daily log return)
+    # Used to label each fold's test window so we can compute regime_ic.
+    # ------------------------------------------------------------------
+    _first_df = next(iter(ticker_dfs.values()))
+    spy_close = _first_df.get("spy_close")
+    if spy_close is not None and spy_close.notna().sum() > 20:
+        spy_ret = np.log(spy_close / spy_close.shift(1))
+        spy_ret = spy_ret.dropna()
+        spy_ret_by_date = spy_ret
+        if hasattr(spy_ret.index, "normalize"):
+            spy_ret_by_date = spy_ret.copy()
+            spy_ret_by_date.index = pd.to_datetime(spy_ret_by_date.index).normalize()
+    else:
+        spy_ret_by_date = pd.Series(dtype=float)
 
     # ------------------------------------------------------------------
     # FIX 1: Stack with (date, ticker) MultiIndex — NOT sort_index() by date alone.
@@ -413,9 +466,18 @@ def run_pipeline(
             test_start=str(getattr(test_start, "date", lambda: test_start)()),
             test_end=str(getattr(test_end, "date", lambda: test_end)()),
         )
+        regime = _label_regime_for_test_window(test_dates, spy_ret_by_date)
+        metrics["regime"] = regime
         fold_results.append(metrics)
 
     fold_metrics_df = summarise(fold_results)
+
+    # Regime-stratified IC: mean IC per regime for position_sizer.ModelStats(regime_ic=...)
+    regime_ic = {}
+    for r in fold_results:
+        reg = r.get("regime", "Unknown")
+        regime_ic.setdefault(reg, []).append(r["ic"])
+    regime_ic = {k: float(np.mean(v)) for k, v in regime_ic.items()}
 
     # ------------------------------------------------------------------
     # Step 7: Log summary
@@ -452,6 +514,7 @@ def run_pipeline(
             n_rows=len(X_final),
             xs_mean=xs_global_mean,
             xs_std=xs_global_std,
+            regime_ic=regime_ic,
         )
         logger.info("Model saved to ml_models/production_r2.pkl")
 
