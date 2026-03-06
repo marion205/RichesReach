@@ -1,5 +1,6 @@
 /**
- * Predictive Credit Oracle - Crowdsourced Insights with Bias Detection (Enhanced UI 2025)
+ * Predictive Credit Oracle - Crowdsourced Insights with Bias Detection
+ * Redesigned 2025 — clean card layout, proper breathing room
  */
 
 import React from 'react';
@@ -44,84 +45,86 @@ export const CreditOracle: React.FC<CreditOracleProps> = ({
     return '#007AFF';
   };
 
-  const getConfidenceGradient = (confidence: number): [string, string] => {
-    if (confidence >= 0.8) return ['#34C759', '#2E9E4B'];
-    if (confidence >= 0.6) return ['#FF9500', '#D87A00'];
-    return ['#FF3B30', '#D63028'];
+  const getConfidenceColor = (confidence: number) => {
+    if (confidence >= 0.8) return '#34C759';
+    if (confidence >= 0.6) return '#FF9500';
+    return '#FF3B30';
   };
 
-  const renderInsight = (insight: OracleInsight, sectionColor: string) => (
-    <TouchableOpacity
-      key={insight.id}
-      style={styles.insightCard}
-      onPress={() => onInsightPress?.(insight)}
-      activeOpacity={0.8}
-    >
-      <LinearGradient
-        colors={['rgba(255,255,255,0.95)', 'rgba(255,255,255,0.85)']}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={styles.insightHeader}>
-        <View style={[styles.insightIcon, { backgroundColor: getTypeColor(insight.type) + '25' }]}>
-          <Icon name={getTypeIcon(insight.type)} size={24} color={getTypeColor(insight.type)} />
-        </View>
-        <View style={styles.insightContent}>
-          <View style={styles.insightTitleRow}>
-            <Text style={styles.insightTitle}>{insight.title}</Text>
+  const renderInsight = (insight: OracleInsight, sectionColor: string) => {
+    const accentColor = getTypeColor(insight.type);
+    const confColor = getConfidenceColor(insight.confidence);
+
+    return (
+      <TouchableOpacity
+        key={insight.id}
+        style={[styles.insightCard, { borderLeftColor: accentColor }]}
+        onPress={() => onInsightPress?.(insight)}
+        activeOpacity={0.75}
+      >
+        {/* ── Top row: icon + title + optional location badge ── */}
+        <View style={styles.cardTop}>
+          <View style={[styles.iconCircle, { backgroundColor: accentColor + '18' }]}>
+            <Icon name={getTypeIcon(insight.type)} size={20} color={accentColor} />
+          </View>
+          <View style={styles.cardTopText}>
+            <Text style={styles.insightTitle} numberOfLines={2}>{insight.title}</Text>
             {insight.location && (
-              <View style={[styles.locationBadge, { borderColor: sectionColor + '50' }]}>
-                <Icon name="map-pin" size={12} color={sectionColor} />
+              <View style={[styles.locationBadge, { backgroundColor: sectionColor + '15' }]}>
+                <Icon name="map-pin" size={11} color={sectionColor} />
                 <Text style={[styles.locationText, { color: sectionColor }]}>{insight.location}</Text>
               </View>
             )}
           </View>
-          <Text style={styles.insightDescription}>{insight.description}</Text>
-          {/* Yellow tip / recommendation bubble */}
-          <View style={styles.tipWrap}>
-            <View style={styles.tipFullWidth}>
-              <View style={styles.tipRowCentered}>
-                <Icon name="star" size={18} color="#E6B800" style={styles.tipIcon} />
-                <Text style={styles.tipTextCentered}>{insight.recommendation}</Text>
-              </View>
-            </View>
-          </View>
-          <View style={styles.insightMeta}>
-            <View style={styles.confidenceBox}>
-              <Text style={styles.confidenceLabel}>Confidence</Text>
-              <View style={styles.confidenceBarContainer}>
-                <View style={styles.confidenceBar}>
-                  <LinearGradient
-                    colors={getConfidenceGradient(insight.confidence)}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={[
-                      styles.confidenceFill,
-                      { width: `${insight.confidence * 100}%` },
-                    ]}
-                  />
-                </View>
-                <Text style={[styles.confidenceValue, { color: getConfidenceGradient(insight.confidence)[0] }]}>
-                  {Math.round(insight.confidence * 100)}%
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.timeHorizon}>{insight.timeHorizon}</Text>
-          </View>
-          {insight.biasCheck && insight.biasCheck.detected && (
-            <LinearGradient
-              colors={['#E3F2FD', '#D1E9FF']}
-              style={styles.biasBox}
-            >
-              <Icon name="shield-check" size={16} color="#007AFF" />
-              <Text style={styles.biasText}>
-                {insight.biasCheck.adjusted ? 'Bias Detected & Adjusted' : 'Bias Detected'}
-              </Text>
-            </LinearGradient>
-          )}
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+
+        {/* ── Description ── */}
+        <Text style={styles.description}>{insight.description}</Text>
+
+        {/* ── Tip / recommendation ── */}
+        <View style={styles.tipRow}>
+          <Icon name="star" size={14} color="#E6B800" style={{ marginTop: 1 }} />
+          <Text style={styles.tipText}>{insight.recommendation}</Text>
+        </View>
+
+        {/* ── Footer: confidence bar + time horizon ── */}
+        <View style={styles.footer}>
+          <View style={styles.confidenceWrap}>
+            <Text style={styles.confidenceLabel}>Confidence</Text>
+            <View style={styles.barRow}>
+              <View style={styles.barTrack}>
+                <View
+                  style={[
+                    styles.barFill,
+                    {
+                      width: `${insight.confidence * 100}%` as any,
+                      backgroundColor: confColor,
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={[styles.confPct, { color: confColor }]}>
+                {Math.round(insight.confidence * 100)}%
+              </Text>
+            </View>
+          </View>
+          <View style={[styles.horizonPill, { backgroundColor: accentColor + '15' }]}>
+            <Text style={[styles.horizonText, { color: accentColor }]}>{insight.timeHorizon}</Text>
+          </View>
+        </View>
+
+        {/* ── Bias badge (optional) ── */}
+        {insight.biasCheck?.detected && (
+          <View style={styles.biasBadge}>
+            <Icon name="shield" size={12} color="#007AFF" />
+            <Text style={styles.biasText}>
+              {insight.biasCheck.adjusted ? 'Bias detected & adjusted' : 'Bias detected'}
+            </Text>
+          </View>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   const renderSection = (title: string, emoji: string, insights: OracleInsight[] | undefined) => {
     if (!insights || insights.length === 0) return null;
@@ -132,6 +135,9 @@ export const CreditOracle: React.FC<CreditOracleProps> = ({
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionEmoji}>{emoji}</Text>
           <Text style={[styles.sectionTitle, { color }]}>{title}</Text>
+          <View style={[styles.countPill, { backgroundColor: color + '18' }]}>
+            <Text style={[styles.countText, { color }]}>{insights.length}</Text>
+          </View>
         </View>
         {insights.map((insight) => renderInsight(insight, color))}
       </View>
@@ -139,32 +145,38 @@ export const CreditOracle: React.FC<CreditOracleProps> = ({
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.scrollContainer}>
-      <View style={styles.container}>
-        <LinearGradient
-          colors={['#FFFFFF', '#F0F4F8']}
-          style={styles.headerGradient}
-        >
-          <View style={styles.header}>
-            <View style={styles.titleContainer}>
-              <Text style={styles.title}>Credit Oracle</Text>
-              <Text style={styles.subtitle}>AI-Powered Predictive Insights from Collective Intelligence</Text>
-            </View>
-            <Icon name="eye" size={32} color="#007AFF" /> {/* Oracle "vision" icon */}
+    <ScrollView
+      contentContainerStyle={styles.scrollContainer}
+      showsVerticalScrollIndicator={false}
+    >
+      {/* ── Header ── */}
+      <View style={styles.oracleHeader}>
+        <View style={styles.oracleTitleRow}>
+          <View style={styles.oracleIconWrap}>
+            <Icon name="eye" size={22} color="#007AFF" />
           </View>
-          <View style={styles.lastUpdatedBox}>
-            <Text style={styles.lastUpdatedLabel}>Last Updated</Text>
-            <Text style={styles.lastUpdatedTime}>
-              {new Date(oracle.lastUpdated).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.oracleTitle}>Credit Oracle</Text>
+            <Text style={styles.oracleSubtitle}>AI-powered predictive insights</Text>
+          </View>
+          <View style={styles.updatedChip}>
+            <Text style={styles.updatedText}>
+              {new Date(oracle.lastUpdated).toLocaleString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
             </Text>
           </View>
-        </LinearGradient>
-
-        {renderSection('Warnings', '⚠️', oracle.warnings)}
-        {renderSection('Opportunities', '✨', oracle.opportunities)}
-        {renderSection('Local Trends', '📍', oracle.localTrends)}
-        {renderSection('Insights', '💡', oracle.insights)}
+        </View>
       </View>
+
+      {/* ── Sections ── */}
+      {renderSection('Warnings', '⚠️', oracle.warnings)}
+      {renderSection('Opportunities', '✨', oracle.opportunities)}
+      {renderSection('Local Trends', '📍', oracle.localTrends)}
+      {renderSection('Insights', '💡', oracle.insights)}
     </ScrollView>
   );
 };
@@ -172,226 +184,228 @@ export const CreditOracle: React.FC<CreditOracleProps> = ({
 const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 1,
-    backgroundColor: '#F0F4F8',
-    padding: 16,
+    backgroundColor: '#F5F7FA',
+    paddingBottom: 24,
   },
-  container: {
-    backgroundColor: 'transparent',
-    borderRadius: 24,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    elevation: 8,
+
+  // ── Header ──────────────────────────────────────────────────────────────────
+  oracleHeader: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EFEFEF',
   },
-  headerGradient: {
-    padding: 24,
-    borderBottomLeftRadius: 0,
-    borderBottomRightRadius: 0,
-  },
-  header: {
+  oracleTitleRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 12,
   },
-  titleContainer: {
-    flex: 1,
+  oracleIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#007AFF15',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#1A1A1A',
-    marginBottom: 4,
+  oracleTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 2,
   },
-  subtitle: {
-    fontSize: 14,
-    color: '#6B6B6B',
-    lineHeight: 20,
+  oracleSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
   },
-  lastUpdatedBox: {
-    alignItems: 'flex-end',
-    marginTop: 16,
-    paddingHorizontal: 24,
+  updatedChip: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
   },
-  lastUpdatedLabel: {
-    fontSize: 12,
-    color: '#8E8E93',
-    marginBottom: 4,
+  updatedText: {
+    fontSize: 11,
+    color: '#6B7280',
+    fontWeight: '500',
   },
-  lastUpdatedTime: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1A1A1A',
-  },
+
+  // ── Section ─────────────────────────────────────────────────────────────────
   section: {
-    padding: 20,
-    borderTopWidth: 1,
-    borderTopColor: '#E0E0E0',
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 4,
   },
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
-  },
-  sectionEmoji: {
-    fontSize: 20,
-    marginRight: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  insightCard: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    backgroundColor: 'rgba(255,255,255,0.5)', // For glassmorphism base
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 4,
-    borderWidth: 0.5,
-    borderColor: 'rgba(255,255,255,0.8)',
-    overflow: 'hidden',
-  },
-  insightHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    width: '100%',
-  },
-  insightIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-    flexShrink: 0,
-  },
-  insightContent: {
-    flex: 1,
-    minWidth: 0, // Allows flex to shrink properly
-  },
-  insightTitleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 14,
     gap: 8,
   },
-  insightTitle: {
+  sectionEmoji: {
+    fontSize: 18,
+  },
+  sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1A1A1A',
     flex: 1,
-    flexShrink: 1,
+  },
+  countPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  countText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  // ── Insight Card ─────────────────────────────────────────────────────────────
+  insightCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  // Top row
+  cardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 12,
+  },
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  cardTopText: {
+    flex: 1,
+    gap: 6,
+  },
+  insightTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+    lineHeight: 21,
   },
   locationBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'transparent',
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
+    paddingVertical: 3,
+    borderRadius: 10,
+    alignSelf: 'flex-start',
   },
   locationText: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginLeft: 4,
+    fontSize: 11,
+    fontWeight: '600',
   },
-  insightDescription: {
+
+  // Description
+  description: {
     fontSize: 14,
-    color: '#6B6B6B',
-    lineHeight: 20,
-    marginBottom: 12,
+    color: '#4B5563',
+    lineHeight: 21,
+    marginBottom: 14,
   },
-  insightMeta: {
+
+  // Tip
+  tipRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
   },
-  confidenceBox: {
+  tipText: {
     flex: 1,
+    fontSize: 13,
+    color: '#92400E',
+    lineHeight: 19,
+    fontWeight: '500',
   },
-  confidenceLabel: {
-    fontSize: 12,
-    color: '#8E8E93',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  confidenceBarContainer: {
+
+  // Footer
+  footer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  confidenceBar: {
+  confidenceWrap: {
     flex: 1,
-    height: 6,
-    backgroundColor: '#E0E0E0',
-    borderRadius: 3,
-    overflow: 'hidden',
   },
-  confidenceFill: {
-    height: '100%',
-    borderRadius: 3,
+  confidenceLabel: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 5,
+    fontWeight: '600',
   },
-  confidenceValue: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    minWidth: 40,
-    textAlign: 'right',
-  },
-  timeHorizon: {
-    fontSize: 13,
-    color: '#6B6B6B',
-    fontWeight: '500',
-  },
-  biasBox: {
+  barRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: 10,
-    borderRadius: 12,
-    marginBottom: 12,
   },
-  biasText: {
+  barTrack: {
+    flex: 1,
+    height: 5,
+    backgroundColor: '#E5E7EB',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  barFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  confPct: {
     fontSize: 13,
-    color: '#007AFF',
+    fontWeight: '700',
+    minWidth: 36,
+    textAlign: 'right',
+  },
+  horizonPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  horizonText: {
+    fontSize: 12,
     fontWeight: '600',
   },
-  tipWrap: {
-    width: '100%',
-    marginTop: 12,
-  },
-  // Full width inside the card's content area
-  tipFullWidth: {
-    width: '100%',
-    backgroundColor: '#FFF2CC',
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    // pull outward to cancel parent padding (insightCard has padding: 16)
-    marginHorizontal: -16,
-  },
-  tipRowCentered: {
+
+  // Bias badge
+  biasBadge: {
     flexDirection: 'row',
-    justifyContent: 'center', // centers icon + text as a group
     alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
   },
-  tipIcon: {
-    marginRight: 10,
-  },
-  tipTextCentered: {
-    flexShrink: 1,        // allows wrapping
-    textAlign: 'center',  // centers multi-line text
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#2A2A2A',
+  biasText: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontWeight: '600',
   },
 });
