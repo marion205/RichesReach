@@ -23,6 +23,12 @@ try {
 export interface HoldingInsight {
   headline: string;
   drivers: string[];
+  /** When position is under pressure: short suggestion (e.g. "Consider a covered call to reduce basis") */
+  repairSuggestion?: string;
+  /** Inline explainer: why this repair helps (1–2 sentences) */
+  whyRepair?: string;
+  /** Topic for "Learn more" (e.g. "Covered calls" or "Defensive strategies") */
+  learnMoreTopic?: string;
 }
 
 /**

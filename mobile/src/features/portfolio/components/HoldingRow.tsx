@@ -20,12 +20,16 @@ interface Holding {
   name?: string;
 }
 
+/** Threshold: show "Teach me what I own" repair education when position is down this much */
+const UNDER_PRESSURE_THRESHOLD_PCT = -3;
+
 interface HoldingRowProps {
   holding: Holding;
   allocationPercent: number;
   onPress: (holding: Holding) => void;
   onBuy?: (holding: Holding) => void;
   onSell?: (holding: Holding) => void;
+  onLearnMore?: (holding: Holding, topic?: string) => void;
   isLast: boolean;
 }
 
@@ -70,16 +74,20 @@ export const HoldingRow: React.FC<HoldingRowProps> = ({
   onPress,
   onBuy,
   onSell,
+  onLearnMore,
   isLast,
 }) => {
   const isPositive = (holding.change || 0) >= 0;
   const changeColor = isPositive ? '#34C759' : '#FF3B30';
-  
+  const isUnderPressure = (holding.changePercent ?? 0) < UNDER_PRESSURE_THRESHOLD_PCT;
+
   // Phase 3: AI insights (optional, graceful fallback)
   const { data: insight, isLoading: insightLoading } = useHoldingInsight(
     holding.symbol,
     true // Enable by default
   );
+
+  const showRepairEducation = isUnderPressure && !insightLoading && insight?.repairSuggestion && insight?.whyRepair;
   
   const handlePress = () => {
     Haptics.selectionAsync();
@@ -167,6 +175,28 @@ export const HoldingRow: React.FC<HoldingRowProps> = ({
           <Text style={styles.insightText} numberOfLines={1}>
             {insight.headline}
           </Text>
+        </View>
+      )}
+
+      {/* Teach me what I own: repair education when position is under pressure */}
+      {showRepairEducation && (
+        <View style={styles.repairEducationBlock}>
+          <View style={styles.repairEducationHeader}>
+            <Icon name="book-open" size={14} color="#007AFF" />
+            <Text style={styles.repairEducationTitle}>Teach me what I own</Text>
+          </View>
+          <Text style={styles.repairSuggestionText}>{insight.repairSuggestion}</Text>
+          <Text style={styles.whyRepairText}>{insight.whyRepair}</Text>
+          {onLearnMore && (insight.learnMoreTopic || insight.repairSuggestion) && (
+            <TouchableOpacity
+              style={styles.learnMoreButton}
+              onPress={() => onLearnMore(holding, insight.learnMoreTopic)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.learnMoreButtonText}>Learn more</Text>
+              <Icon name="chevron-right" size={14} color="#007AFF" />
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </TouchableOpacity>
@@ -284,6 +314,49 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     flex: 1,
     fontStyle: 'italic',
+  },
+  repairEducationBlock: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#E5E5EA',
+    backgroundColor: '#F0F7FF',
+    borderRadius: 10,
+    padding: 12,
+  },
+  repairEducationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  repairEducationTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#007AFF',
+  },
+  repairSuggestionText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 6,
+  },
+  whyRepairText: {
+    fontSize: 12,
+    color: '#374151',
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  learnMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+  },
+  learnMoreButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#007AFF',
   },
   swipeActionsContainer: {
     flexDirection: 'row',

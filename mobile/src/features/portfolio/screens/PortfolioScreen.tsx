@@ -29,6 +29,7 @@ import WhatIfSimulator from '../components/WhatIfSimulator';
 import QuickActionsModal from '../components/QuickActionsModal';
 import DetailedBreakdownModal from '../components/DetailedBreakdownModal';
 import logger from '../../../utils/logger';
+import { globalNavigate } from '../../../navigation/NavigationService';
 import { SharedOrb } from '../../family/components/SharedOrb';
 import { FamilyManagementModal } from '../../family/components/FamilyManagementModal';
 import { familySharingService, FamilyGroup, FamilyMember } from '../../family/services/FamilySharingService';
@@ -37,6 +38,8 @@ import { CreditQuestScreen } from '../../credit/screens/CreditQuestScreen';
 import PortfolioKellyMetricsCard from '../../../components/quant/PortfolioKellyMetricsCard';
 import TransparencyDashboardCard from '../../../components/quant/TransparencyDashboardCard';
 import TradeDebriefScreen from '../../trading/screens/TradeDebriefScreen';
+
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
 
 const GET_PORTFOLIO_RISK_REPORT = gql`
   query GetPortfolioRiskReport {
@@ -419,7 +422,10 @@ setRefreshing(false);
     return portfolio.holdings.map((holding: PortfolioHolding) => {
       const symbol = holding.stock?.symbol || holding.symbol || '';
       const quantity = holding.shares || holding.quantity || 0;
-      const currentPrice = realTimePrices[symbol] || holding.currentPrice || holding.stock?.currentPrice || 0;
+      // In demo, prefer portfolio's own prices so "under pressure" positions (e.g. GOOGL, AMZN) stay negative for "Teach me what I own"
+      const currentPrice = IS_DEMO
+        ? (holding.currentPrice ?? holding.stock?.currentPrice ?? realTimePrices[symbol] ?? 0)
+        : (realTimePrices[symbol] || holding.currentPrice || holding.stock?.currentPrice || 0);
       const totalValue = quantity * currentPrice || holding.totalValue || 0;
       const averagePrice = holding.averagePrice || holding.stock?.averagePrice || currentPrice;
       const change = currentPrice - averagePrice;
@@ -911,6 +917,18 @@ return (
         } catch (error) {
           logger.error('[PortfolioScreen] Error navigating to trading (sell):', error);
           Alert.alert('Navigation Error', 'Could not open trading screen. Please try again.');
+        }
+      }}
+      onLearnMore={(holding, topic) => {
+        try {
+          logger.log('[PortfolioScreen] Learn more pressed for:', holding.symbol, 'topic:', topic);
+          globalNavigate('Learn', {
+            screen: 'tutor-module',
+            params: { topic: topic || 'Defensive strategies for your portfolio' },
+          });
+        } catch (error) {
+          logger.error('[PortfolioScreen] Error navigating to Learn:', error);
+          Alert.alert('Navigation Error', 'Could not open lesson. Please try again.');
         }
       }}
       loading={loadingPrices && !portfolioLoadingTimeout && portfolioLoading}

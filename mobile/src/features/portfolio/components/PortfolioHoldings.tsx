@@ -22,6 +22,7 @@ interface PortfolioHoldingsProps {
   onAddHoldings?: () => void; // Callback for empty state action
   onBuy?: (holding: Holding) => void; // Phase 2: Buy action
   onSell?: (holding: Holding) => void; // Phase 2: Sell action
+  onLearnMore?: (holding: Holding, topic?: string) => void; // Teach me what I own → Learn flow
   loading?: boolean; // Phase 3: Show skeleton while loading
 }
 
@@ -31,6 +32,7 @@ const PortfolioHoldings: React.FC<PortfolioHoldingsProps> = ({
   onAddHoldings,
   onBuy,
   onSell,
+  onLearnMore,
   loading = false,
 }) => {
   // Phase 3: Fade-in animation
@@ -89,11 +91,12 @@ const PortfolioHoldings: React.FC<PortfolioHoldingsProps> = ({
           onPress={(holding) => onStockPress(holding.symbol)}
           onBuy={onBuy}
           onSell={onSell}
+          onLearnMore={onLearnMore}
           isLast={index === holdings.length - 1}
         />
       );
     },
-    [totalValue, onStockPress, onBuy, onSell, holdings.length]
+    [totalValue, onStockPress, onBuy, onSell, onLearnMore, holdings.length]
   );
 
   return (

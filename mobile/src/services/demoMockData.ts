@@ -895,19 +895,51 @@ export const DEMO_FUTURES = {
 };
 
 // ─── Holding Insight (REST /api/coach/holding-insight) ───────────────────────
-export const DEMO_HOLDING_INSIGHTS: Record<string, { headline: string; drivers: string[] }> = {
+export interface DemoHoldingInsightShape {
+  headline: string;
+  drivers: string[];
+  repairSuggestion?: string;
+  whyRepair?: string;
+  learnMoreTopic?: string;
+}
+
+export const DEMO_HOLDING_INSIGHTS: Record<string, DemoHoldingInsightShape> = {
   AAPL: { headline: 'Services revenue growing faster than hardware — margin expansion story intact', drivers: ['App Store record revenue', 'Apple Intelligence driving upgrades', 'Wearables stabilising'] },
   MSFT: { headline: 'Azure re-accelerating as AI workloads shift to cloud', drivers: ['Copilot enterprise adoption', 'OpenAI partnership monetisation', 'Gaming segment recovering'] },
   NVDA: { headline: 'Blackwell ramp confirms $100B revenue trajectory for FY2026', drivers: ['Data centre demand outpacing supply', 'Sovereign AI spending rising', 'Software / CUDA moat deepening'] },
-  GOOGL: { headline: 'Search dominance intact; Gemini integration boosts monetisation', drivers: ['AI Overviews not cannibalising clicks', 'YouTube Shorts ad load increasing', 'Cloud margin expansion'] },
-  AMZN: { headline: 'AWS growth re-accelerating; retail margin at multi-year high', drivers: ['Gen AI services on AWS growing 3×', 'Same-day delivery reducing fulfilment cost', 'Advertising becoming third major pillar'] },
-  TSLA: { headline: 'Margin pressure continues as price competition intensifies', drivers: ['Gross margin fell to 17.4%', 'BYD overtook in volume globally', 'FSD timeline uncertainty remains'] },
+  GOOGL: {
+    headline: 'Search dominance intact; Gemini integration boosts monetisation',
+    drivers: ['AI Overviews not cannibalising clicks', 'YouTube Shorts ad load increasing', 'Cloud margin expansion'],
+    repairSuggestion: 'Consider a covered call to reduce your cost basis',
+    whyRepair: 'Selling a call against your shares collects premium and can lower your effective purchase price. If the stock stays flat or dips, you keep the premium; if it rises past the strike, you may be called away at a profit.',
+    learnMoreTopic: 'Covered calls and reducing cost basis',
+  },
+  AMZN: {
+    headline: 'AWS growth re-accelerating; retail margin at multi-year high',
+    drivers: ['Gen AI services on AWS growing 3×', 'Same-day delivery reducing fulfilment cost', 'Advertising becoming third major pillar'],
+    repairSuggestion: 'Consider a covered call to reduce your cost basis',
+    whyRepair: 'Your position is under pressure. A covered call lets you earn premium and lower your breakeven. You keep the shares if the stock stays below the strike, and the premium cushions further downside.',
+    learnMoreTopic: 'Defensive strategies for down positions',
+  },
+  TSLA: {
+    headline: 'Margin pressure continues as price competition intensifies',
+    drivers: ['Gross margin fell to 17.4%', 'BYD overtook in volume globally', 'FSD timeline uncertainty remains'],
+    repairSuggestion: 'Consider a covered call or selling cash-secured put to improve basis',
+    whyRepair: 'IV expansion can work in your favor: selling options collects more premium. A covered call reduces risk and cost basis; a cash-secured put can let you add shares at a lower price if you’re bullish long term.',
+    learnMoreTopic: 'Options when your stock is under pressure',
+  },
   SPY: { headline: 'S&P 500 in a broadening bull — small/mid caps catching up to mega-cap', drivers: ['Earnings breadth improving', 'Rate cut expectations supportive', 'GDP growth above 2%'] },
   META: { headline: 'Ad platform firing on all cylinders; AI-driven targeting gains share', drivers: ['ROAS outperforming peers', 'Llama 3 reducing inference cost', 'Threads monetisation ahead of schedule'] },
-  DEFAULT: { headline: 'AI insight ready — add to watchlist for personalised analysis', drivers: ['Market analysis updated daily', 'Powered by RichesReach AI'] },
+  DEFAULT: {
+    headline: 'AI insight ready — add to watchlist for personalised analysis',
+    drivers: ['Market analysis updated daily', 'Powered by RichesReach AI'],
+    repairSuggestion: 'Consider defensive strategies to reduce cost basis',
+    whyRepair: 'When a position is down, covered calls can collect premium and lower your breakeven. Learn how in the lesson below.',
+    learnMoreTopic: 'Defensive strategies for your portfolio',
+  },
 };
 
 // Helper to get insight for any ticker
-export function getDemoHoldingInsight(ticker: string): { headline: string; drivers: string[] } {
+export function getDemoHoldingInsight(ticker: string): DemoHoldingInsightShape {
   return DEMO_HOLDING_INSIGHTS[ticker.toUpperCase()] ?? DEMO_HOLDING_INSIGHTS.DEFAULT;
 }
