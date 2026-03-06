@@ -25,6 +25,9 @@ import { useVoice } from '../../../contexts/VoiceContext';
 import { useNavigation } from '@react-navigation/native';
 import OnboardingGuard from '../../../components/OnboardingGuard';
 import logger from '../../../utils/logger';
+
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
 import EducationalTooltip from '../../../components/common/EducationalTooltip';
 import { RiskRewardDiagram } from '../../../components/common/RiskRewardDiagram';
 import { WhyThisTradeModal } from '../../../components/common/WhyThisTradeModal';
@@ -566,14 +569,16 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
       }
     }
     
-    // If there's a network error, use mock data immediately
+    // If there's a network error, use mock data only in demo mode
     if (error && !effectiveData?.picks) {
-      if (__DEV__) {
-        logger.log('⚠️ Network error - using mock data for development');
+      if (IS_DEMO) {
+        if (__DEV__) logger.log('⚠️ Network error - using mock data (demo mode)');
+        return getMockPicks();
       }
-      return getMockPicks();
+      if (__DEV__) logger.log('⚠️ Network error - no picks available (non-demo)');
+      return [];
     }
-    
+
     if (effectiveData?.picks && effectiveData.picks.length > 0) {
       // Backend now returns up to 10 picks - use all of them
       const result = effectiveData.picks;
@@ -582,11 +587,13 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
       }
       return result;
     }
-    // Return mock data if no real data available (for testing educational features)
-    if (__DEV__) {
-      logger.log('⚠️ No picks available - returning mock data for testing');
+    // No real data available - use mock only in demo mode
+    if (IS_DEMO) {
+      if (__DEV__) logger.log('⚠️ No picks available - using mock data (demo mode)');
+      return getMockPicks();
     }
-    return getMockPicks();
+    if (__DEV__) logger.log('⚠️ No picks available');
+    return [];
   }, [dayTradingData?.picks, getMockPicks, error]);
 
   // Use real data for metadata display

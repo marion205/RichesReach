@@ -20,6 +20,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MemeQuestScreen from '../../social/screens/MemeQuestScreen';
 import logger from '../../../utils/logger';
 import { TIMING, ANIMATION } from '../../../config/constants';
+
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
 // import ConfettiCannon from 'react-native-confetti-cannon';
 
 const { width, height } = Dimensions.get('window');
@@ -673,13 +675,13 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
     }
   });
 
-  // Use mock data immediately if loading, timeout, or error - optimistic loading
-  // Define mock data first to ensure it's always available
+  // Use real data from GraphQL; in demo mode fall back to mock when no data available
   const progress = useMemo(() => {
     if (progressData?.tutorProgress) {
-      return progressData.tutorProgress; // Use real data if available
+      return progressData.tutorProgress;
     }
-    // Show mock data immediately while loading, on timeout, or on error
+    if (!IS_DEMO) return null;
+    // Demo mode: show mock progress
     return {
       userId: "demo-user-123",
       xp: 1250,
@@ -701,12 +703,13 @@ const TutorScreen: React.FC<TutorScreenProps> = ({ navigation }) => {
       __typename: "TutorProgress"
     };
   }, [progressData, progressLoadingTimeout, progressError]);
-  
+
   const dailyQuest = useMemo(() => {
     if (questData?.dailyQuest) {
-      return questData.dailyQuest; // Use real data if available
+      return questData.dailyQuest;
     }
-    // Show mock data immediately while loading or on error
+    if (!IS_DEMO) return null;
+    // Demo mode: show mock quest
     return {
       id: "quest_001",
       title: "Options Spread Mastery",
@@ -1080,16 +1083,12 @@ Let's dive in and explore ${topic} together!`,
       }, 3000);
     };
 
-    // Immediately use mock data - no waiting for API
-    // This ensures instant lesson start even if API fails
-    const mockLesson = getMockLesson(topic);
-    
-    // Try to fetch real data in background, but don't wait for it
+    // Fetch real lesson data from the API
     try {
       const lessonPromise = startLesson({
         variables: { topic, regime: 'BULL' }
       });
-      
+
       let timeoutId: NodeJS.Timeout | null = null;
       const timeoutPromise = new Promise<never>((_, reject) => {
         timeoutId = setTimeout(() => {
@@ -1098,38 +1097,35 @@ Let's dive in and explore ${topic} together!`,
         }, TIMING.TIMEOUT_SHORT);
         lessonTimeoutRef.current = timeoutId;
       });
-      
-      Promise.race([lessonPromise, timeoutPromise])
-        .then((result: { data?: { startLesson?: Lesson } }) => {
-          // Clear timeout if promise resolved
-          if (timeoutId) {
-            clearTimeout(timeoutId);
-            lessonTimeoutRef.current = null;
-            timeoutId = null;
-          }
-          if (result?.data?.startLesson) {
-            logger.log('Received real lesson data, updating:', result.data.startLesson.title);
-            // Update with real data if it arrives
-            startLessonWithData(result.data.startLesson);
-          }
-        })
-        .catch((error) => {
-          // Clear timeout on error
-          if (timeoutId) {
-            clearTimeout(timeoutId);
-            lessonTimeoutRef.current = null;
-            timeoutId = null;
-          }
-          // Silently fail - we already started with mock data
-          logger.warn('Lesson API failed (already using mock data):', error);
-        });
-      
-      // Start immediately with mock data
-      startLessonWithData(mockLesson);
+
+      try {
+        const result = await Promise.race([lessonPromise, timeoutPromise]) as { data?: { startLesson?: Lesson } };
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          lessonTimeoutRef.current = null;
+          timeoutId = null;
+        }
+        if (result?.data?.startLesson) {
+          startLessonWithData(result.data.startLesson);
+        } else if (IS_DEMO) {
+          startLessonWithData(getMockLesson(topic));
+        }
+      } catch (error) {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          lessonTimeoutRef.current = null;
+          timeoutId = null;
+        }
+        logger.warn('Lesson API failed:', error);
+        if (IS_DEMO) {
+          startLessonWithData(getMockLesson(topic));
+        }
+      }
     } catch (error) {
-      // Fallback: if anything fails, use mock data
-      logger.warn('Error in lesson start (using mock data):', error);
-      startLessonWithData(mockLesson);
+      logger.warn('Error starting lesson:', error);
+      if (IS_DEMO) {
+        startLessonWithData(getMockLesson(topic));
+      }
     }
   };
 

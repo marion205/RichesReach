@@ -33,6 +33,8 @@ import { debounce } from 'lodash-es';
 import { StockMomentsIntegration } from './StockMomentsIntegration';
 import logger from '../../../utils/logger';
 import { GestureEventPayload } from 'react-native-gesture-handler';
+
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
 import ConsumerSpendingSurgeChart from '../../../components/charts/ConsumerSpendingSurgeChart';
 import SmartMoneyFlowChart from '../../../components/charts/SmartMoneyFlowChart';
 import { useQuery, gql } from '@apollo/client';
@@ -1404,23 +1406,24 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
         setStockData(data);
         if (data.chartData) {
           setChartData(data.chartData);
+        } else if (IS_DEMO) {
+          // Generate fallback chart data only in demo mode
+          setChartData(generateFallbackChartData(symbol, timeframe));
         } else {
-          // Generate fallback chart data if none provided
-          const fallbackData = generateFallbackChartData(symbol, timeframe);
-          setChartData(fallbackData);
+          setChartData(null);
         }
       } else {
         setStockError('Failed to fetch stock data');
-        // Generate fallback data on complete failure
-        const fallbackData = generateFallbackChartData(symbol, timeframe);
-        setChartData(fallbackData);
+        if (IS_DEMO) {
+          setChartData(generateFallbackChartData(symbol, timeframe));
+        }
       }
     } catch (error) {
       setStockError('Error fetching stock data');
       logger.error('Error fetching stock data:', error);
-      // Generate fallback data on error
-      const fallbackData = generateFallbackChartData(symbol, timeframe);
-      setChartData(fallbackData);
+      if (IS_DEMO) {
+        setChartData(generateFallbackChartData(symbol, timeframe));
+      }
     } finally {
       setStockLoading(false);
     }
@@ -1439,15 +1442,19 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
         setStockData(data);
       } else {
         logger.warn('No chart data received for', symbol);
-        // Generate fallback chart data
-        const fallbackData = generateFallbackChartData(symbol, timeframe);
-        setChartData(fallbackData);
+        if (IS_DEMO) {
+          setChartData(generateFallbackChartData(symbol, timeframe));
+        } else {
+          setChartData(null);
+        }
       }
     } catch (error) {
       logger.error('Error fetching chart data:', error);
-      // Generate fallback chart data on error
-      const fallbackData = generateFallbackChartData(symbol, timeframe);
-      setChartData(fallbackData);
+      if (IS_DEMO) {
+        setChartData(generateFallbackChartData(symbol, timeframe));
+      } else {
+        setChartData(null);
+      }
     } finally {
       setChartLoading(false);
     }

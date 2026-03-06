@@ -4,6 +4,8 @@ import { useQuery } from '@apollo/client';
 import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
 const GET_EXECUTION_QUALITY_STATS = gql`
   query GetExecutionQualityStats($signalType: String!, $days: Int!) {
     executionQualityStats(signalType: $signalType, days: $days) {
@@ -71,8 +73,8 @@ export default function ExecutionQualityDashboard({
     periodDays: days,
   });
 
-  // Use mock data if there's an error or no data (for development)
-  const effectiveStats = stats || (error ? getMockStats() : null);
+  // Use mock data only in demo mode when there's an error or no data
+  const effectiveStats = stats || (error && IS_DEMO ? getMockStats() : null);
 
   if (loading && !effectiveStats) {
     return (
@@ -117,8 +119,8 @@ export default function ExecutionQualityDashboard({
   const qualityColor = safeCompare(effectiveStats.avgQualityScore, 8) ? C.success : 
                        safeCompare(effectiveStats.avgQualityScore, 6) ? C.warning : C.danger;
   
-  // Show warning banner if using mock data
-  const isUsingMockData = !stats && error;
+  // Show warning banner only in demo mode when using mock data
+  const isUsingMockData = IS_DEMO && !stats && !!error;
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>

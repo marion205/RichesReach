@@ -21,6 +21,8 @@ import LicensingDisclosureScreen from '../components/LicensingDisclosureScreen';
 import { FEATURES } from '../config/featureFlags';
 import logger from '../utils/logger';
 
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
 // GraphQL Queries
 import { GET_CRYPTO_PORTFOLIO, GET_CRYPTO_ANALYTICS } from '../cryptoQueries';
 
@@ -146,18 +148,13 @@ const CryptoScreen: React.FC<CryptoScreenProps> = React.memo(({ navigation }) =>
         })) || [],
       };
     }
-    // Priority 2: If error occurred or loading completed with no data, use mock data
-    const hasError = portfolioError && !portfolioData?.cryptoPortfolio;
-    const hasNetworkError = portfolioError?.message?.includes('Network request failed');
-    const loadingCompleted = !portfolioLoading && !portfolioData?.cryptoPortfolio;
-    
-    // Always return mock data for optimistic loading (show immediately, replace when real data arrives)
-    if (hasError || hasNetworkError || loadingCompleted || !portfolioLoading) {
+    // Priority 2: If in demo mode, use mock data on error or no data
+    if (IS_DEMO) {
       return getMockCryptoPortfolio();
     }
-    
-    // While actively loading, show mock data immediately (optimistic loading)
-    return getMockCryptoPortfolio();
+
+    // Non-demo: return null while loading, stay null on error
+    return null;
   }, [portfolioData?.cryptoPortfolio, portfolioLoading, portfolioError]);
 
   const effectiveAnalytics = useMemo(() => {
@@ -181,18 +178,13 @@ const CryptoScreen: React.FC<CryptoScreenProps> = React.memo(({ navigation }) =>
         } : undefined,
       };
     }
-    // Priority 2: If error occurred or loading completed with no data, use mock data
-    const hasError = analyticsError && !analyticsData?.cryptoAnalytics;
-    const hasNetworkError = analyticsError?.message?.includes('Network request failed');
-    const loadingCompleted = !analyticsLoading && !analyticsData?.cryptoAnalytics;
-    
-    // Always return mock data for optimistic loading (show immediately, replace when real data arrives)
-    if (hasError || hasNetworkError || loadingCompleted || !analyticsLoading) {
+    // Priority 2: If in demo mode, use mock data on error or no data
+    if (IS_DEMO) {
       return getMockCryptoAnalytics();
     }
-    
-    // While actively loading, show mock data immediately (optimistic loading)
-    return getMockCryptoAnalytics();
+
+    // Non-demo: return null while loading, stay null on error
+    return null;
   }, [analyticsData?.cryptoAnalytics, analyticsLoading, analyticsError]);
 
   const onRefresh = useCallback(async () => {
@@ -246,7 +238,7 @@ const CryptoScreen: React.FC<CryptoScreenProps> = React.memo(({ navigation }) =>
           <CryptoPortfolioCard 
             portfolio={effectivePortfolio}
             analytics={effectiveAnalytics}
-            loading={false} // Never show loading state - always show mock data immediately
+            loading={!IS_DEMO && (portfolioLoading || analyticsLoading)}
             onRefresh={onRefresh}
             onPressHolding={(symbol) => logger.log('Pressed holding:', symbol)}
             onStartTrading={() => setActiveTab('trading')}

@@ -52,6 +52,9 @@ import { useStockSearch } from '../../../shared/hooks/useStockSearch';
 import { useWatchlist, GET_MY_WATCHLIST } from '../../../shared/hooks/useWatchlist';
 import { UI } from '../../../shared/constants';
 import logger from '../../../utils/logger';
+
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
 import EducationalTooltip from '../../../components/common/EducationalTooltip';
 import RustOptionsAnalysisWidget from '../../../components/rust/RustOptionsAnalysisWidget';
 import OptionsNextMoveCard from '../../../components/options/OptionsNextMoveCard';
@@ -1092,15 +1095,16 @@ interface OptionOrder {
   // Use mock data if timeout or error - always return data, never null
   const effectiveResearchData = useMemo(() => {
     if (researchData?.researchHub) {
-      return researchData; // Use real data if available
+      return researchData;
     }
-    // Always return mock data if no real data available (loading, timeout, or error)
-    return getMockResearchData();
+    // In demo mode: use mock data on timeout or error
+    if (IS_DEMO && (researchLoadingTimeout || researchError)) {
+      return getMockResearchData();
+    }
+    return null;
   }, [researchData, researchLoadingTimeout, researchError, researchLoading, getMockResearchData]);
-  
-  // Always show mock data immediately - never show loading state for research
-  // The mock data provides instant feedback while real data loads in background
-  const effectiveResearchLoading = false;
+
+  const effectiveResearchLoading = !IS_DEMO && researchLoading && !effectiveResearchData;
 
   // ✅ Fix #3: Only load chart when on research tab AND have symbol
   // Removed researchData check since effectiveResearchData always has mock data

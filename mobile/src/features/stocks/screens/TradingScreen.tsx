@@ -40,6 +40,8 @@ import { AlpacaPosition, NavigationType } from '../types';
 import logger from '../../../utils/logger';
 import { getUserFriendlyError } from '../../../utils/errorMessages';
 
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
 const C = {
   bg: '#F5F6FA',
   card: '#FFFFFF',
@@ -293,11 +295,11 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     },
   ];
 
-  // Use Alpaca data when available, fallback to legacy or mock data
+  // Use Alpaca data when available, fallback to legacy or mock data (demo mode only)
   const account = useMemo(() => {
     if (alpacaAccount) return alpacaAccount;
     if (accountData?.tradingAccount) return accountData.tradingAccount;
-    if (accountLoadingTimeout || (!accountLoading && !accountData)) {
+    if (IS_DEMO && (accountLoadingTimeout || (!accountLoading && !accountData))) {
       return getMockAccount();
     }
     return null;
@@ -308,7 +310,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     if (positionsData?.tradingPositions && positionsData.tradingPositions.length > 0) {
       return positionsData.tradingPositions;
     }
-    if (positionsLoadingTimeout || (!positionsLoading && !positionsData?.tradingPositions)) {
+    if (IS_DEMO && (positionsLoadingTimeout || (!positionsLoading && !positionsData?.tradingPositions))) {
       return getMockPositions();
     }
     return [];

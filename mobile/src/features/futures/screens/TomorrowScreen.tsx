@@ -28,6 +28,8 @@ import { API_HTTP } from '../../../config/api';
 import logger from '../../../utils/logger';
 import { useWatchlist } from '../../../shared/hooks/useWatchlist';
 
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
 // Mock data for demo when API is unavailable
 const getMockRecommendations = (): FuturesRecommendation[] => [
   {
@@ -92,11 +94,11 @@ export default function TomorrowScreen({ navigation }: any) {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!IS_DEMO);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [usingCachedData, setUsingCachedData] = useState(true); // Start with true to show mock data immediately
-  const [recommendations, setRecommendations] = useState<FuturesRecommendation[]>(getMockRecommendations()); // Initialize with mock data
+  const [usingCachedData, setUsingCachedData] = useState(IS_DEMO);
+  const [recommendations, setRecommendations] = useState<FuturesRecommendation[]>(IS_DEMO ? getMockRecommendations() : []);
   const [positions, setPositions] = useState<FuturesPosition[]>([]);
   const [showPositions, setShowPositions] = useState(false);
   const [viewMode, setViewMode] = useState<'list' | 'heatmap'>('list');
@@ -147,14 +149,17 @@ export default function TomorrowScreen({ navigation }: any) {
   
   const tradingSession = useMemo(() => getTradingSession(), [getTradingSession]);
 
-  // Load recommendations with proper error handling (no silent mock fallback)
+  // Load recommendations with proper error handling
   const loadRecommendations = useCallback(async () => {
+    // In demo mode, mock data is already shown; skip the live fetch
+    if (IS_DEMO) return;
+
     try {
       setLoading(true);
       setError(null);
       setUsingCachedData(false);
-      
-      // Add timeout wrapper (reduced to 5s for faster fallback to mock data)
+
+      // Add timeout wrapper
       let timeoutId: NodeJS.Timeout | null = null;
       const timeoutPromise = new Promise<never>((_, reject) => {
         timeoutId = setTimeout(() => {
@@ -163,102 +168,61 @@ export default function TomorrowScreen({ navigation }: any) {
         }, 5000);
         recommendationsTimeoutRef.current = timeoutId;
       });
-      
+
       try {
         const fetchPromise = FuturesService.getRecommendations();
         const resp = await Promise.race([fetchPromise, timeoutPromise]) as { recommendations: FuturesRecommendation[] };
-        
+
         // Clear timeout if request succeeded
         if (timeoutId) {
           clearTimeout(timeoutId);
           recommendationsTimeoutRef.current = null;
           timeoutId = null;
         }
-        
+
         if (resp.recommendations && resp.recommendations.length > 0) {
-        setRecommendations(resp.recommendations);
-        setUsingCachedData(false); // Clear cached flag when real data loads
-        setError(null); // Clear any previous errors
-        // Initialize prices from recommendations (if included)
-        const initialPrices: Record<string, { price: number; change: number; changePercent: number; priceHistory: number[] }> = {};
-        resp.recommendations.forEach(rec => {
-          if (rec.current_price !== undefined) {
-            initialPrices[rec.symbol] = {
-              price: rec.current_price,
-              change: rec.price_change || 0,
-              changePercent: rec.price_change_percent || 0,
-              priceHistory: rec.price_history || [],
-            };
+          setRecommendations(resp.recommendations);
+          setUsingCachedData(false);
+          setError(null);
+          // Initialize prices from recommendations (if included)
+          const initialPrices: Record<string, { price: number; change: number; changePercent: number; priceHistory: number[] }> = {};
+          resp.recommendations.forEach(rec => {
+            if (rec.current_price !== undefined) {
+              initialPrices[rec.symbol] = {
+                price: rec.current_price,
+                change: rec.price_change || 0,
+                changePercent: rec.price_change_percent || 0,
+                priceHistory: rec.price_history || [],
+              };
+            }
+          });
+          if (Object.keys(initialPrices).length > 0) {
+            setPriceUpdates(initialPrices);
           }
-        });
-        if (Object.keys(initialPrices).length > 0) {
-          setPriceUpdates(initialPrices);
+          startPricePolling(resp.recommendations.map(r => r.symbol));
+        } else {
+          logger.warn('⚠️ [Tomorrow] Backend returned empty recommendations');
+          setRecommendations([]);
+          setError('No live recommendations available. Pull to refresh.');
         }
-        // Start polling for real-time price updates
-        startPricePolling(resp.recommendations.map(r => r.symbol));
-      } else {
-        // Backend returned empty array - use mock data as fallback
-        logger.warn('⚠️ [Tomorrow] Backend returned empty recommendations, using mock data');
-        const mockData = getMockRecommendations();
-        setRecommendations(mockData);
-        setUsingCachedData(true);
-        setError('No live recommendations available. Showing demo data. Pull to refresh.');
-        // Start polling for mock symbols (won't work but won't crash)
-        startPricePolling(mockData.map(r => r.symbol));
-      }
       } catch (innerError: any) {
-        // Handle inner try-catch errors (timeout, etc.)
         throw innerError;
       }
     } catch (e: any) {
       logger.error('❌ [Tomorrow] Failed to load recommendations:', e);
-      
-      // Show user-friendly error message in banner (non-intrusive)
-      // Only show modal if this is the FIRST load and we have NO cached data
-      const hasCachedData = recommendations.length > 0;
-      
+
       if (e?.message?.includes('timeout')) {
-        // If no cached data, use mock data as fallback so screen still loads
-        if (!hasCachedData) {
-          logger.warn('⚠️ [Tomorrow] Using mock data due to timeout');
-          setRecommendations(getMockRecommendations());
-          setUsingCachedData(true);
-          setError('Connection timeout. Showing demo data. Pull to refresh for live data.');
-        } else {
-          setError('Connection timeout. Showing cached data.');
-          setUsingCachedData(true);
-        }
-        // Only show modal on first load with no cached data (and no mock fallback)
-        // Removed modal to avoid blocking - banner is sufficient
+        setError('Connection timeout. Pull to refresh for live data.');
       } else if (e?.message?.includes('Network request failed') || e?.message?.includes('Failed to fetch')) {
-        // If no cached data, use mock data as fallback so screen still loads
-        if (!hasCachedData) {
-          logger.warn('⚠️ [Tomorrow] Using mock data due to network error');
-          setRecommendations(getMockRecommendations());
-          setUsingCachedData(true);
-          setError('Network error. Showing demo data. Pull to refresh for live data.');
-        } else {
-          setError('Network error. Showing cached data.');
-          setUsingCachedData(true);
-        }
-        // Removed modal to avoid blocking - banner is sufficient
+        setError('Network error. Pull to refresh for live data.');
       } else {
-        // If no cached data, use mock data as fallback so screen still loads
-        if (!hasCachedData) {
-          logger.warn('⚠️ [Tomorrow] Using mock data due to error');
-          setRecommendations(getMockRecommendations());
-          setUsingCachedData(true);
-          setError('Unable to load. Showing demo data. Pull to refresh for live data.');
-        } else {
-          setError('Update failed. Showing cached data.');
-          setUsingCachedData(true);
-        }
-        // Removed modal to avoid blocking - banner is sufficient
+        setError('Unable to load recommendations. Pull to refresh.');
       }
+      setUsingCachedData(false);
     } finally {
       setLoading(false);
     }
-  }, [recommendations.length]);
+  }, []);
 
   // Load recommendations on mount
   React.useEffect(() => {
