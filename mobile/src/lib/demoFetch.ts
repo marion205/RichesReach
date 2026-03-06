@@ -13,6 +13,7 @@ import {
   DEMO_DAILY_BRIEF,
   DEMO_BRIEF_PROGRESS,
   DEMO_FUTURES,
+  DEMO_CREDIT_SNAPSHOT,
   getDemoHoldingInsight,
 } from '../services/demoMockData';
 
@@ -154,6 +155,23 @@ const HANDLERS: Handler[] = [
         hasPremiumAccess: true,
         subscriptionTier: 'premium',
       });
+    }
+    return null;
+  },
+
+  // Credit — full snapshot + individual endpoints
+  (url) => {
+    if (url.includes('/api/credit/snapshot')) {
+      return jsonResponse(DEMO_CREDIT_SNAPSHOT);
+    }
+    if (url.includes('/api/credit/score/refresh')) {
+      return jsonResponse(DEMO_CREDIT_SNAPSHOT.score);
+    }
+    if (url.includes('/api/credit/score')) {
+      return jsonResponse(DEMO_CREDIT_SNAPSHOT.score);
+    }
+    if (url.includes('/api/credit/projection')) {
+      return jsonResponse(DEMO_CREDIT_SNAPSHOT.projection);
     }
     return null;
   },

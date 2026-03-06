@@ -603,6 +603,88 @@ export const DEMO_TRANSPARENCY_PERFORMANCE = {
   __typename: 'PerformanceSummaryType',
 };
 
+// ─── Credit Snapshot (REST /api/credit/snapshot) ─────────────────────────────
+export const DEMO_CREDIT_SNAPSHOT = {
+  score: {
+    score: 725,
+    scoreRange: 'Good',
+    lastUpdated: new Date().toISOString(),
+    provider: 'self_reported',
+  },
+  cards: [
+    {
+      id: 'card-1',
+      name: 'Chase Sapphire',
+      balance: 1240,
+      limit: 8000,
+      utilization: 0.155,
+      paymentDueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+      minimumPayment: 35,
+      apr: 0.2199,
+    },
+    {
+      id: 'card-2',
+      name: 'Amex Gold',
+      balance: 480,
+      limit: 5000,
+      utilization: 0.096,
+      paymentDueDate: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString(),
+      minimumPayment: 25,
+      apr: 0.2699,
+    },
+  ],
+  utilization: {
+    totalLimit: 13000,
+    totalBalance: 1720,
+    currentUtilization: 0.132,
+    optimalUtilization: 0.09,
+    paydownSuggestion: 550,
+    projectedScoreGain: 12,
+  },
+  projection: {
+    scoreGain6m: 38,
+    topAction: 'REDUCE_UTILIZATION',
+    confidence: 0.78,
+    factors: {
+      payment_history: 0.35,
+      utilization: 0.30,
+      credit_age: 0.15,
+      credit_mix: 0.10,
+      inquiries: 0.10,
+    },
+  },
+  actions: [
+    {
+      id: '1',
+      type: 'UTILIZATION_REDUCED',
+      title: 'Pay Down Chase Sapphire',
+      description: 'Pay $550 to bring your utilization from 13.2% to under 9% — the sweet spot for maximum score impact.',
+      completed: false,
+      projectedScoreGain: 12,
+      dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: '2',
+      type: 'AUTOPAY_SETUP',
+      title: 'Set Up Autopay',
+      description: 'Automate minimum payments on both cards to protect your perfect payment history (35% of your score).',
+      completed: false,
+      projectedScoreGain: 8,
+      dueDate: null,
+    },
+    {
+      id: '3',
+      type: 'CREDIT_LIMIT_INCREASE',
+      title: 'Request Credit Limit Increase',
+      description: 'With 18 months of on-time payments, Chase may approve a limit increase — lowering utilization without paying down debt.',
+      completed: false,
+      projectedScoreGain: 15,
+      dueDate: null,
+    },
+  ],
+  shield: [],
+};
+
 // ─── Budget / Spending ────────────────────────────────────────────────────────
 export const DEMO_BUDGET_DATA = {
   monthlyIncome: 8500,
