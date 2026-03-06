@@ -273,6 +273,206 @@ const HANDLERS: Handler[] = [
     return jsonResponse(quotes);
   },
 
+  // ── External stock data APIs — intercept so StockDetailScreen works in demo mode ──
+
+  // Shared demo price table (reused across all API handlers below)
+  (url) => {
+    // Only handle known external stock API domains
+    const isStockApi = (
+      url.includes('finnhub.io') ||
+      url.includes('api.polygon.io') ||
+      url.includes('data.alpaca.markets') ||
+      url.includes('alphavantage.co') ||
+      url.includes('newsapi.org')
+    );
+    if (!isStockApi) return null;
+
+    // Per-symbol demo data (matches the /api/market/quotes table above)
+    const DEMO_STOCKS_DATA: Record<string, {
+      c: number; d: number; dp: number; v: number; h: number; l: number; o: number; pc: number;
+      name: string; sector: string; marketCap: number; pe: number; pb: number; eps: number;
+    }> = {
+      AAPL:  { c: 189.30, d: 2.10,  dp: 1.12,  v: 52000000, h: 190.50, l: 188.10, o: 188.50, pc: 187.20, name: 'Apple Inc.',            sector: 'Technology',          marketCap: 2940000, pe: 28.5, pb: 45.2, eps: 6.64 },
+      MSFT:  { c: 415.80, d: 5.60,  dp: 1.37,  v: 24000000, h: 417.00, l: 414.00, o: 414.50, pc: 410.20, name: 'Microsoft Corporation',  sector: 'Technology',          marketCap: 3090000, pe: 35.2, pb: 12.8, eps: 11.81 },
+      NVDA:  { c: 875.40, d: 36.18, dp: 4.31,  v: 48000000, h: 882.00, l: 860.00, o: 862.00, pc: 839.22, name: 'NVIDIA Corporation',     sector: 'Technology',          marketCap: 2160000, pe: 65.4, pb: 38.1, eps: 13.39 },
+      TSLA:  { c: 196.50, d: 3.20,  dp: 1.66,  v: 88000000, h: 198.00, l: 195.00, o: 195.80, pc: 193.30, name: 'Tesla Inc.',             sector: 'Consumer Cyclical',   marketCap: 625000,  pe: 48.2, pb: 11.4, eps: 4.07 },
+      META:  { c: 502.30, d: 8.40,  dp: 1.70,  v: 19000000, h: 505.00, l: 499.00, o: 500.00, pc: 493.90, name: 'Meta Platforms Inc.',    sector: 'Communication',       marketCap: 1280000, pe: 24.8, pb: 7.3,  eps: 20.25 },
+      GOOGL: { c: 175.60, d: 2.80,  dp: 1.62,  v: 20000000, h: 176.50, l: 174.50, o: 174.80, pc: 172.80, name: 'Alphabet Inc.',          sector: 'Communication',       marketCap: 2180000, pe: 22.6, pb: 6.8,  eps: 7.77 },
+      AMZN:  { c: 198.40, d: 3.60,  dp: 1.85,  v: 32000000, h: 199.50, l: 197.00, o: 197.20, pc: 194.80, name: 'Amazon.com Inc.',        sector: 'Consumer Cyclical',   marketCap: 2090000, pe: 41.3, pb: 8.9,  eps: 4.80 },
+      AMD:   { c: 168.20, d: 4.10,  dp: 2.50,  v: 38000000, h: 169.50, l: 166.80, o: 167.00, pc: 164.10, name: 'Advanced Micro Devices', sector: 'Technology',          marketCap: 272000,  pe: 44.1, pb: 3.6,  eps: 3.81 },
+      NFLX:  { c: 625.10, d: 11.20, dp: 1.82,  v: 9000000,  h: 628.00, l: 622.00, o: 623.00, pc: 613.90, name: 'Netflix Inc.',           sector: 'Communication',       marketCap: 268000,  pe: 38.7, pb: 16.2, eps: 16.15 },
+      COIN:  { c: 228.50, d: -8.30, dp: -3.51, v: 14000000, h: 238.00, l: 226.00, o: 237.00, pc: 236.80, name: 'Coinbase Global Inc.',   sector: 'Financial Services',  marketCap: 58000,   pe: 32.1, pb: 4.8,  eps: 7.11 },
+      SPY:   { c: 524.00, d: 4.20,  dp: 0.81,  v: 72000000, h: 525.50, l: 522.00, o: 522.50, pc: 519.80, name: 'SPDR S&P 500 ETF',      sector: 'ETF',                 marketCap: 505000,  pe: 22.1, pb: 4.1,  eps: 23.71 },
+      PYPL:  { c: 65.40,  d: 1.20,  dp: 1.87,  v: 22000000, h: 66.20,  l: 64.80,  o: 65.00,  pc: 64.20,  name: 'PayPal Holdings Inc.',   sector: 'Financial Services',  marketCap: 70000,   pe: 15.8, pb: 2.9,  eps: 4.14 },
+      UBER:  { c: 78.60,  d: 2.10,  dp: 2.74,  v: 24000000, h: 79.20,  l: 77.80,  o: 78.00,  pc: 76.50,  name: 'Uber Technologies Inc.', sector: 'Technology',          marketCap: 165000,  pe: 29.4, pb: 8.1,  eps: 2.67 },
+    };
+
+    // Helper — get demo data for any symbol (fallback for unknowns)
+    const extractSymbol = (u: string): string => {
+      // Try common query param patterns: symbol=X, ticker=X, symbols=X
+      const symMatch = u.match(/[?&](?:symbol|ticker|symbols)=([A-Z.]+)/i);
+      if (symMatch) return symMatch[1].toUpperCase().split(',')[0];
+      // Polygon/Alpaca path pattern: /ticker/AAPL/ or /stocks/AAPL/
+      const pathMatch = u.match(/\/(?:ticker|stocks|aggs\/ticker)\/([A-Z.]+)\//i);
+      if (pathMatch) return pathMatch[1].toUpperCase();
+      return 'AAPL';
+    };
+
+    const sym = extractSymbol(url);
+    const d = DEMO_STOCKS_DATA[sym] ?? { ...DEMO_STOCKS_DATA.AAPL, name: `${sym} Corp`, c: 100.00, d: 0.50, dp: 0.50, v: 5000000, h: 101.00, l: 99.00, o: 100.00, pc: 99.50 };
+
+    // ── Finnhub: /quote ──────────────────────────────────────────────────────
+    if (url.includes('finnhub.io') && url.includes('/quote')) {
+      return jsonResponse({ c: d.c, d: d.d, dp: d.dp, h: d.h, l: d.l, o: d.o, pc: d.pc, v: d.v, t: Date.now() });
+    }
+
+    // ── Finnhub: /stock/profile2 ─────────────────────────────────────────────
+    if (url.includes('finnhub.io') && url.includes('profile2')) {
+      return jsonResponse({
+        name: d.name, ticker: sym, finnhubIndustry: d.sector, country: 'US',
+        currency: 'USD', exchange: 'NASDAQ', ipo: '1980-12-12',
+        marketCapitalization: d.marketCap, shareOutstanding: Math.round(d.marketCap / d.c),
+        logo: '', weburl: `https://www.${sym.toLowerCase()}.com`,
+        phone: '1-800-555-0100',
+      });
+    }
+
+    // ── Finnhub: /stock/candle ───────────────────────────────────────────────
+    if (url.includes('finnhub.io') && url.includes('/stock/candle')) {
+      const count = 30;
+      const now = Math.floor(Date.now() / 1000);
+      let price = d.c * 0.92;
+      const t: number[] = [], o: number[] = [], h: number[] = [], l: number[] = [], c: number[] = [], v: number[] = [];
+      for (let i = count - 1; i >= 0; i--) {
+        const open = price + (Math.random() - 0.48) * d.c * 0.01;
+        const close = open + (Math.random() - 0.46) * d.c * 0.015;
+        t.push(now - i * 86400);
+        o.push(parseFloat(open.toFixed(2)));
+        h.push(parseFloat((Math.max(open, close) + Math.random() * d.c * 0.005).toFixed(2)));
+        l.push(parseFloat((Math.min(open, close) - Math.random() * d.c * 0.005).toFixed(2)));
+        c.push(parseFloat(close.toFixed(2)));
+        v.push(Math.floor(d.v * (0.7 + Math.random() * 0.6)));
+        price = close;
+      }
+      return jsonResponse({ s: 'ok', t, o, h, l, c, v });
+    }
+
+    // ── Finnhub: /stock/recommendation ──────────────────────────────────────
+    if (url.includes('finnhub.io') && url.includes('recommendation')) {
+      return jsonResponse([
+        { buy: 18, hold: 8, sell: 2, strongBuy: 12, strongSell: 1, period: '2026-03-01', symbol: sym },
+        { buy: 16, hold: 9, sell: 3, strongBuy: 10, strongSell: 1, period: '2026-02-01', symbol: sym },
+      ]);
+    }
+
+    // ── Finnhub: insider transactions ────────────────────────────────────────
+    if (url.includes('finnhub.io') && url.includes('insider-transaction')) {
+      return jsonResponse({
+        data: [
+          { name: 'John Smith', share: 50000, change: 50000, transactionDate: '2026-02-15', transactionPrice: d.c * 0.95, transactionCode: 'P' },
+          { name: 'Jane Doe', share: -20000, change: -20000, transactionDate: '2026-02-10', transactionPrice: d.c * 1.02, transactionCode: 'S' },
+        ],
+        symbol: sym,
+      });
+    }
+
+    // ── Finnhub: institutional ownership ─────────────────────────────────────
+    if (url.includes('finnhub.io') && url.includes('institutional')) {
+      return jsonResponse({
+        data: [
+          { name: 'Vanguard Group', share: 1200000000, change: 5000000, reportDate: '2025-12-31' },
+          { name: 'BlackRock Inc.', share: 980000000, change: -2000000, reportDate: '2025-12-31' },
+          { name: 'State Street Corporation', share: 640000000, change: 1000000, reportDate: '2025-12-31' },
+        ],
+        symbol: sym,
+      });
+    }
+
+    // ── Polygon: /v2/aggs/ticker ─────────────────────────────────────────────
+    if (url.includes('api.polygon.io') && url.includes('/aggs/ticker')) {
+      const count = 30;
+      const now = Date.now();
+      let price = d.c * 0.92;
+      const results = Array.from({ length: count }, (_, i) => {
+        const open = price + (Math.random() - 0.48) * d.c * 0.01;
+        const close = open + (Math.random() - 0.46) * d.c * 0.015;
+        const result = {
+          t: now - (count - 1 - i) * 86400000,
+          o: parseFloat(open.toFixed(2)),
+          h: parseFloat((Math.max(open, close) + Math.random() * d.c * 0.005).toFixed(2)),
+          l: parseFloat((Math.min(open, close) - Math.random() * d.c * 0.005).toFixed(2)),
+          c: parseFloat(close.toFixed(2)),
+          v: Math.floor(d.v * (0.7 + Math.random() * 0.6)),
+          vw: parseFloat(close.toFixed(2)),
+          n: Math.floor(40000 + Math.random() * 20000),
+        };
+        price = close;
+        return result;
+      });
+      return jsonResponse({ ticker: sym, queryCount: count, resultsCount: count, adjusted: true, results, status: 'OK', request_id: 'demo' });
+    }
+
+    // ── Alpaca: /v2/stocks/bars ──────────────────────────────────────────────
+    if (url.includes('data.alpaca.markets') && url.includes('/bars')) {
+      const count = 30;
+      const now = Date.now();
+      let price = d.c * 0.92;
+      const bars = Array.from({ length: count }, (_, i) => {
+        const open = price + (Math.random() - 0.48) * d.c * 0.01;
+        const close = open + (Math.random() - 0.46) * d.c * 0.015;
+        const bar = {
+          t: new Date(now - (count - 1 - i) * 86400000).toISOString(),
+          o: parseFloat(open.toFixed(2)),
+          h: parseFloat((Math.max(open, close) + Math.random() * d.c * 0.005).toFixed(2)),
+          l: parseFloat((Math.min(open, close) - Math.random() * d.c * 0.005).toFixed(2)),
+          c: parseFloat(close.toFixed(2)),
+          v: Math.floor(d.v * (0.7 + Math.random() * 0.6)),
+          vw: parseFloat(close.toFixed(2)),
+          n: Math.floor(40000 + Math.random() * 20000),
+        };
+        price = close;
+        return bar;
+      });
+      return jsonResponse({ bars: { [sym]: bars }, next_page_token: null });
+    }
+
+    // ── Alpha Vantage: OVERVIEW ──────────────────────────────────────────────
+    if (url.includes('alphavantage.co')) {
+      return jsonResponse({
+        Symbol: sym, Name: d.name, Description: `${d.name} is a leading company in ${d.sector}.`,
+        Sector: d.sector, Industry: d.sector, MarketCapitalization: String(d.marketCap * 1000000),
+        PERatio: String(d.pe), PriceToBookRatio: String(d.pb), EPS: String(d.eps),
+        DividendYield: '0.0050', DividendPerShare: '0.24', PayoutRatio: '0.15',
+        RevenuePerShareTTM: String((d.c * 0.8).toFixed(2)),
+        ProfitMargin: '0.25', OperatingMarginTTM: '0.30',
+        ReturnOnAssetsTTM: '0.18', ReturnOnEquityTTM: '1.47',
+        RevenueTTM: String(Math.round(d.marketCap * 1000000 * 0.12)),
+        GrossProfitTTM: String(Math.round(d.marketCap * 1000000 * 0.05)),
+        EBITDATTm: String(Math.round(d.marketCap * 1000000 * 0.04)),
+        QuarterlyRevenueGrowthYOY: '0.08', QuarterlyEarningsGrowthYOY: '0.12',
+        AnalystTargetPrice: String((d.c * 1.18).toFixed(2)),
+        '52WeekHigh': String((d.c * 1.32).toFixed(2)), '52WeekLow': String((d.c * 0.68).toFixed(2)),
+        '50DayMovingAverage': String((d.c * 0.97).toFixed(2)), '200DayMovingAverage': String((d.c * 0.88).toFixed(2)),
+        SharesOutstanding: String(Math.round(d.marketCap * 1000000 / d.c)),
+        Beta: '1.20', ForwardPE: String((d.pe * 0.85).toFixed(1)),
+      });
+    }
+
+    // ── NewsAPI ──────────────────────────────────────────────────────────────
+    if (url.includes('newsapi.org')) {
+      return jsonResponse({
+        status: 'ok', totalResults: 3,
+        articles: [
+          { title: `${d.name} beats Q4 earnings estimates`, description: `${sym} reported strong earnings, exceeding analyst expectations with solid revenue growth.`, url: `https://example.com/${sym}-earnings`, publishedAt: new Date(Date.now() - 3600000).toISOString(), source: { name: 'Reuters' }, sentiment: 'positive' },
+          { title: `Analysts raise price target on ${sym}`, description: `Several Wall Street analysts have raised their price targets following the earnings beat.`, url: `https://example.com/${sym}-pt`, publishedAt: new Date(Date.now() - 7200000).toISOString(), source: { name: 'Bloomberg' }, sentiment: 'positive' },
+          { title: `${d.sector} sector outlook for 2026`, description: `Industry analysts weigh in on the ${d.sector} sector's prospects amid macro headwinds.`, url: `https://example.com/${d.sector.toLowerCase()}-outlook`, publishedAt: new Date(Date.now() - 86400000).toISOString(), source: { name: 'CNBC' }, sentiment: 'neutral' },
+        ],
+      });
+    }
+
+    return null;
+  },
+
   // GraphQL — let mock Apollo client handle it (don't intercept)
   // No handler needed; graphql requests go through Apollo not fetch directly.
 ];

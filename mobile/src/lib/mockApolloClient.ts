@@ -200,6 +200,46 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
   Stocks:          { stocks: DEMO_STOCKS },
   MyWatchlist:     { myWatchlist: [] },
 
+  // Stock Detail — Analysis (used by StockDetailScreen insights tab)
+  GetStockAnalysis: (() => {
+    const now = Date.now();
+    const spendingData = Array.from({ length: 12 }, (_, i) => ({
+      date: new Date(now - (11 - i) * 30 * 86400000).toISOString().split('T')[0],
+      spending: Math.floor(800000000 + Math.random() * 400000000),
+      __typename: 'SpendingDataPoint',
+    }));
+    const optionsFlowData = Array.from({ length: 8 }, (_, i) => ({
+      date: new Date(now - i * 86400000).toISOString().split('T')[0],
+      callVolume: Math.floor(50000 + Math.random() * 100000),
+      putVolume: Math.floor(20000 + Math.random() * 60000),
+      callOI: Math.floor(200000 + Math.random() * 300000),
+      putOI: Math.floor(100000 + Math.random() * 200000),
+      unusualActivity: Math.random() > 0.6,
+      __typename: 'OptionsFlowDataPoint',
+    }));
+    return {
+      rustStockAnalysis: {
+        symbol: 'NVDA',
+        spendingData,
+        optionsFlowData,
+        signalContributions: [
+          { signal: 'Momentum', contribution: 0.38, direction: 'bullish', __typename: 'SignalContribution' },
+          { signal: 'Volume', contribution: 0.25, direction: 'bullish', __typename: 'SignalContribution' },
+          { signal: 'Options Flow', contribution: 0.22, direction: 'bullish', __typename: 'SignalContribution' },
+          { signal: 'Sentiment', contribution: 0.15, direction: 'neutral', __typename: 'SignalContribution' },
+        ],
+        shapValues: [
+          { feature: 'RSI', value: 0.18, __typename: 'ShapValue' },
+          { feature: 'MACD', value: 0.14, __typename: 'ShapValue' },
+          { feature: 'Volume Surge', value: 0.22, __typename: 'ShapValue' },
+          { feature: 'Options Gamma', value: 0.19, __typename: 'ShapValue' },
+          { feature: 'News Sentiment', value: 0.12, __typename: 'ShapValue' },
+        ],
+        __typename: 'RustStockAnalysis',
+      },
+    };
+  })(),
+
   // Budget / Spending
   GetBudgetData:      { budgetData: DEMO_BUDGET_DATA },
   GetSpendingAnalysis: { spendingAnalysis: DEMO_SPENDING_ANALYSIS },
