@@ -1,6 +1,12 @@
 // Initialize Sentry for error tracking (must be first)
 import './config/sentry';
 
+// Demo mode: install fetch interceptor before anything else runs
+import { installDemoFetch } from './lib/demoFetch';
+if (process.env.EXPO_PUBLIC_DEMO_MODE === 'true') {
+  installDemoFetch();
+}
+
 // Import Reanimated first (required for worklets)
 // NOTE: If app crashes during startup with ReanimatedModule.mm:166 error,
 // this is a known issue with Reanimated 4.1.1 + RN 0.81 + Expo SDK 54
@@ -136,6 +142,8 @@ import UserProfileService from './features/user/services/UserProfileService';
 // Contexts
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { VoiceProvider } from './contexts/VoiceContext';
+import { DemoProvider } from './contexts/DemoContext';
+import DemoBanner from './components/DemoBanner';
 
 // ✅ Lazy load heavy screens for code splitting (reduces initial bundle size)
 const AIPortfolioScreen = lazy(() => import('./features/portfolio/screens/AIPortfolioScreen'));
@@ -1085,19 +1093,22 @@ return (
 
 export default function App() {
   return (
-    <ErrorBoundary>
-      <SafeAreaProvider>
-        <ApolloProvider>
-          <AuthProvider>
-            <WalletProvider>
-              <VoiceProvider>
-                <AppContent />
-              </VoiceProvider>
-            </WalletProvider>
-          </AuthProvider>
-        </ApolloProvider>
-      </SafeAreaProvider>
-    </ErrorBoundary>
+    <DemoProvider>
+      <ErrorBoundary>
+        <SafeAreaProvider>
+          <DemoBanner />
+          <ApolloProvider>
+            <AuthProvider>
+              <WalletProvider>
+                <VoiceProvider>
+                  <AppContent />
+                </VoiceProvider>
+              </WalletProvider>
+            </AuthProvider>
+          </ApolloProvider>
+        </SafeAreaProvider>
+      </ErrorBoundary>
+    </DemoProvider>
   );
 }
 const styles = StyleSheet.create({

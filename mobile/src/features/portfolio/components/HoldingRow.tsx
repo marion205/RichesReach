@@ -163,7 +163,7 @@ export const HoldingRow: React.FC<HoldingRowProps> = ({
       {/* Phase 3: AI Insight */}
       {insight?.headline && !insightLoading && (
         <View style={styles.insightContainer}>
-          <Icon name="lightbulb" size={12} color="#007AFF" />
+          <Icon name="zap" size={12} color="#007AFF" />
           <Text style={styles.insightText} numberOfLines={1}>
             {insight.headline}
           </Text>

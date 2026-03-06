@@ -354,6 +354,11 @@ return this.isTracking;
 
 // Start real-time tracking
 public startTracking() {
+// Demo mode: skip live price polling
+if (process.env.EXPO_PUBLIC_DEMO_MODE === 'true') {
+  logger.log('🎭 [RealTimePortfolio] Demo mode — skipping live tracking');
+  return;
+}
 if (this.isTracking) return;
 this.isTracking = true;
 this.updateInterval = setInterval(() => this.updatePortfolio(), this.updateFrequency);

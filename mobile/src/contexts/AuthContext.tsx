@@ -8,6 +8,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMutation } from '@apollo/client';
 import { TOKEN_AUTH, VERIFY_TOKEN } from '../graphql/queries_corrected';
 import logger from '../utils/logger';
+import { DEMO_USER } from './DemoContext';
+
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
 
 interface User {
   id: string;
@@ -49,6 +52,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const loadStoredToken = async () => {
+    // Demo mode: skip all network calls, inject demo user immediately
+    if (IS_DEMO) {
+      await AsyncStorage.setItem('token', 'DEMO_TOKEN_NOT_A_REAL_JWT');
+      setToken('DEMO_TOKEN_NOT_A_REAL_JWT');
+      setUser(DEMO_USER);
+      setLoading(false);
+      return;
+    }
+
     try {
       const storedToken = await AsyncStorage.getItem('token');
       if (storedToken) {

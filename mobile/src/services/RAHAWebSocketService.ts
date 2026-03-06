@@ -73,6 +73,12 @@ class RAHAWebSocketService {
    * Connect to WebSocket server
    */
   connect(token?: string): void {
+    // Demo mode: skip WebSocket connection entirely
+    if (process.env.EXPO_PUBLIC_DEMO_MODE === 'true') {
+      logger.log("🎭 [RAHA WebSocket] Demo mode — skipping connection");
+      return;
+    }
+
     if (this.socket?.connected) {
       logger.log("🔌 WebSocket already connected");
       return;

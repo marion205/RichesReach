@@ -305,7 +305,15 @@ const TradeDebriefScreen: React.FC<TradeDebriefScreenProps> = ({ onBack }) => {
             </Text>
           )}
         </ScrollView>
-      ) : null}
+      ) : (
+        <View style={styles.centered}>
+          <Icon name="inbox" size={48} color="#8E8E93" />
+          <Text style={styles.emptyTitle}>No debrief available</Text>
+          <Text style={styles.emptySubtitle}>
+            Complete at least 5 trades in the last {lookbackDays} days to unlock your AI debrief.
+          </Text>
+        </View>
+      )}
     </View>
   );
 };
