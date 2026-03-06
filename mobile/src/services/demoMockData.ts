@@ -135,12 +135,15 @@ export const DEMO_GQL_PORTFOLIO_METRICS = {
 
 // ─── Portfolio Risk Report ────────────────────────────────────────────────────
 export const DEMO_PORTFOLIO_RISK_REPORT = JSON.stringify({
-  regime: 'Bull',
-  gate_multiplier: 1.0,
-  narrative: 'Your portfolio is well-positioned for the current bull regime. Volatility is below your 90-day average and sector diversification looks healthy.',
-  risk_score: 42,
+  regime: 'Expansion',          // matches regimeColour map: green #10B981
+  gate_multiplier: 1.0,         // "Full" sizing gate — no restrictions
+  sizing_down_pct: 0,
+  narrative: 'Market regime confirmed Expansion — risk-on conditions intact. Your portfolio volatility (14.2%) is below the 90-day average (18.5%) and sector diversification is healthy across Technology, ETF, and Energy. Full position sizing is authorised.',
+  risk_score: 38,               // low risk score (good for demo)
   max_drawdown_30d: -3.8,
   var_95: -287,
+  sharpe_30d: 1.54,
+  beta: 1.12,
 });
 
 // ─── AI Recommendations ──────────────────────────────────────────────────────
