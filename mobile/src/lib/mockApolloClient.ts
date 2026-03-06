@@ -61,6 +61,67 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
     },
   },
 
+  // Stock Chart Data
+  GetStockChartData: {
+    stockChartData: {
+      symbol: 'NVDA',
+      currentPrice: 875.40,
+      change: 36.18,
+      changePercent: 4.31,
+      __typename: 'StockChartDataType',
+      data: [],
+    },
+  },
+  GetAdvancedChartData: (() => {
+    // Generate 30 days of realistic NVDA-like OHLCV candles
+    const candles = [];
+    let price = 780;
+    const now = Date.now();
+    for (let i = 29; i >= 0; i--) {
+      const ts = new Date(now - i * 24 * 60 * 60 * 1000).toISOString();
+      const open = price + (Math.random() - 0.48) * 12;
+      const close = open + (Math.random() - 0.46) * 18;
+      const high = Math.max(open, close) + Math.random() * 8;
+      const low = Math.min(open, close) - Math.random() * 8;
+      price = close;
+      candles.push({
+        timestamp: ts,
+        open: parseFloat(open.toFixed(2)),
+        high: parseFloat(high.toFixed(2)),
+        low: parseFloat(low.toFixed(2)),
+        close: parseFloat(close.toFixed(2)),
+        volume: Math.floor(30000000 + Math.random() * 20000000),
+        __typename: 'ChartDataPointType',
+      });
+    }
+    return {
+      stockChartData: {
+        symbol: 'NVDA',
+        interval: '1D',
+        limit: 30,
+        currentPrice: 875.40,
+        change: 36.18,
+        changePercent: 4.31,
+        __typename: 'StockChartDataType',
+        data: candles,
+        indicators: {
+          SMA20: 842.10,
+          SMA50: 810.55,
+          EMA12: 858.30,
+          EMA26: 835.70,
+          BBUpper: 910.20,
+          BBMiddle: 842.10,
+          BBLower: 774.00,
+          RSI14: 61.4,
+          MACD: 22.6,
+          MACDSignal: 18.1,
+          MACDHist: 4.5,
+          __typename: 'IndicatorsType',
+        },
+      },
+    };
+  })(),
+
   // AI
   GetAIRecommendations:  { aiRecommendations: DEMO_AI_RECOMMENDATIONS },
   GetQuantScreener:      { advancedStockScreening: DEMO_QUANT_SCREENER },
