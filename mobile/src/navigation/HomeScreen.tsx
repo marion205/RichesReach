@@ -181,6 +181,8 @@ import { personaCopy, inferPersona } from '../services/IntentPersona';
 import VoiceCaptureSheet from '../features/voice/VoiceCaptureSheet';
 import { parseIntent } from '../features/voice/intent';
 import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
+
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
   
   /* ===================== GraphQL ===================== */
   const GET_PORTFOLIO_METRICS = gql`
@@ -985,39 +987,37 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
       return 'Balanced Investor - Steady growth with moderate risk';
     }, []);
   
-    // Unified resolver: prefers real -> live -> graphql -> hardcoded demo
+    // Unified resolver: prefers real -> live -> graphql. Mock only in demo mode (pitch events).
     const resolved = useMemo(() => {
       const g = portfolioData?.portfolioMetrics;
       const liveVal = live?.totalValue;
       const liveRet = live?.totalReturn;
       const livePct = live?.totalReturnPercent;
-  
-      // Use mock data for demo when no real data available
-      const mockData = getMockHomeScreenPortfolio();
+      const mockData = IS_DEMO ? getMockHomeScreenPortfolio() : null;
 
       const totalValue =
         realPortfolio?.totalValue ??
         (isFinite(Number(liveVal)) ? Number(liveVal) : undefined) ??
         g?.totalValue ??
-        mockData.portfolioMetrics.totalValue;
+        (mockData ? mockData.portfolioMetrics.totalValue : 0);
 
       const totalReturn =
         realPortfolio?.totalReturn ??
         (isFinite(Number(liveRet)) ? Number(liveRet) : undefined) ??
         g?.totalReturn ??
-        mockData.portfolioMetrics.totalReturn;
+        (mockData ? mockData.portfolioMetrics.totalReturn : 0);
 
       const totalReturnPercent =
         realPortfolio?.totalReturnPercent ??
         (isFinite(Number(livePct)) ? Number(livePct) : undefined) ??
         g?.totalReturnPercent ??
-        mockData.portfolioMetrics.totalReturnPercent;
+        (mockData ? mockData.portfolioMetrics.totalReturnPercent : 0);
 
       const rawHoldings =
         realPortfolio?.holdings ??
         live?.holdings ??
         g?.holdings ??
-        mockData.portfolioMetrics.holdings;
+        (mockData ? mockData.portfolioMetrics.holdings : []);
   
       // Transform holdings to match PortfolioHoldings interface
       interface RawHolding {

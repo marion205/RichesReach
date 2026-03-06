@@ -190,9 +190,9 @@ function useChartSeries(data?: { stockChartData?: { data?: GqlBar[]; indicators?
   
   const rows = data?.stockChartData?.data ?? [];
   const indicators = data?.stockChartData?.indicators;
-  
-  // ✅ If no data and we have symbol/interval, generate mock data as fallback
-  const useMockData = rows.length === 0 && symbol && interval;
+  const isDemo = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+  // Only use mock chart data in demo mode (pitch events). Otherwise use real data only.
+  const useMockData = isDemo && rows.length === 0 && !!symbol && !!interval;
   
   return useMemo(() => {
     // ✅ Use mock data if no real data available
@@ -1089,18 +1089,14 @@ interface OptionOrder {
     };
   }, [researchSymbol]);
 
-  // Use mock data if timeout or error - always return data, never null
+  // In demo mode: use mock research when no real data. Otherwise: real data only.
+  const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
   const effectiveResearchData = useMemo(() => {
-    if (researchData?.researchHub) {
-      return researchData; // Use real data if available
-    }
-    // Always return mock data if no real data available (loading, timeout, or error)
-    return getMockResearchData();
+    if (researchData?.researchHub) return researchData;
+    if (IS_DEMO) return getMockResearchData();
+    return null;
   }, [researchData, researchLoadingTimeout, researchError, researchLoading, getMockResearchData]);
-  
-  // Always show mock data immediately - never show loading state for research
-  // The mock data provides instant feedback while real data loads in background
-  const effectiveResearchLoading = false;
+  const effectiveResearchLoading = !IS_DEMO && !effectiveResearchData && researchLoading;
 
   // ✅ Fix #3: Only load chart when on research tab AND have symbol
   // Removed researchData check since effectiveResearchData always has mock data

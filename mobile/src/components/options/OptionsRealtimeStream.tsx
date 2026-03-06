@@ -71,34 +71,11 @@ export default function OptionsRealtimeStream({ symbol, contractSymbol }: Option
 
     if (!symbol) return;
 
-    // Non-demo: simulate real-time updates with polling
-    const connectWebSocket = () => {
-      setIsConnected(true);
-      const updateInterval = setInterval(() => {
-        const mockData: StreamData = {
-          bid: 2.40 + Math.random() * 0.1,
-          ask: 2.50 + Math.random() * 0.1,
-          last: 2.45 + Math.random() * 0.1,
-          volume: Math.floor(1000 + Math.random() * 500),
-          delta: 0.5 + (Math.random() - 0.5) * 0.1,
-          gamma: 0.02 + (Math.random() - 0.5) * 0.01,
-          theta: -0.05 + (Math.random() - 0.5) * 0.02,
-          vega: 0.1 + (Math.random() - 0.5) * 0.05,
-          impliedVolatility: 0.25 + (Math.random() - 0.5) * 0.05,
-          timestamp: new Date().toISOString(),
-        };
-        setStreamData(mockData);
-        setLastUpdate(new Date());
-      }, 2000);
-      return () => {
-        clearInterval(updateInterval);
-        setIsConnected(false);
-      };
-    };
-
-    const cleanup = connectWebSocket();
+    // Non-demo: use real live data only. Do not show mock/simulated stream.
+    // Leave streamData null so UI shows "Connecting to real-time feed..." until a real feed is integrated.
+    setIsConnected(false);
+    setStreamData(null);
     return () => {
-      if (cleanup) cleanup();
       if (wsRef.current) wsRef.current.close();
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
     };

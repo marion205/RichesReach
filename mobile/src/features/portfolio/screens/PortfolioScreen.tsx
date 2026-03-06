@@ -345,29 +345,28 @@ setRefreshing(false);
     // Continue to render with demo data instead of showing error screen
   }
   
-  // Fallback demo data when backend has no portfolios yet or on error
-  // Use comprehensive mock data that matches chart values
-  const mockPortfoliosData = getMockMyPortfolios();
-  const demoPortfolios = mockPortfoliosData.portfolios.map(p => ({
-    name: p.name,
-    totalValue: p.totalValue,
-    holdingsCount: p.holdingsCount,
-    holdings: p.holdings.map(h => ({
-      id: h.id,
-      stock: {
-        symbol: h.stock.symbol,
-        companyName: h.stock.companyName,
-        currentPrice: h.stock.currentPrice,
-      },
-      shares: h.shares,
-      averagePrice: h.averagePrice,
-      currentPrice: h.currentPrice,
-      totalValue: h.totalValue,
-    })),
-  }));
-  
-  // Use data if available, otherwise fall back to demo data
+  // Demo data only for pitch/demo mode (EXPO_PUBLIC_DEMO_MODE=true). Otherwise use real data only.
   const rawPortfolios = portfolioData?.myPortfolios?.portfolios || [];
+  const useDemoData = IS_DEMO && (rawPortfolios.length === 0 || portfolioError);
+  const demoPortfolios = useDemoData
+    ? getMockMyPortfolios().portfolios.map(p => ({
+        name: p.name,
+        totalValue: p.totalValue,
+        holdingsCount: p.holdingsCount,
+        holdings: p.holdings.map(h => ({
+          id: h.id,
+          stock: {
+            symbol: h.stock.symbol,
+            companyName: h.stock.companyName,
+            currentPrice: h.stock.currentPrice,
+          },
+          shares: h.shares,
+          averagePrice: h.averagePrice,
+          currentPrice: h.currentPrice,
+          totalValue: h.totalValue,
+        })),
+      }))
+    : [];
   const portfolios = (rawPortfolios.length > 0 && !portfolioError) ? rawPortfolios : demoPortfolios;
   const totalValue = (portfolioData?.myPortfolios?.totalValue != null)
     ? portfolioData.myPortfolios.totalValue

@@ -210,13 +210,13 @@ const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigateTo: navigateToPro
   const [likeSignal] = useMutation(LIKE_SIGNAL);
   const [commentSignal] = useMutation(COMMENT_SIGNAL);
 
-  // Use real data from GraphQL or fallback to mock data for demo
+  // Use real data from GraphQL. Mock signals only in demo mode (pitch events).
+  const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
   const signals: SwingSignal[] = useMemo(() => {
     if (data?.swingSignals && data.swingSignals.length > 0) {
       return data.swingSignals;
     }
-    // If loading timed out or no data, use mock data for demo
-    if (loadingTimeout || (error && !data?.swingSignals)) {
+    if (IS_DEMO && (loadingTimeout || (error && !data?.swingSignals))) {
       return getMockSignals();
     }
     return [];

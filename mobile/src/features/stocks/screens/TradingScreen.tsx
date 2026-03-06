@@ -293,11 +293,12 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     },
   ];
 
-  // Use Alpaca data when available, fallback to legacy or mock data
+  // Use real Alpaca/GraphQL data. Mock account/positions only in demo mode (pitch events).
+  const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
   const account = useMemo(() => {
     if (alpacaAccount) return alpacaAccount;
     if (accountData?.tradingAccount) return accountData.tradingAccount;
-    if (accountLoadingTimeout || (!accountLoading && !accountData)) {
+    if (IS_DEMO && (accountLoadingTimeout || (!accountLoading && !accountData))) {
       return getMockAccount();
     }
     return null;
@@ -308,7 +309,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     if (positionsData?.tradingPositions && positionsData.tradingPositions.length > 0) {
       return positionsData.tradingPositions;
     }
-    if (positionsLoadingTimeout || (!positionsLoading && !positionsData?.tradingPositions)) {
+    if (IS_DEMO && (positionsLoadingTimeout || (!positionsLoading && !positionsData?.tradingPositions))) {
       return getMockPositions();
     }
     return [];
