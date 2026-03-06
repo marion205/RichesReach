@@ -200,6 +200,91 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
   Stocks:          { stocks: DEMO_STOCKS },
   MyWatchlist:     { myWatchlist: [] },
 
+  // Rust Sentiment Analysis (used by RustSentimentWidget on Stock Detail insights tab)
+  GetRustSentimentAnalysis: {
+    rustSentimentAnalysis: {
+      symbol: 'NVDA',
+      overallSentiment: 'BULLISH',
+      sentimentScore: 0.72,
+      newsSentiment: {
+        score: 0.75,
+        articleCount: 24,
+        positiveArticles: 16,
+        negativeArticles: 4,
+        neutralArticles: 4,
+        topHeadlines: [
+          'NVDA beats Q4 earnings estimates by wide margin',
+          'Analysts raise price targets following strong results',
+          'AI chip demand drives record revenue quarter',
+        ],
+        __typename: 'NewsSentimentType',
+      },
+      socialSentiment: {
+        score: 0.68,
+        mentions24h: 48200,
+        positiveMentions: 31000,
+        negativeMentions: 8400,
+        engagementScore: 0.82,
+        trending: true,
+        __typename: 'SocialSentimentType',
+      },
+      confidence: 0.88,
+      timestamp: new Date().toISOString(),
+      __typename: 'SentimentAnalysisType',
+    },
+  },
+
+  // Stock Moments (used by StockMomentsIntegration on Chart tab - Key Moments view)
+  GetStockMoments: (() => {
+    const now = Date.now();
+    return {
+      stockMoments: [
+        {
+          id: 'moment-earnings-1',
+          symbol: 'NVDA',
+          timestamp: new Date(now - 7 * 86400000).toISOString(),
+          category: 'EARNINGS',
+          title: 'Q4 Earnings Beat Expectations',
+          quickSummary: 'NVDA reported EPS of $5.16 vs $4.64 estimated — 11% beat',
+          deepSummary: 'NVIDIA crushed Q4 estimates driven by explosive data center revenue growth of 409% YoY. CEO Jensen Huang cited unprecedented AI infrastructure demand. Management guided Q1 revenue above consensus, sending shares up 9% after-hours.',
+          importanceScore: 0.95,
+          sourceLinks: ['https://example.com/nvda-earnings'],
+          impact1D: 9.2,
+          impact7D: 14.8,
+          __typename: 'StockMomentType',
+        },
+        {
+          id: 'moment-analyst-1',
+          symbol: 'NVDA',
+          timestamp: new Date(now - 18 * 86400000).toISOString(),
+          category: 'ANALYST',
+          title: 'Multiple Analysts Raise Price Targets',
+          quickSummary: '7 analysts raised targets, average new PT: $1,050',
+          deepSummary: 'Following the earnings beat, Goldman Sachs, Morgan Stanley, and five other firms raised their NVDA price targets. The consensus PT moved to $1,050 from $875, implying 20% upside. All firms maintained Buy/Overweight ratings.',
+          importanceScore: 0.78,
+          sourceLinks: ['https://example.com/nvda-pt-raises'],
+          impact1D: 2.4,
+          impact7D: 5.1,
+          __typename: 'StockMomentType',
+        },
+        {
+          id: 'moment-product-1',
+          symbol: 'NVDA',
+          timestamp: new Date(now - 32 * 86400000).toISOString(),
+          category: 'PRODUCT',
+          title: 'Blackwell Architecture Launch',
+          quickSummary: 'Next-gen GPU architecture unveiled at GTC conference',
+          deepSummary: 'NVIDIA unveiled its Blackwell GPU architecture at the GTC Developer Conference. The new chips promise 2.5x performance improvement over Hopper for AI training workloads. Major cloud providers announced immediate adoption plans.',
+          importanceScore: 0.88,
+          sourceLinks: ['https://example.com/nvda-blackwell'],
+          impact1D: 5.7,
+          impact7D: 11.3,
+          __typename: 'StockMomentType',
+        },
+      ],
+    };
+  })(),
+
   // Stock Detail — Analysis (used by StockDetailScreen insights tab)
   GetStockAnalysis: (() => {
     const now = Date.now();
