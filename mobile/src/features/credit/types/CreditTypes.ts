@@ -192,6 +192,24 @@ export interface CreditSnapshot {
     ageMonths: number;
     isOldest: boolean;
   }>;
+
+  // Feature 2: Per-bureau score tracking for arbitrage
+  bureauScores?: {
+    experian?: number;
+    equifax?: number;
+    transunion?: number;
+    lastPulled?: string;
+  };
+
+  // Feature 3: Unreported payments (rent, utilities, subscriptions)
+  unreportedPayments?: Array<{
+    type: 'rent' | 'utility' | 'subscription' | 'insurance';
+    description: string;
+    monthlyAmount: number;
+    reportingService?: string;
+    estimatedPointsGain: number;
+    estimatedTimeToImpact: string;
+  }>;
 }
 
 // Statement-Date Utilization Planner
@@ -323,7 +341,8 @@ export interface OracleInsight {
   description: string;
   confidence: number; // 0-1
   timeHorizon: string; // e.g., "Q4 2025"
-  source: 'crowdsourced' | 'ai' | 'market_data' | 'real_time' | 'ai_behavioral_model' | 'velocity_tracker';
+  source: 'crowdsourced' | 'ai' | 'market_data' | 'real_time' | 'ai_behavioral_model' | 'velocity_tracker'
+       | 'negotiation_intel' | 'bureau_arbitrage' | 'community_data' | 'lender_intel' | 'shadow_score';
   location?: string; // city/region
   affectedFactors: string[];
   recommendation: string;
@@ -338,6 +357,77 @@ export interface OracleInsight {
     detected: boolean;
     adjusted: boolean;
     explanation: string;
+  };
+
+  // Feature 1: Negotiation Intelligence
+  negotiationScript?: {
+    creditor: string;
+    scriptText: string;
+    targetItem: string;
+    successRate: number;
+    bestTimeToCall?: string;
+  };
+
+  // Feature 2: Bureau Score Arbitrage
+  bureauArbitrage?: {
+    highBureau: 'experian' | 'equifax' | 'transunion';
+    highScore: number;
+    lowBureau: 'experian' | 'equifax' | 'transunion';
+    lowScore: number;
+    scoreDelta: number;
+    recommendedLenders: string[];
+    windowDays: number;
+  };
+
+  // Feature 4: Real Dollar Impact Forecasting
+  dollarImpact?: {
+    loanType: 'auto' | 'mortgage' | 'personal' | 'student';
+    loanAmount: number;
+    currentRate: number;
+    qualifyingRate: number;
+    savings: number;
+    projectedScoreNeeded: number;
+    timeToQualify: string;
+  };
+
+  // Feature 5: Credit Dead Zone Map
+  scoreUnlocks?: Array<{
+    scoreThreshold: number;
+    products: Array<{
+      name: string;
+      type: 'card' | 'mortgage' | 'auto' | 'personal_loan';
+      rate?: string;
+      description: string;
+    }>;
+  }>;
+
+  // Feature 6: Soft-Pull Lender Intelligence
+  softPullOffers?: Array<{
+    lender: string;
+    productName: string;
+    apr: string;
+    limit?: string;
+    preQualified: boolean;
+    expiresInDays?: number;
+  }>;
+
+  // Feature 7: Shadow Score Coaching
+  scoringModelInsight?: {
+    model: 'FICO8' | 'FICO9' | 'FICO_Auto' | 'FICO_Mortgage' | 'VantageScore3';
+    modelScore: number;
+    relevantFor: string;
+    keyDifferences: string[];
+    primaryDrag: string;
+  };
+
+  // Feature 8: Community Credit Playbooks
+  communityPlaybook?: {
+    peerGroup: string;
+    sampleSize: number;
+    action: string;
+    result: string;
+    timeline: string;
+    successRate: number;
   };
 }
 

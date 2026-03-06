@@ -698,6 +698,42 @@ export const DEMO_CREDIT_SNAPSHOT = {
     },
   ],
   shield: [],
+
+  // Feature 2: Per-bureau scores for arbitrage (Equifax notably higher)
+  bureauScores: {
+    experian:   720,
+    equifax:    763,   // +43 pts higher — arbitrage window is open
+    transunion: 737,
+    lastPulled: new Date().toISOString(),
+  },
+
+  // Feature 3: Unreported recurring payments
+  unreportedPayments: [
+    {
+      type: 'rent',
+      description: 'Monthly Rent',
+      monthlyAmount: 1400,
+      reportingService: 'Experian RentBureau',
+      estimatedPointsGain: 22,
+      estimatedTimeToImpact: '45 days',
+    },
+    {
+      type: 'utility',
+      description: 'Electric & Gas Bills',
+      monthlyAmount: 185,
+      reportingService: 'Experian Boost',
+      estimatedPointsGain: 8,
+      estimatedTimeToImpact: '2 weeks',
+    },
+    {
+      type: 'subscription',
+      description: 'Netflix, Spotify, Disney+',
+      monthlyAmount: 47,
+      reportingService: 'Experian Boost',
+      estimatedPointsGain: 4,
+      estimatedTimeToImpact: '2 weeks',
+    },
+  ],
 };
 
 // ─── Budget / Spending ────────────────────────────────────────────────────────
