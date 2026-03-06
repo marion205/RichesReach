@@ -43,8 +43,15 @@ export default function ConsumerSpendingSurgeChart({
       return `${date.getMonth() + 1}/${date.getDate()}`;
     });
 
-    const spendingChanges = spendingData.map((d) => d.spendingChange * 100); // Convert to %
-    const priceChanges = spendingData.map((d) => d.priceChange * 100); // Convert to %
+    // Guard against undefined/NaN — replace with 0 so chart never crashes
+    const spendingChanges = spendingData.map((d) => {
+      const v = (d.spendingChange ?? 0) * 100;
+      return isFinite(v) ? v : 0;
+    });
+    const priceChanges = spendingData.map((d) => {
+      const v = (d.priceChange ?? 0) * 100;
+      return isFinite(v) ? v : 0;
+    });
 
     return {
       labels: labels.slice(-12), // Last 12 data points
@@ -77,8 +84,8 @@ export default function ConsumerSpendingSurgeChart({
   }
 
   const latestSpending = spendingData[spendingData.length - 1];
-  const spendingGrowth = latestSpending.spendingChange * 100;
-  const priceGrowth = latestSpending.priceChange * 100;
+  const spendingGrowth = isFinite((latestSpending.spendingChange ?? 0) * 100) ? (latestSpending.spendingChange ?? 0) * 100 : 0;
+  const priceGrowth = isFinite((latestSpending.priceChange ?? 0) * 100) ? (latestSpending.priceChange ?? 0) * 100 : 0;
   const correlation = spendingGrowth > 0 && priceGrowth > 0 ? 'positive' : 'negative';
 
   return (

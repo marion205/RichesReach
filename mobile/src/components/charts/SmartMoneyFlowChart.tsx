@@ -64,7 +64,11 @@ export default function SmartMoneyFlowChart({
     return `${date.getMonth() + 1}/${date.getDate()}`;
   });
 
-  const priceDataForChart = mergedData.slice(-20).map((d) => d.price);
+  // Guard against undefined/NaN prices — replace with 0 so the chart never crashes
+  const priceDataForChart = mergedData.slice(-20).map((d) => {
+    const v = d.price;
+    return typeof v === 'number' && isFinite(v) ? v : 0;
+  });
 
   const chartData = {
     labels: chartLabels,

@@ -203,20 +203,43 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
   // Stock Detail — Analysis (used by StockDetailScreen insights tab)
   GetStockAnalysis: (() => {
     const now = Date.now();
-    const spendingData = Array.from({ length: 12 }, (_, i) => ({
-      date: new Date(now - (11 - i) * 30 * 86400000).toISOString().split('T')[0],
-      spending: Math.floor(800000000 + Math.random() * 400000000),
-      __typename: 'SpendingDataPoint',
-    }));
-    const optionsFlowData = Array.from({ length: 8 }, (_, i) => ({
-      date: new Date(now - i * 86400000).toISOString().split('T')[0],
-      callVolume: Math.floor(50000 + Math.random() * 100000),
-      putVolume: Math.floor(20000 + Math.random() * 60000),
-      callOI: Math.floor(200000 + Math.random() * 300000),
-      putOI: Math.floor(100000 + Math.random() * 200000),
-      unusualActivity: Math.random() > 0.6,
-      __typename: 'OptionsFlowDataPoint',
-    }));
+    // spendingData needs: date, spending, spendingChange, price, priceChange
+    // ConsumerSpendingSurgeChart multiplies spendingChange/priceChange * 100 for display
+    let basePrice = 840;
+    let baseSpending = 820000000;
+    const spendingData = Array.from({ length: 12 }, (_, i) => {
+      const spendingChange = parseFloat((0.04 + (Math.random() - 0.45) * 0.06).toFixed(4));
+      const priceChange = parseFloat((0.03 + (Math.random() - 0.48) * 0.08).toFixed(4));
+      baseSpending = Math.round(baseSpending * (1 + spendingChange));
+      basePrice = parseFloat((basePrice * (1 + priceChange)).toFixed(2));
+      return {
+        date: new Date(now - (11 - i) * 30 * 86400000).toISOString().split('T')[0],
+        spending: baseSpending,
+        spendingChange,
+        price: basePrice,
+        priceChange,
+        __typename: 'SpendingDataPoint',
+      };
+    });
+    // optionsFlowData needs: date, price, unusualVolumePercent, sweepCount, putCallRatio
+    // SmartMoneyFlowChart uses opt.price for the price line on the chart
+    let optPrice = 870;
+    const optionsFlowData = Array.from({ length: 8 }, (_, i) => {
+      optPrice = parseFloat((optPrice + (Math.random() - 0.47) * 12).toFixed(2));
+      return {
+        date: new Date(now - (7 - i) * 86400000).toISOString().split('T')[0],
+        price: optPrice,
+        unusualVolumePercent: parseFloat((15 + Math.random() * 40).toFixed(1)),
+        sweepCount: Math.floor(Math.random() * 5),
+        putCallRatio: parseFloat((0.6 + Math.random() * 0.8).toFixed(2)),
+        callVolume: Math.floor(50000 + Math.random() * 100000),
+        putVolume: Math.floor(20000 + Math.random() * 60000),
+        callOI: Math.floor(200000 + Math.random() * 300000),
+        putOI: Math.floor(100000 + Math.random() * 200000),
+        unusualActivity: Math.random() > 0.6,
+        __typename: 'OptionsFlowDataPoint',
+      };
+    });
     return {
       rustStockAnalysis: {
         symbol: 'NVDA',
