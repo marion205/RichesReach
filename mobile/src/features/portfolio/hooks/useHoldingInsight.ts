@@ -1,12 +1,15 @@
 /**
  * useHoldingInsight - Fetch AI insights for a holding
  * Phase 3: AI insights with caching
- * 
+ *
  * Falls back gracefully if react-query is not available
  */
 
 import React from 'react';
 import { API_BASE } from '../../../config/api';
+import { getDemoHoldingInsight } from '../../../services/demoMockData';
+
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
 
 // Graceful fallback if @tanstack/react-query is not available
 let useQuery: any = null;
@@ -45,6 +48,15 @@ async function fetchHoldingInsight(ticker: string): Promise<HoldingInsight> {
  * Caches for 5-15 minutes, falls back gracefully
  */
 export function useHoldingInsight(ticker: string, enabled: boolean = true) {
+  // Demo mode: return rich mock insight immediately — no network call needed
+  if (IS_DEMO) {
+    return {
+      data: getDemoHoldingInsight(ticker) as HoldingInsight,
+      isLoading: false,
+      error: null,
+    };
+  }
+
   // Fallback if react-query not available
   if (!useQuery) {
     const [data, setData] = React.useState<HoldingInsight | null>(null);
