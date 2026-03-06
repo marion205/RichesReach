@@ -856,10 +856,6 @@ return (
               </View>
             )}
           </View>
-          {/* Narrative */}
-          {!!riskReport.narrative && (
-            <Text style={styles.riskNarrative}>{riskReport.narrative}</Text>
-          )}
         </View>
       );
     })()}
@@ -1668,15 +1664,6 @@ analyticsButtonText: {
   riskMetricValue: {
     fontSize: 18,
     fontWeight: '700',
-  },
-  riskNarrative: {
-    fontSize: 13,
-    color: '#4B5563',
-    lineHeight: 19,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    paddingTop: 10,
-    marginTop: 2,
   },
 });
 
