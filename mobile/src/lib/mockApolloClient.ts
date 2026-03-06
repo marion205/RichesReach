@@ -31,6 +31,8 @@ import {
   DEMO_QUANT_SCREENER,
   DEMO_BUDGET_DATA,
   DEMO_SPENDING_ANALYSIS,
+  DEMO_TRANSPARENCY_DASHBOARD,
+  DEMO_TRANSPARENCY_PERFORMANCE,
 } from '../services/demoMockData';
 
 // ─── Operation → mock data map ────────────────────────────────────────────────
@@ -88,6 +90,10 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
   // RAHA
   GetRAHASignals:  { rahaSignals: DEMO_RAHA_SIGNALS },
   GetRAHAMetrics:  { rahaMetrics: DEMO_RAHA_METRICS },
+
+  // Transparency Dashboard
+  TransparencyDashboard:   { transparencyDashboard: DEMO_TRANSPARENCY_DASHBOARD },
+  TransparencyPerformance: { transparencyPerformance: DEMO_TRANSPARENCY_PERFORMANCE },
   GetStrategies:   { strategies: [] },
   GetUserBacktests: { userBacktests: [] },
 

@@ -134,8 +134,10 @@ export default function TransparencyDashboardCard({ style, limit = 50 }: Transpa
     return (
       <View style={[styles.container, style]}>
         <View style={styles.header}>
-          <Icon name="eye" size={20} color="#1D4ED8" />
-          <Text style={styles.title}>Transparency Dashboard</Text>
+          <View style={styles.headerTop}>
+            <Icon name="eye" size={20} color="#1D4ED8" />
+            <Text style={styles.title}>Transparency Dashboard</Text>
+          </View>
         </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color="#1D4ED8" />
@@ -149,8 +151,10 @@ export default function TransparencyDashboardCard({ style, limit = 50 }: Transpa
     return (
       <View style={[styles.container, style]}>
         <View style={styles.header}>
-          <Icon name="eye" size={20} color="#1D4ED8" />
-          <Text style={styles.title}>Transparency Dashboard</Text>
+          <View style={styles.headerTop}>
+            <Icon name="eye" size={20} color="#1D4ED8" />
+            <Text style={styles.title}>Transparency Dashboard</Text>
+          </View>
         </View>
         <View style={styles.errorContainer}>
           <Icon name="alert-circle" size={16} color="#EF4444" />
@@ -168,10 +172,9 @@ export default function TransparencyDashboardCard({ style, limit = 50 }: Transpa
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
       <View style={styles.header}>
-        <Icon name="eye" size={20} color="#1D4ED8" />
-        <Text style={styles.title}>Transparency Dashboard</Text>
-        <Text style={styles.subtitle}>Public Performance Metrics</Text>
-        <View style={styles.badgeContainer}>
+        <View style={styles.headerTop}>
+          <Icon name="eye" size={20} color="#1D4ED8" />
+          <Text style={styles.title}>Transparency Dashboard</Text>
           <View style={[
             styles.badge,
             { backgroundColor: tradingMode === 'LIVE' ? '#10B981' : '#F59E0B' }
@@ -179,6 +182,7 @@ export default function TransparencyDashboardCard({ style, limit = 50 }: Transpa
             <Text style={styles.badgeText}>{tradingMode}</Text>
           </View>
         </View>
+        <Text style={styles.subtitle}>Public Performance Metrics</Text>
       </View>
 
       {/* Performance Summary */}
@@ -429,9 +433,12 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   header: {
+    marginBottom: 16,
+  },
+  headerTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 4,
   },
   title: {
     fontSize: 18,
@@ -439,11 +446,12 @@ const styles = StyleSheet.create({
     color: '#1F2937',
     marginLeft: 8,
     flex: 1,
+    flexShrink: 1,
   },
   subtitle: {
     fontSize: 12,
     color: '#6B7280',
-    marginLeft: 8,
+    marginLeft: 28, // align under title (icon width 20 + marginLeft 8)
   },
   loadingContainer: {
     padding: 20,
@@ -662,9 +670,6 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     marginTop: 4,
     textAlign: 'center',
-  },
-  badgeContainer: {
-    marginTop: 4,
   },
   badge: {
     paddingHorizontal: 8,

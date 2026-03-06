@@ -525,6 +525,54 @@ export const DEMO_QUANT_SCREENER = [
   { symbol: 'XOM',  companyName: 'Exxon Mobil', sector: 'Energy', marketCap: 500_000_000_000, peRatio: 14.2, beginnerFriendlyScore: 82, currentPrice: 118.60, mlScore: 0.74, riskLevel: 'low', growthPotential: 0.61, score: 76, momentum: 0.62, value: 0.81, quality: 0.77, __typename: 'ScreenerResult' },
 ];
 
+// ─── Transparency Dashboard ───────────────────────────────────────────────────
+const now = new Date();
+const daysAgo = (d: number) => new Date(now.getTime() - d * 86_400_000).toISOString();
+
+export const DEMO_TRANSPARENCY_SIGNALS = [
+  { id: 1, symbol: 'NVDA', action: 'BUY', confidence: 0.89, entryPrice: 820.00, entryTimestamp: daysAgo(18), exitPrice: 875.40, exitTimestamp: daysAgo(11), pnl: 554.00, pnlPercent: 0.0677, status: 'CLOSED', reasoning: 'Blackwell ramp confirmed; data-centre demand exceeding supply estimates.', tradingMode: 'PAPER', signalId: 'sig-001', __typename: 'SignalRecordType' },
+  { id: 2, symbol: 'AAPL', action: 'BUY', confidence: 0.81, entryPrice: 172.00, entryTimestamp: daysAgo(15), exitPrice: 180.00, exitTimestamp: daysAgo(8), pnl: 80.00, pnlPercent: 0.0465, status: 'CLOSED', reasoning: 'Services revenue beat; Apple Intelligence upgrade cycle beginning.', tradingMode: 'PAPER', signalId: 'sig-002', __typename: 'SignalRecordType' },
+  { id: 3, symbol: 'TSLA', action: 'SELL', confidence: 0.74, entryPrice: 210.00, entryTimestamp: daysAgo(12), exitPrice: 196.50, exitTimestamp: daysAgo(5), pnl: 135.00, pnlPercent: 0.0643, status: 'CLOSED', reasoning: 'Gross margin compression below 18%; BYD volume overtake confirmed.', tradingMode: 'PAPER', signalId: 'sig-003', __typename: 'SignalRecordType' },
+  { id: 4, symbol: 'MSFT', action: 'BUY', confidence: 0.83, entryPrice: 410.00, entryTimestamp: daysAgo(9), exitPrice: null, exitTimestamp: null, pnl: null, pnlPercent: null, status: 'OPEN', reasoning: 'Azure re-acceleration; Copilot enterprise seats growing faster than consensus.', tradingMode: 'PAPER', signalId: 'sig-004', __typename: 'SignalRecordType' },
+  { id: 5, symbol: 'META', action: 'BUY', confidence: 0.79, entryPrice: 495.00, entryTimestamp: daysAgo(22), exitPrice: 512.30, exitTimestamp: daysAgo(14), pnl: 173.00, pnlPercent: 0.0350, status: 'CLOSED', reasoning: 'Ad ROAS recovery; Llama inference cost cuts boosting margin outlook.', tradingMode: 'PAPER', signalId: 'sig-005', __typename: 'SignalRecordType' },
+  { id: 6, symbol: 'COIN', action: 'ABSTAIN', confidence: 0.52, entryPrice: null, entryTimestamp: daysAgo(20), exitPrice: null, exitTimestamp: null, pnl: null, pnlPercent: null, status: 'ABSTAINED', reasoning: 'Regulatory uncertainty too high; risk/reward insufficient at current levels.', tradingMode: 'PAPER', signalId: 'sig-006', __typename: 'SignalRecordType' },
+  { id: 7, symbol: 'LLY', action: 'BUY', confidence: 0.77, entryPrice: 750.00, entryTimestamp: daysAgo(30), exitPrice: 780.00, exitTimestamp: daysAgo(19), pnl: 300.00, pnlPercent: 0.0400, status: 'CLOSED', reasoning: 'GLP-1 prescription data accelerating; pipeline FDA catalyst upcoming.', tradingMode: 'PAPER', signalId: 'sig-007', __typename: 'SignalRecordType' },
+  { id: 8, symbol: 'SPY', action: 'BUY', confidence: 0.71, entryPrice: 510.00, entryTimestamp: daysAgo(7), exitPrice: null, exitTimestamp: null, pnl: null, pnlPercent: null, status: 'OPEN', reasoning: 'Broad market breadth improving; 68% of S&P 500 above 200-day MA.', tradingMode: 'PAPER', signalId: 'sig-008', __typename: 'SignalRecordType' },
+];
+
+export const DEMO_TRANSPARENCY_STATISTICS = {
+  totalSignals: 8,
+  closedSignals: 5,
+  openSignals: 2,
+  abstainedSignals: 1,
+  winRate: 1.0,
+  totalWins: 5,
+  totalLosses: 0,
+  avgWin: 248.40,
+  avgLoss: 0,
+  totalPnl: 1242.00,
+  profitFactor: null,
+  lastUpdated: now.toISOString(),
+  __typename: 'TransparencyStatisticsType',
+};
+
+export const DEMO_TRANSPARENCY_DASHBOARD = {
+  signals: DEMO_TRANSPARENCY_SIGNALS,
+  statistics: DEMO_TRANSPARENCY_STATISTICS,
+  __typename: 'TransparencyDashboardType',
+};
+
+export const DEMO_TRANSPARENCY_PERFORMANCE = {
+  periodDays: 30,
+  totalSignals: 8,
+  winRate: 0.833,
+  totalPnl: 1242.00,
+  avgPnl: 248.40,
+  sharpeRatio: 1.87,
+  maxDrawdown: -0.042,
+  __typename: 'PerformanceSummaryType',
+};
+
 // ─── Budget / Spending ────────────────────────────────────────────────────────
 export const DEMO_BUDGET_DATA = {
   monthlyIncome: 8500,
