@@ -187,16 +187,94 @@ const HANDLERS: Handler[] = [
     return null;
   },
 
-  // Options copilot
-  (url) => {
-    if (url.includes('/api/options/copilot')) {
+  // Options copilot + AI options REST endpoints
+  (url, options) => {
+    if (!url.includes('/api/options') && !url.includes('/api/ai-options')) return null;
+
+    // AI Options — recommendations (POST /api/ai-options/recommendations)
+    if (url.includes('/api/ai-options/recommendations')) {
       return jsonResponse({
-        recommendations: [],
-        chain: [],
-        pnl: { max_profit: 450, max_loss: 150, breakeven: 178.50 },
-        risk: { delta: 0.42, gamma: 0.018, theta: -3.2, vega: 12.4 },
+        symbol: 'AAPL',
+        current_price: 189.30,
+        generated_at: new Date().toISOString(),
+        total_recommendations: 2,
+        market_analysis: {
+          symbol: 'AAPL', current_price: 189.30, volatility: 0.22, implied_volatility: 0.26,
+          volume: 52000000, market_cap: 2940000000000, sector: 'Technology',
+          sentiment_score: 0.68, trend_direction: 'bullish',
+          support_levels: [182.00, 178.50], resistance_levels: [196.00, 202.50],
+          earnings_date: '2026-05-01', dividend_yield: 0.005, beta: 1.2,
+        },
+        recommendations: [
+          {
+            strategy_name: 'Bull Call Spread',
+            strategy_type: 'speculation',
+            confidence_score: 0.82,
+            symbol: 'AAPL', current_price: 189.30, risk_score: 0.32,
+            days_to_expiration: 21,
+            created_at: new Date().toISOString(),
+            options: [
+              { type: 'call', action: 'buy',  strike: 190, expiration: '2026-04-18', premium: 4.20, quantity: 1 },
+              { type: 'call', action: 'sell', strike: 195, expiration: '2026-04-18', premium: 2.10, quantity: 1 },
+            ],
+            analytics: { max_profit: 540, max_loss: 210, probability_of_profit: 0.64, expected_return: 0.18, breakeven: 192.10 },
+            reasoning: {
+              market_outlook: 'Bullish momentum with IV rank at 42%',
+              strategy_rationale: 'Defined-risk spread captures upside to $195 resistance while limiting max loss to premium paid.',
+              risk_factors: ['Earnings volatility', 'Tech sector rotation'],
+              key_benefits: ['Defined max loss', 'Positive theta after 10 DTE', 'Lower cost than outright call'],
+            },
+          },
+          {
+            strategy_name: 'Cash-Secured Put',
+            strategy_type: 'income',
+            confidence_score: 0.75,
+            symbol: 'AAPL', current_price: 189.30, risk_score: 0.25,
+            days_to_expiration: 14,
+            created_at: new Date().toISOString(),
+            options: [
+              { type: 'put', action: 'sell', strike: 185, expiration: '2026-04-04', premium: 2.20, quantity: 1 },
+            ],
+            analytics: { max_profit: 220, max_loss: 18280, probability_of_profit: 0.72, expected_return: 0.012, breakeven: 182.80 },
+            reasoning: {
+              market_outlook: 'Support holds at $182 with strong buyer demand',
+              strategy_rationale: 'Sell put at support level to collect premium. If assigned, acquire AAPL at effective cost of $182.80.',
+              risk_factors: ['Broad market selloff', 'Support level break'],
+              key_benefits: ['High probability of profit', 'Generates income', 'Gets long AAPL at discount if assigned'],
+            },
+          },
+        ],
       });
     }
+
+    // AI Options — market analysis (POST /api/ai-options/market-analysis)
+    if (url.includes('/api/ai-options/market-analysis')) {
+      return jsonResponse({
+        symbol: 'AAPL', current_price: 189.30, volatility: 0.22, implied_volatility: 0.26,
+        volume: 52000000, market_cap: 2940000000000, sector: 'Technology',
+        sentiment_score: 0.68, trend_direction: 'bullish',
+        support_levels: [182.00, 178.50], resistance_levels: [196.00, 202.50],
+        earnings_date: '2026-05-01', dividend_yield: 0.005, beta: 1.2,
+      });
+    }
+
+    // AI Options — strategy optimization, model status, health
+    if (url.includes('/api/ai-options')) {
+      return jsonResponse({ success: true, status: 'ok', message: 'Demo mode' });
+    }
+
+    // Options copilot (legacy endpoint)
+    if (url.includes('/api/options/copilot')) {
+      return jsonResponse({
+        recommendations: [
+          { strategy: 'Bull Call Spread', confidence: 0.82, max_profit: 540, max_loss: 210, breakeven: 192.10 },
+        ],
+        chain: [],
+        pnl: { max_profit: 540, max_loss: 210, breakeven: 192.10 },
+        risk: { delta: 0.48, gamma: 0.032, theta: -0.09, vega: 0.21 },
+      });
+    }
+
     return null;
   },
 

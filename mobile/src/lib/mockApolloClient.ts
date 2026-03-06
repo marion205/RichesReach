@@ -200,6 +200,188 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
   Stocks:          { stocks: DEMO_STOCKS },
   MyWatchlist:     { myWatchlist: [] },
 
+  // ── Options Intelligence (StockScreen "Options" tab) ─────────────────────────
+
+  // OneTapTrades — "Do This Exact Trade" card in OneTapTradeButton
+  GetOneTapTrades: {
+    oneTapTrades: [
+      {
+        symbol: 'AAPL',
+        strategy: 'Bull Call Spread',
+        strategyType: 'DEBIT_SPREAD',
+        entryPrice: 189.30,
+        expectedEdge: 18,
+        confidence: 82,
+        takeProfit: 205.00,
+        stopLoss: 182.00,
+        reasoning: 'Strong momentum into earnings with IV rank at 42%. Defined-risk structure limits downside while capturing upside to resistance at $205.',
+        maxLoss: 210.00,
+        maxProfit: 540.00,
+        probabilityOfProfit: 0.64,
+        daysToExpiration: 21,
+        totalCost: 210.00,
+        totalCredit: 0,
+        legs: [
+          { action: 'BUY', optionType: 'CALL', strike: 190, expiration: '2026-04-18', quantity: 1, premium: 4.20, __typename: 'OneTapLegType' },
+          { action: 'SELL', optionType: 'CALL', strike: 195, expiration: '2026-04-18', quantity: 1, premium: 2.10, __typename: 'OneTapLegType' },
+        ],
+        __typename: 'OneTapTradeType',
+      },
+    ],
+  },
+
+  // Options chain analysis — OptionChainCard and options tab overview
+  GetOptionsAnalysis: {
+    optionsAnalysis: {
+      underlyingSymbol: 'AAPL',
+      underlyingPrice: 189.30,
+      __typename: 'OptionsAnalysisType',
+      optionsChain: {
+        __typename: 'OptionsChainType',
+        expirationDates: ['2026-03-21', '2026-04-18', '2026-05-16'],
+        calls: [
+          { strike: 185, bid: 5.80, ask: 5.90, volume: 12400, expirationDate: '2026-04-18', delta: 0.62,  gamma: 0.028, theta: -0.08, vega: 0.18, impliedVolatility: 0.28, __typename: 'OptionContractType' },
+          { strike: 190, bid: 3.90, ask: 4.00, volume: 28600, expirationDate: '2026-04-18', delta: 0.48,  gamma: 0.032, theta: -0.09, vega: 0.21, impliedVolatility: 0.26, __typename: 'OptionContractType' },
+          { strike: 195, bid: 2.40, ask: 2.50, volume: 19200, expirationDate: '2026-04-18', delta: 0.35,  gamma: 0.030, theta: -0.08, vega: 0.20, impliedVolatility: 0.25, __typename: 'OptionContractType' },
+          { strike: 200, bid: 1.30, ask: 1.40, volume: 14800, expirationDate: '2026-04-18', delta: 0.22,  gamma: 0.024, theta: -0.06, vega: 0.16, impliedVolatility: 0.24, __typename: 'OptionContractType' },
+          { strike: 205, bid: 0.65, ask: 0.70, volume: 9100,  expirationDate: '2026-04-18', delta: 0.13,  gamma: 0.016, theta: -0.04, vega: 0.11, impliedVolatility: 0.23, __typename: 'OptionContractType' },
+        ],
+        puts: [
+          { strike: 185, bid: 2.10, ask: 2.20, volume: 8400,  expirationDate: '2026-04-18', delta: -0.38, gamma: 0.028, theta: -0.07, vega: 0.18, impliedVolatility: 0.29, __typename: 'OptionContractType' },
+          { strike: 190, bid: 3.60, ask: 3.70, volume: 16200, expirationDate: '2026-04-18', delta: -0.52, gamma: 0.032, theta: -0.08, vega: 0.21, impliedVolatility: 0.27, __typename: 'OptionContractType' },
+          { strike: 195, bid: 5.80, ask: 5.90, volume: 10500, expirationDate: '2026-04-18', delta: -0.65, gamma: 0.030, theta: -0.07, vega: 0.20, impliedVolatility: 0.26, __typename: 'OptionContractType' },
+          { strike: 200, bid: 8.60, ask: 8.70, volume: 7200,  expirationDate: '2026-04-18', delta: -0.78, gamma: 0.022, theta: -0.05, vega: 0.15, impliedVolatility: 0.25, __typename: 'OptionContractType' },
+        ],
+      },
+    },
+  },
+
+  // Edge Predictor Heatmap — EdgePredictorHeatmap component
+  GetEdgePredictions: {
+    edgePredictions: [
+      { strike: 190, expiration: '2026-04-18', optionType: 'CALL', currentEdge: 12.4, predictedEdge15min: 13.1, predictedEdge1hr: 14.8, predictedEdge1day: 16.2, confidence: 0.78, explanation: 'Momentum aligns with bullish regime; call skew favorable', edgeChangeDollars: 0.68, currentPremium: 3.95, predictedPremium15min: 4.12, predictedPremium1hr: 4.63, __typename: 'EdgePredictionType' },
+      { strike: 195, expiration: '2026-04-18', optionType: 'CALL', currentEdge: 8.6,  predictedEdge15min: 9.0,  predictedEdge1hr: 10.4, predictedEdge1day: 12.1, confidence: 0.72, explanation: 'Near resistance — edge improving on breakout probability', edgeChangeDollars: 0.42, currentPremium: 2.45, predictedPremium15min: 2.58, predictedPremium1hr: 2.87, __typename: 'EdgePredictionType' },
+      { strike: 185, expiration: '2026-04-18', optionType: 'PUT',  currentEdge: -4.2, predictedEdge15min: -3.8, predictedEdge1hr: -2.9, predictedEdge1day: -1.4, confidence: 0.65, explanation: 'Put edge deteriorating as support holds; IV declining', edgeChangeDollars: -0.22, currentPremium: 2.15, predictedPremium15min: 2.08, predictedPremium1hr: 1.94, __typename: 'EdgePredictionType' },
+      { strike: 185, expiration: '2026-03-21', optionType: 'CALL', currentEdge: 6.1,  predictedEdge15min: 6.4,  predictedEdge1hr: 7.0,  predictedEdge1day: 8.3,  confidence: 0.60, explanation: 'Short-dated theta decay accelerating — edge modest', edgeChangeDollars: 0.18, currentPremium: 5.82, predictedPremium15min: 5.90, predictedPremium1hr: 6.08, __typename: 'EdgePredictionType' },
+    ],
+  },
+
+  // IV Surface Forecast — IVSurfaceForecast component
+  GetIVSurfaceForecast: {
+    ivSurfaceForecast: {
+      symbol: 'AAPL',
+      currentIv: 0.26,
+      predictedIv1hr: 0.25,
+      predictedIv24hr: 0.24,
+      confidence: 0.74,
+      regime: 'NORMAL_CONTANGO',
+      timestamp: new Date().toISOString(),
+      __typename: 'IVSurfaceForecastType',
+      ivChangeHeatmap: [
+        { strike: 185, expiration: '2026-03-21', currentIv: 0.30, predictedIv1hr: 0.29, predictedIv24hr: 0.27, ivChange1hrPct: -2.1, ivChange24hrPct: -8.4, confidence: 0.72, __typename: 'IVHeatmapPoint' },
+        { strike: 190, expiration: '2026-03-21', currentIv: 0.27, predictedIv1hr: 0.26, predictedIv24hr: 0.25, ivChange1hrPct: -1.8, ivChange24hrPct: -6.2, confidence: 0.74, __typename: 'IVHeatmapPoint' },
+        { strike: 195, expiration: '2026-03-21', currentIv: 0.25, predictedIv1hr: 0.24, predictedIv24hr: 0.23, ivChange1hrPct: -1.4, ivChange24hrPct: -5.1, confidence: 0.70, __typename: 'IVHeatmapPoint' },
+        { strike: 185, expiration: '2026-04-18', currentIv: 0.29, predictedIv1hr: 0.28, predictedIv24hr: 0.27, ivChange1hrPct: -1.6, ivChange24hrPct: -5.8, confidence: 0.76, __typename: 'IVHeatmapPoint' },
+        { strike: 190, expiration: '2026-04-18', currentIv: 0.26, predictedIv1hr: 0.25, predictedIv24hr: 0.24, ivChange1hrPct: -1.2, ivChange24hrPct: -4.4, confidence: 0.78, __typename: 'IVHeatmapPoint' },
+        { strike: 195, expiration: '2026-04-18', currentIv: 0.24, predictedIv1hr: 0.24, predictedIv24hr: 0.23, ivChange1hrPct: -0.8, ivChange24hrPct: -3.6, confidence: 0.74, __typename: 'IVHeatmapPoint' },
+      ],
+    },
+  },
+
+  // Rust Options Analysis — RustOptionsAnalysisWidget
+  GetRustOptionsAnalysis: {
+    rustOptionsAnalysis: {
+      symbol: 'AAPL',
+      underlyingPrice: 189.30,
+      putCallRatio: 0.82,
+      impliedVolatilityRank: 42,
+      timestamp: new Date().toISOString(),
+      __typename: 'RustOptionsAnalysisType',
+      volatilitySurface: {
+        atmVol: 0.26, skew: -0.04, termStructure: [0.28, 0.26, 0.25, 0.24],
+        __typename: 'VolatilitySurfaceType',
+      },
+      greeks: { delta: 0.48, gamma: 0.032, theta: -0.09, vega: 0.21, rho: 0.06, __typename: 'PortfolioGreeksType' },
+      recommendedStrikes: [
+        { strike: 190, expiration: '2026-04-18', optionType: 'CALL', expectedReturn: 0.18, riskScore: 0.32, greeks: { delta: 0.48, gamma: 0.032, theta: -0.09, vega: 0.21, rho: 0.06, __typename: 'PortfolioGreeksType' }, __typename: 'RecommendedStrikeType' },
+        { strike: 185, expiration: '2026-04-18', optionType: 'PUT',  expectedReturn: 0.09, riskScore: 0.28, greeks: { delta: -0.38, gamma: 0.028, theta: -0.07, vega: 0.18, rho: -0.04, __typename: 'PortfolioGreeksType' }, __typename: 'RecommendedStrikeType' },
+      ],
+    },
+  },
+
+  // Rust Correlation Analysis — StockScreen (shows symbol vs SPY/BTC correlation)
+  GetRustCorrelationAnalysis: {
+    rustCorrelationAnalysis: {
+      primarySymbol: 'AAPL', secondarySymbol: 'SPY',
+      correlation1d: 0.72, correlation7d: 0.68, correlation30d: 0.61,
+      btcDominance: 0.12, spyCorrelation: 0.72, regime: 'RISK_ON',
+      timestamp: new Date().toISOString(),
+      __typename: 'RustCorrelationAnalysisType',
+    },
+  },
+
+  // Chan Quant Signals — ChanQuantSignalsCard on Options tab
+  ChanQuantSignals: {
+    chanQuantSignals: {
+      symbol: 'AAPL',
+      __typename: 'ChanQuantSignalsType',
+      meanReversion: {
+        deviationSigma: 1.4, reversionProbability: 0.68, expectedDrawdown: 0.035,
+        timeframeDays: 5, confidence: 0.74,
+        explanation: 'Price is 1.4σ above 20-day mean. Mean reversion probability elevated — consider selling premium or waiting for pullback entry.',
+        __typename: 'MeanReversionSignalType',
+      },
+      momentum: {
+        timingConfidence: 0.72, momentumDecayProbability: 0.28, trendPersistenceHalfLife: 8.4,
+        momentumAlignment: { daily: 0.78, weekly: 0.65, monthly: 0.52, __typename: 'MomentumAlignmentType' },
+        confidence: 0.70,
+        explanation: 'Daily and weekly momentum aligned bullish. Monthly trend less clear. Half-life suggests trend may persist ~8 more days.',
+        __typename: 'MomentumSignalType',
+      },
+      kellyPositionSize: {
+        kellyFraction: 0.22, recommendedFraction: 0.11, maxDrawdownRisk: 0.082,
+        winRate: 0.58, avgWin: 0.094, avgLoss: 0.062,
+        explanation: 'Full Kelly 22%; using half-Kelly (11%) for risk management. Win rate 58% with 1.52 win/loss ratio supports moderate position.',
+        __typename: 'KellyPositionSizeType',
+      },
+      regimeRobustness: {
+        robustnessScore: 0.76, regimesTested: 8,
+        worstRegimePerformance: -0.12, bestRegimePerformance: 0.38,
+        explanation: 'Strategy tested across 8 market regimes. Robust in 6/8 scenarios. Underperforms in high-volatility bear markets.',
+        __typename: 'RegimeRobustnessType',
+      },
+    },
+  },
+
+  // Research Hub — Research tab in StockScreen
+  Research: {
+    researchHub: {
+      symbol: 'AAPL', updatedAt: new Date().toISOString(),
+      peers: ['MSFT', 'GOOGL', 'META', 'AMZN'],
+      __typename: 'ResearchHubType',
+      company: { name: 'Apple Inc.', sector: 'Technology', marketCap: 2940000000000, country: 'US', website: 'https://apple.com', __typename: 'CompanySnapshotType' },
+      quote: { currentPrice: 189.30, change: 2.10, changePercent: 1.12, high: 190.50, low: 188.10, volume: 52000000, __typename: 'QuoteType' },
+      technicals: { rsi: 58.4, macd: 1.82, macdhistogram: 0.42, movingAverage50: 184.20, movingAverage200: 172.80, supportLevel: 182.00, resistanceLevel: 196.00, impliedVolatility: 0.26, __typename: 'TechnicalsType' },
+      sentiment: { sentiment_label: 'bullish', sentiment_score: 0.68, articleCount: 24, confidence: 0.82, __typename: 'SentimentType' },
+      macro: { vix: 16.4, market_sentiment: 'risk_on', risk_appetite: 'moderate', __typename: 'MacroType' },
+      marketRegime: { marketRegime: 'BULL_TREND', confidence: 0.72, recommendedStrategy: 'Momentum / Long Bias', __typename: 'MarketRegimeType' },
+    },
+  },
+
+  // StockScreen Chart query (uses operation name "Chart" — different from GetStockChartData)
+  Chart: (() => {
+    let price = 187;
+    const now = Date.now();
+    const data = Array.from({ length: 30 }, (_, i) => {
+      const ts = new Date(now - (29 - i) * 86400000).toISOString();
+      const open = price + (Math.random() - 0.48) * 3;
+      const close = open + (Math.random() - 0.46) * 4;
+      price = close;
+      return { timestamp: ts, open: parseFloat(open.toFixed(2)), high: parseFloat((Math.max(open, close) + Math.random() * 1.5).toFixed(2)), low: parseFloat((Math.min(open, close) - Math.random() * 1.5).toFixed(2)), close: parseFloat(close.toFixed(2)), volume: Math.floor(40000000 + Math.random() * 20000000) };
+    });
+    return { stockChartData: { symbol: 'AAPL', data, __typename: 'StockChartDataType' } };
+  })(),
+
   // Rust Sentiment Analysis (used by RustSentimentWidget on Stock Detail insights tab)
   GetRustSentimentAnalysis: {
     rustSentimentAnalysis: {
