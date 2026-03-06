@@ -31,17 +31,44 @@ export const DEMO_ME = {
 
 // ─── Market Brief (REST /api/market/brief/) ──────────────────────────────────
 export const DEMO_MARKET_BRIEF = {
-  regime: 'Bull Market — Momentum Phase',
+  regime: 'Expansion',
+  narrative: 'Equities are in a risk-on phase driven by AI capex and better-than-expected earnings. Breadth remains healthy with 68% of S&P 500 names above their 200-day MA. Fed pivot expectations are supporting valuations and the labour market remains resilient.',
   top_bullish: [
-    { symbol: 'NVDA', signal: 'AI infrastructure demand accelerating', score: 0.91 },
-    { symbol: 'MSFT', signal: 'Cloud growth beating estimates', score: 0.87 },
-    { symbol: 'AAPL', signal: 'Services revenue expanding margins', score: 0.83 },
+    {
+      ticker: 'NVDA',
+      signal: 'Bullish',
+      confidence: 'High',
+      reasons: ['AI infrastructure demand accelerating', 'Blackwell GPU ramp ahead of schedule', 'Data-centre capex cycle intact'],
+    },
+    {
+      ticker: 'MSFT',
+      signal: 'Bullish',
+      confidence: 'High',
+      reasons: ['Cloud growth beating estimates', 'Copilot monetisation gaining traction'],
+    },
+    {
+      ticker: 'AAPL',
+      signal: 'Bullish',
+      confidence: 'Medium',
+      reasons: ['Services revenue expanding margins', 'iPhone upgrade cycle approaching'],
+    },
   ],
   top_bearish: [
-    { symbol: 'TSLA', signal: 'Margin pressure from price cuts', score: -0.72 },
-    { symbol: 'COIN', signal: 'Regulatory headwinds persist', score: -0.68 },
+    {
+      ticker: 'TSLA',
+      signal: 'Bearish',
+      confidence: 'High',
+      reasons: ['Margin pressure from aggressive price cuts', 'EV demand softening in key markets'],
+    },
+    {
+      ticker: 'COIN',
+      signal: 'Bearish',
+      confidence: 'Medium',
+      reasons: ['Regulatory headwinds persist', 'Crypto volumes declining'],
+    },
   ],
-  market_summary: 'Equities are in a risk-on phase driven by AI capex and better-than-expected earnings. Breadth remains healthy with 68% of S&P 500 names above their 200-day MA.',
+  generated_at: new Date().toISOString(),
+  from_cache: false,
 };
 
 // ─── Daily Brief (REST /api/daily-brief/today) ───────────────────────────────

@@ -123,8 +123,8 @@ export const CreditOracle: React.FC<CreditOracleProps> = ({
     </TouchableOpacity>
   );
 
-  const renderSection = (title: string, emoji: string, insights: OracleInsight[]) => {
-    if (insights.length === 0) return null;
+  const renderSection = (title: string, emoji: string, insights: OracleInsight[] | undefined) => {
+    if (!insights || insights.length === 0) return null;
 
     const color = getSectionColor(title);
     return (

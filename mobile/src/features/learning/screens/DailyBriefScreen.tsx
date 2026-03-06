@@ -720,7 +720,7 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
 
             <Text style={styles.sectionContent}>{marketBrief.narrative}</Text>
 
-            {marketBrief.top_bullish.length > 0 && (
+            {(marketBrief.top_bullish?.length ?? 0) > 0 && (
               <View style={styles.briefSignalGroup}>
                 <Text style={styles.briefSignalGroupLabel}>📈 Top Bullish</Text>
                 {marketBrief.top_bullish.map(s => (
@@ -729,7 +729,7 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
                     <View style={[styles.briefConfidencePill, { backgroundColor: '#10B98122' }]}>
                       <Text style={[styles.briefConfidenceText, { color: '#10B981' }]}>{s.confidence}</Text>
                     </View>
-                    {s.reasons.length > 0 && (
+                    {(s.reasons?.length ?? 0) > 0 && (
                       <Text style={styles.briefSignalReason} numberOfLines={1}>{s.reasons[0]}</Text>
                     )}
                   </View>
@@ -737,7 +737,7 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
               </View>
             )}
 
-            {marketBrief.top_bearish.length > 0 && (
+            {(marketBrief.top_bearish?.length ?? 0) > 0 && (
               <View style={styles.briefSignalGroup}>
                 <Text style={styles.briefSignalGroupLabel}>📉 Top Bearish</Text>
                 {marketBrief.top_bearish.map(s => (
@@ -746,7 +746,7 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
                     <View style={[styles.briefConfidencePill, { backgroundColor: '#EF444422' }]}>
                       <Text style={[styles.briefConfidenceText, { color: '#EF4444' }]}>{s.confidence}</Text>
                     </View>
-                    {s.reasons.length > 0 && (
+                    {(s.reasons?.length ?? 0) > 0 && (
                       <Text style={styles.briefSignalReason} numberOfLines={1}>{s.reasons[0]}</Text>
                     )}
                   </View>
@@ -860,13 +860,13 @@ export default function DailyBriefScreen({ navigateTo }: DailyBriefScreenProps) 
               <View style={styles.progressItem}>
                 <Text style={styles.progressLabel}>Daily Briefs</Text>
                 <Text style={styles.progressValue}>
-                  {brief.weekly_progress.briefs_completed} / {brief.weekly_progress.goal}
+                  {brief.weekly_progress?.briefs_completed ?? 0} / {brief.weekly_progress?.goal ?? 5}
                 </Text>
                 <View style={styles.progressBar}>
                   <View 
                     style={[
                       styles.progressFill,
-                      { width: `${getProgressPercentage(brief.weekly_progress.briefs_completed, brief.weekly_progress.goal)}%` }
+                      { width: `${getProgressPercentage(brief.weekly_progress?.briefs_completed ?? 0, brief.weekly_progress?.goal ?? 5)}%` }
                     ]} 
                   />
                 </View>
