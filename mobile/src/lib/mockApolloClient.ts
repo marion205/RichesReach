@@ -39,6 +39,7 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
   // Auth / User
   GetMe:          { me: DEMO_ME },
   Me:             { me: DEMO_ME },
+  GetUserProfile: { me: DEMO_ME },  // AIPortfolioScreen uses this operation name
 
   // Portfolio
   GetPortfolioMetrics:   { portfolioMetrics: DEMO_GQL_PORTFOLIO_METRICS },
@@ -130,6 +131,28 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
   },
 
   // Mutations — return success shapes
+  GenerateAIRecommendations: {
+    generateAiRecommendations: {
+      success: true,
+      message: 'Recommendations generated',
+      recommendations: null,
+    },
+  },
+  CreateIncomeProfile: {
+    createIncomeProfile: {
+      success: true,
+      message: 'Profile created',
+      incomeProfile: {
+        id: 'demo-ip-1',
+        incomeBracket: '$75,000 - $100,000',
+        age: 32,
+        investmentGoals: ['Wealth Building', 'Retirement Savings'],
+        riskTolerance: 'Moderate',
+        investmentHorizon: '5-10 years',
+        __typename: 'IncomeProfileType',
+      },
+    },
+  },
   LikeSignal:    { likeSignal: { success: true } },
   CommentSignal: { commentSignal: { success: true } },
   AddToWatchlist:    { addToWatchlist: { success: true } },

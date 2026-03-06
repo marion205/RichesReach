@@ -517,11 +517,12 @@ export const DEMO_STOCKS = [
 
 // ─── Quant Screener ───────────────────────────────────────────────────────────
 export const DEMO_QUANT_SCREENER = [
-  { symbol: 'NVDA', score: 94, momentum: 0.92, value: 0.41, quality: 0.88, __typename: 'ScreenerResult' },
-  { symbol: 'META', score: 88, momentum: 0.85, value: 0.62, quality: 0.79, __typename: 'ScreenerResult' },
-  { symbol: 'MSFT', score: 86, momentum: 0.81, value: 0.55, quality: 0.91, __typename: 'ScreenerResult' },
-  { symbol: 'LLY',  score: 83, momentum: 0.79, value: 0.38, quality: 0.84, __typename: 'ScreenerResult' },
-  { symbol: 'AAPL', score: 80, momentum: 0.76, value: 0.60, quality: 0.88, __typename: 'ScreenerResult' },
+  { symbol: 'NVDA', companyName: 'NVIDIA Corporation', sector: 'Technology', marketCap: 2_160_000_000_000, peRatio: 62.4, beginnerFriendlyScore: 72, currentPrice: 875.40, mlScore: 0.92, riskLevel: 'medium', growthPotential: 0.91, score: 94, momentum: 0.92, value: 0.41, quality: 0.88, __typename: 'ScreenerResult' },
+  { symbol: 'META', companyName: 'Meta Platforms', sector: 'Technology', marketCap: 1_310_000_000_000, peRatio: 28.1, beginnerFriendlyScore: 78, currentPrice: 512.30, mlScore: 0.85, riskLevel: 'medium', growthPotential: 0.84, score: 88, momentum: 0.85, value: 0.62, quality: 0.79, __typename: 'ScreenerResult' },
+  { symbol: 'MSFT', companyName: 'Microsoft Corporation', sector: 'Technology', marketCap: 3_080_000_000_000, peRatio: 36.8, beginnerFriendlyScore: 88, currentPrice: 415.20, mlScore: 0.81, riskLevel: 'low', growthPotential: 0.79, score: 86, momentum: 0.81, value: 0.55, quality: 0.91, __typename: 'ScreenerResult' },
+  { symbol: 'LLY',  companyName: 'Eli Lilly', sector: 'Healthcare', marketCap: 740_000_000_000, peRatio: 58.2, beginnerFriendlyScore: 65, currentPrice: 780.00, mlScore: 0.79, riskLevel: 'medium', growthPotential: 0.85, score: 83, momentum: 0.79, value: 0.38, quality: 0.84, __typename: 'ScreenerResult' },
+  { symbol: 'AAPL', companyName: 'Apple Inc.', sector: 'Technology', marketCap: 2_800_000_000_000, peRatio: 29.4, beginnerFriendlyScore: 92, currentPrice: 180.00, mlScore: 0.76, riskLevel: 'low', growthPotential: 0.72, score: 80, momentum: 0.76, value: 0.60, quality: 0.88, __typename: 'ScreenerResult' },
+  { symbol: 'XOM',  companyName: 'Exxon Mobil', sector: 'Energy', marketCap: 500_000_000_000, peRatio: 14.2, beginnerFriendlyScore: 82, currentPrice: 118.60, mlScore: 0.74, riskLevel: 'low', growthPotential: 0.61, score: 76, momentum: 0.62, value: 0.81, quality: 0.77, __typename: 'ScreenerResult' },
 ];
 
 // ─── Budget / Spending ────────────────────────────────────────────────────────
