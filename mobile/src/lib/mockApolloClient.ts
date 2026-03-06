@@ -48,6 +48,18 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
   GetMyPortfolios:       { myPortfolios: DEMO_MY_PORTFOLIOS },
   MyPortfolios:          { myPortfolios: DEMO_MY_PORTFOLIOS },
   GetPortfolioRiskReport: { portfolioRiskReport: DEMO_PORTFOLIO_RISK_REPORT },
+  PortfolioKellyMetrics: {
+    portfolioKellyMetrics: {
+      totalPortfolioValue: 14303.52,
+      aggregateKellyFraction: 0.22,
+      aggregateRecommendedFraction: 0.11,
+      portfolioMaxDrawdownRisk: 0.082,
+      weightedWinRate: 0.68,
+      positionCount: 5,
+      totalPositions: 5,
+      __typename: 'PortfolioKellyMetrics',
+    },
+  },
 
   // AI
   GetAIRecommendations:  { aiRecommendations: DEMO_AI_RECOMMENDATIONS },
