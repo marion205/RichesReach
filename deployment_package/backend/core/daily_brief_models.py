@@ -223,7 +223,11 @@ class UserAchievement(models.Model):
         ('streak_7', '7 Day Streak'),
         ('streak_30', '30 Day Streak'),
         ('lessons_10', '10 Lessons Learned'),
+        ('lessons_25', '25 Lessons Learned'),
         ('lessons_50', '50 Lessons Learned'),
+        ('weekly_goal', 'Weekly Goal Met'),
+        ('confidence_7', 'Confidence 7+'),
+        ('confidence_9', 'Confidence 9+'),
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

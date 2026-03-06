@@ -10,6 +10,7 @@ from .raha_types import (
 from .raha_models import (
     Strategy, StrategyVersion, UserStrategySettings, RAHASignal, RAHABacktestRun
 )
+from .raha_queries import _normalize_uuid
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import date
@@ -40,8 +41,11 @@ class EnableStrategy(graphene.Mutation):
                 message="Authentication required"
             )
         
+        norm_id = _normalize_uuid(strategy_version_id)
+        if not norm_id:
+            return EnableStrategy(success=False, message="Invalid strategy version ID")
         try:
-            strategy_version = StrategyVersion.objects.get(id=strategy_version_id)
+            strategy_version = StrategyVersion.objects.get(id=norm_id)
             
             # Create or update user settings
             settings, created = UserStrategySettings.objects.update_or_create(
@@ -90,11 +94,13 @@ class DisableStrategy(graphene.Mutation):
                 success=False,
                 message="Authentication required"
             )
-        
+        norm_id = _normalize_uuid(strategy_version_id)
+        if not norm_id:
+            return DisableStrategy(success=False, message="Invalid strategy version ID")
         try:
             settings = UserStrategySettings.objects.get(
                 user=user,
-                strategy_version_id=strategy_version_id
+                strategy_version_id=norm_id
             )
             settings.enabled = False
             settings.save()
@@ -139,8 +145,11 @@ class RunBacktest(graphene.Mutation):
                 message="Authentication required"
             )
         
+        norm_id = _normalize_uuid(strategy_version_id)
+        if not norm_id:
+            return RunBacktest(success=False, message="Invalid strategy version ID")
         try:
-            strategy_version = StrategyVersion.objects.get(id=strategy_version_id)
+            strategy_version = StrategyVersion.objects.get(id=norm_id)
             
             # Create backtest run
             backtest = RAHABacktestRun.objects.create(
@@ -218,10 +227,13 @@ class GenerateRAHASignals(graphene.Mutation):
                 message="Authentication required"
             )
         
+        norm_id = _normalize_uuid(strategy_version_id)
+        if not norm_id:
+            return GenerateRAHASignals(success=False, message="Invalid strategy version ID")
         try:
             from .raha_strategy_engine import RAHAStrategyEngine
             
-            strategy_version = StrategyVersion.objects.get(id=strategy_version_id)
+            strategy_version = StrategyVersion.objects.get(id=norm_id)
             
             # Get user's parameters or use defaults
             try:

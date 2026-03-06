@@ -184,13 +184,13 @@ class TransparencyQueries(graphene.ObjectType):
         summary = dashboard_service.get_performance_summary(days=days)
         
         return PerformanceSummaryType(
-            period_days=summary['period_days'],
-            total_signals=summary['total_signals'],
-            win_rate=summary['win_rate'],
-            total_pnl=summary['total_pnl'],
-            avg_pnl=summary['avg_pnl'],
-            sharpe_ratio=summary['sharpe_ratio'],
-            max_drawdown=summary['max_drawdown']
+            period_days=summary.get('period_days', 0),
+            total_signals=summary.get('total_signals', 0),
+            win_rate=summary.get('win_rate', 0.0),
+            total_pnl=summary.get('total_pnl', 0.0),
+            avg_pnl=summary.get('avg_pnl', 0.0),
+            sharpe_ratio=summary.get('sharpe_ratio', 0.0),
+            max_drawdown=summary.get('max_drawdown', 0.0)
         )
     
     def resolve_transparency_csv_export(self, info, limit: int = 100, days: int = None, status: str = None) -> str:

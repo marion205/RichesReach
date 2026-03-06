@@ -5,8 +5,22 @@ Queries for strategy catalog, user settings, signals, and backtests
 import graphene
 import logging
 import json
+import uuid
 from decimal import Decimal
 from django.db import models
+
+
+def _normalize_uuid(value):
+    """Return value if it's a valid UUID string, else None. Prevents passing 'fallback' or invalid strings to UUIDField."""
+    if not value:
+        return None
+    if value == "fallback":
+        return None
+    try:
+        uuid.UUID(str(value))
+        return str(value)
+    except (ValueError, TypeError):
+        return None
 from .raha_types import (
     StrategyType, StrategyVersionType, UserStrategySettingsType,
     RAHASignalType, RAHABacktestRunType, RAHAMetricsType
@@ -306,9 +320,10 @@ class RAHAQueries(graphene.ObjectType):
         
         # Query database with select_related
         strategy = None
-        if id:
+        norm_id = _normalize_uuid(id)
+        if norm_id:
             try:
-                strategy = Strategy.objects.select_related('created_by').get(id=id, enabled=True)
+                strategy = Strategy.objects.select_related('created_by').get(id=norm_id, enabled=True)
             except Strategy.DoesNotExist:
                 pass
         elif slug:
@@ -360,11 +375,13 @@ class RAHAQueries(graphene.ObjectType):
         return result
     
     def resolve_rahaSignals(self, info, symbol=None, timeframe=None, strategy_version_id=None, limit=20, offset=0):
-        """Get RAHA signals with optional filters and pagination (cached)"""
+        """Get RAHA signals with optional filters and pagination (cached).
+        Never pass client-supplied IDs (e.g. strategy_version_id) to UUIDField without _normalize_uuid."""
         user = info.context.user
         if not user.is_authenticated:
             return []
-        
+        # Normalize so "fallback" or invalid IDs never hit the DB (ValidationError)
+        strategy_version_id = _normalize_uuid(strategy_version_id)
         # Check cache (only for first page to avoid cache bloat)
         if offset == 0:
             cache_key = get_cache_key(
@@ -455,10 +472,13 @@ class RAHAQueries(graphene.ObjectType):
             return None
         
         # Check cache
-        cache_key = get_cache_key('backtest_run', user.id, id=id)
+        norm_id = _normalize_uuid(id)
+        if not norm_id:
+            return None
+        cache_key = get_cache_key('backtest_run', user.id, id=norm_id)
         cached_result = get_cached_query_result(cache_key)
         if cached_result is not None:
-            logger.debug(f"Cache hit for backtest_run (user={user.id}, id={id})")
+            logger.debug(f"Cache hit for backtest_run (user={user.id}, id={norm_id})")
             return cached_result
         
         # Query with select_related to prevent N+1 queries
@@ -466,7 +486,7 @@ class RAHAQueries(graphene.ObjectType):
             backtest = RAHABacktestRun.objects.select_related(
                 'strategy_version',
                 'strategy_version__strategy'
-            ).get(id=id, user=user)
+            ).get(id=norm_id, user=user)
             
             # Cache result
             cache_query_result(cache_key, backtest, timeout=CACHE_TIMEOUTS['backtest_run'])
@@ -481,6 +501,7 @@ class RAHAQueries(graphene.ObjectType):
         if not user.is_authenticated:
             return []
         
+        strategy_version_id = _normalize_uuid(strategy_version_id)
         # Check cache (only for first page)
         if offset == 0:
             cache_key = get_cache_key(
@@ -523,6 +544,9 @@ class RAHAQueries(graphene.ObjectType):
         if not user.is_authenticated:
             return None
         
+        strategy_version_id = _normalize_uuid(strategy_version_id)
+        if not strategy_version_id:
+            return None
         # Check cache
         cache_key = get_cache_key(
             'raha_metrics',
@@ -711,6 +735,7 @@ class RAHAQueries(graphene.ObjectType):
                 'strategy_version__strategy'
             )
             
+            strategy_version_id = _normalize_uuid(strategy_version_id)
             if strategy_version_id:
                 queryset = queryset.filter(strategy_version_id=strategy_version_id)
             
@@ -767,9 +792,13 @@ class RAHAQueries(graphene.ObjectType):
                 # Get strategy names for components
                 components_with_names = []
                 for comp in blend.components:
+                    comp_svid = _normalize_uuid(comp.get('strategy_version_id'))
                     try:
-                        strategy_version = StrategyVersion.objects.get(id=comp.get('strategy_version_id'))
-                        strategy_name = strategy_version.strategy.name
+                        if comp_svid:
+                            strategy_version = StrategyVersion.objects.get(id=comp_svid)
+                            strategy_name = strategy_version.strategy.name
+                        else:
+                            strategy_name = 'Unknown'
                     except StrategyVersion.DoesNotExist:
                         strategy_name = 'Unknown'
                     

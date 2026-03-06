@@ -32,10 +32,26 @@ class SectorStatsType(graphene.ObjectType):
     """Win/loss breakdown per sector."""
     sector    = graphene.String()
     trades    = graphene.Int()
+    trade_count = graphene.Int()   # alias for trades (snake_case)
+    tradeCount = graphene.Int()     # camelCase alias for trades
     wins      = graphene.Int()
     losses    = graphene.Int()
     total_pnl = graphene.Float()
+    totalPnl  = graphene.Float()    # camelCase alias
     win_rate  = graphene.Float()   # 0–1
+    winRate   = graphene.Float()   # camelCase alias
+
+    def resolve_trade_count(self, info):
+        return getattr(self, 'trade_count', None) or getattr(self, 'trades', None)
+
+    def resolve_tradeCount(self, info):
+        return getattr(self, 'tradeCount', None) or getattr(self, 'trade_count', None) or getattr(self, 'trades', None)
+
+    def resolve_totalPnl(self, info):
+        return getattr(self, 'totalPnl', None) or getattr(self, 'total_pnl', None)
+
+    def resolve_winRate(self, info):
+        return getattr(self, 'winRate', None) or getattr(self, 'win_rate', None)
 
 
 class TradeDebriefType(graphene.ObjectType):

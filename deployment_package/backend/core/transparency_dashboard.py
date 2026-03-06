@@ -203,6 +203,7 @@ class TransparencyDashboard:
                 'total_signals': 0,
                 'win_rate': 0.0,
                 'total_pnl': 0.0,
+                'avg_pnl': 0.0,
                 'sharpe_ratio': 0.0,
                 'profit_factor': 0.0,
                 'max_drawdown': 0.0,
