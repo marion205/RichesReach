@@ -18,6 +18,8 @@ import { gql } from '@apollo/client';
 import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import logger from '../../../utils/logger';
+
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
 import {
   GET_SWING_SIGNALS,
   LIKE_SIGNAL,
@@ -216,6 +218,7 @@ const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigateTo: navigateToPro
     if (data?.swingSignals && data.swingSignals.length > 0) {
       return data.swingSignals;
     }
+    // In demo mode: fall back to mock data on timeout or error
     if (IS_DEMO && (loadingTimeout || (error && !data?.swingSignals))) {
       return getMockSignals();
     }

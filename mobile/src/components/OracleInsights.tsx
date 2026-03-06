@@ -20,6 +20,8 @@ import { useQuery, gql } from '@apollo/client';
 import { API_GRAPHQL } from '../config/api';
 import logger from '../utils/logger';
 
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
 const { width } = Dimensions.get('window');
 
 interface OracleEvent {
@@ -109,9 +111,9 @@ const getMockInsights = (): OracleEvent[] => [
 
 export default function OracleInsights({ onInsightPress, onGenerateInsight }: OracleInsightsProps = {}) {
   const theme = useTheme();
-  // Start with mock data immediately for instant loading
-  const [insights, setInsights] = useState<OracleEvent[]>(getMockInsights());
-  const [loading, setLoading] = useState(false); // Changed to false - show content immediately
+  // Start with mock data only in demo mode; otherwise start empty and populate from API
+  const [insights, setInsights] = useState<OracleEvent[]>(IS_DEMO ? getMockInsights() : []);
+  const [loading, setLoading] = useState(!IS_DEMO); // Show loading state when not in demo
   const [refreshing, setRefreshing] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [selectedInsight, setSelectedInsight] = useState<OracleEvent | null>(null);
@@ -222,8 +224,12 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
       }
     },
     onError: (error) => {
-      // Silently fail - we already have mock data showing
-      logger.log('ℹ️ Oracle insights GraphQL not available, using mock data');
+      if (IS_DEMO) {
+        logger.log('ℹ️ Oracle insights GraphQL not available, using mock data (demo mode)');
+      } else {
+        logger.log('ℹ️ Oracle insights GraphQL not available');
+        setLoading(false);
+      }
     },
   });
 
@@ -232,8 +238,10 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
     try {
       await refetchOracle();
     } catch (error: any) {
-      // Silently fail - we already have mock data showing
-      logger.log('ℹ️ Error loading insights, using existing mock data');
+      if (!IS_DEMO) {
+        setLoading(false);
+      }
+      logger.log('ℹ️ Error loading insights:', error?.message);
     }
   };
 

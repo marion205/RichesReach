@@ -2,6 +2,8 @@
 // This provides comprehensive stock data with minimal API costs
 import logger from '../utils/logger';
 
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
 interface StockData {
   symbol: string;
   companyName: string;
@@ -236,8 +238,8 @@ async function fetchChartData(symbol: string, currentPrice: number, timeframe?: 
   const cached = getCachedData(cacheKey);
   if (cached) return cached;
 
-  if (!USE_REAL_APIS) {
-    logger.log(`Using mock data for chart (APIs disabled)`);
+  if (!USE_REAL_APIS || IS_DEMO) {
+    logger.log(`Using mock data for chart (${IS_DEMO ? 'demo mode' : 'APIs disabled'})`);
     return generateFallbackChartData(symbol, currentPrice, timeframe);
   }
 
@@ -263,9 +265,13 @@ async function fetchChartData(symbol: string, currentPrice: number, timeframe?: 
     }
   }
 
-  // All sources failed, use fallback
-  logger.log(`All data sources failed for ${symbol}, using fallback`);
-  return generateFallbackChartData(symbol, currentPrice, timeframe);
+  // All real sources failed - only use generated fallback in demo mode
+  if (IS_DEMO) {
+    logger.log(`All data sources failed for ${symbol}, using generated fallback (demo mode)`);
+    return generateFallbackChartData(symbol, currentPrice, timeframe);
+  }
+  logger.warn(`All data sources failed for ${symbol}, returning empty chart data`);
+  return [];
 }
 
 // Fetch chart data from Polygon API

@@ -17,6 +17,8 @@ import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { LineChart, BarChart } from 'react-native-chart-kit';
 import * as Speech from 'expo-speech';
 
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 interface ChartData {
@@ -68,16 +70,16 @@ export const AdvancedMobileChart: React.FC<AdvancedChartProps> = ({
   const loadChartData = async () => {
     setIsLoading(true);
     try {
-      // Mock data - replace with real API call
-      const mockData = generateMockData(timeframe);
-      setChartData(mockData);
-      
-      // Mock price data
-      setPrice(150.25);
-      setChange(2.15);
-      setChangePercent(1.45);
-      setVolume(1250000);
-      
+      if (IS_DEMO) {
+        // Demo mode: use generated placeholder data
+        const mockData = generateMockData(timeframe);
+        setChartData(mockData);
+        setPrice(150.25);
+        setChange(2.15);
+        setChangePercent(1.45);
+        setVolume(1250000);
+      }
+      // Non-demo: real API integration required; leave chartData null
       setIsLoading(false);
     } catch (error) {
       console.error('Error loading chart data:', error);

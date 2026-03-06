@@ -16,6 +16,8 @@ import { getMockPrice } from '../constants/mockPrices';
 import EducationalTooltip from '../../../components/common/EducationalTooltip';
 import { RiskRewardDiagram } from '../../../components/common/RiskRewardDiagram';
 
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
 const C = {
   bg: '#F5F6FA',
   card: '#FFFFFF',
@@ -148,17 +150,16 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       return;
     }
 
-    // ALWAYS show mock estimate immediately (no waiting for GraphQL)
-    const mockPrice = getMockPrice(symbol);
-    const estimatedTotal = qty * mockPrice;
-    
-    // Set mock immediately
-    setLocalCost({
-      pricePerShare: mockPrice,
-      total: estimatedTotal,
-      source: 'Est. Market Price',
-      isLive: false,
-    });
+    // In demo mode show mock estimate immediately; otherwise wait for real quote
+    if (IS_DEMO) {
+      const mockPrice = getMockPrice(symbol);
+      setLocalCost({
+        pricePerShare: mockPrice,
+        total: qty * mockPrice,
+        source: 'Est. Market Price',
+        isLive: false,
+      });
+    }
 
     // If we have real quote data, upgrade to live price (non-blocking)
     if (quoteData?.tradingQuote) {
@@ -178,8 +179,9 @@ export const OrderForm: React.FC<OrderFormProps> = ({
     }
   }, [symbol, quantity, orderSide, quoteData?.tradingQuote]);
 
-  // Safety net: ensure localCost is set even if first useEffect didn't run
+  // Safety net (demo mode only): ensure localCost is set even if first useEffect didn't run
   useEffect(() => {
+    if (!IS_DEMO) return;
     const qty = parseFloat(quantity) || 0;
     if (symbol && qty > 0 && !localCost) {
       const mockPrice = getMockPrice(symbol);
@@ -224,14 +226,10 @@ export const OrderForm: React.FC<OrderFormProps> = ({
       isLoading = true;
     }
     
-    // If we have a symbol and quantity but no quote after loading completes, use estimated price
-    // This prevents infinite loading states
+    // In demo mode: if quote unavailable after loading, use mock price estimate
     const hasSymbolAndQty = symbol && qty > 0;
-    if (hasSymbolAndQty && !quoteData?.tradingQuote && !quoteLoading) {
-      // Use a reasonable default estimate based on symbol
-      // This is better than showing nothing
+    if (IS_DEMO && hasSymbolAndQty && !quoteData?.tradingQuote && !quoteLoading) {
       const defaultPrice = getMockPrice(symbol);
-      
       if (orderType === 'market' && marketPrice === 0) {
         pricePerShare = defaultPrice;
         priceSource = 'Est. Market Price';

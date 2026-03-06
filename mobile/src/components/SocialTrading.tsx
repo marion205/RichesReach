@@ -23,6 +23,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { globalNavigate } from '../navigation/NavigationService';
 import NewsFeed from '../features/social/components/NewsFeed';
 
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
 // GraphQL Queries and Mutations
 const GET_SOCIAL_FEEDS = gql`
   query GetSocialFeeds($limit: Int, $offset: Int) {
@@ -485,26 +487,26 @@ export const SocialTrading: React.FC<SocialTradingProps> = ({
     },
   ];
 
-  // Use mock data immediately if loading, timeout, or error - optimistic loading
+  // Use mock data only in demo mode; in production show real data or empty
   const effectiveFeeds = useMemo(() => {
     if (feedsData?.socialFeeds?.length) {
       return feedsData.socialFeeds;
     }
-    return getMockFeeds();
+    return IS_DEMO ? getMockFeeds() : [];
   }, [feedsData, feedsLoadingTimeout, feedsError]);
 
   const effectiveTraders = useMemo(() => {
     if (tradersData?.topTraders?.length) {
       return tradersData.topTraders;
     }
-    return getMockTraders();
+    return IS_DEMO ? getMockTraders() : [];
   }, [tradersData, tradersLoadingTimeout, tradersError]);
 
   const effectiveSignals = useMemo(() => {
     if (signalsData?.swingSignals?.length) {
       return signalsData.swingSignals;
     }
-    return getMockSignals();
+    return IS_DEMO ? getMockSignals() : [];
   }, [signalsData, signalsLoadingTimeout, signalsError]);
 
   const [followTrader] = useMutation(FOLLOW_TRADER);

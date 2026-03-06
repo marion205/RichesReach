@@ -15,6 +15,8 @@ import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import logger from '../../../utils/logger';
 
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
 /* ----------------------------- GraphQL ----------------------------- */
 const GET_LEADERBOARD = gql`
   query GetLeaderboard($category: String, $limit: Int) {
@@ -216,13 +218,13 @@ const LeaderboardScreen: React.FC<LeaderboardScreenProps> = ({ navigateTo: navig
     }
   }, [loading, data]);
 
-  // Use real data from GraphQL or fallback to mock data for demo
+  // Use real data from GraphQL or fallback to mock data (demo mode only)
   const leaderboard = useMemo(() => {
     if (data?.leaderboard && data.leaderboard.length > 0) {
       return data.leaderboard;
     }
-    // If loading timed out or error occurred, use mock data for demo
-    if (loadingTimeout || (error && !data?.leaderboard)) {
+    // In demo mode, fall back to mock data on timeout or error
+    if (IS_DEMO && (loadingTimeout || (error && !data?.leaderboard))) {
       return getMockLeaderboard(category);
     }
     return [];

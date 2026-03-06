@@ -40,6 +40,8 @@ import { AlpacaPosition, NavigationType } from '../types';
 import logger from '../../../utils/logger';
 import { getUserFriendlyError } from '../../../utils/errorMessages';
 
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
 const C = {
   bg: '#F5F6FA',
   card: '#FFFFFF',
@@ -293,8 +295,7 @@ const TradingScreen = ({ navigateTo }: { navigateTo: (screen: string) => void })
     },
   ];
 
-  // Use real Alpaca/GraphQL data. Mock account/positions only in demo mode (pitch events).
-  const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+  // Use Alpaca data when available, fallback to mock data only in demo mode
   const account = useMemo(() => {
     if (alpacaAccount) return alpacaAccount;
     if (accountData?.tradingAccount) return accountData.tradingAccount;

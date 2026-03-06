@@ -5,6 +5,8 @@
 import { API_HTTP } from '../../../config';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import logger from '../../../utils/logger';
+
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
 export interface OptionsRecommendation {
 strategy_name: string;
 strategy_type: 'income' | 'hedge' | 'speculation' | 'arbitrage';
@@ -228,11 +230,12 @@ logger.log({
 return data;
 } catch (error) {
 const err = error as Error;
-// For network errors, return mock data for demo instead of throwing
-if (err?.message?.includes('Network request failed') || 
-    err?.message?.includes('Failed to fetch') ||
-    err?.name === 'TypeError') {
-  logger.warn('⚠️ Network error, using mock data for demo');
+// For network/other errors, return mock data only in demo mode
+if (IS_DEMO) {
+  const isNetworkError = err?.message?.includes('Network request failed') ||
+      err?.message?.includes('Failed to fetch') ||
+      err?.name === 'TypeError';
+  logger.warn(`⚠️ ${isNetworkError ? 'Network' : 'API'} error, using mock data (demo mode)`);
   return this.getMockRecommendations(symbol, userRiskTolerance, portfolioValue, timeHorizon, maxRecommendations);
 }
 logger.error('❌ Error getting AI options recommendations:', error);
@@ -241,8 +244,7 @@ name: err?.name,
 message: err?.message,
 stack: err?.stack,
 });
-// For other errors, still provide mock data for demo
-return this.getMockRecommendations(symbol, userRiskTolerance, portfolioValue, timeHorizon, maxRecommendations);
+throw error;
 }
 }
 

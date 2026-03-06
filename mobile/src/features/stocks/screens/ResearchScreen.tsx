@@ -21,6 +21,7 @@ import QuantThinkingExplainer from '../../../components/quant/QuantThinkingExpla
 import { useLoadingTimeout } from '../../../hooks/useLoadingTimeout';
 import logger from '../../../utils/logger';
 
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
 const RECENTS_KEY = 'research_recent_symbols';
 
 // TypeScript interfaces
@@ -216,22 +217,20 @@ export default function ResearchScreen() {
     };
   };
 
-  // Use mock data immediately if loading, or if timeout/error occurs
-  // This provides instant content while real data loads
+  // Use mock data (demo mode only) when real data isn't available yet
   const effectiveResearchData = useMemo(() => {
     // Prioritize real data if available
     if (researchData?.researchHub) {
       return researchData;
     }
-    // Show mock data immediately while loading, on timeout, or on error
-    if (researchLoading || researchLoadingTimeout || researchError) {
+    // In demo mode, fall back to mock data on timeout or error
+    if (IS_DEMO && (researchLoadingTimeout || researchError)) {
       return getMockResearchData();
     }
     return null;
   }, [researchData, researchLoadingTimeout, researchError, researchLoading, selectedSymbol]);
-  
-  // Don't show loading spinner - always show mock data immediately while loading
-  const effectiveResearchLoading = false;
+
+  const effectiveResearchLoading = !IS_DEMO && researchLoading && !effectiveResearchData;
 
   // Change symbol handler
   const openSymbol = (symbol: string) => {
@@ -408,31 +407,31 @@ function ResearchBody({ data }: { data: ResearchData }) {
   const macro = data.macro;
   const marketRegime = data.marketRegime;
 
-  // Fallback to mock technical data if missing or empty
+  // Fallback technical data (only used in demo mode when real data is missing)
   const basePrice = quote?.price || 150.00;
-  const mockTechnical = {
+  const mockTechnical = IS_DEMO ? {
     rsi: 55.5,
     macd: 2.3,
     movingAverage50: basePrice * 0.98,
     movingAverage200: basePrice * 0.95,
     supportLevel: basePrice * 0.92,
     resistanceLevel: basePrice * 1.08,
-  };
+  } : null;
 
-  // Use real technical data if available and has at least one valid value, otherwise use mock
+  // Use real technical data if available and has at least one valid value
   const hasValidTechnicalData = data.technical && (
     (data.technical.rsi != null && !isNaN(data.technical.rsi)) ||
     (data.technical.macd != null && !isNaN(data.technical.macd)) ||
     (data.technical.movingAverage50 != null && !isNaN(data.technical.movingAverage50))
   );
-  
+
   const technical = hasValidTechnicalData ? {
-    rsi: data.technical.rsi ?? mockTechnical.rsi,
-    macd: data.technical.macd ?? mockTechnical.macd,
-    movingAverage50: data.technical.movingAverage50 ?? mockTechnical.movingAverage50,
-    movingAverage200: data.technical.movingAverage200 ?? mockTechnical.movingAverage200,
-    supportLevel: data.technical.supportLevel ?? mockTechnical.supportLevel,
-    resistanceLevel: data.technical.resistanceLevel ?? mockTechnical.resistanceLevel,
+    rsi: data.technical.rsi ?? mockTechnical?.rsi,
+    macd: data.technical.macd ?? mockTechnical?.macd,
+    movingAverage50: data.technical.movingAverage50 ?? mockTechnical?.movingAverage50,
+    movingAverage200: data.technical.movingAverage200 ?? mockTechnical?.movingAverage200,
+    supportLevel: data.technical.supportLevel ?? mockTechnical?.supportLevel,
+    resistanceLevel: data.technical.resistanceLevel ?? mockTechnical?.resistanceLevel,
   } : mockTechnical;
 
   // Technical data processed

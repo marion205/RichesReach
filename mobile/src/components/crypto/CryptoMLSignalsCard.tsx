@@ -22,6 +22,8 @@ import { gql } from '@apollo/client';
 import { API_RUST_BASE } from '../../config/api';
 import logger from '../../utils/logger';
 
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
 // Add this lightweight holdings query
 const GET_CRYPTO_HOLDINGS = gql`
   query GetCryptoHoldings {
@@ -320,21 +322,12 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
     }
   );
 
-  // Use real recommendations or fallback to mock data
+  // Use real recommendations or fallback to mock data (demo mode only)
   const effectiveRecommendations = useMemo(() => {
     if (recommendationsData?.cryptoRecommendations && recommendationsData.cryptoRecommendations.length > 0) {
       return recommendationsData.cryptoRecommendations;
     }
-    // If error occurred, loading completed with no data, or no data available, use mock recommendations
-    const hasError = recommendationsError && !recommendationsData?.cryptoRecommendations;
-    const hasNetworkError = recommendationsError?.message?.includes('Network request failed');
-    const loadingCompleted = !recommendationsLoading && (!recommendationsData?.cryptoRecommendations || recommendationsData.cryptoRecommendations.length === 0);
-    
-    if (hasError || hasNetworkError || loadingCompleted || !recommendationsData?.cryptoRecommendations) {
-      return getMockRecommendations();
-    }
-    // While loading, show mock data immediately (optimistic loading)
-    return getMockRecommendations();
+    return IS_DEMO ? getMockRecommendations() : [];
   }, [recommendationsData?.cryptoRecommendations, recommendationsLoading, recommendationsError, finalSymbols]);
 
 
@@ -432,19 +425,14 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
       };
     }
     
-    // Priority 2: If error occurred or loading completed with no data, use mock data
-    const hasError = signalError && !signalData?.cryptoMlSignal;
-    const hasNetworkError = signalError?.message?.includes('Network request failed');
-    const loadingCompleted = !signalLoading && !signalData?.cryptoMlSignal;
-    
-    if (hasError || hasNetworkError || loadingCompleted) {
-      logger.log('[CryptoMLSignalsCard] Using mock data for', selectedSymbol, 'due to error or no data');
+    // Priority 2: In demo mode, fall back to mock data on error or missing data
+    if (IS_DEMO) {
+      logger.log('[CryptoMLSignalsCard] Using mock data for', selectedSymbol, '(demo mode)');
       return getMockSignal(selectedSymbol);
     }
-    
-    // Priority 3: While actively loading, show mock data immediately (optimistic loading)
-    logger.log('[CryptoMLSignalsCard] Using mock data for', selectedSymbol, 'while loading');
-    return getMockSignal(selectedSymbol);
+
+    // Non-demo: return null when no data
+    return null;
   }, [signalData, signalLoading, signalError, selectedSymbol]);
 
   /* ------------------------------- Auto-refresh ------------------------------ */
@@ -627,25 +615,24 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
           generateTimeoutRef.current = null;
           timeoutId = null;
         }
-        // If it's a timeout or other error, use mock data
-        logger.warn('[CryptoMLSignalsCard] Prediction generation failed, using mock data:', error.message);
-        // Generate mock prediction instead of showing error
-        const mockProbability = 0.65 + (Math.random() * 0.25); // Random between 0.65 and 0.9
-        const mockConfidence = mockProbability > 0.8 ? 'HIGH' : mockProbability > 0.6 ? 'MEDIUM' : 'LOW';
-        const mockSentiment = mockProbability > 0.6 ? 'Bullish' : 'Neutral';
-        
-        // Show success message with mock data
-        Alert.alert(
-          'Prediction Generated', 
-          `${selectedSymbol}: ${pctStr(mockProbability)} probability\nConfidence: ${mockConfidence}\nSentiment: ${mockSentiment}`
-        );
-        
-        // Refresh signal to potentially show updated data
-        await refetchSignal();
+        logger.warn('[CryptoMLSignalsCard] Prediction generation failed:', error.message);
+        if (IS_DEMO) {
+          // In demo mode: show a mock prediction result
+          const mockProbability = 0.65 + (Math.random() * 0.25);
+          const mockConfidence = mockProbability > 0.8 ? 'HIGH' : mockProbability > 0.6 ? 'MEDIUM' : 'LOW';
+          const mockSentiment = mockProbability > 0.6 ? 'Bullish' : 'Neutral';
+          Alert.alert(
+            'Prediction Generated',
+            `${selectedSymbol}: ${pctStr(mockProbability)} probability\nConfidence: ${mockConfidence}\nSentiment: ${mockSentiment}`
+          );
+          await refetchSignal();
+        } else {
+          Alert.alert('Error', 'Prediction generation failed. Please try again.');
+        }
         setGenerating(false);
         return;
       }
-      
+
       logger.log('[CryptoMLSignalsCard] Generate prediction response:', res.data);
       const ok = res.data?.generateMlPrediction?.success;
       if (ok) {
@@ -653,25 +640,32 @@ const CryptoMLSignalsCard: React.FC<Props> = ({ initialSymbol = 'BTC', pollInter
         Alert.alert('Prediction Generated', `${selectedSymbol}: ${pctStr(p)} probability`);
         await refetchSignal();
       } else {
-        // If API returned failure, still generate mock prediction for demo
+        if (IS_DEMO) {
+          // Demo mode: show mock result when API returns failure
+          const mockProbability = 0.65 + (Math.random() * 0.25);
+          const mockConfidence = mockProbability > 0.8 ? 'HIGH' : mockProbability > 0.6 ? 'MEDIUM' : 'LOW';
+          Alert.alert(
+            'Prediction Generated',
+            `${selectedSymbol}: ${pctStr(mockProbability)} probability\nConfidence: ${mockConfidence}`
+          );
+          await refetchSignal();
+        } else {
+          Alert.alert('Error', 'Prediction generation failed. Please try again.');
+        }
+      }
+    } catch (e: any) {
+      logger.warn('[CryptoMLSignalsCard] Unexpected error during prediction:', e.message);
+      if (IS_DEMO) {
         const mockProbability = 0.65 + (Math.random() * 0.25);
         const mockConfidence = mockProbability > 0.8 ? 'HIGH' : mockProbability > 0.6 ? 'MEDIUM' : 'LOW';
         Alert.alert(
-          'Prediction Generated', 
-          `${selectedSymbol}: ${pctStr(mockProbability)} probability\nConfidence: ${mockConfidence}`
+          'Prediction Generated',
+          `${selectedSymbol}: ${pctStr(mockProbability)} probability\nConfidence: ${mockConfidence}\n\nNote: Using demo prediction`
         );
         await refetchSignal();
+      } else {
+        Alert.alert('Error', 'An unexpected error occurred. Please try again.');
       }
-    } catch (e: any) {
-      // Final fallback - generate mock prediction instead of showing error
-      logger.warn('[CryptoMLSignalsCard] Unexpected error, using mock prediction:', e.message);
-      const mockProbability = 0.65 + (Math.random() * 0.25);
-      const mockConfidence = mockProbability > 0.8 ? 'HIGH' : mockProbability > 0.6 ? 'MEDIUM' : 'LOW';
-      Alert.alert(
-        'Prediction Generated', 
-        `${selectedSymbol}: ${pctStr(mockProbability)} probability\nConfidence: ${mockConfidence}\n\nNote: Using demo prediction`
-      );
-      await refetchSignal();
     } finally {
       setGenerating(false);
     }

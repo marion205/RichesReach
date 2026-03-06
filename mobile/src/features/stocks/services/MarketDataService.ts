@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import logger from '../../../utils/logger';
+
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
 // Market Data Interfaces
 export interface StockQuote {
 symbol: string;
@@ -102,7 +104,8 @@ await AsyncStorage.setItem('alpha_vantage_api_key', apiKey);
 public async getStockQuote(symbol: string): Promise<StockQuote> {
 if (this.MARKET_DATA_DISABLED) {
   logger.warn('[MarketData] disabled in client; skipping', symbol);
-  return this.getMockQuote(symbol);
+  if (IS_DEMO) return this.getMockQuote(symbol);
+  throw new Error(`MarketDataService disabled — use SecureMarketDataService`);
 }
 
 try {
@@ -113,7 +116,8 @@ symbol: symbol.toUpperCase()
 // Check for API errors
 if (data['Error Message']) {
 logger.warn(`API Error for ${symbol}:`, data['Error Message']);
-return this.getMockQuote(symbol);
+if (IS_DEMO) return this.getMockQuote(symbol);
+throw new Error(data['Error Message']);
 }
 // Check for rate limit messages
 if (data['Note']) {
@@ -138,18 +142,21 @@ marketStatus: this.getMarketStatus()
 };
 }
 }
-// Only use mock data if no cached data available
-return this.getMockQuote(symbol);
+// Only fall back to mock when in demo mode
+if (IS_DEMO) return this.getMockQuote(symbol);
+throw new Error('Rate limited and no cached data available');
 }
 // Check for invalid API key
 if (data['Information'] && data['Information'].includes('API key')) {
 logger.warn(`API key issue for ${symbol}:`, data['Information']);
-return this.getMockQuote(symbol);
+if (IS_DEMO) return this.getMockQuote(symbol);
+throw new Error('Invalid API key');
 }
 const quote = data['Global Quote'];
 if (!quote || !quote['05. price']) {
-logger.warn(`No quote data available for ${symbol}, using mock data`);
-return this.getMockQuote(symbol);
+logger.warn(`No quote data available for ${symbol}`);
+if (IS_DEMO) return this.getMockQuote(symbol);
+throw new Error('No quote data available');
 }
 return {
 symbol: quote['01. symbol'],
@@ -166,15 +173,16 @@ marketStatus: this.getMarketStatus()
 };
 } catch (error) {
 logger.warn(`Failed to get quote for ${symbol}:`, error.message);
-// Return mock data as fallback
-return this.getMockQuote(symbol);
+if (IS_DEMO) return this.getMockQuote(symbol);
+throw error;
 }
 }
 // Get multiple stock quotes with rate limiting
 public async getMultipleQuotes(symbols: string[]): Promise<StockQuote[]> {
 if (this.MARKET_DATA_DISABLED) {
-  logger.warn('[MarketData] disabled in client; returning mock data for', symbols.length, 'symbols');
-  return symbols.map(symbol => this.getMockQuote(symbol));
+  logger.warn('[MarketData] disabled in client; skipping', symbols.length, 'symbols');
+  if (IS_DEMO) return symbols.map(symbol => this.getMockQuote(symbol));
+  return [];
 }
 
 const quotes: StockQuote[] = [];
@@ -189,8 +197,8 @@ if (i < symbols.length - 1) {
 await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay
 }
 } catch (error) {
-logger.warn(`Failed to get quote for ${symbol}, using mock data`);
-quotes.push(this.getMockQuote(symbol));
+logger.warn(`Failed to get quote for ${symbol}:`, error.message);
+// In non-demo, skip the failed symbol rather than inserting mock data
 }
 }
 return quotes;
@@ -233,7 +241,8 @@ volume: parseInt(values['5. volume'])
 })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 } catch (error) {
 logger.error(`Failed to get historical data for ${symbol}:`, error);
-return this.getMockHistoricalData(symbol);
+if (IS_DEMO) return this.getMockHistoricalData(symbol);
+throw error;
 }
 }
 // Get market news from NewsAPI
@@ -285,7 +294,8 @@ logger.error('Failed to get market news:', error);
 if (cached) {
 return (cached.data || []) as MarketNews[];
 }
-return this.getMockNews();
+if (IS_DEMO) return this.getMockNews();
+return [];
 }
 }
 // Get news for specific stock symbol

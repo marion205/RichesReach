@@ -15,6 +15,8 @@ import { useQuery } from '@apollo/client';
 import { GET_PORTFOLIO_ANALYTICS, GET_EXECUTION_QUALITY_TRENDS } from '../../../graphql/analytics';
 import ExecutionQualityDashboard from '../../trading/components/ExecutionQualityDashboard';
 
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
 const { width } = Dimensions.get('window');
 
 interface AnalyticsScreenProps {
@@ -135,10 +137,12 @@ export default function AnalyticsScreen({ navigateTo }: AnalyticsScreenProps) {
         },
         sectorAllocation: sectorAlloc,
         topPerformers: topPerformers,
-        monthlyReturns: mockAnalytics.monthlyReturns, // Keep mock for now, can be enhanced later
+        monthlyReturns: mockAnalytics.monthlyReturns,
       };
     }
-    return mockAnalytics;
+    // In demo mode: show mock analytics when real data unavailable
+    if (IS_DEMO) return mockAnalytics;
+    return null;
   }, [portfolioMetrics]);
 
   const onRefresh = async () => {
@@ -197,6 +201,10 @@ export default function AnalyticsScreen({ navigateTo }: AnalyticsScreenProps) {
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#007AFF" />
               </View>
+            ) : !analytics ? (
+              <View style={styles.loadingContainer}>
+                <Text style={{ color: '#6B7280', textAlign: 'center' }}>Analytics unavailable</Text>
+              </View>
             ) : (
               <>
                 <View style={styles.performanceCard}>
@@ -239,7 +247,7 @@ export default function AnalyticsScreen({ navigateTo }: AnalyticsScreenProps) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Sector Allocation</Text>
           <View style={styles.sectorContainer}>
-            {analytics.sectorAllocation.map((sector, index) => (
+            {(analytics?.sectorAllocation || []).map((sector, index) => (
               <View key={index} style={styles.sectorItem}>
                 <View style={styles.sectorHeader}>
                   <View
@@ -268,7 +276,7 @@ export default function AnalyticsScreen({ navigateTo }: AnalyticsScreenProps) {
         {/* Top Performers */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Top Performers</Text>
-          {analytics.topPerformers.map((stock, index) => (
+          {(analytics?.topPerformers || []).map((stock, index) => (
             <View key={index} style={styles.performerItem}>
               <View style={styles.performerInfo}>
                 <Text style={styles.performerSymbol}>{stock.symbol}</Text>
@@ -288,19 +296,19 @@ export default function AnalyticsScreen({ navigateTo }: AnalyticsScreenProps) {
           <View style={styles.riskGrid}>
             <View style={styles.riskCard}>
               <Text style={styles.riskLabel}>Beta</Text>
-              <Text style={styles.riskValue}>{analytics.riskMetrics.beta.toFixed(2)}</Text>
+              <Text style={styles.riskValue}>{analytics?.riskMetrics?.beta?.toFixed(2) ?? '—'}</Text>
             </View>
             <View style={styles.riskCard}>
               <Text style={styles.riskLabel}>Alpha</Text>
-              <Text style={styles.riskValue}>{analytics.riskMetrics.alpha.toFixed(2)}%</Text>
+              <Text style={styles.riskValue}>{analytics?.riskMetrics?.alpha != null ? `${analytics.riskMetrics.alpha.toFixed(2)}%` : '—'}</Text>
             </View>
             <View style={styles.riskCard}>
               <Text style={styles.riskLabel}>R²</Text>
-              <Text style={styles.riskValue}>{analytics.riskMetrics.rSquared.toFixed(2)}</Text>
+              <Text style={styles.riskValue}>{analytics?.riskMetrics?.rSquared?.toFixed(2) ?? '—'}</Text>
             </View>
             <View style={styles.riskCard}>
               <Text style={styles.riskLabel}>Tracking Error</Text>
-              <Text style={styles.riskValue}>{analytics.riskMetrics.trackingError.toFixed(2)}%</Text>
+              <Text style={styles.riskValue}>{analytics?.riskMetrics?.trackingError != null ? `${analytics.riskMetrics.trackingError.toFixed(2)}%` : '—'}</Text>
             </View>
           </View>
         </View>
@@ -315,7 +323,7 @@ export default function AnalyticsScreen({ navigateTo }: AnalyticsScreenProps) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Monthly Returns</Text>
           <View style={styles.monthlyContainer}>
-            {analytics.monthlyReturns.map((month, index) => (
+            {(analytics?.monthlyReturns || []).map((month, index) => (
               <View key={index} style={styles.monthlyItem}>
                 <Text style={styles.monthlyLabel}>{month.month}</Text>
                 <Text

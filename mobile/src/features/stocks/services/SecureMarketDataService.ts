@@ -6,6 +6,8 @@ import { API_BASE } from '../../../config/api';
 import logger from '../../../utils/logger';
 import { imageCache } from '../../../utils/imageCache';
 
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
 export interface Quote {
   symbol: string;
   price: number;
@@ -99,10 +101,13 @@ export class SecureMarketDataService {
           logger.warn(`⚠️ Network error, using stale cache for symbols: ${key}`, err.message);
           return hit.data;
         }
-        // If no cache, return mock data instead of throwing error
-        // This prevents the app from breaking when the backend is unavailable
-        logger.warn(`⚠️ No cache available, using mock data for symbols: ${key}`);
-        return this._getMockQuotes(symbols);
+        // If no cache and in demo mode, use mock data; otherwise rethrow
+        if (IS_DEMO) {
+          logger.warn(`⚠️ No cache available, using mock data for symbols: ${key} (demo mode)`);
+          return this._getMockQuotes(symbols);
+        }
+        logger.warn(`⚠️ No cache available and backend unavailable for symbols: ${key}`);
+        throw err;
       })
       .finally(() => {
         inflight.delete(key);
