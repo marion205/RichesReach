@@ -176,6 +176,121 @@ export const DEMO_PORTFOLIO_RISK_REPORT = JSON.stringify({
   beta: 1.12,
 });
 
+// ─── Quant Terminal (Options tab — Portfolio risk / Vol surface / Edge decay / Regime / Portfolio DNA) ─
+export const DEMO_QUANT_VOL_SURFACE = {
+  symbol: 'AAPL',
+  strikes: [160, 170, 180, 190, 200, 210],
+  expirations: ['2025-04-18', '2025-05-16', '2025-06-20', '2025-07-18'],
+  iv_matrix: [
+    [0.28, 0.26, 0.24, 0.22, 0.23, 0.25],
+    [0.26, 0.25, 0.23, 0.22, 0.23, 0.24],
+    [0.24, 0.24, 0.23, 0.22, 0.23, 0.24],
+    [0.23, 0.23, 0.22, 0.22, 0.23, 0.24],
+  ],
+  timestamp: new Date().toISOString(),
+};
+
+export const DEMO_QUANT_EDGE_DECAY = {
+  strategy_name: 'long_call',
+  symbol: 'AAPL',
+  time_points: ['0', '7', '14', '21', '30', '45', '60'],
+  edge_values: [0.42, 0.38, 0.32, 0.26, 0.20, 0.12, 0.06],
+  confidence_values: [0.88, 0.82, 0.75, 0.68, 0.58, 0.45, 0.32],
+  decay_rate: 0.08,
+  half_life_days: 12,
+  timestamp: new Date().toISOString(),
+};
+
+export const DEMO_QUANT_REGIME_TIMELINE = {
+  start_date: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+  end_date: new Date().toISOString().split('T')[0],
+  events: [
+    { date: new Date().toISOString().split('T')[0], regime: 'Expansion', headline: 'Risk-on conditions intact', confidence: 0.85, market_impact: 0.02 },
+    { date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], regime: 'Expansion', headline: 'Breadth improving', confidence: 0.78, market_impact: 0.01 },
+  ],
+  transitions: [
+    { from: 'Contraction', to: 'Expansion', date: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], duration_days: 5, volatility_spike: 1.2 },
+  ],
+  timestamp: new Date().toISOString(),
+};
+
+export const DEMO_QUANT_PORTFOLIO_DNA = {
+  user_id: 'demo-user-1',
+  fingerprint: {
+    win_rate: 0.58,
+    profit_factor: 1.52,
+    avg_holding_period_days: 12,
+    preferred_iv_regime: 'mid',
+    preferred_dte_range: '21-45',
+    risk_tolerance: 0.6,
+    strategy_preferences: { long_call: 0.35, put_spread: 0.25, covered_call: 0.2, straddle: 0.2 },
+    sharpe_ratio: 1.24,
+    max_drawdown: -0.12,
+    total_trades: 84,
+    best_performing_strategy: 'long_call',
+    worst_performing_strategy: 'naked_put',
+  },
+  archetype: 'Balanced growth',
+  archetype_breakdown: { growth: 0.5, income: 0.3, speculation: 0.2 },
+  strengths: ['Consistent with 21–45 DTE', 'Good win rate on defined-risk spreads', 'Disciplined position sizing'],
+  weaknesses: ['Naked puts have drawn down in vol spikes', 'Holding period sometimes too short'],
+  recommendations: ['Size down naked puts or replace with spreads', 'Consider 30–60 DTE for higher-probability names'],
+  timestamp: new Date().toISOString(),
+};
+
+// ─── Demo options positions (Options tab — Portfolio Risk Management) ───────────
+// OCC format: SYMBOL + YYMMDD + C/P + STRIKE (8 digits). Used when EXPO_PUBLIC_DEMO_MODE=true.
+export const DEMO_OPTIONS_POSITIONS = [
+  {
+    symbol: 'AAPL250418C00190000',
+    qty: 2,
+    side: 'long' as const,
+    marketValue: 840,
+    avgEntryPrice: 3.80,
+    currentPrice: 4.20,
+    unrealizedPl: 80,
+    unrealizedPL: 80,
+    unrealized_pl: 80,
+    unrealized_plpc: 0.105,
+    avg_entry_price: 3.80,
+    current_price: 4.20,
+    market_value: 840,
+    cost_basis: 760,
+  },
+  {
+    symbol: 'MSFT250620C00420000',
+    qty: 1,
+    side: 'long' as const,
+    marketValue: 325,
+    avgEntryPrice: 2.90,
+    currentPrice: 3.25,
+    unrealizedPl: 35,
+    unrealizedPL: 35,
+    unrealized_pl: 35,
+    unrealized_plpc: 0.121,
+    avg_entry_price: 2.90,
+    current_price: 3.25,
+    market_value: 325,
+    cost_basis: 290,
+  },
+  {
+    symbol: 'NVDA250517P00850000',
+    qty: 1,
+    side: 'long' as const,
+    marketValue: 420,
+    avgEntryPrice: 5.10,
+    currentPrice: 4.20,
+    unrealizedPl: -90,
+    unrealizedPL: -90,
+    unrealized_pl: -90,
+    unrealized_plpc: -0.176,
+    avg_entry_price: 5.10,
+    current_price: 4.20,
+    market_value: 420,
+    cost_basis: 510,
+  },
+];
+
 // ─── AI Recommendations ──────────────────────────────────────────────────────
 export const DEMO_AI_RECOMMENDATIONS = {
   buyRecommendations: [

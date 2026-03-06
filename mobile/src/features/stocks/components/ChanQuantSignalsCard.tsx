@@ -130,7 +130,7 @@ export default function ChanQuantSignalsCard({ symbol, onShowExplainer }: ChanQu
             <Text style={styles.sectionTitle}>Mean Reversion</Text>
             <View style={[styles.confidenceBadge, { backgroundColor: getConfidenceColor(signals.meanReversion.confidence) + '20' }]}>
               <Text style={[styles.confidenceText, { color: getConfidenceColor(signals.meanReversion.confidence) }]}>
-                {signals.meanReversion.confidence.toUpperCase()}
+                {(signals.meanReversion.confidence != null ? String(signals.meanReversion.confidence) : 'medium').toUpperCase()}
               </Text>
             </View>
           </View>
@@ -160,7 +160,7 @@ export default function ChanQuantSignalsCard({ symbol, onShowExplainer }: ChanQu
             <Text style={styles.sectionTitle}>Momentum</Text>
             <View style={[styles.confidenceBadge, { backgroundColor: getConfidenceColor(signals.momentum.confidence) + '20' }]}>
               <Text style={[styles.confidenceText, { color: getConfidenceColor(signals.momentum.confidence) }]}>
-                {signals.momentum.confidence.toUpperCase()}
+                {(signals.momentum.confidence != null ? String(signals.momentum.confidence) : 'medium').toUpperCase()}
               </Text>
             </View>
           </View>
@@ -236,31 +236,49 @@ export default function ChanQuantSignalsCard({ symbol, onShowExplainer }: ChanQu
             <Icon name="shield" size={20} color="#8B5CF6" />
             <Text style={styles.sectionTitle}>Regime Robustness</Text>
             <View style={styles.robustnessScore}>
-              <Text style={styles.robustnessValue}>{(signals.regimeRobustness.robustnessScore * 100).toFixed(0)}%</Text>
+              <Text style={styles.robustnessValue}>
+                {signals.regimeRobustness.robustnessScore != null
+                  ? `${(Number(signals.regimeRobustness.robustnessScore) * 100).toFixed(0)}%`
+                  : '—'}
+              </Text>
             </View>
           </View>
           <Text style={styles.regimesList}>
-            Tested: {signals.regimeRobustness.regimesTested.join(', ')}
+            Tested: {Array.isArray(signals.regimeRobustness.regimesTested)
+              ? signals.regimeRobustness.regimesTested.join(', ')
+              : (signals.regimeRobustness.regimesTested != null ? String(signals.regimeRobustness.regimesTested) : '—')}
           </Text>
           <View style={styles.metricsRow}>
             <View style={styles.metric}>
               <Text style={styles.metricLabel}>Worst Regime</Text>
-              <Text style={styles.metricValue}>{signals.regimeRobustness.worstRegimePerformance.toFixed(2)}</Text>
+              <Text style={styles.metricValue}>
+                {signals.regimeRobustness.worstRegimePerformance != null
+                  ? Number(signals.regimeRobustness.worstRegimePerformance).toFixed(2)
+                  : '—'}
+              </Text>
             </View>
             <View style={styles.metric}>
               <Text style={styles.metricLabel}>Best Regime</Text>
-              <Text style={styles.metricValue}>{signals.regimeRobustness.bestRegimePerformance.toFixed(2)}</Text>
+              <Text style={styles.metricValue}>
+                {signals.regimeRobustness.bestRegimePerformance != null
+                  ? Number(signals.regimeRobustness.bestRegimePerformance).toFixed(2)
+                  : '—'}
+              </Text>
             </View>
           </View>
-          <Text style={styles.explanation}>{signals.regimeRobustness.explanation}</Text>
+          {signals.regimeRobustness.explanation != null && (
+            <Text style={styles.explanation}>{signals.regimeRobustness.explanation}</Text>
+          )}
         </View>
       )}
     </ScrollView>
   );
 }
 
-function getConfidenceColor(confidence: string): string {
-  switch (confidence.toLowerCase()) {
+function getConfidenceColor(confidence: string | number | undefined | null): string {
+  if (confidence == null) return '#6B7280';
+  const s = typeof confidence === 'string' ? confidence : String(confidence);
+  switch (s.toLowerCase()) {
     case 'high':
       return '#10B981';
     case 'medium':

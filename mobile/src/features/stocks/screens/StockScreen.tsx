@@ -3074,16 +3074,16 @@ placeholderTextColor="#999"
               </>
             ) : null}
 
-            {/* Real-Time Options Data Stream */}
-            {optionsProMode && optionsSymbol && selectedOption ? (
+            {/* Real-Time Options Data Stream — in demo mode always show mock stream */}
+            {(optionsProMode && optionsSymbol && selectedOption) || process.env.EXPO_PUBLIC_DEMO_MODE === 'true' ? (
               <OptionsRealtimeStream
-                symbol={optionsSymbol}
-                contractSymbol={(() => {
+                symbol={optionsSymbol || 'AAPL'}
+                contractSymbol={selectedOption ? (() => {
                   const exp = (selectedOption as any).expiration || '';
                   const strike = (selectedOption as any).strike || 0;
                   const optType = (selectedOption as any).optionType || 'call';
                   return `${optionsSymbol}${exp.replace(/-/g, '')}${optType === 'call' ? 'C' : 'P'}${(strike * 1000).toFixed(0).padStart(8, '0')}`;
-                })()}
+                })() : undefined}
               />
             ) : (
               <View style={[styles.card, { padding: 16, backgroundColor: '#F8FAFC' }]}>

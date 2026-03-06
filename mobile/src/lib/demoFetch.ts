@@ -15,6 +15,10 @@ import {
   DEMO_FUTURES,
   DEMO_CREDIT_SNAPSHOT,
   getDemoHoldingInsight,
+  DEMO_QUANT_VOL_SURFACE,
+  DEMO_QUANT_EDGE_DECAY,
+  DEMO_QUANT_REGIME_TIMELINE,
+  DEMO_QUANT_PORTFOLIO_DNA,
 } from '../services/demoMockData';
 
 function jsonResponse(data: unknown, status = 200): Response {
@@ -183,6 +187,24 @@ const HANDLERS: Handler[] = [
       const sym = url.split('/').pop()?.split('?')[0] ?? 'ES';
       const price = (DEMO_FUTURES.prices as any)[sym] ?? { price: 0, change: 0, changePercent: 0 };
       return jsonResponse(price);
+    }
+    return null;
+  },
+
+  // Quant Terminal (Options tab — vol surface, edge decay, regime timeline, portfolio DNA)
+  (url, options) => {
+    if (!url.includes('/v1/quant/')) return null;
+    if (url.includes('/v1/quant/vol-surface') && options?.method === 'POST') {
+      return jsonResponse(DEMO_QUANT_VOL_SURFACE);
+    }
+    if (url.includes('/v1/quant/edge-decay') && options?.method === 'POST') {
+      return jsonResponse(DEMO_QUANT_EDGE_DECAY);
+    }
+    if (url.includes('/v1/quant/regime-timeline') && options?.method === 'POST') {
+      return jsonResponse(DEMO_QUANT_REGIME_TIMELINE);
+    }
+    if (url.includes('/v1/quant/portfolio-dna/') && (options?.method === 'GET' || !options?.method)) {
+      return jsonResponse(DEMO_QUANT_PORTFOLIO_DNA);
     }
     return null;
   },

@@ -1,6 +1,9 @@
 import { useMemo } from 'react';
 import { useAlpacaPositions } from '../features/stocks/hooks/useAlpacaPositions';
 import { AlpacaPosition } from '../features/stocks/types';
+import { DEMO_OPTIONS_POSITIONS } from '../services/demoMockData';
+
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
 
 interface OptionsPosition extends AlpacaPosition {
   underlyingSymbol?: string;
@@ -13,16 +16,15 @@ interface OptionsPosition extends AlpacaPosition {
 /**
  * Hook to filter and parse options positions from Alpaca positions
  * Options contracts have OCC format symbols like "AAPL240119C00150000"
+ * In demo mode, returns mock positions when real positions are empty.
  */
 export const useOptionsPositions = (accountId: number | null) => {
   const { positions, loading, error, refetch, isOffline, isUsingCache } = useAlpacaPositions(accountId);
 
-  // Filter and parse options positions
+  // Filter and parse options positions; in demo mode use mock positions when empty
   const optionsPositions = useMemo<OptionsPosition[]>(() => {
-    return positions
+    const raw = positions
       .filter((pos: AlpacaPosition) => {
-        // Options contracts have OCC format: SYMBOL + YYMMDD + C/P + STRIKE (8 digits)
-        // Example: AAPL240119C00150000
         const symbol = pos.symbol || '';
         const isOptions = /^[A-Z]+\d{6}[CP]\d{8}$/.test(symbol);
         return isOptions;
@@ -30,7 +32,6 @@ export const useOptionsPositions = (accountId: number | null) => {
       .map((pos: AlpacaPosition) => {
         const symbol = pos.symbol || '';
         const parsed = parseOptionsSymbol(symbol);
-        
         return {
           ...pos,
           underlyingSymbol: parsed.underlyingSymbol,
@@ -40,6 +41,21 @@ export const useOptionsPositions = (accountId: number | null) => {
           daysToExp: parsed.daysToExp,
         };
       });
+
+    if (IS_DEMO && raw.length === 0) {
+      return DEMO_OPTIONS_POSITIONS.map((pos) => {
+        const parsed = parseOptionsSymbol(pos.symbol);
+        return {
+          ...pos,
+          underlyingSymbol: parsed.underlyingSymbol,
+          strike: parsed.strike,
+          expiration: parsed.expiration,
+          optionType: parsed.optionType,
+          daysToExp: parsed.daysToExp,
+        } as OptionsPosition;
+      });
+    }
+    return raw;
   }, [positions]);
 
   return {

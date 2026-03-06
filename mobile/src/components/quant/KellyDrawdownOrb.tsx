@@ -12,7 +12,6 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Dimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
-import Icon from 'react-native-vector-icons/Feather';
 
 const { width } = Dimensions.get('window');
 const ORB_SIZE = Math.min(width * 0.4, 160);
@@ -95,11 +94,6 @@ export default function KellyDrawdownOrb({
             <Text style={styles.orbLabel}>Position</Text>
           </View>
         </LinearGradient>
-        
-        {/* Center indicator */}
-        <View style={styles.centerIndicator}>
-          <Icon name="target" size={16} color={riskColor} />
-        </View>
       </View>
       
       {/* Details Panel */}
@@ -194,20 +188,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-  },
-  centerIndicator: {
-    position: 'absolute',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
   },
   detailsPanel: {
     marginTop: 24,

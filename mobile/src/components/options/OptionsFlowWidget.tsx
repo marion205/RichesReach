@@ -4,6 +4,8 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useQuery } from '@apollo/client';
 import { GET_OPTIONS_FLOW } from '../../graphql/tradingQueries';
 
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
 interface OptionsFlowWidgetProps {
   symbol: string;
 }
@@ -33,10 +35,15 @@ export default function OptionsFlowWidget({ symbol }: OptionsFlowWidgetProps) {
 
   const { data, loading, error } = useQuery(GET_OPTIONS_FLOW, {
     variables: { symbol },
-    skip: !symbol,
+    skip: !symbol || IS_DEMO, // In demo mode use mock data below
     fetchPolicy: 'cache-first', // Use cache first to avoid long loading
     errorPolicy: 'all',
   });
+
+  // Demo mode: show mock options flow and unusual activity
+  if (IS_DEMO && symbol) {
+    return <OptionsFlowWidgetMock symbol={symbol} filter={filter} setFilter={setFilter} />;
+  }
 
   // Timeout after 12 seconds - show delayed state if still loading
   useEffect(() => {
@@ -229,26 +236,26 @@ function OptionsFlowWidgetMock({
 }) {
   const mockActivity: UnusualActivity[] = [
     {
-      contractSymbol: `${symbol}240119C00150000`,
-      strike: 150,
-      expiration: '2024-01-19',
+      contractSymbol: `${symbol}250418C00190000`,
+      strike: 190,
+      expiration: '2025-04-18',
       optionType: 'call',
       volume: 15234,
       openInterest: 45000,
       volumeVsOI: 0.34,
-      lastPrice: 2.45,
-      bid: 2.40,
-      ask: 2.50,
-      impliedVolatility: 0.28,
+      lastPrice: 4.20,
+      bid: 4.15,
+      ask: 4.25,
+      impliedVolatility: 0.26,
       unusualVolumePercent: 245,
       sweepCount: 3,
       blockSize: 500,
       isDarkPool: false,
     },
     {
-      contractSymbol: `${symbol}240119P00145000`,
-      strike: 145,
-      expiration: '2024-01-19',
+      contractSymbol: `${symbol}250418P00185000`,
+      strike: 185,
+      expiration: '2025-04-18',
       optionType: 'put',
       volume: 8900,
       openInterest: 12000,
@@ -261,6 +268,23 @@ function OptionsFlowWidgetMock({
       sweepCount: 0,
       blockSize: 0,
       isDarkPool: true,
+    },
+    {
+      contractSymbol: `${symbol}250515C00195000`,
+      strike: 195,
+      expiration: '2025-05-15',
+      optionType: 'call',
+      volume: 6200,
+      openInterest: 22000,
+      volumeVsOI: 0.28,
+      lastPrice: 3.10,
+      bid: 3.05,
+      ask: 3.15,
+      impliedVolatility: 0.24,
+      unusualVolumePercent: 312,
+      sweepCount: 2,
+      blockSize: 300,
+      isDarkPool: false,
     },
   ];
 

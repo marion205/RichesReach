@@ -116,17 +116,21 @@ export const IVSurfaceForecast: React.FC<IVSurfaceForecastProps> = ({ symbol }) 
   const maxChange = Math.max(...allChanges);
   const range = maxChange - minChange || 1;
 
+  const regimeLabel = (forecast.regime || '').replace(/_/g, ' ').toUpperCase();
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View>
+        <View style={styles.headerTitleWrap}>
           <Text style={styles.title}>IV Surface Forecast</Text>
           <Text style={styles.subtitle}>
             Predicts IV changes {timeHorizon === '1hr' ? '1 hour' : '24 hours'} ahead
           </Text>
         </View>
         <View style={styles.regimeBadge}>
-          <Text style={styles.regimeText}>{forecast.regime.toUpperCase()}</Text>
+          <Text style={styles.regimeText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}>
+            {regimeLabel}
+          </Text>
         </View>
       </View>
 
@@ -159,9 +163,11 @@ export const IVSurfaceForecast: React.FC<IVSurfaceForecastProps> = ({ symbol }) 
           <Text style={styles.infoLabel}>Confidence</Text>
           <Text style={styles.infoValue}>{forecast.confidence.toFixed(0)}%</Text>
         </View>
-        <View style={styles.infoItem}>
+        <View style={[styles.infoItem, styles.infoItemRegime]}>
           <Text style={styles.infoLabel}>Regime</Text>
-          <Text style={styles.infoValue}>{forecast.regime}</Text>
+          <Text style={styles.infoValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+            {regimeLabel}
+          </Text>
         </View>
       </View>
 
@@ -274,6 +280,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 16,
+    gap: 12,
+  },
+  headerTitleWrap: {
+    flex: 1,
+    minWidth: 0,
   },
   title: {
     fontSize: 24,
@@ -290,6 +301,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 12,
+    maxWidth: '48%',
   },
   regimeText: {
     fontSize: 12,
@@ -366,6 +378,10 @@ const styles = StyleSheet.create({
   },
   infoItem: {
     alignItems: 'center',
+    flex: 1,
+  },
+  infoItemRegime: {
+    minWidth: 0,
   },
   infoLabel: {
     fontSize: 12,

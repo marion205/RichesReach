@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/Feather';
 
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
 interface OptionsRealtimeStreamProps {
   symbol: string;
   contractSymbol?: string;
@@ -20,25 +22,59 @@ interface StreamData {
   timestamp: string;
 }
 
+function getDemoStreamData(symbol: string): StreamData {
+  const base = symbol === 'AAPL' ? 4.2 : symbol === 'MSFT' ? 3.8 : 2.5;
+  return {
+    bid: base - 0.05,
+    ask: base + 0.05,
+    last: base,
+    volume: 12450,
+    delta: 0.52,
+    gamma: 0.018,
+    theta: -0.048,
+    vega: 0.12,
+    impliedVolatility: 0.26,
+    timestamp: new Date().toISOString(),
+  };
+}
+
 export default function OptionsRealtimeStream({ symbol, contractSymbol }: OptionsRealtimeStreamProps) {
-  const [streamData, setStreamData] = useState<StreamData | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const demoSymbol = symbol || 'AAPL';
+  const [streamData, setStreamData] = useState<StreamData | null>(() =>
+    IS_DEMO ? getDemoStreamData(demoSymbol) : null
+  );
+  const [isConnected, setIsConnected] = useState(IS_DEMO);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(IS_DEMO ? new Date() : null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
+    if (IS_DEMO) {
+      const sym = symbol || 'AAPL';
+      setStreamData(getDemoStreamData(sym));
+      setLastUpdate(new Date());
+      setIsConnected(true);
+      const updateInterval = setInterval(() => {
+        const next = getDemoStreamData(sym);
+        next.bid += (Math.random() - 0.5) * 0.04;
+        next.ask = next.bid + 0.08 + (Math.random() - 0.5) * 0.02;
+        next.last = (next.bid + next.ask) / 2;
+        next.volume += Math.floor((Math.random() - 0.5) * 200);
+        next.delta += (Math.random() - 0.5) * 0.02;
+        next.impliedVolatility += (Math.random() - 0.5) * 0.01;
+        next.timestamp = new Date().toISOString();
+        setStreamData(next);
+        setLastUpdate(new Date());
+      }, 3000);
+      return () => clearInterval(updateInterval);
+    }
+
     if (!symbol) return;
 
-    // In production, this would connect to a WebSocket server
-    // For now, simulate real-time updates with polling
+    // Non-demo: simulate real-time updates with polling
     const connectWebSocket = () => {
-      // Simulate WebSocket connection
       setIsConnected(true);
-      
-      // Simulate real-time updates every 2 seconds
       const updateInterval = setInterval(() => {
-        // Generate mock real-time data
         const mockData: StreamData = {
           bid: 2.40 + Math.random() * 0.1,
           ask: 2.50 + Math.random() * 0.1,
@@ -51,11 +87,9 @@ export default function OptionsRealtimeStream({ symbol, contractSymbol }: Option
           impliedVolatility: 0.25 + (Math.random() - 0.5) * 0.05,
           timestamp: new Date().toISOString(),
         };
-        
         setStreamData(mockData);
         setLastUpdate(new Date());
       }, 2000);
-
       return () => {
         clearInterval(updateInterval);
         setIsConnected(false);
@@ -63,15 +97,10 @@ export default function OptionsRealtimeStream({ symbol, contractSymbol }: Option
     };
 
     const cleanup = connectWebSocket();
-    
     return () => {
       if (cleanup) cleanup();
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
+      if (wsRef.current) wsRef.current.close();
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
     };
   }, [symbol, contractSymbol]);
 
@@ -102,10 +131,16 @@ export default function OptionsRealtimeStream({ symbol, contractSymbol }: Option
       <View style={styles.header}>
         <Icon name="radio" size={18} color="#007AFF" />
         <Text style={styles.title}>Real-Time Options Data</Text>
-        <View style={[styles.statusIndicator, isConnected && styles.statusIndicatorLive]}>
-          <View style={[styles.statusDot, isConnected && styles.statusDotLive]} />
-          <Text style={styles.statusText}>{isConnected ? 'LIVE' : 'OFFLINE'}</Text>
-        </View>
+        {IS_DEMO ? (
+          <View style={styles.demoBadge}>
+            <Text style={styles.demoBadgeText}>DEMO</Text>
+          </View>
+        ) : (
+          <View style={[styles.statusIndicator, isConnected && styles.statusIndicatorLive]}>
+            <View style={[styles.statusDot, isConnected && styles.statusDotLive]} />
+            <Text style={styles.statusText}>{isConnected ? 'LIVE' : 'OFFLINE'}</Text>
+          </View>
+        )}
       </View>
 
       {lastUpdate && (
@@ -208,6 +243,17 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginLeft: 8,
     flex: 1,
+  },
+  demoBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  demoBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#92400E',
   },
   statusIndicator: {
     flexDirection: 'row',

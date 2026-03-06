@@ -573,22 +573,24 @@ export default function QuantTerminalWidget({
           ) : portfolioDNA ? (
             <ScrollView>
               <View style={styles.dnaCard}>
-                <Text style={styles.dnaArchetype}>{portfolioDNA.archetype}</Text>
+                <Text style={styles.dnaArchetype}>{portfolioDNA.archetype ?? '—'}</Text>
                 <Text style={styles.dnaSubtext}>
-                  You are {Object.entries(portfolioDNA.archetype_breakdown)
-                    .map(([k, v]) => `${(v * 100).toFixed(0)}% ${k}`)
-                    .join(', ')}
+                  You are {Object.entries(portfolioDNA.archetype_breakdown ?? {})
+                    .map(([k, v]) => `${(Number(v) * 100).toFixed(0)}% ${k}`)
+                    .join(', ') || '—'}
                 </Text>
               </View>
-              <View style={styles.dnaSection}>
-                <Text style={styles.dnaLabel}>Fingerprint</Text>
-                <Text style={styles.dnaText}>Win Rate: {(portfolioDNA.fingerprint.win_rate * 100).toFixed(1)}%</Text>
-                <Text style={styles.dnaText}>Profit Factor: {portfolioDNA.fingerprint.profit_factor.toFixed(2)}</Text>
-                <Text style={styles.dnaText}>Sharpe Ratio: {portfolioDNA.fingerprint.sharpe_ratio.toFixed(2)}</Text>
-                <Text style={styles.dnaText}>Max Drawdown: {(portfolioDNA.fingerprint.max_drawdown * 100).toFixed(1)}%</Text>
-                <Text style={styles.dnaText}>Total Trades: {portfolioDNA.fingerprint.total_trades}</Text>
-              </View>
-              {portfolioDNA.strengths.length > 0 && (
+              {portfolioDNA.fingerprint && (
+                <View style={styles.dnaSection}>
+                  <Text style={styles.dnaLabel}>Fingerprint</Text>
+                  <Text style={styles.dnaText}>Win Rate: {((portfolioDNA.fingerprint.win_rate ?? 0) * 100).toFixed(1)}%</Text>
+                  <Text style={styles.dnaText}>Profit Factor: {(portfolioDNA.fingerprint.profit_factor ?? 0).toFixed(2)}</Text>
+                  <Text style={styles.dnaText}>Sharpe Ratio: {(portfolioDNA.fingerprint.sharpe_ratio ?? 0).toFixed(2)}</Text>
+                  <Text style={styles.dnaText}>Max Drawdown: {((portfolioDNA.fingerprint.max_drawdown ?? 0) * 100).toFixed(1)}%</Text>
+                  <Text style={styles.dnaText}>Total Trades: {portfolioDNA.fingerprint.total_trades ?? 0}</Text>
+                </View>
+              )}
+              {Array.isArray(portfolioDNA.strengths) && portfolioDNA.strengths.length > 0 && (
                 <View style={styles.dnaSection}>
                   <Text style={styles.dnaLabel}>Strengths</Text>
                   {portfolioDNA.strengths.map((s, idx) => (
@@ -596,7 +598,7 @@ export default function QuantTerminalWidget({
                   ))}
                 </View>
               )}
-              {portfolioDNA.weaknesses.length > 0 && (
+              {Array.isArray(portfolioDNA.weaknesses) && portfolioDNA.weaknesses.length > 0 && (
                 <View style={styles.dnaSection}>
                   <Text style={styles.dnaLabel}>Weaknesses</Text>
                   {portfolioDNA.weaknesses.map((w, idx) => (
@@ -604,7 +606,7 @@ export default function QuantTerminalWidget({
                   ))}
                 </View>
               )}
-              {portfolioDNA.recommendations.length > 0 && (
+              {Array.isArray(portfolioDNA.recommendations) && portfolioDNA.recommendations.length > 0 && (
                 <View style={styles.dnaSection}>
                   <Text style={styles.dnaLabel}>Recommendations</Text>
                   {portfolioDNA.recommendations.map((r, idx) => (
