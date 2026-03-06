@@ -450,6 +450,18 @@ export const DEMO_SENTIMENT_INDICATORS = [
   { name: 'Insider Buying', value: 1.8, change: 0.3, signal: 'bullish', level: 'elevated', __typename: 'SentimentIndicator' },
 ];
 
+// ─── Oracle Insights (GetOracleInsights) ───────────────────────────────────────
+export const DEMO_ORACLE_INSIGHTS = {
+  id: 'oracle-demo-1',
+  question: 'What is the outlook for tech stocks given current macro conditions?',
+  answer: 'Tech remains supported by AI capex and resilient earnings. We maintain a neutral-to-positive bias with a preference for quality large caps (NVDA, MSFT) over speculative names. Key risks: rates staying higher for longer and multiple compression.',
+  confidence: 0.82,
+  sources: ['Macro regime model', 'Sector flow data', 'Earnings revisions'],
+  timestamp: new Date().toISOString(),
+  relatedInsights: [] as string[],
+  __typename: 'OracleInsightType',
+};
+
 // ─── RAHA Signals ─────────────────────────────────────────────────────────────
 export const DEMO_RAHA_SIGNALS = [
   {

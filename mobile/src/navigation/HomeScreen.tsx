@@ -32,6 +32,10 @@ import { API_BASE, API_HTTP } from '../config/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useDailyBriefProgress } from '../hooks/useDailyBriefProgress';
 import type { NavigateParams } from './types';
+
+// Daily brief auto-redirect: only once per app session (survives tab switch / Home remount)
+let hasAutoNavigatedToDailyBriefThisSession = false;
+
 // Create a safe logger that always works, even if the import fails
 // This prevents "Property 'logger' doesn't exist" errors
 const createSafeLogger = () => {
@@ -536,11 +540,14 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
       };
     }, []); // Run once when component mounts
 
-    // Auto-navigate to Daily Brief if not completed today (only once per session)
+    // Auto-navigate to Daily Brief if not completed today — only on first load this session, not when returning to Home
     useEffect(() => {
+      if (hasAutoNavigatedToDailyBriefThisSession) return;
+      if (!token || hasCheckedDailyBrief.current) return;
+
       let active = true;
       const checkAndNavigateToDailyBrief = async () => {
-        if (!token || hasCheckedDailyBrief.current) return;
+        if (!token || hasCheckedDailyBrief.current || hasAutoNavigatedToDailyBriefThisSession) return;
         try {
           await new Promise(resolve => setTimeout(resolve, 1000));
           if (!active) return;
@@ -554,7 +561,8 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
           if (!active) return;
           if (response.ok) {
             const data = await response.json();
-            if (!data.is_completed && !hasCheckedDailyBrief.current) {
+            if (!data.is_completed && !hasAutoNavigatedToDailyBriefThisSession) {
+              hasAutoNavigatedToDailyBriefThisSession = true;
               hasCheckedDailyBrief.current = true;
               if (dailyBriefTimeoutRef.current) clearTimeout(dailyBriefTimeoutRef.current);
               dailyBriefTimeoutRef.current = setTimeout(() => {
@@ -564,17 +572,18 @@ import { getMockHomeScreenPortfolio } from '../services/mockPortfolioData';
                 dailyBriefTimeoutRef.current = null;
               }, 500);
             } else if (data.is_completed) {
+              hasAutoNavigatedToDailyBriefThisSession = true;
               hasCheckedDailyBrief.current = true;
             }
           }
         } catch (error) {
           logger.log('Daily brief check failed:', error);
+          hasAutoNavigatedToDailyBriefThisSession = true;
           hasCheckedDailyBrief.current = true;
         }
       };
-      if (token && !hasCheckedDailyBrief.current) {
-        checkAndNavigateToDailyBrief();
-      }
+      checkAndNavigateToDailyBrief();
+
       return () => {
         active = false;
         if (dailyBriefTimeoutRef.current) {

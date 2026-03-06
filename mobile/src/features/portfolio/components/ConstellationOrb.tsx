@@ -591,8 +591,11 @@ export const ConstellationOrb: React.FC<ConstellationOrbProps> = ({
               const y = ORB_CENTER + radius * Math.sin(rad) - 6;
               
               const positionValue = position.value ?? 0;
-              const positionColor = positionValue >= 0 ? '#34C759' : '#FF3B30';
-              const positionSize = Math.min(8, Math.max(4, 4 + (Math.abs(positionValue) / 1000)));
+              const pct = position.changePercent;
+              const positionColor = pct != null
+                ? (pct > 0.5 ? '#34C759' : pct < -0.5 ? '#FF3B30' : '#8E8E93')
+                : (positionValue >= 0 ? '#34C759' : '#FF3B30');
+              const positionSize = Math.min(12, Math.max(6, 6 + (Math.abs(positionValue) / 1000)));
 
               return (
                 <View
@@ -624,10 +627,13 @@ export const ConstellationOrb: React.FC<ConstellationOrbProps> = ({
               };
             });
             
-            // Determine position color based on performance (if available)
+            // Determine position color based on performance (changePercent) or value
             const positionValue = position.value ?? 0;
-            const positionColor = positionValue >= 0 ? '#34C759' : '#FF3B30';
-            const positionSize = Math.min(8, Math.max(4, 4 + (Math.abs(positionValue) / 1000)));
+            const pct = position.changePercent;
+            const positionColor = pct != null
+              ? (pct > 0.5 ? '#34C759' : pct < -0.5 ? '#FF3B30' : '#8E8E93')
+              : (positionValue >= 0 ? '#34C759' : '#FF3B30');
+            const positionSize = Math.min(12, Math.max(6, 6 + (Math.abs(positionValue) / 1000)));
 
             return (
               <Animated.View

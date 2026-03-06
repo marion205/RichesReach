@@ -19,6 +19,8 @@ export interface MoneySnapshot {
     symbol: string;
     value: number;
     shares: number;
+    /** When set, used for orb color: positive = green, negative = red, near zero = neutral */
+    changePercent?: number;
   }>;
   shield: Array<{
     type: 'LOW_BALANCE' | 'BILL_DUE' | 'RISKY_ORDER';

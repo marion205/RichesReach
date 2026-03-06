@@ -33,6 +33,7 @@ import {
   DEMO_SPENDING_ANALYSIS,
   DEMO_TRANSPARENCY_DASHBOARD,
   DEMO_TRANSPARENCY_PERFORMANCE,
+  DEMO_ORACLE_INSIGHTS,
 } from '../services/demoMockData';
 
 // ─── Operation → mock data map ────────────────────────────────────────────────
@@ -61,17 +62,39 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
     },
   },
 
-  // Stock Chart Data
-  GetStockChartData: {
-    stockChartData: {
-      symbol: 'NVDA',
-      currentPrice: 875.40,
-      change: 36.18,
-      changePercent: 4.31,
-      __typename: 'StockChartDataType',
-      data: [],
-    },
-  },
+  // Stock Chart Data (demo: generate candles so Price & P&L chart renders)
+  GetStockChartData: (() => {
+    const points = 30;
+    const candles: Array<{ timestamp: string; open: number; high: number; low: number; close: number; volume: number }> = [];
+    let price = 780;
+    const now = Date.now();
+    for (let i = points - 1; i >= 0; i--) {
+      const ts = new Date(now - i * 24 * 60 * 60 * 1000).toISOString();
+      const open = price + (Math.random() - 0.48) * 12;
+      const close = open + (Math.random() - 0.46) * 18;
+      const high = Math.max(open, close) + Math.random() * 8;
+      const low = Math.min(open, close) - Math.random() * 8;
+      price = close;
+      candles.push({
+        timestamp: ts,
+        open: parseFloat(open.toFixed(2)),
+        high: parseFloat(high.toFixed(2)),
+        low: parseFloat(low.toFixed(2)),
+        close: parseFloat(close.toFixed(2)),
+        volume: Math.floor(30000000 + Math.random() * 20000000),
+      });
+    }
+    return {
+      stockChartData: {
+        symbol: 'NVDA',
+        currentPrice: 875.40,
+        change: 36.18,
+        changePercent: 4.31,
+        __typename: 'StockChartDataType',
+        data: candles,
+      },
+    };
+  })(),
   GetAdvancedChartData: (() => {
     // Generate 30 days of realistic NVDA-like OHLCV candles
     const candles = [];
@@ -163,6 +186,9 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
   // RAHA
   GetRAHASignals:  { rahaSignals: DEMO_RAHA_SIGNALS },
   GetRAHAMetrics:  { rahaMetrics: DEMO_RAHA_METRICS },
+
+  // Oracle Insights (AI / Oracle)
+  GetOracleInsights: { oracleInsights: DEMO_ORACLE_INSIGHTS },
 
   // Transparency Dashboard
   TransparencyDashboard:   { transparencyDashboard: DEMO_TRANSPARENCY_DASHBOARD },

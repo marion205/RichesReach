@@ -52,6 +52,75 @@ const HANDLERS: Handler[] = [
     return null;
   },
 
+  // Voice / TTS preview — return valid shape so VoiceAI doesn't throw "Failed to generate preview"
+  (url, options) => {
+    if ((url.includes('/api/preview') || url.includes('/api/preview/')) && options?.method === 'POST') {
+      return jsonResponse({
+        success: true,
+        audio_url: 'data:audio/mpeg;base64,//uQx',
+        format: 'mp3',
+      });
+    }
+    return null;
+  },
+
+  // Whisper / transcribe — demo transcription so voice flows don't break
+  (url, options) => {
+    if (url.includes('/api/transcribe-audio/') && options?.method === 'POST') {
+      return jsonResponse({
+        success: true,
+        transcript: 'Demo transcription.',
+        response: { transcription: 'Demo transcription.', whisper_used: false },
+      });
+    }
+    return null;
+  },
+
+  // Connectivity check (e.g. Google generate_204) — return 204 No Content, no body
+  (url) => {
+    if (url.includes('generate_204')) {
+      return new Response(null, { status: 204 });
+    }
+    return null;
+  },
+
+  // Tutor module (Learn → Generate) — demo content so "Generate" shows something in demo mode
+  (url, options) => {
+    if (url.includes('/tutor/module') && options?.method === 'POST') {
+      return jsonResponse({
+        title: 'Risk Management',
+        difficulty: 'beginner',
+        estimated_time: 10,
+        description: 'Learn how to identify, measure, and manage risk in your portfolio. This module covers position sizing, stop losses, and diversification.',
+        sections: [
+          {
+            title: 'What is risk?',
+            content: 'Risk is the chance that your investment may lose value. In trading, we manage risk by limiting how much we could lose on any single trade and across our portfolio.',
+            key_points: ['Risk can be measured (e.g. volatility, drawdown).', 'Diversification reduces unsystematic risk.', 'Position sizing limits loss per trade.'],
+            examples: ['Example: Never risk more than 1–2% of your account on one trade.'],
+          },
+          {
+            title: 'Position sizing',
+            content: 'Position sizing means choosing how many shares or contracts to trade so that if the trade hits your stop loss, you only lose a set amount (e.g. 1% of account).',
+            key_points: ['Size = (Account × Risk%) ÷ (Entry − Stop).', 'Smaller size = smaller loss if stopped out.', 'Adjust size when volatility changes.'],
+          },
+          {
+            title: 'Putting it together',
+            content: 'Combine stop losses with position sizing and diversification. Review your risk regularly and adjust as your account or goals change.',
+            key_points: ['Use stops on every trade.', 'Diversify across sectors and timeframes.', 'Revisit risk rules when markets change.'],
+          },
+        ],
+        quiz: {
+          questions: [
+            { id: 'q1', question: 'What is a key benefit of position sizing?', question_type: 'multiple_choice', options: ['Larger profits', 'Limited loss per trade', 'Faster execution'], correct_answer: 'Limited loss per trade' },
+            { id: 'q2', question: 'True or false: Diversification can reduce unsystematic risk.', question_type: 'true_false', options: ['True', 'False'], correct_answer: 'True' },
+          ],
+        },
+      });
+    }
+    return null;
+  },
+
   // Market brief
   (url) => {
     if (url.includes('/api/market/brief') || url.includes('/api/market/status')) {
@@ -231,8 +300,10 @@ export function installDemoFetch() {
       }
     }
 
-    // Fallback: log and return empty 200 so app doesn't crash on unknown endpoints
-    console.warn(`[DemoMode] Unhandled fetch: ${url} — returning empty 200`);
+    // Fallback: return empty 200 so app doesn't crash (log only in __DEV__ to reduce noise)
+    if (__DEV__) {
+      console.warn(`[DemoMode] Unhandled fetch: ${url} — returning empty 200`);
+    }
     return Promise.resolve(jsonResponse({}));
   };
 }

@@ -382,13 +382,19 @@ setRefreshing(false);
       return portfolio.holdings.map((holding: PortfolioHolding) => {
         const symbol = holding.stock?.symbol || holding.symbol || '';
         const quantity = holding.shares || holding.quantity || 0;
-        const currentPrice = realTimePrices[symbol] || holding.currentPrice || holding.stock?.currentPrice || 0;
-        const totalValue = quantity * currentPrice || holding.totalValue || 0;
-        
+        const currentPriceForValue = realTimePrices[symbol] || holding.currentPrice || holding.stock?.currentPrice || 0;
+        const totalValue = quantity * currentPriceForValue || holding.totalValue || 0;
+        const averagePrice = holding.averagePrice ?? holding.stock?.averagePrice;
+        // Use holding's own price for orb color so demo/cost-basis drives green/neutral/red (not real-time ticker)
+        const priceForChange = holding.currentPrice ?? holding.stock?.currentPrice ?? currentPriceForValue;
+        const changePercent = averagePrice != null && averagePrice > 0
+          ? ((priceForChange - averagePrice) / averagePrice) * 100
+          : undefined;
         return {
           symbol,
           value: totalValue,
           shares: quantity,
+          ...(changePercent != null && { changePercent }),
         };
       }).filter(pos => pos.symbol && pos.value > 0); // Only include valid positions
     });
