@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
     paddingTop: 44, // Status bar height
-    paddingBottom: 12,
+    paddingBottom: 6,
     paddingHorizontal: 16,
   },
   content: {

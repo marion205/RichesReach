@@ -732,7 +732,7 @@ export const CreditQuestScreen: React.FC<CreditQuestScreenProps> = ({
           insights.push({
             id: 'arb-1',
             type: 'opportunity',
-            title: `Bureau Score Arbitrage: +${bureauDelta} Point Advantage`,
+            title: `Credit Edge Opportunity: +${bureauDelta} Point Advantage`,
             description: `Your Equifax score is ${bureauDelta} points higher than Experian. Several premium lenders pull Equifax only — apply in the next 14 days for maximum advantage.`,
             confidence: 0.84,
             timeHorizon: '14 days',
@@ -1338,7 +1338,35 @@ export const CreditQuestScreen: React.FC<CreditQuestScreenProps> = ({
               score={snapshot.score}
               projection={snapshot.projection}
             />
+            <Text style={styles.disclaimerText}>
+              For educational and informational purposes only. Not credit or financial advice.
+            </Text>
           </View>
+
+          {/* Mission Meter: target, next milestone, progress */}
+          {(() => {
+            const current = snapshot.score?.score ?? 580;
+            const targetScore = 780;
+            const nextMilestone = current >= 740 ? { score: 780, label: 'Excellent tier' } : current >= 670 ? { score: 740, label: 'Unlocks better auto rates' } : { score: 670, label: 'Good tier' };
+            const progressPct = Math.min(100, Math.max(0, ((current - 580) / (targetScore - 580)) * 100));
+            return (
+              <View style={styles.missionMeterCard}>
+                <Text style={styles.missionMeterTitle}>Credit Quest Progress</Text>
+                <Text style={styles.missionMeterTarget}>Target: {targetScore} (Excellent Tier)</Text>
+                <View style={styles.missionMeterNext}>
+                  <Icon name="flag" size={14} color="#007AFF" />
+                  <Text style={styles.missionMeterNextText}>Next milestone: {nextMilestone.score} — {nextMilestone.label}</Text>
+                </View>
+                <View style={styles.progressBarBg}>
+                  <View style={[styles.progressBarFill, { width: `${progressPct}%` }]} />
+                </View>
+                <View style={styles.progressLabels}>
+                  <Text style={styles.progressLabelText}>580</Text>
+                  <Text style={styles.progressLabelText}>{targetScore}</Text>
+                </View>
+              </View>
+            );
+          })()}
 
           {/* Quick Stats Card */}
           <View style={styles.statsCard}>
@@ -1379,12 +1407,19 @@ export const CreditQuestScreen: React.FC<CreditQuestScreenProps> = ({
               <Text style={styles.priorityAction}>{topAction.title}</Text>
               <Text style={styles.priorityDescription}>{topAction.description}</Text>
               
-              {topAction.projectedScoreGain && topAction.projectedScoreGain > 0 && (
-                <View style={styles.impactBadge}>
-                  <Icon name="trending-up" size={14} color="#34C759" />
-                  <Text style={styles.impactText}>
-                    +{topAction.projectedScoreGain} points
-                  </Text>
+              {(topAction.projectedScoreGain ?? 0) > 0 && (
+                <View style={styles.xpBadgeRow}>
+                  <View style={styles.impactBadge}>
+                    <Icon name="trending-up" size={14} color="#34C759" />
+                    <Text style={styles.impactText}>
+                      Est. +{topAction.projectedScoreGain} Score XP
+                    </Text>
+                  </View>
+                  <View style={styles.xpMetaRow}>
+                    <Text style={styles.xpMeta}>Difficulty: {topAction.difficulty ?? (topAction.projectedScoreGain! <= 10 ? 'Easy' : topAction.projectedScoreGain! <= 20 ? 'Medium' : 'Hard')}</Text>
+                    <Text style={styles.xpMeta}>Time: {topAction.timeRequired ?? '2 min'}</Text>
+                    <Text style={styles.xpMeta}>Impact: {topAction.impactWindow ?? '7–14 days'}</Text>
+                  </View>
                 </View>
               )}
               
@@ -1405,6 +1440,42 @@ export const CreditQuestScreen: React.FC<CreditQuestScreenProps> = ({
               </TouchableOpacity>
             </View>
           )}
+
+          {/* Auto Loan Risk Alert - industry-specific score gap */}
+          {snapshot?.score && (() => {
+            const mainScore = snapshot.score.score ?? 0;
+            const autoScoreGap = 18;
+            const dealerScore = mainScore - autoScoreGap;
+            if (mainScore < 620) return null;
+            return (
+              <View style={styles.autoRiskCard}>
+                <View style={styles.autoRiskHeader}>
+                  <Icon name="alert-triangle" size={20} color="#F59E0B" />
+                  <Text style={styles.autoRiskTitle}>Auto Loan Risk Alert</Text>
+                </View>
+                <View style={styles.autoRiskRow}>
+                  <Text style={styles.autoRiskLabel}>Dealer Score</Text>
+                  <Text style={styles.autoRiskValue}>{dealerScore}</Text>
+                </View>
+                <View style={styles.autoRiskRow}>
+                  <Text style={styles.autoRiskLabel}>Your Main Score</Text>
+                  <Text style={styles.autoRiskValue}>{mainScore}</Text>
+                </View>
+                <View style={styles.autoRiskRow}>
+                  <Text style={styles.autoRiskLabel}>Gap</Text>
+                  <Text style={[styles.autoRiskValue, { color: '#EF4444' }]}>-{autoScoreGap}</Text>
+                </View>
+                <View style={styles.autoRiskFix}>
+                  <Text style={styles.autoRiskFixLabel}>Fix</Text>
+                  <Text style={styles.autoRiskFixText}>Credit builder auto loan</Text>
+                  <Text style={styles.autoRiskFixGain}>Est. potential gain: +25 points</Text>
+                </View>
+                <Text style={styles.autoRiskDisclaimer}>
+                  Auto scores are often 10–20 pts lower than your main score. This is an example; your lender may use different scores.
+                </Text>
+              </View>
+            );
+          })()}
 
           {/* Credit Shield - Urgent Alerts */}
           {shieldPlan && shieldPlan.riskLevel !== 'LOW' && (
@@ -1443,6 +1514,11 @@ export const CreditQuestScreen: React.FC<CreditQuestScreenProps> = ({
             {/* Score Simulator */}
             {snapshot.score && (
               <View style={styles.simulatorContainer}>
+                <Text style={styles.simulatorSectionTitle}>Score Simulator</Text>
+                <Text style={styles.simulatorSectionSubtitle}>
+                  If you: Pay down cards, report rent, open a new line — see your projected score
+                </Text>
+                <Text style={styles.simulatorDisclaimer}>Estimates only; actual results may vary.</Text>
                 <ScoreSimulator
                   currentScore={snapshot.score.score || 580}
                   onSimulate={(inputs) => scoreSimulatorService.simulateScore(
@@ -1488,13 +1564,23 @@ export const CreditQuestScreen: React.FC<CreditQuestScreenProps> = ({
                     <Text style={styles.actionDescription}>
                       {action.description}
                     </Text>
-                    {action.projectedScoreGain && action.projectedScoreGain > 0 && (
-                      <View style={styles.gainBadge}>
-                        <Icon name="arrow-up" size={10} color="#34C759" />
-                        <Text style={styles.gainText}>
-                          +{action.projectedScoreGain} pts
-                        </Text>
-                      </View>
+                    {(action.projectedScoreGain ?? 0) > 0 && (
+                      <>
+                        <View style={styles.gainBadge}>
+                          <Icon name="arrow-up" size={10} color="#34C759" />
+                          <Text style={styles.gainText}>
+                            Est. +{action.projectedScoreGain} Score XP
+                          </Text>
+                        </View>
+                        <View style={styles.actionXpMeta}>
+                          <Text style={styles.actionXpMetaText}>
+                            Difficulty: {action.difficulty ?? (action.projectedScoreGain! <= 10 ? 'Easy' : action.projectedScoreGain! <= 20 ? 'Medium' : 'Hard')}
+                          </Text>
+                          <Text style={styles.actionXpMetaText}>
+                            Time: {action.timeRequired ?? '2 min'} · Impact: {action.impactWindow ?? '7–14 days'}
+                          </Text>
+                        </View>
+                      </>
                     )}
                   </View>
                 </View>
@@ -1896,6 +1982,113 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     marginBottom: 16,
   },
+  missionMeterCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  missionMeterTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 6,
+  },
+  missionMeterTarget: {
+    fontSize: 14,
+    color: '#3B82F6',
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  missionMeterRow: { marginBottom: 4 },
+  missionMeterNext: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  missionMeterNextText: {
+    fontSize: 13,
+    color: '#64748B',
+  },
+  progressBarBg: {
+    height: 8,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 4,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#007AFF',
+    borderRadius: 4,
+  },
+  progressLabels: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  progressLabelText: {
+    fontSize: 11,
+    color: '#94A3B8',
+  },
+  autoRiskCard: {
+    backgroundColor: '#FFFBEB',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+  },
+  autoRiskHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  autoRiskTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  autoRiskRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  autoRiskLabel: { fontSize: 14, color: '#64748B' },
+  autoRiskValue: { fontSize: 14, fontWeight: '700', color: '#1C1C1E' },
+  autoRiskFix: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#FDE68A',
+  },
+  autoRiskFixLabel: { fontSize: 11, fontWeight: '600', color: '#92400E', marginBottom: 4 },
+  autoRiskFixText: { fontSize: 14, color: '#1C1C1E', marginBottom: 4 },
+  autoRiskFixGain: { fontSize: 13, fontWeight: '600', color: '#34C759' },
+  autoRiskDisclaimer: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 10,
+    fontStyle: 'italic',
+  },
+  disclaimerText: {
+    fontSize: 11,
+    color: '#8E8E93',
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 16,
+  },
+  simulatorDisclaimer: {
+    fontSize: 11,
+    color: '#8E8E93',
+    marginBottom: 12,
+  },
   statsCard: {
     marginBottom: 20,
     borderRadius: 16,
@@ -1989,6 +2182,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#34C759',
   },
+  xpBadgeRow: { marginTop: 4 },
+  xpMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 6 },
+  xpMeta: { fontSize: 12, color: '#64748B' },
   actionButton: {
     borderRadius: 12,
     overflow: 'hidden',
@@ -2081,6 +2277,17 @@ const styles = StyleSheet.create({
   simulatorContainer: {
     marginTop: 16,
   },
+  simulatorSectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  simulatorSectionSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginBottom: 12,
+  },
   actionCard: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
@@ -2132,6 +2339,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#34C759',
   },
+  actionXpMeta: { marginTop: 4 },
+  actionXpMetaText: { fontSize: 11, color: '#64748B', marginTop: 2 },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',

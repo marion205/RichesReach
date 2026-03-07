@@ -149,12 +149,12 @@ export const CreditOracle: React.FC<CreditOracleProps> = ({
           </View>
         )}
 
-        {/* ── Feature 2: Bureau Arbitrage ── */}
+        {/* ── Feature 2: Credit Edge Opportunity (Bureau Arbitrage) ── */}
         {insight.bureauArbitrage && (
           <View style={styles.bureauBox}>
             <View style={styles.featureHeaderRow}>
               <Icon name="bar-chart-2" size={13} color="#AF52DE" />
-              <Text style={[styles.featureLabel, { color: '#AF52DE' }]}>BUREAU ARBITRAGE</Text>
+              <Text style={[styles.featureLabel, { color: '#AF52DE' }]}>CREDIT EDGE OPPORTUNITY</Text>
             </View>
             <View style={styles.bureauScoreRow}>
               <View style={styles.bureauScoreItem}>
@@ -166,16 +166,19 @@ export const CreditOracle: React.FC<CreditOracleProps> = ({
               </View>
               <View style={styles.bureauDivider}>
                 <Text style={styles.bureauDeltaText}>+{insight.bureauArbitrage.scoreDelta}</Text>
-                <Text style={styles.bureauDeltaLabel}>pts higher</Text>
+                <Text style={styles.bureauDeltaLabel}>point advantage</Text>
               </View>
               <View style={styles.bureauScoreItem}>
                 <Text style={styles.bureauLabel}>{insight.bureauArbitrage.lowBureau.toUpperCase()}</Text>
                 <Text style={styles.bureauScoreLow}>{insight.bureauArbitrage.lowScore}</Text>
               </View>
             </View>
-            <Text style={styles.lendersLabel}>Lenders pulling {insight.bureauArbitrage.highBureau}:</Text>
+            <Text style={styles.lendersLabel}>Best lenders to apply now</Text>
             <Text style={styles.lendersList}>{insight.bureauArbitrage.recommendedLenders.join(' · ')}</Text>
-            <Text style={styles.windowText}>Act within {insight.bureauArbitrage.windowDays} days</Text>
+            <View style={styles.windowRow}>
+              <Icon name="clock" size={12} color="#F59E0B" />
+              <Text style={styles.windowText}>Window closes in: {insight.bureauArbitrage.windowDays} days</Text>
+            </View>
           </View>
         )}
 
@@ -714,6 +717,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827',
     marginBottom: 6,
+  },
+  windowRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
   },
   windowText: {
     fontSize: 12,

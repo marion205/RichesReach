@@ -150,6 +150,12 @@ export interface CreditAction {
   completed: boolean;
   projectedScoreGain?: number;
   dueDate?: string;
+  /** Quest XP: difficulty for gamification */
+  difficulty?: 'Easy' | 'Medium' | 'Hard';
+  /** e.g. "2 min", "10 min" */
+  timeRequired?: string;
+  /** e.g. "7–14 days" */
+  impactWindow?: string;
 }
 
 export interface CreditEducationModule {

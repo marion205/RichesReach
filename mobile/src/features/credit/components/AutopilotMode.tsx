@@ -1,5 +1,7 @@
 /**
- * Autopilot Mode - AI selects 1-2 actions per week and tracks completion
+ * Autopilot Mode — Guided recommendations, not execution.
+ * AI selects top 1–2 score-building actions each week; user approves and completes them.
+ * Roadmap: L2 = reminders + timing alerts; L3 = connected execution + audit.
  */
 
 import React, { useState } from 'react';
@@ -59,9 +61,9 @@ export const AutopilotMode: React.FC<AutopilotModeProps> = ({
           <View style={styles.headerText}>
             <Text style={styles.title}>Autopilot Mode</Text>
             <Text style={styles.subtitle}>
-              {status.enabled 
-                ? `Week of ${formatDate(status.currentWeek.weekStart)}`
-                : 'AI selects 1-2 actions per week'}
+              {status.enabled
+                ? `Week of ${formatDate(status.currentWeek.weekStart)} · You stay in control`
+                : 'Autopilot picks your best next actions. You stay in control.'}
             </Text>
           </View>
         </View>
@@ -72,6 +74,12 @@ export const AutopilotMode: React.FC<AutopilotModeProps> = ({
           <View style={[styles.toggleCircle, status.enabled && styles.toggleCircleActive]} />
         </TouchableOpacity>
       </View>
+
+      {!status.enabled && (
+        <Text style={styles.precisionLine}>
+          AI selects your top 1–2 score-building actions each week. You approve and complete them.
+        </Text>
+      )}
 
       {status.enabled && (
         <>
@@ -259,6 +267,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#8E8E93',
     marginTop: 2,
+  },
+  precisionLine: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 18,
+    marginBottom: 12,
+    fontStyle: 'italic',
   },
   toggle: {
     width: 50,

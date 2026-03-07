@@ -83,6 +83,38 @@ export const StatementDatePlanner: React.FC<StatementDatePlannerProps> = ({
                 </Text>
               </View>
 
+              {/* Visual utilization bar: current vs after payment */}
+              <View style={styles.utilizationBarSection}>
+                <View style={styles.utilizationBarRow}>
+                  <Text style={styles.utilizationBarLabel}>Current: {utilizationPercent}%</Text>
+                  <View style={styles.utilizationBarTrack}>
+                    <View
+                      style={[
+                        styles.utilizationBarFill,
+                        {
+                          width: `${Math.min(100, utilizationPercent)}%`,
+                          backgroundColor: utilizationPercent > 30 ? '#EF4444' : utilizationPercent > 9 ? '#F59E0B' : '#34C759',
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
+                <View style={styles.utilizationBarRow}>
+                  <Text style={styles.utilizationBarLabel}>After payment: {targetPercent}%</Text>
+                  <View style={styles.utilizationBarTrack}>
+                    <View
+                      style={[
+                        styles.utilizationBarFill,
+                        {
+                          width: `${Math.min(100, targetPercent)}%`,
+                          backgroundColor: targetPercent > 30 ? '#EF4444' : targetPercent > 9 ? '#F59E0B' : '#34C759',
+                        },
+                      ]}
+                    />
+                  </View>
+                </View>
+              </View>
+
               <View style={styles.recommendationBox}>
                 <View style={styles.recommendationHeader}>
                   <Icon name="target" size={16} color="#007AFF" />
@@ -96,7 +128,7 @@ export const StatementDatePlanner: React.FC<StatementDatePlannerProps> = ({
                 </Text>
                 {plan.projectedScoreGain > 0 && (
                   <Text style={styles.scoreGain}>
-                    +{plan.projectedScoreGain} points potential
+                    Est. +{plan.projectedScoreGain} points potential
                   </Text>
                 )}
               </View>
@@ -223,6 +255,31 @@ const styles = StyleSheet.create({
   },
   metricValueHigh: {
     color: '#FF3B30',
+  },
+  utilizationBarSection: {
+    marginVertical: 10,
+    gap: 8,
+  },
+  utilizationBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  utilizationBarLabel: {
+    fontSize: 12,
+    color: '#64748B',
+    width: 110,
+  },
+  utilizationBarTrack: {
+    flex: 1,
+    height: 10,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 5,
+    overflow: 'hidden',
+  },
+  utilizationBarFill: {
+    height: '100%',
+    borderRadius: 5,
   },
   recommendationBox: {
     backgroundColor: '#E3F2FD',

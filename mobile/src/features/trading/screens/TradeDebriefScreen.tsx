@@ -96,8 +96,8 @@ const TradeDebriefScreen: React.FC<TradeDebriefScreenProps> = ({ onBack }) => {
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      {/* Header */}
+    <View style={[styles.container, { paddingTop: Math.min(insets.top, 8) }]}>
+      {/* Header — compact to sit close under main app header */}
       <View style={styles.header}>
         {onBack && (
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -327,14 +327,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
   },
   backButton: {
-    marginRight: 4,
+    marginRight: 2,
     padding: 2,
   },
   headerTitle: {
@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 8,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
@@ -417,8 +417,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    margin: 16,
-    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    padding: 12,
     backgroundColor: '#EEF2FF',
     borderRadius: 12,
   },
@@ -434,6 +436,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     paddingHorizontal: 12,
     gap: 8,
+    marginTop: 0,
     marginBottom: 8,
   },
   statCard: {
@@ -464,7 +467,7 @@ const styles = StyleSheet.create({
   },
   section: {
     paddingHorizontal: 16,
-    marginTop: 20,
+    marginTop: 14,
   },
   sectionTitle: {
     fontSize: 13,
@@ -472,7 +475,7 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   narrativeCard: {
     backgroundColor: '#FFFFFF',

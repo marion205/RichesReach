@@ -79,7 +79,8 @@ const CreditScoreOrbInternal: React.FC<{
   scoreRange: string;
   projectionGain?: number;
   size: number;
-}> = ({ scoreValue, scoreRange, projectionGain, size }) => {
+  lastUpdated?: string;
+}> = ({ scoreValue, scoreRange, projectionGain, size, lastUpdated }) => {
   // All values are already extracted as primitives - no frozen object access
   const validScore = scoreValue;
   const validScoreRange = scoreRange;
@@ -229,9 +230,21 @@ const CreditScoreOrbInternal: React.FC<{
       <Text style={[styles.scoreRange, { color: orbColor }]}>
         {validScoreRange}
       </Text>
+      {lastUpdated && (
+        <Text style={styles.asOfText}>
+          As of {(() => {
+            try {
+              const d = new Date(lastUpdated);
+              return isNaN(d.getTime()) ? lastUpdated : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+            } catch {
+              return lastUpdated;
+            }
+          })()}
+        </Text>
+      )}
       {projectionValue > 0 && (
         <Text style={styles.projectionText}>
-          +{projectionValue} in 6 months
+          Est. +{projectionValue} in 6 months
         </Text>
       )}
     </View>
@@ -249,11 +262,13 @@ export const CreditScoreOrb: React.FC<CreditScoreOrbProps> = (props) => {
       let scoreRange = 'Fair';
       
       const scoreProp = props.score;
+      let lastUpdated: string | undefined;
       if (scoreProp && typeof scoreProp === 'object') {
         // Try to access score property - use try-catch in case it's frozen
         try {
           scoreValue = typeof scoreProp.score === 'number' ? scoreProp.score : 580;
           scoreRange = (scoreProp.scoreRange as any) || 'Fair';
+          lastUpdated = typeof (scoreProp as any).lastUpdated === 'string' ? (scoreProp as any).lastUpdated : undefined;
         } catch (e) {
           // If access fails, use defaults
           logger.warn('[CreditScoreOrb] Could not access score prop, using defaults');
@@ -277,6 +292,7 @@ export const CreditScoreOrb: React.FC<CreditScoreOrbProps> = (props) => {
         scoreRange,
         projectionGain,
         size: props.size || ORB_SIZE,
+        lastUpdated,
       };
     } catch (error) {
       logger.warn('[CreditScoreOrb] Error extracting values:', error);
@@ -286,6 +302,7 @@ export const CreditScoreOrb: React.FC<CreditScoreOrbProps> = (props) => {
         scoreRange: 'Fair',
         projectionGain: 0,
         size: props.size || ORB_SIZE,
+        lastUpdated: undefined,
       };
     }
   }, [
@@ -316,6 +333,7 @@ export const CreditScoreOrb: React.FC<CreditScoreOrbProps> = (props) => {
       scoreRange={normalizedValues.scoreRange}
       projectionGain={normalizedValues.projectionGain}
       size={normalizedValues.size}
+      lastUpdated={normalizedValues.lastUpdated}
     />
   );
 };
@@ -359,6 +377,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 12,
     textTransform: 'capitalize',
+  },
+  asOfText: {
+    fontSize: 11,
+    color: '#8E8E93',
+    marginTop: 4,
   },
   projectionText: {
     fontSize: 14,
