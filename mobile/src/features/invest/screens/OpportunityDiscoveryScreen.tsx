@@ -198,7 +198,7 @@ export default function OpportunityDiscoveryScreen() {
   }
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
+    <View style={styles.root}>
       <StatusBar barStyle="light-content" />
 
       {/* ── Hero Header ──────────────────────────────────────────────────── */}
