@@ -296,7 +296,33 @@ class AIInsightsQueries(graphene.ObjectType):
                     context_parts.append(f"User Portfolio:\n{json.dumps(portfolio_summary, indent=2)}")
             except Exception as e:
                 logger.warning(f"Failed to get portfolio data for Oracle insights: {e}")
-        
+
+        # ── Financial Intelligence Graph context injection ──────────────────
+        # Gives the Oracle cross-silo awareness: debt, savings, credit, income
+        if user and not getattr(user, 'is_anonymous', True):
+            try:
+                from .financial_graph_service import FinancialGraphService
+                graph_ctx = FinancialGraphService().build_graph_safe(user)
+                if graph_ctx and graph_ctx.edges:
+                    financial_graph_summary = {
+                        'cross_silo_insights': graph_ctx.summary_sentences,
+                        'total_cc_min_payments': graph_ctx.total_cc_min_payments,
+                        'total_savings_balance': graph_ctx.total_savings_balance,
+                        'emergency_fund_months': graph_ctx.emergency_fund_months,
+                        'avg_credit_utilization_pct': round(
+                            graph_ctx.avg_credit_utilization * 100, 1
+                        ),
+                        'estimated_monthly_income': graph_ctx.estimated_monthly_income,
+                        'investable_surplus_monthly': graph_ctx.investable_surplus_monthly,
+                        'portfolio_total_value': graph_ctx.portfolio_total_value,
+                    }
+                    context_parts.append(
+                        f"Financial Graph (Cross-Silo Intelligence):\n"
+                        f"{json.dumps(financial_graph_summary, indent=2)}"
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to inject financial graph into Oracle: {e}")
+
         # Add market context
         try:
             from .ai_service import AIService
@@ -323,7 +349,12 @@ Guidelines:
 - If portfolio data is available, tailor your response to the user's specific situation
 - Use clear, professional language suitable for investors
 - Include confidence levels and reasoning for your insights
-- Keep responses concise but comprehensive (2-4 paragraphs)"""
+- Keep responses concise but comprehensive (2-4 paragraphs)
+- When Financial Graph (Cross-Silo Intelligence) data is provided, use it to reason across silos.
+  Reference specific dollar amounts and relationships, for example:
+  "Paying off your credit cards frees $X/month to invest" or
+  "Your Y-month emergency fund supports taking on higher-risk positions."
+  Weave these cross-silo insights naturally into your answer."""
 
         user_prompt = f"User Question: {query}\n\n"
         
