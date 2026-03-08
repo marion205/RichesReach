@@ -20,14 +20,11 @@ export default function InvestAdvancedSheet() {
         <Pressable style={styles.row} onPress={() => navigation.navigate('OptionsCopilot')}>
           <Text style={styles.rowText}>Advanced</Text>
         </Pressable>
-        <Pressable style={styles.row} onPress={() => navigation.navigate('Tomorrow')}>
-          <Text style={styles.rowText}>Tomorrow</Text>
-        </Pressable>
         <Pressable style={styles.row} onPress={() => navigation.navigate('Screeners')}>
           <Text style={styles.rowText}>Screeners</Text>
         </Pressable>
-        <Pressable style={styles.row} onPress={() => navigation.navigate('paper-trading')}>
-          <Text style={styles.rowText}>Paper Trading</Text>
+        <Pressable style={styles.row} onPress={() => navigation.navigate('PrivateMarkets')}>
+          <Text style={styles.rowText}>Private Markets</Text>
         </Pressable>
 
         <Pressable style={[styles.row, styles.close]} onPress={() => navigation.goBack()}>
