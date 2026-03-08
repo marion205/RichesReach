@@ -48,6 +48,11 @@ export interface IPrivateMarketsService {
    * When real: from API; demo can return stub or null.
    */
   getDataProvenance(dealId: string): Promise<DealDataProvenance | null>;
+
+  /** Saved deals (watchlist) — persist per user/device. */
+  getSavedDealIds(): Promise<string[]>;
+  saveDeal(dealId: string): Promise<void>;
+  unsaveDeal(dealId: string): Promise<void>;
 }
 
 /** Default service instance. Swap demo for API-backed implementation when real data is live. */

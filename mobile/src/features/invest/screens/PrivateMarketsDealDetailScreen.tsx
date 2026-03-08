@@ -58,10 +58,18 @@ export default function PrivateMarketsDealDetailScreen() {
   const [provenance, setProvenance] = useState<DealDataProvenance | null>(null);
   const [diligence, setDiligence] = useState<InstitutionalDiligence | null>(null);
   const [diligenceStatus, setDiligenceStatus] = useState<Record<string, DiligenceItemStatus>>({});
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     getPrivateMarketsService().getDataProvenance(detail.id).then(setProvenance);
     getPrivateMarketsService().getDiligence(detail.id).then(setDiligence);
+  }, [detail.id]);
+
+  useEffect(() => {
+    getPrivateMarketsService()
+      .getSavedDealIds()
+      .then((ids) => setSaved(ids.includes(detail.id)))
+      .catch(() => {});
   }, [detail.id]);
 
   useEffect(() => {
@@ -100,6 +108,19 @@ export default function PrivateMarketsDealDetailScreen() {
       [{ text: 'OK' }]
     );
   }, [setDiligenceItemStatus]);
+
+  const handleSavePress = useCallback(() => {
+    const svc = getPrivateMarketsService();
+    if (saved) {
+      svc.unsaveDeal(detail.id).then(() => setSaved(false)).catch(() => {});
+    } else {
+      svc.saveDeal(detail.id).then(() => setSaved(true)).catch(() => {});
+    }
+  }, [detail.id, saved]);
+
+  const handleLearnPress = useCallback(() => {
+    navigation.navigate('PrivateMarketsLearn', { dealId: detail.id, deal });
+  }, [navigation, detail.id, deal]);
 
   const handlePartnerCta = () => {
     Linking.openURL('https://richesreach.com/private-markets-partner').catch(() => {});
@@ -472,7 +493,7 @@ export default function PrivateMarketsDealDetailScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Actions</Text>
         <View style={styles.actionsRow}>
-          <Pressable style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}>
+          <Pressable style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]} onPress={handleLearnPress}>
             <Feather name="book-open" size={18} color={COLORS.accent} />
             <Text style={styles.actionBtnText}>Learn</Text>
           </Pressable>
@@ -483,9 +504,9 @@ export default function PrivateMarketsDealDetailScreen() {
             <Feather name="layers" size={18} color={COLORS.accent} />
             <Text style={styles.actionBtnText}>Compare</Text>
           </Pressable>
-          <Pressable style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}>
-            <Feather name="bookmark" size={18} color={COLORS.accent} />
-            <Text style={styles.actionBtnText}>Save</Text>
+          <Pressable style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]} onPress={handleSavePress}>
+            <Feather name="bookmark" size={18} color={saved ? COLORS.primary : COLORS.accent} fill={saved ? COLORS.primary : undefined} />
+            <Text style={[styles.actionBtnText, saved && styles.actionBtnTextSaved]}>{saved ? 'Saved' : 'Save'}</Text>
           </Pressable>
         </View>
       </View>
@@ -680,6 +701,7 @@ const styles = StyleSheet.create({
   actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 16, backgroundColor: 'rgba(59,130,246,0.08)', borderWidth: 1, borderColor: 'rgba(59,130,246,0.3)' },
   actionBtnPressed: { opacity: 0.75, transform: [{ scale: 0.97 }] },
   actionBtnText: { fontSize: 15, fontWeight: '600', color: COLORS.accent },
+  actionBtnTextSaved: { color: COLORS.primary },
   partnerCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: COLORS.primary, paddingVertical: 18, borderRadius: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 16, elevation: 8 },
   partnerCtaPressed: { opacity: 0.92, transform: [{ scale: 0.98 }] },
   partnerCtaText: { fontSize: 17, fontWeight: '700', color: '#FFF' },

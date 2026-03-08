@@ -4,6 +4,7 @@
  * Swap this for an API-backed implementation when compare workflow, data moat, and diligence are live.
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type {
   Deal,
   DealDetail,
@@ -19,7 +20,19 @@ import type { IPrivateMarketsService } from './privateMarketsService';
 import { DEMO_DEALS } from '../data/demoDeals';
 import { getDemoDealDetail } from '../data/demoDealDetail';
 
+const SAVED_DEAL_IDS_KEY = 'privateMarkets_savedDealIds';
 const sessions = new Map<string, CompareSession>();
+
+async function getSavedDealIdsStorage(): Promise<string[]> {
+  try {
+    const raw = await AsyncStorage.getItem(SAVED_DEAL_IDS_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter((id: unknown) => typeof id === 'string') : [];
+  } catch {
+    return [];
+  }
+}
 
 export const demoPrivateMarketsService: IPrivateMarketsService = {
   async getDeals(filters) {
@@ -282,5 +295,21 @@ export const demoPrivateMarketsService: IPrivateMarketsService = {
       lastFullRefresh: new Date().toISOString(),
       gaps: ['no_institutional_diligence', 'no_live_compare_data_moat'],
     };
+  },
+
+  async getSavedDealIds(): Promise<string[]> {
+    return getSavedDealIdsStorage();
+  },
+
+  async saveDeal(dealId: string): Promise<void> {
+    const ids = await getSavedDealIdsStorage();
+    if (ids.includes(dealId)) return;
+    await AsyncStorage.setItem(SAVED_DEAL_IDS_KEY, JSON.stringify([...ids, dealId]));
+  },
+
+  async unsaveDeal(dealId: string): Promise<void> {
+    const ids = await getSavedDealIdsStorage();
+    const next = ids.filter((id) => id !== dealId);
+    await AsyncStorage.setItem(SAVED_DEAL_IDS_KEY, JSON.stringify(next));
   },
 };

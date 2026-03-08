@@ -163,6 +163,7 @@ import InvestAdvancedSheet from '../features/invest/InvestAdvancedSheet';
 import PrivateMarketsScreen from '../features/invest/screens/PrivateMarketsScreen';
 import PrivateMarketsDealDetailScreen from '../features/invest/screens/PrivateMarketsDealDetailScreen';
 import PrivateMarketsCompareScreen from '../features/invest/screens/PrivateMarketsCompareScreen';
+import PrivateMarketsLearnScreen from '../features/invest/screens/PrivateMarketsLearnScreen';
 
 // Swing Trading screens
 import SwingTradingDashboard from '../features/swingTrading/screens/SwingTradingDashboard';
@@ -383,6 +384,7 @@ function InvestStack() {
       <Stack.Screen name="PrivateMarkets" component={PrivateMarketsScreen} options={{ headerShown: true, title: 'Private Markets' }} />
       <Stack.Screen name="PrivateMarketsDealDetail" component={PrivateMarketsDealDetailScreen} options={{ headerShown: true, title: 'Deal Detail' }} />
       <Stack.Screen name="PrivateMarketsCompare" component={PrivateMarketsCompareScreen} options={{ headerShown: true, title: 'Compare Deals' }} />
+      <Stack.Screen name="PrivateMarketsLearn" component={PrivateMarketsLearnScreen} options={{ headerShown: true, title: 'Learn' }} />
 
       {/* Legacy aliases to avoid breaking existing navigate calls */}
       <Stack.Screen name="stock" component={StockScreenWrapper} options={{ headerShown: true, title: 'Stocks' }} />
