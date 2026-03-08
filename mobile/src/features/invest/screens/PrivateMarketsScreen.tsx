@@ -11,6 +11,7 @@ import {
   StyleSheet,
   ScrollView,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
@@ -27,12 +28,17 @@ export default function PrivateMarketsScreen() {
   const [tab, setTab] = useState<Tab>('deals');
   const [allDeals, setAllDeals] = useState<Deal[]>([]);
   const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setLoading(true);
+    setError(null);
     getPrivateMarketsService()
       .getDeals()
       .then(setAllDeals)
-      .catch(() => {});
+      .catch(() => setError('Could not load deals'))
+      .finally(() => setLoading(false));
   }, []);
 
   useFocusEffect(
@@ -63,12 +69,24 @@ export default function PrivateMarketsScreen() {
       </View>
 
       <View style={styles.tabRow}>
-        <Pressable style={styles.tabTouch} onPress={() => setTab('deals')}>
+        <Pressable
+          style={styles.tabTouch}
+          onPress={() => setTab('deals')}
+          accessibilityLabel="Deal Room tab"
+          accessibilityRole="tab"
+          accessibilityState={{ selected: tab === 'deals' }}
+        >
           <View style={[styles.tab, tab === 'deals' && styles.tabActive]}>
             <Text style={[styles.tabInactiveText, tab === 'deals' && styles.tabActiveText]}>Deal Room</Text>
           </View>
         </Pressable>
-        <Pressable style={styles.tabTouch} onPress={() => setTab('saved')}>
+        <Pressable
+          style={styles.tabTouch}
+          onPress={() => setTab('saved')}
+          accessibilityLabel="Saved deals tab"
+          accessibilityRole="tab"
+          accessibilityState={{ selected: tab === 'saved' }}
+        >
           <View style={[styles.tab, tab === 'saved' && styles.tabActive]}>
             <Text style={[styles.tabInactiveText, tab === 'saved' && styles.tabActiveText]}>Saved</Text>
           </View>
@@ -76,7 +94,17 @@ export default function PrivateMarketsScreen() {
       </View>
 
       <Text style={styles.sectionLabel}>{tab === 'saved' ? 'Saved opportunities' : 'Opportunities'}</Text>
-      {tab === 'saved' && deals.length === 0 ? (
+      {loading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading opportunities…</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.errorWrap}>
+          <Feather name="alert-circle" size={40} color="#94A3B8" />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : tab === 'saved' && deals.length === 0 ? (
         <View style={styles.emptyState}>
           <Feather name="bookmark" size={40} color="#94A3B8" />
           <Text style={styles.emptyTitle}>No saved deals yet</Text>
@@ -90,6 +118,8 @@ export default function PrivateMarketsScreen() {
               key={deal.id}
               style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
               onPress={() => navigation.navigate('PrivateMarketsDealDetail', { dealId: deal.id, deal })}
+              accessibilityLabel={`View ${deal.name}, score ${deal.score}`}
+              accessibilityRole="button"
             >
               <View style={[styles.cardStripe, { backgroundColor: stripeColor }]} />
               <View style={styles.cardInner}>
@@ -140,6 +170,10 @@ const styles = StyleSheet.create({
   tabActive: { borderBottomWidth: 3, borderBottomColor: COLORS.primary },
   tabActiveText: { fontSize: 16, fontWeight: '700', color: COLORS.primary },
   tabInactiveText: { fontSize: 16, fontWeight: '600', color: '#94A3B8' },
+  loadingWrap: { alignItems: 'center', paddingVertical: 48 },
+  loadingText: { marginTop: 12, fontSize: 15, color: COLORS.textSecondary },
+  errorWrap: { alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24 },
+  errorText: { fontSize: 15, color: COLORS.textSecondary, marginTop: 12, textAlign: 'center' },
   emptyState: { alignItems: 'center', paddingVertical: 48, paddingHorizontal: 24 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.primary, marginTop: 12 },
   emptySub: { fontSize: 14, color: COLORS.textSecondary, marginTop: 6, textAlign: 'center' },

@@ -4,7 +4,7 @@ AI-powered investment platform: portfolio management, trading, options, and cont
 
 ## Overview
 
-RichesReach is a full-stack investment app with a **React Native (Expo)** mobile client and a **Python** backend (FastAPI + Django, GraphQL). It combines real-time portfolio and market data with AI-driven insights, options trading tools, learning flows, and “Teach me what I own”–style education tied to your positions.
+RichesReach is a full-stack investment app with a **React Native (Expo)** mobile client and a **Python** backend (FastAPI + Django, GraphQL). It combines real-time portfolio and market data with AI-driven insights, options trading tools, learning flows, “Teach me what I own”–style education tied to your positions, and **Private Markets** deal intelligence (score, confidence, compare, diligence workflow, Learn & Save).
 
 ## Repo structure
 
@@ -24,6 +24,7 @@ RichesReach is a full-stack investment app with a **React Native (Expo)** mobile
 
 - **Portfolio** – Holdings, allocation, AI insights, and **“Teach me what I own”**: when a position is under pressure, inline repair suggestion, “Why this repair,” and “Learn more” → Learn tab.
 - **Trading & options** – Order entry, options chain, Greeks, options learning.
+- **Private Markets** – Evidence-based deal intelligence: **Deal Room** (browse opportunities), **Deal Detail** (AI Deal Score, confidence with factors, “What feeds this score,” “What would change this score,” risk framing, portfolio fit, decision guidance), **Compare** (2–4 deals with summary and best/worst callouts), **diligence workflow** (Not started → Requested → Received → Reviewed per item; “Request from issuer/GP” placeholder), **Learn** (deal-context education: how to read the score, confidence, key terms, what to do next), **Save** (watchlist with Saved tab). Execution via licensed partner.
 - **Learn** – Daily Brief, tutor modules, lesson library, quizzes, voice digest.
 - **AI** – Trading coach, portfolio insights, holding-level repair/education (demo + API).
 - **DeFi** – Vaults, autopilot, positions (where enabled).

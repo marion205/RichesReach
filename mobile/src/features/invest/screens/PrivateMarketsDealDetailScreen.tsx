@@ -12,33 +12,20 @@ import {
   Pressable,
   Linking,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Feather from '@expo/vector-icons/Feather';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { COLORS } from '../theme/privateMarketsTheme';
-import CircularScore from '../components/CircularScore';
-import { getDemoDealDetail } from '../data/demoDealDetail';
+import { ScoreHeroSection } from '../components/detail/ScoreHeroSection';
+import { DecisionGuidanceSection } from '../components/detail/DecisionGuidanceSection';
 import { getPrivateMarketsService } from '../services/privateMarketsService';
 import type { Deal, DealDetail, DealDataProvenance, InstitutionalDiligence, DiligenceItemStatus } from '../types/privateMarketsTypes';
 
 type DealDetailParams = { dealId?: string; deal?: Deal };
 
 const DILIGENCE_CHECKLIST_KEY = (dealId: string) => `privateMarkets_diligenceChecklist_${dealId}`;
-
-const DILIGENCE_STATUS_ORDER: DiligenceItemStatus[] = ['not_started', 'requested', 'received', 'reviewed'];
-const DILIGENCE_STATUS_LABELS: Record<DiligenceItemStatus, string> = {
-  not_started: 'Not started',
-  requested: 'Requested',
-  received: 'Received',
-  reviewed: 'Reviewed',
-};
-
-const getProgressColor = (score: number) => {
-  if (score >= 80) return '#10B981';
-  if (score >= 60) return '#3B82F6';
-  return '#F59E0B';
-};
 
 function SectionCard({ children, style, ...props }: { children: React.ReactNode; style?: any }) {
   return (
@@ -52,28 +39,46 @@ export default function PrivateMarketsDealDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteProp<{ params: DealDetailParams }, 'params'>>();
   const params = route.params ?? {};
-  const deal: Deal = params.deal ?? { id: '1', name: 'Series B — Fintech', tagline: 'B2B payments infrastructure', score: 72, category: 'fintech' };
-  const detail: DealDetail = getDemoDealDetail(deal);
+  const dealId = params.dealId ?? params.deal?.id ?? '1';
+  const dealFromParams = params.deal;
 
+  const [detail, setDetail] = useState<DealDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [provenance, setProvenance] = useState<DealDataProvenance | null>(null);
   const [diligence, setDiligence] = useState<InstitutionalDiligence | null>(null);
   const [diligenceStatus, setDiligenceStatus] = useState<Record<string, DiligenceItemStatus>>({});
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    getPrivateMarketsService().getDataProvenance(detail.id).then(setProvenance);
-    getPrivateMarketsService().getDiligence(detail.id).then(setDiligence);
-  }, [detail.id]);
+    setLoading(true);
+    setError(null);
+    getPrivateMarketsService()
+      .getDealDetail(dealId)
+      .then((d) => {
+        setDetail(d ?? null);
+        if (!d) setError('Deal not found');
+      })
+      .catch(() => setError('Could not load deal'))
+      .finally(() => setLoading(false));
+  }, [dealId]);
 
   useEffect(() => {
+    if (!detail) return;
+    getPrivateMarketsService().getDataProvenance(detail.id).then(setProvenance);
+    getPrivateMarketsService().getDiligence(detail.id).then(setDiligence);
+  }, [detail?.id]);
+
+  useEffect(() => {
+    if (!detail) return;
     getPrivateMarketsService()
       .getSavedDealIds()
       .then((ids) => setSaved(ids.includes(detail.id)))
       .catch(() => {});
-  }, [detail.id]);
+  }, [detail?.id]);
 
   useEffect(() => {
-    if (!detail.whatWouldChangeScore?.length) return;
+    if (!detail?.whatWouldChangeScore?.length) return;
     const key = DILIGENCE_CHECKLIST_KEY(detail.id);
     AsyncStorage.getItem(key)
       .then((raw) => {
@@ -90,15 +95,15 @@ export default function PrivateMarketsDealDetailScreen() {
         } catch (_) {}
       })
       .catch(() => {});
-  }, [detail.id, detail.whatWouldChangeScore?.length]);
+  }, [detail?.id, detail?.whatWouldChangeScore?.length]);
 
   const setDiligenceItemStatus = useCallback((line: string, status: DiligenceItemStatus) => {
     setDiligenceStatus((prev) => {
       const next = { ...prev, [line]: status };
-      AsyncStorage.setItem(DILIGENCE_CHECKLIST_KEY(detail.id), JSON.stringify(next)).catch(() => {});
+      AsyncStorage.setItem(DILIGENCE_CHECKLIST_KEY(dealId), JSON.stringify(next)).catch(() => {});
       return next;
     });
-  }, [detail.id]);
+  }, [dealId]);
 
   const handleRequestFromGP = useCallback((line: string) => {
     setDiligenceItemStatus(line, 'requested');
@@ -110,21 +115,90 @@ export default function PrivateMarketsDealDetailScreen() {
   }, [setDiligenceItemStatus]);
 
   const handleSavePress = useCallback(() => {
+    if (!detail) return;
     const svc = getPrivateMarketsService();
     if (saved) {
       svc.unsaveDeal(detail.id).then(() => setSaved(false)).catch(() => {});
     } else {
       svc.saveDeal(detail.id).then(() => setSaved(true)).catch(() => {});
     }
-  }, [detail.id, saved]);
+  }, [detail?.id, saved]);
 
   const handleLearnPress = useCallback(() => {
-    navigation.navigate('PrivateMarketsLearn', { dealId: detail.id, deal });
-  }, [navigation, detail.id, deal]);
+    if (!detail) return;
+    const dealForLearn: Deal = dealFromParams ?? {
+      id: detail.id,
+      name: detail.name,
+      tagline: detail.tagline ?? '',
+      score: detail.scoreBreakdown?.overall ?? 0,
+      category: (detail as Deal).category,
+    };
+    navigation.navigate('PrivateMarketsLearn', { dealId: detail.id, deal: dealForLearn });
+  }, [navigation, detail?.id, detail?.name, detail?.tagline, detail?.scoreBreakdown?.overall, dealFromParams]);
 
   const handlePartnerCta = () => {
     Linking.openURL('https://richesreach.com/private-markets-partner').catch(() => {});
   };
+
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <Pressable
+          style={({ pressed }) => [styles.backRow, pressed && styles.backRowPressed]}
+          onPress={() => navigation.goBack()}
+          accessibilityLabel="Back to deals"
+          accessibilityRole="button"
+        >
+          <Feather name="chevron-left" size={24} color={COLORS.primary} />
+          <Text style={styles.backLabel}>Back to deals</Text>
+        </Pressable>
+        <View style={styles.header}>
+          <Text style={styles.dealName}>{dealFromParams?.name ?? 'Deal'}</Text>
+          <Text style={styles.dealTagline}>{dealFromParams?.tagline ?? 'Loading…'}</Text>
+        </View>
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading deal…</Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (error || !detail) {
+    return (
+      <View style={styles.container}>
+        <Pressable
+          style={({ pressed }) => [styles.backRow, pressed && styles.backRowPressed]}
+          onPress={() => navigation.goBack()}
+          accessibilityLabel="Back to deals"
+          accessibilityRole="button"
+        >
+          <Feather name="chevron-left" size={24} color={COLORS.primary} />
+          <Text style={styles.backLabel}>Back to deals</Text>
+        </Pressable>
+        <View style={styles.errorWrap}>
+          <Feather name="alert-circle" size={48} color="#94A3B8" />
+          <Text style={styles.errorText}>{error ?? 'Deal not found'}</Text>
+          <Pressable
+            style={({ pressed }) => [styles.retryBtn, pressed && styles.retryBtnPressed]}
+            onPress={() => {
+              setError(null);
+              setLoading(true);
+              getPrivateMarketsService()
+                .getDealDetail(dealId)
+                .then((d) => setDetail(d ?? null))
+                .catch(() => setError('Could not load deal'))
+                .finally(() => setLoading(false));
+            }}
+            accessibilityLabel="Retry loading deal"
+            accessibilityRole="button"
+          >
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -132,7 +206,12 @@ export default function PrivateMarketsDealDetailScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <Pressable style={({ pressed }) => [styles.backRow, pressed && styles.backRowPressed]} onPress={() => navigation.goBack()}>
+      <Pressable
+        style={({ pressed }) => [styles.backRow, pressed && styles.backRowPressed]}
+        onPress={() => navigation.goBack()}
+        accessibilityLabel="Back to deals"
+        accessibilityRole="button"
+      >
         <Feather name="chevron-left" size={24} color={COLORS.primary} />
         <Text style={styles.backLabel}>Back to deals</Text>
       </Pressable>
@@ -146,133 +225,12 @@ export default function PrivateMarketsDealDetailScreen() {
       {detail.scoreBreakdown && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>AI Deal Score</Text>
-          <View style={styles.scoreHero}>
-            <CircularScore
-              score={detail.scoreBreakdown.overall}
-              size={180}
-              strokeWidth={16}
-              progressColor={getProgressColor(detail.scoreBreakdown.overall)}
-              trackColor="#E2E8F0"
-              textColor={COLORS.primary}
-            />
-          </View>
-          {(detail.confidence || detail.confidenceDetail) && (
-            <View style={[styles.confidenceStrip, styles[`confidence_${detail.confidenceDetail?.level ?? detail.confidence}` as keyof typeof styles]]}>
-              <Feather
-                name={(detail.confidenceDetail?.level ?? detail.confidence) === 'high' ? 'shield' : (detail.confidenceDetail?.level ?? detail.confidence) === 'moderate' ? 'info' : 'alert-circle'}
-                size={18}
-                color={(detail.confidenceDetail?.level ?? detail.confidence) === 'high' ? '#059669' : (detail.confidenceDetail?.level ?? detail.confidence) === 'moderate' ? '#B45309' : '#DC2626'}
-              />
-              <View style={styles.confidenceTextBlock}>
-                <Text style={styles.confidenceLabel}>
-                  {(detail.confidenceDetail?.level ?? detail.confidence) === 'high'
-                    ? 'High confidence'
-                    : (detail.confidenceDetail?.level ?? detail.confidence) === 'moderate'
-                      ? `Moderate confidence${detail.confidenceDetail?.percent != null ? ` (${detail.confidenceDetail.percent}%)` : ''}`
-                      : `Limited data${detail.confidenceDetail?.percent != null ? ` (${detail.confidenceDetail.percent}%)` : ''}`}
-                </Text>
-                {detail.confidenceDetail?.factors && detail.confidenceDetail.factors.length > 0 ? (
-                  <>
-                    <Text style={styles.confidenceFactorsLabel}>Affected by:</Text>
-                    <Text style={styles.confidenceSub}>{detail.confidenceDetail.factors.join(', ')}</Text>
-                  </>
-                ) : (
-                  <Text style={styles.confidenceSub}>
-                    {(detail.confidenceDetail?.level ?? detail.confidence) === 'high'
-                      ? 'Score and fit based on full diligence.'
-                      : (detail.confidenceDetail?.level ?? detail.confidence) === 'moderate'
-                        ? 'Based on partial diligence; consider additional verification.'
-                        : 'Diligence limited; score and recommendation have lower confidence.'}
-                  </Text>
-                )}
-              </View>
-            </View>
-          )}
-          {detail.scoreBreakdown.benchmark && (
-            <View style={styles.benchmarkBadge}>
-              <Feather name="bar-chart-2" size={16} color="#64748B" />
-              <Text style={styles.benchmarkText}>
-                {detail.scoreBreakdown.benchmark.trend === 'above_peer' ? 'Above' : 'Below or in line with'} peers
-                {detail.scoreBreakdown.benchmark.percentileAmongPeers != null &&
-                  ` • Top ${100 - detail.scoreBreakdown.benchmark.percentileAmongPeers}%`}
-              </Text>
-            </View>
-          )}
-          {detail.scoreInputs && detail.scoreInputs.length > 0 && (
-            <SectionCard style={styles.scoreInputsCard}>
-              <Text style={styles.subsectionTitle}>What feeds this score</Text>
-              {detail.scoreInputs.map((cat) => (
-                <View key={cat.id} style={styles.scoreInputCategory}>
-                  <Text style={styles.scoreInputCatLabel}>{cat.label}</Text>
-                  {cat.items.map((item, i) => (
-                    <View key={i} style={styles.scoreInputItem}>
-                      <Text style={styles.scoreInputItemLabel}>{item.label}</Text>
-                      <Text style={styles.scoreInputItemValue}>{item.value}</Text>
-                      {item.source && <Text style={styles.scoreInputSource}>{item.source}</Text>}
-                    </View>
-                  ))}
-                </View>
-              ))}
-            </SectionCard>
-          )}
-          {detail.whatWouldChangeScore && detail.whatWouldChangeScore.length > 0 && (
-            <SectionCard style={styles.whatWouldChangeCard}>
-              <Text style={styles.subsectionTitle}>What would change this score?</Text>
-              <Text style={styles.whatWouldChangeSubtitle}>Track your diligence workflow</Text>
-              {detail.whatWouldChangeScore.map((line, i) => {
-                const status = diligenceStatus[line] ?? 'not_started';
-                const canRequest = status === 'not_started' || status === 'requested';
-                return (
-                  <View key={i} style={styles.whatWouldChangeItemBlock}>
-                    <Text style={[styles.whatWouldChangeText, status === 'reviewed' && styles.whatWouldChangeTextReviewed]}>{line}</Text>
-                    <View style={styles.whatWouldChangeStatusRow}>
-                      {DILIGENCE_STATUS_ORDER.map((s) => (
-                        <Pressable
-                          key={s}
-                          style={({ pressed }) => [
-                            styles.diligencePill,
-                            status === s && styles.diligencePillActive,
-                            pressed && styles.diligencePillPressed,
-                          ]}
-                          onPress={() => setDiligenceItemStatus(line, s)}
-                        >
-                          <Text style={[styles.diligencePillText, status === s && styles.diligencePillTextActive]} numberOfLines={1}>
-                            {DILIGENCE_STATUS_LABELS[s]}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                    {canRequest && (
-                      <Pressable
-                        style={({ pressed }) => [styles.requestFromGPButton, pressed && styles.requestFromGPPressed]}
-                        onPress={() => handleRequestFromGP(line)}
-                      >
-                        <Feather name="send" size={14} color={COLORS.primary} />
-                        <Text style={styles.requestFromGPText}>Request from issuer/GP</Text>
-                      </Pressable>
-                    )}
-                  </View>
-                );
-              })}
-            </SectionCard>
-          )}
-          <SectionCard>
-            <Text style={styles.subsectionTitle}>Score components</Text>
-            <View style={styles.componentsList}>
-              {detail.scoreBreakdown.components.map((c, i) => (
-                <View key={i} style={styles.componentRow}>
-                  <View style={styles.componentMain}>
-                    <Text style={styles.componentLabel}>{c.label}</Text>
-                    <Text style={styles.componentWeight}>Weight: {c.weight}</Text>
-                  </View>
-                  <View style={styles.componentRight}>
-                    <Text style={[styles.componentScore, { color: getProgressColor(c.score) }]}>{c.score}</Text>
-                  </View>
-                  <Text style={styles.componentReason}>{c.shortReason}</Text>
-                </View>
-              ))}
-            </View>
-          </SectionCard>
+          <ScoreHeroSection
+            detail={detail}
+            diligenceStatus={diligenceStatus}
+            onDiligenceStatusChange={setDiligenceItemStatus}
+            onRequestFromGP={handleRequestFromGP}
+          />
         </View>
       )}
 
@@ -458,34 +416,7 @@ export default function PrivateMarketsDealDetailScreen() {
       {detail.decisionSupport && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Decision guidance</Text>
-          <SectionCard style={styles.decisionCard}>
-            {detail.confidence && detail.confidence !== 'high' && (
-              <View style={styles.diligenceImpact}>
-                <Feather name="info" size={16} color="#B45309" />
-                <Text style={styles.diligenceImpactText}>
-                  Diligence is {detail.confidence === 'moderate' ? 'partial' : 'limited'}; recommendation confidence is {detail.confidence}.
-                </Text>
-              </View>
-            )}
-            {detail.decisionSupport.suggestedPositionSize && (
-              <View style={styles.decisionHighlight}>
-                <Text style={styles.decisionLabelBig}>Recommended allocation</Text>
-                <Text style={styles.decisionValueBig}>{detail.decisionSupport.suggestedPositionSize}</Text>
-              </View>
-            )}
-            {detail.decisionSupport.concentrationWarning && (
-              <View style={styles.concentrationCard}>
-                <View style={styles.concentrationHeader}>
-                  <Feather name="alert-circle" size={16} color="#F59E0B" />
-                  <Text style={styles.decisionLabel}>Concentration</Text>
-                </View>
-                <Text style={styles.concentrationText}>{detail.decisionSupport.concentrationWarning}</Text>
-              </View>
-            )}
-            {detail.decisionSupport.tradeoffSummary && (
-              <Text style={styles.tradeoffText}>{detail.decisionSupport.tradeoffSummary}</Text>
-            )}
-          </SectionCard>
+          <DecisionGuidanceSection decisionSupport={detail.decisionSupport} confidence={detail.confidence} />
         </View>
       )}
 
@@ -493,18 +424,30 @@ export default function PrivateMarketsDealDetailScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Actions</Text>
         <View style={styles.actionsRow}>
-          <Pressable style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]} onPress={handleLearnPress}>
+          <Pressable
+            style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
+            onPress={handleLearnPress}
+            accessibilityLabel="Learn about this deal"
+            accessibilityRole="button"
+          >
             <Feather name="book-open" size={18} color={COLORS.accent} />
             <Text style={styles.actionBtnText}>Learn</Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
             onPress={() => navigation.navigate('PrivateMarketsCompare', { dealIds: [detail.id, ...(detail.decisionSupport?.compareDealIds ?? [])].slice(0, 4) })}
+            accessibilityLabel="Compare this deal with others"
+            accessibilityRole="button"
           >
             <Feather name="layers" size={18} color={COLORS.accent} />
             <Text style={styles.actionBtnText}>Compare</Text>
           </Pressable>
-          <Pressable style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]} onPress={handleSavePress}>
+          <Pressable
+            style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
+            onPress={handleSavePress}
+            accessibilityLabel={saved ? 'Remove from saved deals' : 'Save this deal'}
+            accessibilityRole="button"
+          >
             <Feather name="bookmark" size={18} color={saved ? COLORS.primary : COLORS.accent} fill={saved ? COLORS.primary : undefined} />
             <Text style={[styles.actionBtnText, saved && styles.actionBtnTextSaved]}>{saved ? 'Saved' : 'Save'}</Text>
           </Pressable>
@@ -513,7 +456,12 @@ export default function PrivateMarketsDealDetailScreen() {
 
       {/* 9. Partner CTA */}
       <View style={styles.section}>
-        <Pressable style={({ pressed }) => [styles.partnerCta, pressed && styles.partnerCtaPressed]} onPress={handlePartnerCta}>
+        <Pressable
+          style={({ pressed }) => [styles.partnerCta, pressed && styles.partnerCtaPressed]}
+          onPress={handlePartnerCta}
+          accessibilityLabel="Invest via licensed partner"
+          accessibilityRole="button"
+        >
           <Text style={styles.partnerCtaText}>Invest via partner</Text>
           <Feather name="external-link" size={18} color="#FFF" />
         </Pressable>
@@ -534,6 +482,13 @@ const styles = StyleSheet.create({
   header: { marginBottom: 28 },
   dealName: { fontSize: 26, fontWeight: 'bold', color: COLORS.primary, letterSpacing: -0.4 },
   dealTagline: { fontSize: 15, color: COLORS.textSecondary, marginTop: 8, lineHeight: 22 },
+  loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  loadingText: { marginTop: 12, fontSize: 15, color: COLORS.textSecondary },
+  errorWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  errorText: { fontSize: 16, color: COLORS.textSecondary, marginTop: 12, textAlign: 'center' },
+  retryBtn: { marginTop: 20, paddingVertical: 12, paddingHorizontal: 24, backgroundColor: COLORS.primary, borderRadius: 12 },
+  retryBtnPressed: { opacity: 0.8 },
+  retryBtnText: { fontSize: 16, fontWeight: '600', color: '#FFF' },
   section: { marginBottom: 36 },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: '#64748B', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 },
   sectionCard: {
@@ -548,67 +503,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
-  scoreHero: { alignItems: 'center', marginVertical: 20 },
-  confidenceStrip: { flexDirection: 'row', alignItems: 'flex-start', padding: 14, borderRadius: 12, marginBottom: 16, borderWidth: 1 },
-  confidence_high: { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
-  confidence_moderate: { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' },
-  confidence_limited: { backgroundColor: '#FEF2F2', borderColor: '#FECACA' },
-  confidenceTextBlock: { flex: 1, marginLeft: 12 },
-  confidenceLabel: { fontSize: 15, fontWeight: '700', color: COLORS.primary },
-  confidenceSub: { fontSize: 13, color: COLORS.textSecondary, marginTop: 4, lineHeight: 18 },
-  confidenceFactorsLabel: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginTop: 4 },
-  scoreInputsCard: { marginBottom: 16 },
-  whatWouldChangeCard: { marginBottom: 16 },
-  whatWouldChangeSubtitle: { fontSize: 12, color: '#64748B', marginBottom: 10 },
-  whatWouldChangeItemBlock: { marginBottom: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E2E8F0' },
-  whatWouldChangeText: { fontSize: 13, color: COLORS.textSecondary, lineHeight: 18, marginBottom: 8 },
-  whatWouldChangeTextReviewed: { color: '#94A3B8', textDecorationLine: 'line-through' },
-  whatWouldChangeStatusRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
-  diligencePill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' },
-  diligencePillActive: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
-  diligencePillPressed: { opacity: 0.8 },
-  diligencePillText: { fontSize: 11, fontWeight: '600', color: '#64748B' },
-  diligencePillTextActive: { color: '#FFF' },
-  requestFromGPButton: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8, backgroundColor: 'rgba(59, 130, 246, 0.1)' },
-  requestFromGPPressed: { opacity: 0.8 },
-  requestFromGPText: { fontSize: 12, fontWeight: '600', color: COLORS.primary },
-  scoreInputCategory: { marginBottom: 14 },
-  scoreInputCatLabel: { fontSize: 14, fontWeight: '700', color: COLORS.primary, marginBottom: 6 },
-  scoreInputItem: { marginBottom: 4 },
-  scoreInputItemLabel: { fontSize: 13, color: '#64748B' },
-  scoreInputItemValue: { fontSize: 14, fontWeight: '600', color: COLORS.primary },
-  scoreInputSource: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
-  diligenceImpact: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, padding: 10, backgroundColor: 'rgba(245, 158, 11, 0.12)', borderRadius: 10 },
-  diligenceImpactText: { flex: 1, fontSize: 13, color: '#92400E', lineHeight: 18 },
-  benchmarkBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#F1F5F9',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  benchmarkText: { fontSize: 14, color: '#475569', fontWeight: '500' },
-  subsectionTitle: { fontSize: 15, fontWeight: '700', color: COLORS.primary, marginBottom: 12 },
-  componentsList: { gap: 0 },
-  componentRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'flex-start',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
-  },
-  componentMain: { marginBottom: 4, flex: 1, minWidth: 100 },
-  componentRight: { alignSelf: 'flex-start', marginBottom: 4 },
-  componentScore: { fontSize: 20, fontWeight: '800' },
-  componentWeight: { fontSize: 12, color: '#94A3B8', marginTop: 2 },
-  componentLabel: { fontSize: 14, fontWeight: '600', color: COLORS.primary },
-  componentReason: { width: '100%', fontSize: 13, color: COLORS.textSecondary, lineHeight: 20, marginTop: 4 },
   bulletList: { gap: 4 },
   bulletRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 14 },
   bulletIcon: { marginRight: 12, marginTop: 3 },
@@ -678,25 +572,6 @@ const styles = StyleSheet.create({
   diligenceItemDetail: { fontSize: 12, color: '#64748B', marginTop: 2 },
   docRefs: { marginTop: 8 },
   docRef: { fontSize: 13, color: COLORS.accent },
-  decisionCard: { backgroundColor: '#F0F9FF', borderColor: '#BAE6FD' },
-  decisionHighlight: {
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: 'rgba(59,130,246,0.08)',
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  decisionLabelBig: { fontSize: 15, fontWeight: '600', color: '#1E293B' },
-  decisionValueBig: { fontSize: 28, fontWeight: '800', color: COLORS.accent, marginTop: 4 },
-  concentrationCard: { padding: 12, borderRadius: 12, backgroundColor: 'rgba(245, 158, 11, 0.12)', marginBottom: 12 },
-  concentrationHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  concentrationText: { fontSize: 14, color: '#0369A1', lineHeight: 20 },
-  decisionRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  decisionRowIcon: { marginTop: 2 },
-  decisionLabel: { fontSize: 14, fontWeight: '600', color: '#0C4A6E' },
-  decisionValueWrap: { flex: 1, minWidth: 0 },
-  decisionValue: { fontSize: 14, color: '#0369A1', lineHeight: 20 },
-  tradeoffText: { fontSize: 13, color: '#64748B', lineHeight: 20, marginTop: 6 },
   actionsRow: { flexDirection: 'row', gap: 12 },
   actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 16, backgroundColor: 'rgba(59,130,246,0.08)', borderWidth: 1, borderColor: 'rgba(59,130,246,0.3)' },
   actionBtnPressed: { opacity: 0.75, transform: [{ scale: 0.97 }] },

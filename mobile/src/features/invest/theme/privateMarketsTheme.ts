@@ -14,6 +14,24 @@ export const COLORS = {
   promiseBg: '#F8FAFC',
 };
 
+/** Spacing (px) — use for margins/padding consistency */
+export const SPACING = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  xxl: 24,
+};
+
+/** Border radius (px) */
+export const RADIUS = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+};
+
 /** Category stripe colors for deal cards (e.g. Fintech, Climate, Health) */
 export const CATEGORY_STRIPE: Record<string, string> = {
   fintech: '#3B82F6',
