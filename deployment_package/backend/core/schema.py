@@ -139,6 +139,20 @@ except (ImportError, SyntaxError):
         pass
 
 try:
+    from .financial_graph_types import FinancialGraphQueries
+except (ImportError, SyntaxError) as e:
+    logger.warning(f"FinancialGraphQueries not available: {e}")
+    class FinancialGraphQueries(graphene.ObjectType):
+        pass
+
+try:
+    from .opportunity_discovery_types import OpportunityDiscoveryQueries
+except (ImportError, SyntaxError) as e:
+    logger.warning(f"OpportunityDiscoveryQueries not available: {e}")
+    class OpportunityDiscoveryQueries(graphene.ObjectType):
+        pass
+
+try:
     from .ai_scans_types import AIScansQueries
 except (ImportError, SyntaxError):
     class AIScansQueries(graphene.ObjectType):
@@ -298,7 +312,7 @@ except (ImportError, SyntaxError) as e:
     class DiscussionsQuery(graphene.ObjectType):
         pass
 
-class ExtendedQuery(PremiumQueries, BrokerQueries, TradingQuery, BudgetSpendingQuery, SocialQuery, MarketDataQuery, AnalyticsQuery, SecurityQuery, SignalsQuery, OptionsRustQuery, DiscussionsQuery, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, RiskManagementQueries, OptionsAlertQueries, BlockchainQueries, DefiQueries, CryptoQueries, RAHAQueries, ChanQuantQueries, TransparencyQueries, SpeedOptimizationQueries, OptionsQueries, RepairQueries, Query, graphene.ObjectType):
+class ExtendedQuery(PremiumQueries, BrokerQueries, TradingQuery, BudgetSpendingQuery, SocialQuery, MarketDataQuery, AnalyticsQuery, SecurityQuery, SignalsQuery, OptionsRustQuery, DiscussionsQuery, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, RiskManagementQueries, OptionsAlertQueries, BlockchainQueries, DefiQueries, CryptoQueries, RAHAQueries, ChanQuantQueries, TransparencyQueries, SpeedOptimizationQueries, OptionsQueries, RepairQueries, FinancialGraphQueries, OpportunityDiscoveryQueries, Query, graphene.ObjectType):
     """
     Final Query type exposed by the schema.
 

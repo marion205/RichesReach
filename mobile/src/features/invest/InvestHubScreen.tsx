@@ -35,6 +35,7 @@ export default function InvestHubScreen({ navigateTo: navigateToProp }: InvestHu
       { key: 'crypto', title: 'Crypto', subtitle: 'Track & research', icon: 'zap', to: 'Crypto' },
       { key: 'defi', title: 'DeFi Fortress', subtitle: 'Earn yield, build wealth', icon: 'shield', to: 'DeFiFortress' },
       { key: 'ai', title: 'AI Portfolio', subtitle: 'Smart recs & rebalance', icon: 'cpu', to: 'AIPortfolio' },
+      { key: 'discover', title: 'Discover', subtitle: 'All asset classes', icon: 'compass', to: 'OpportunityDiscovery' },
       { key: 'tomorrow', title: 'Tomorrow', subtitle: 'Trade tomorrow\'s markets today', icon: 'calendar', to: 'Tomorrow' },
       { key: 'trade', title: 'Trading', subtitle: 'Live & options', icon: 'activity', to: 'trading' },
       { key: 'portfolio', title: 'Portfolio', subtitle: 'Positions & P/L', icon: 'pie-chart', to: 'Portfolio' },

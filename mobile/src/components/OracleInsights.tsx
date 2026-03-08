@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import type { FinancialGraph } from '../features/invest/types/opportunityTypes';
 import {
   View,
   Text,
@@ -43,6 +44,9 @@ interface OracleEvent {
 interface OracleInsightsProps {
   onInsightPress?: (insight: OracleEvent) => void;
   onGenerateInsight?: () => void;
+  /** Optional: Financial Intelligence Graph data. When provided, a cross-silo
+   *  "Financial Intelligence" section is rendered above the Oracle insight cards. */
+  financialGraph?: FinancialGraph;
 }
 
 // GraphQL query for Oracle insights
@@ -109,7 +113,7 @@ const getMockInsights = (): OracleEvent[] => [
   },
 ];
 
-export default function OracleInsights({ onInsightPress, onGenerateInsight }: OracleInsightsProps = {}) {
+export default function OracleInsights({ onInsightPress, onGenerateInsight, financialGraph }: OracleInsightsProps = {}) {
   const theme = useTheme();
   // Start with mock data only in demo mode; otherwise start empty and populate from API
   const [insights, setInsights] = useState<OracleEvent[]>(IS_DEMO ? getMockInsights() : []);
@@ -555,6 +559,46 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight }: Or
           </View>
         </View>
 
+        {/* Financial Intelligence Section — cross-silo graph edges */}
+        {financialGraph && financialGraph.edges && financialGraph.edges.length > 0 && (
+          <View style={styles.graphSection}>
+            <Text style={styles.graphSectionTitle}>🔗 Financial Intelligence</Text>
+            <Text style={styles.graphSectionSubtitle}>Cross-silo insights powering this Oracle</Text>
+            {financialGraph.edges.map((edge) => (
+              <View
+                key={edge.relationshipId}
+                style={[
+                  styles.graphEdgeCard,
+                  {
+                    borderLeftColor:
+                      edge.direction === 'positive'
+                        ? '#34C759'
+                        : edge.direction === 'negative'
+                        ? '#FF9500'
+                        : '#8E8E93',
+                  },
+                ]}
+              >
+                <Text style={styles.graphEdgeRoute}>
+                  {edge.sourceLabel}
+                  <Text style={styles.graphEdgeArrow}> → </Text>
+                  {edge.targetLabel}
+                </Text>
+                <Text style={styles.graphEdgeExplanation}>{edge.explanation}</Text>
+                {edge.numericImpact != null && edge.unit && (
+                  <Text style={styles.graphEdgeMeta}>
+                    {edge.direction === 'positive' ? '↑' : '↓'}{' '}
+                    {typeof edge.numericImpact === 'number' &&
+                    edge.unit.startsWith('$')
+                      ? `$${edge.numericImpact.toLocaleString()}`
+                      : `${edge.numericImpact.toFixed(1)} ${edge.unit}`}
+                  </Text>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+
         {insights.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateIcon}>🔮</Text>
@@ -938,5 +982,60 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 4,
+  },
+
+  // ── Financial Intelligence Graph section ───────────────────────────────────
+  graphSection: {
+    marginBottom: 16,
+    backgroundColor: '#F8FAFF',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#DBEAFE',
+  },
+  graphSectionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E3A5F',
+    marginBottom: 2,
+  },
+  graphSectionSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 10,
+  },
+  graphEdgeCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#34C759',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  graphEdgeRoute: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1E293B',
+    marginBottom: 3,
+  },
+  graphEdgeArrow: {
+    color: '#94A3B8',
+    fontWeight: '400',
+  },
+  graphEdgeExplanation: {
+    fontSize: 12,
+    color: '#475569',
+    lineHeight: 17,
+    marginBottom: 3,
+  },
+  graphEdgeMeta: {
+    fontSize: 11,
+    color: '#3B82F6',
+    fontWeight: '600',
   },
 });
