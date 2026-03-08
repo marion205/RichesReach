@@ -911,6 +911,12 @@ export default function DeFiAutopilotScreen() {
             <Icon name="check" size={18} color="#FFFFFF" />
             <Text style={styles.primaryBtnText}>Save Intent</Text>
           </TouchableOpacity>
+          <View style={styles.guardrailsNote}>
+            <Icon name="shield" size={14} color="#64748B" />
+            <Text style={styles.guardrailsNoteText}>
+              Guardrails: spend limit, circuit breaker, and confirmations apply. Ask uses a disclaimer when you have portfolio context.
+            </Text>
+          </View>
 
           {isConnected && (
             <>
@@ -1753,6 +1759,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.1,
+  },
+  guardrailsNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 0,
+  },
+  guardrailsNoteText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 18,
   },
   secondaryBtn: {
     marginTop: 14,

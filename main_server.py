@@ -1867,7 +1867,11 @@ async def assistant_query(request: Request):
             has_portfolio_context = context_str and ("portfolio" in context_str.lower() or "holdings" in context_str.lower())
             if has_buy_add_intent and has_portfolio_context:
                 content = content.rstrip() + "\n\n*This isn't financial advice. Consider concentration risk and your overall portfolio before adding.*"
-            
+                try:
+                    from core.safety_log import log_safety_decision
+                    log_safety_decision(str(user_id), 'ask_buy_add', 'disclaimer_applied', 'portfolio context present')
+                except Exception:
+                    pass
             logger.info(f"✅ [Assistant] Generated response ({len(content)} chars)")
             
             return {

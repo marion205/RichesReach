@@ -841,3 +841,6 @@ from core.options_models import (  # noqa: E402, F401
     OptionsPosition,
     OptionsRegimeSnapshot
 )
+
+# Safety v0 — central decision log (Ask, auto-execute)
+from core.safety_models import SafetyDecisionLog  # noqa: E402, F401

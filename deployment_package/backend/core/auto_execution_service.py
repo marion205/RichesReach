@@ -30,7 +30,15 @@ class AutoExecutionService:
         self.min_confidence = 0.8  # Minimum confidence to auto-execute
         self.max_position_size_pct = 0.10  # Max 10% of account per position
         self.daily_loss_limit_pct = -0.05  # Stop trading if down 5% for the day
-        
+
+    def _log_safety_block(self, user_id: int, reason: str) -> None:
+        """Log a safety block to SafetyDecisionLog (non-fatal)."""
+        try:
+            from .safety_log import log_safety_decision
+            log_safety_decision(str(user_id), 'auto_execute', 'blocked', reason)
+        except Exception as e:
+            logger.debug("Safety log skip: %s", e)
+
     def should_auto_execute(
         self,
         signal: Dict[str, Any],
@@ -51,36 +59,31 @@ class AutoExecutionService:
         # Check confidence threshold
         confidence = signal.get('confidence', 0.0) or signal.get('ml_probability', 0.0)
         if confidence < self.min_confidence:
-            return {
-                'should_execute': False,
-                'reason': f'Confidence {confidence:.2%} below threshold {self.min_confidence:.2%}'
-            }
-        
+            reason = f'Confidence {confidence:.2%} below threshold {self.min_confidence:.2%}'
+            self._log_safety_block(user_id, reason)
+            return {'should_execute': False, 'reason': reason}
+
         # Check daily loss limit
         daily_pnl = self._get_daily_pnl(user_id)
         if daily_pnl < self.daily_loss_limit_pct * account_equity:
-            return {
-                'should_execute': False,
-                'reason': f'Daily loss limit reached: ${daily_pnl:.2f}'
-            }
-        
+            reason = f'Daily loss limit reached: ${daily_pnl:.2f}'
+            self._log_safety_block(user_id, reason)
+            return {'should_execute': False, 'reason': reason}
+
         # Check position size limits
         position_value = self._calculate_position_size(signal, account_equity)
         max_position_value = account_equity * self.max_position_size_pct
-        
         if position_value > max_position_value:
-            return {
-                'should_execute': False,
-                'reason': f'Position size ${position_value:.2f} exceeds limit ${max_position_value:.2f}'
-            }
-        
+            reason = f'Position size ${position_value:.2f} exceeds limit ${max_position_value:.2f}'
+            self._log_safety_block(user_id, reason)
+            return {'should_execute': False, 'reason': reason}
+
         # Check if user has auto-trading enabled
         if not self._is_auto_trading_enabled(user_id):
-            return {
-                'should_execute': False,
-                'reason': 'Auto-trading not enabled for user'
-            }
-        
+            reason = 'Auto-trading not enabled for user'
+            self._log_safety_block(user_id, reason)
+            return {'should_execute': False, 'reason': reason}
+
         return {
             'should_execute': True,
             'reason': 'All checks passed',
