@@ -1,17 +1,20 @@
 /**
- * Opportunity Discovery Screen
- * ============================
- * Tabbed multi-asset discovery hub: Real Estate | Alternatives | Fixed Income
- * Plus a "Private Markets" tab that navigates to the existing PrivateMarketsScreen.
+ * Opportunity Discovery Screen — 2026 Premium Redesign
+ * =====================================================
+ * Tabbed multi-asset discovery: Fixed Income | Real Estate | Alternatives
+ * + "Private" tab that hands off to the existing PrivateMarketsScreen.
  *
- * Features:
- *  - Graph Intelligence banner: cross-silo insight from the financial graph
- *  - Opportunity cards: score badge, tagline, graph rationale, meta chips
- *  - Saved watchlist (persisted via AsyncStorage through the demo service)
- *  - Loading / error / empty states
+ * Design language:
+ *  - Dark navy hero header with gradient
+ *  - Frosted stat row (graph intelligence summary)
+ *  - Pill tab bar with smooth active state
+ *  - Score arc badge with asset-class accent color
+ *  - Graph rationale chip (indigo tint, link icon)
+ *  - Liquidity / risk / return meta row
+ *  - Pull-to-refresh, save/unsave, loading skeleton
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -20,63 +23,115 @@ import {
   Pressable,
   ActivityIndicator,
   RefreshControl,
+  Animated,
+  Dimensions,
+  StatusBar,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import Feather from '@expo/vector-icons/Feather';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { COLORS, SPACING, RADIUS } from '../theme/privateMarketsTheme';
 import {
   getOpportunityDiscoveryService,
 } from '../services/opportunityDiscoveryService';
 import type { Opportunity, FinancialGraph, AssetClass } from '../types/opportunityTypes';
 
-// ── Tab config ──────────────────────────────────────────────────────────────
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// ── Design tokens ────────────────────────────────────────────────────────────
+
+const D = {
+  // Core palette
+  navy: '#0B1426',
+  navyMid: '#0F1E35',
+  navyLight: '#162642',
+  white: '#FFFFFF',
+  offWhite: '#F8FAFC',
+  // Accents
+  blue: '#3B82F6',
+  blueLight: '#60A5FA',
+  blueFaint: '#EFF6FF',
+  indigo: '#6366F1',
+  indigoFaint: '#EEF2FF',
+  // Semantic
+  green: '#10B981',
+  greenFaint: '#D1FAE5',
+  amber: '#F59E0B',
+  amberFaint: '#FEF3C7',
+  red: '#EF4444',
+  redFaint: '#FEE2E2',
+  // Text
+  textPrimary: '#0F172A',
+  textSecondary: '#64748B',
+  textMuted: '#94A3B8',
+  // Surfaces
+  card: '#FFFFFF',
+  cardBorder: '#E2E8F0',
+  bg: '#F1F5F9',
+  // Spacing
+  r4: 4, r8: 8, r12: 12, r16: 16, r20: 20, r24: 24,
+};
+
+// ── Asset class config ────────────────────────────────────────────────────────
 
 type Tab = 'fixed_income' | 'real_estate' | 'alternatives' | 'private_markets';
 
-const TABS: { key: Tab; label: string }[] = [
-  { key: 'fixed_income', label: 'Fixed Income' },
-  { key: 'real_estate', label: 'Real Estate' },
-  { key: 'alternatives', label: 'Alternatives' },
-  { key: 'private_markets', label: 'Private' },
+const TABS: { key: Tab; label: string; icon: keyof typeof Feather.glyphMap }[] = [
+  { key: 'fixed_income',    label: 'Fixed Income',  icon: 'shield' },
+  { key: 'real_estate',     label: 'Real Estate',   icon: 'home' },
+  { key: 'alternatives',    label: 'Alternatives',  icon: 'trending-up' },
+  { key: 'private_markets', label: 'Private',       icon: 'lock' },
 ];
 
-// Category → accent colour for left stripe
-const CATEGORY_COLOR: Record<string, string> = {
-  treasury: '#10B981',    // green
-  bond_ladder: '#059669',
-  cd: '#34D399',
-  reit: '#3B82F6',        // blue
-  direct: '#1D4ED8',
-  commodity: '#F59E0B',   // amber
-  hedge_fund: '#7C3AED',  // purple
-  venture: '#EF4444',     // red
-  buyout: '#DC2626',
+const ASSET_ACCENT: Record<string, string> = {
+  fixed_income:    '#10B981',
+  real_estate:     '#3B82F6',
+  alternatives:    '#F59E0B',
+  private_markets: '#7C3AED',
 };
 
-const RISK_COLOR: Record<string, string> = {
-  low: '#059669',
-  moderate: '#D97706',
-  high: '#DC2626',
+const ASSET_GRADIENT: Record<string, [string, string]> = {
+  fixed_income:    ['#065F46', '#10B981'],
+  real_estate:     ['#1E40AF', '#3B82F6'],
+  alternatives:    ['#92400E', '#F59E0B'],
+  private_markets: ['#4C1D95', '#7C3AED'],
 };
 
-const RISK_BG: Record<string, string> = {
-  low: '#D1FAE5',
-  moderate: '#FEF3C7',
-  high: '#FEE2E2',
+const CATEGORY_ACCENT: Record<string, string> = {
+  treasury: '#10B981', bond_ladder: '#059669', cd: '#34D399',
+  reit: '#3B82F6', direct: '#1D4ED8',
+  commodity: '#F59E0B', hedge_fund: '#7C3AED',
 };
 
-// ── Component ───────────────────────────────────────────────────────────────
+const RISK_STYLES: Record<string, { color: string; bg: string; label: string }> = {
+  low:      { color: '#059669', bg: '#D1FAE5', label: 'Low risk' },
+  moderate: { color: '#D97706', bg: '#FEF3C7', label: 'Moderate' },
+  high:     { color: '#DC2626', bg: '#FEE2E2', label: 'High risk' },
+};
+
+const LIQUIDITY_ICON: Record<string, keyof typeof Feather.glyphMap> = {
+  daily:     'refresh-cw',
+  quarterly: 'calendar',
+  illiquid:  'lock',
+};
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export default function OpportunityDiscoveryScreen() {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<Tab>('fixed_income');
-  const [allOpportunities, setAllOpportunities] = useState<Opportunity[]>([]);
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [financialGraph, setFinancialGraph] = useState<FinancialGraph | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Entrance animation
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(24)).current;
 
   const service = getOpportunityDiscoveryService();
 
@@ -87,18 +142,24 @@ export default function OpportunityDiscoveryScreen() {
         service.getFinancialGraph(),
         service.getSavedOpportunityIds(),
       ]);
-      setAllOpportunities(opps);
+      setOpportunities(opps);
       setFinancialGraph(graph);
       setSavedIds(new Set(saved));
       setError(null);
     } catch {
-      setError('Could not load opportunities. Please try again.');
+      setError('Could not load opportunities.');
     }
   }, [service]);
 
   useEffect(() => {
     setLoading(true);
-    loadData().finally(() => setLoading(false));
+    loadData().finally(() => {
+      setLoading(false);
+      Animated.parallel([
+        Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+        Animated.timing(slideAnim, { toValue: 0, duration: 500, useNativeDriver: true }),
+      ]).start();
+    });
   }, [loadData]);
 
   const onRefresh = async () => {
@@ -109,349 +170,558 @@ export default function OpportunityDiscoveryScreen() {
 
   const toggleSave = async (id: string) => {
     const next = new Set(savedIds);
-    if (next.has(id)) {
-      next.delete(id);
-      await service.unsaveOpportunity(id);
-    } else {
-      next.add(id);
-      await service.saveOpportunity(id);
-    }
+    if (next.has(id)) { next.delete(id); await service.unsaveOpportunity(id); }
+    else              { next.add(id);    await service.saveOpportunity(id); }
     setSavedIds(next);
   };
 
-  // Navigate to Private Markets when that tab is selected
   const handleTabPress = (tab: Tab) => {
-    if (tab === 'private_markets') {
-      navigation.navigate('PrivateMarkets');
-      return;
-    }
+    if (tab === 'private_markets') { navigation.navigate('PrivateMarkets'); return; }
     setActiveTab(tab);
   };
 
-  const tabOpportunities = allOpportunities.filter(
-    (o) => o.assetClass === (activeTab as AssetClass),
-  );
+  const tabOpps = opportunities.filter(o => o.assetClass === (activeTab as AssetClass));
+  const accent = ASSET_ACCENT[activeTab] ?? D.blue;
+  const [gradStart, gradEnd] = ASSET_GRADIENT[activeTab] ?? [D.navyMid, D.navy];
 
-  const graphBannerText = financialGraph?.summarySentences?.[0] ?? null;
+  // Graph summary stats
+  const graphStats: { label: string; value: string; icon: keyof typeof Feather.glyphMap }[] = [];
+  if (financialGraph) {
+    if (financialGraph.totalCcMinPayments)
+      graphStats.push({ label: 'Freed/mo', value: `$${financialGraph.totalCcMinPayments.toLocaleString()}`, icon: 'arrow-up-right' });
+    if (financialGraph.emergencyFundMonths)
+      graphStats.push({ label: 'Emerg. fund', value: `${financialGraph.emergencyFundMonths.toFixed(1)}mo`, icon: 'shield' });
+    if (financialGraph.avgCreditUtilization != null)
+      graphStats.push({ label: 'Utilization', value: `${(financialGraph.avgCreditUtilization * 100).toFixed(0)}%`, icon: 'credit-card' });
+    if (financialGraph.investableSurplusMonthly)
+      graphStats.push({ label: 'Surplus', value: `$${financialGraph.investableSurplusMonthly.toLocaleString()}`, icon: 'zap' });
+  }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.accent} />
-      }
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Discover</Text>
-        <Text style={styles.subtitle}>Opportunities matched to your financial picture.</Text>
+    <View style={[styles.root, { paddingTop: insets.top }]}>
+      <StatusBar barStyle="light-content" />
+
+      {/* ── Hero Header ──────────────────────────────────────────────────── */}
+      <LinearGradient colors={[D.navy, D.navyMid]} style={styles.hero}>
+        <View style={styles.heroTop}>
+          <View>
+            <Text style={styles.heroEyebrow}>OPPORTUNITY DISCOVERY</Text>
+            <Text style={styles.heroTitle}>Discover</Text>
+            <Text style={styles.heroSubtitle}>Matched to your financial picture</Text>
+          </View>
+          <View style={[styles.heroIconWrap, { backgroundColor: `${accent}22` }]}>
+            <Feather name="compass" size={26} color={accent} />
+          </View>
+        </View>
+
+        {/* Graph stats strip */}
+        {graphStats.length > 0 && (
+          <View style={styles.statsRow}>
+            {graphStats.map((s, i) => (
+              <View key={i} style={styles.statPill}>
+                <Feather name={s.icon} size={11} color={accent} />
+                <Text style={styles.statValue}>{s.value}</Text>
+                <Text style={styles.statLabel}>{s.label}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </LinearGradient>
+
+      {/* ── Tab bar ──────────────────────────────────────────────────────── */}
+      <View style={styles.tabBarWrap}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabBarContent}
+        >
+          {TABS.map(({ key, label, icon }) => {
+            const isActive = activeTab === key && key !== 'private_markets';
+            const tabAccent = ASSET_ACCENT[key] ?? D.blue;
+            return (
+              <Pressable
+                key={key}
+                onPress={() => handleTabPress(key)}
+                style={({ pressed }) => [styles.tabPill, pressed && { opacity: 0.7 }]}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: isActive }}
+              >
+                <LinearGradient
+                  colors={isActive ? [tabAccent, tabAccent] : ['transparent', 'transparent']}
+                  style={[styles.tabPillInner, isActive && styles.tabPillActive]}
+                >
+                  <Feather name={icon} size={13} color={isActive ? '#fff' : D.textSecondary} />
+                  <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
+                    {label}
+                  </Text>
+                </LinearGradient>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </View>
 
-      {/* Graph Intelligence Banner */}
-      {graphBannerText && (
-        <View style={styles.graphBanner}>
-          <Feather name="activity" size={15} color={COLORS.accent} style={styles.bannerIcon} />
-          <Text style={styles.graphBannerText}>{graphBannerText}</Text>
+      {/* ── Graph Intelligence Banner ─────────────────────────────────────── */}
+      {financialGraph?.summarySentences?.[0] && (
+        <View style={styles.bannerWrap}>
+          <View style={[styles.banner, { borderLeftColor: accent }]}>
+            <View style={[styles.bannerDot, { backgroundColor: accent }]} />
+            <Text style={styles.bannerText} numberOfLines={2}>
+              {financialGraph.summarySentences[0]}
+            </Text>
+            <Feather name="chevron-right" size={14} color={D.textMuted} />
+          </View>
         </View>
       )}
 
-      {/* Tab Bar */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tabRowContent}
-        style={styles.tabRow}
+      {/* ── Content ──────────────────────────────────────────────────────── */}
+      <Animated.ScrollView
+        style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={accent} />
+        }
       >
-        {TABS.map(({ key, label }) => (
-          <Pressable
-            key={key}
-            onPress={() => handleTabPress(key)}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: activeTab === key && key !== 'private_markets' }}
-            style={styles.tabTouch}
-          >
-            <View
-              style={[
-                styles.tab,
-                activeTab === key && key !== 'private_markets' && styles.tabActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.tabText,
-                  activeTab === key && key !== 'private_markets' && styles.tabActiveText,
-                ]}
-              >
-                {label}
-              </Text>
+        {loading ? (
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color={accent} />
+            <Text style={styles.centerText}>Loading opportunities…</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.center}>
+            <View style={styles.errorIconWrap}>
+              <Feather name="alert-circle" size={28} color={D.red} />
             </View>
-          </Pressable>
-        ))}
-      </ScrollView>
-
-      {/* Content */}
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={COLORS.accent} />
-          <Text style={styles.loadingText}>Loading opportunities…</Text>
-        </View>
-      ) : error ? (
-        <View style={styles.center}>
-          <Feather name="alert-circle" size={32} color="#DC2626" />
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : tabOpportunities.length === 0 ? (
-        <View style={styles.center}>
-          <Feather name="inbox" size={32} color={COLORS.textSecondary} />
-          <Text style={styles.emptyText}>No opportunities in this category yet.</Text>
-        </View>
-      ) : (
-        tabOpportunities.map((opp) => (
-          <OpportunityCard
-            key={opp.id}
-            opportunity={opp}
-            isSaved={savedIds.has(opp.id)}
-            onSave={() => toggleSave(opp.id)}
-            onPress={() =>
-              navigation.navigate('OpportunityDetail', { opportunityId: opp.id })
-            }
-          />
-        ))
-      )}
-    </ScrollView>
+            <Text style={styles.errorTitle}>Something went wrong</Text>
+            <Text style={styles.centerText}>{error}</Text>
+          </View>
+        ) : tabOpps.length === 0 ? (
+          <View style={styles.center}>
+            <View style={styles.emptyIconWrap}>
+              <Feather name="inbox" size={28} color={D.textMuted} />
+            </View>
+            <Text style={styles.emptyTitle}>Coming soon</Text>
+            <Text style={styles.centerText}>No opportunities in this category yet.</Text>
+          </View>
+        ) : (
+          <>
+            <Text style={styles.sectionHeader}>
+              {tabOpps.length} OPPORTUNITIES
+            </Text>
+            {tabOpps.map((opp, idx) => (
+              <OpportunityCard
+                key={opp.id}
+                opportunity={opp}
+                isSaved={savedIds.has(opp.id)}
+                assetAccent={ASSET_ACCENT[opp.assetClass] ?? D.blue}
+                onSave={() => toggleSave(opp.id)}
+                onPress={() => navigation.navigate('OpportunityDetail', { opportunityId: opp.id })}
+                index={idx}
+              />
+            ))}
+            <View style={{ height: 32 }} />
+          </>
+        )}
+      </Animated.ScrollView>
+    </View>
   );
 }
 
-// ── Opportunity Card ─────────────────────────────────────────────────────────
+// ── Opportunity Card ──────────────────────────────────────────────────────────
 
-interface OpportunityCardProps {
+interface CardProps {
   opportunity: Opportunity;
   isSaved: boolean;
-  onSave: () => void;
+  assetAccent: string;
+  onSave: () => void | Promise<void>;
   onPress: () => void;
+  index: number;
 }
 
-function OpportunityCard({ opportunity: opp, isSaved, onSave, onPress }: OpportunityCardProps) {
-  const stripeColor =
-    CATEGORY_COLOR[opp.category as string] ?? COLORS.accent;
+function OpportunityCard({ opportunity: opp, isSaved, assetAccent, onSave, onPress, index }: CardProps) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const catAccent = CATEGORY_ACCENT[opp.category as string] ?? assetAccent;
+  const riskStyle = RISK_STYLES[opp.riskLevel ?? ''] ?? null;
+  const liquidityIcon = LIQUIDITY_ICON[opp.liquidity ?? ''] ?? 'clock';
+
+  const onPressIn  = () => Animated.spring(scaleAnim, { toValue: 0.975, useNativeDriver: true, speed: 50 }).start();
+  const onPressOut = () => Animated.spring(scaleAnim, { toValue: 1,     useNativeDriver: true, speed: 50 }).start();
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-      accessibilityRole="button"
-      accessibilityLabel={`${opp.name}, score ${opp.score}`}
-    >
-      {/* Left category stripe */}
-      <View style={[styles.categoryStripe, { backgroundColor: stripeColor }]} />
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={onPressIn}
+        onPressOut={onPressOut}
+        style={styles.card}
+        accessibilityRole="button"
+        accessibilityLabel={`${opp.name}, score ${opp.score}`}
+      >
+        {/* Top accent line */}
+        <View style={[styles.cardAccentLine, { backgroundColor: catAccent }]} />
 
-      <View style={styles.cardBody}>
-        {/* Top row: name + score + save */}
-        <View style={styles.cardTop}>
-          <Text style={styles.cardName} numberOfLines={2}>
-            {opp.name}
-          </Text>
-          <View style={styles.cardTopRight}>
-            <View style={styles.scoreBadge}>
-              <Text style={styles.scoreText}>{opp.score}</Text>
+        <View style={styles.cardInner}>
+          {/* Header row */}
+          <View style={styles.cardHeader}>
+            <View style={styles.cardHeaderLeft}>
+              {/* Score ring */}
+              <View style={[styles.scoreWrap, { borderColor: catAccent }]}>
+                <Text style={[styles.scoreNum, { color: catAccent }]}>{opp.score}</Text>
+              </View>
+              <View style={styles.cardTitleWrap}>
+                <Text style={styles.cardName} numberOfLines={2}>{opp.name}</Text>
+                <Text style={styles.cardTagline} numberOfLines={1}>{opp.tagline}</Text>
+              </View>
             </View>
-            <Pressable
-              onPress={onSave}
-              hitSlop={8}
-              accessibilityLabel={isSaved ? 'Remove from saved' : 'Save opportunity'}
-            >
+            <Pressable onPress={onSave} hitSlop={10} style={styles.saveBtn}>
               <Feather
-                name={isSaved ? 'bookmark' : 'bookmark'}
-                size={18}
-                color={isSaved ? COLORS.accent : COLORS.textSecondary}
-                style={{ opacity: isSaved ? 1 : 0.5 }}
+                name="bookmark"
+                size={19}
+                color={isSaved ? assetAccent : D.textMuted}
+                style={{ opacity: isSaved ? 1 : 0.45 }}
               />
             </Pressable>
           </View>
-        </View>
 
-        {/* Tagline */}
-        <Text style={styles.cardTagline}>{opp.tagline}</Text>
+          {/* Graph rationale */}
+          {opp.graphRationale && (
+            <View style={styles.rationaleRow}>
+              <View style={styles.rationaleIcon}>
+                <Feather name="link-2" size={11} color={D.indigo} />
+              </View>
+              <Text style={styles.rationaleText} numberOfLines={2}>
+                {opp.graphRationale}
+              </Text>
+            </View>
+          )}
 
-        {/* Graph rationale */}
-        {opp.graphRationale && (
-          <View style={styles.rationaleBadge}>
-            <Feather name="link" size={11} color={COLORS.accent} />
-            <Text style={styles.rationaleText} numberOfLines={2}>
-              {opp.graphRationale}
-            </Text>
+          {/* Meta row */}
+          <View style={styles.metaRow}>
+            {opp.expectedReturnRange && (
+              <View style={styles.metaChip}>
+                <Feather name="trending-up" size={10} color={D.green} />
+                <Text style={[styles.metaChipText, { color: D.green }]}>{opp.expectedReturnRange}</Text>
+              </View>
+            )}
+            {opp.liquidity && (
+              <View style={styles.metaChip}>
+                <Feather name={liquidityIcon} size={10} color={D.textSecondary} />
+                <Text style={styles.metaChipText}>{opp.liquidity}</Text>
+              </View>
+            )}
+            {riskStyle && (
+              <View style={[styles.metaChip, { backgroundColor: riskStyle.bg }]}>
+                <Text style={[styles.metaChipText, { color: riskStyle.color }]}>{riskStyle.label}</Text>
+              </View>
+            )}
+            {opp.minimumInvestment != null && (
+              <View style={[styles.metaChip, styles.metaChipRight]}>
+                <Text style={styles.metaChipText}>
+                  Min {opp.minimumInvestment >= 1000
+                    ? `$${(opp.minimumInvestment / 1000).toFixed(0)}k`
+                    : `$${opp.minimumInvestment}`}
+                </Text>
+              </View>
+            )}
           </View>
-        )}
 
-        {/* Meta chips */}
-        <View style={styles.chips}>
-          {opp.expectedReturnRange && (
-            <View style={styles.chip}>
-              <Text style={styles.chipText}>{opp.expectedReturnRange}</Text>
-            </View>
-          )}
-          {opp.liquidity && (
-            <View style={styles.chip}>
-              <Text style={styles.chipText}>{opp.liquidity}</Text>
-            </View>
-          )}
-          {opp.riskLevel && (
-            <View
-              style={[
-                styles.chip,
-                { backgroundColor: RISK_BG[opp.riskLevel] ?? '#F1F5F9' },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  { color: RISK_COLOR[opp.riskLevel] ?? COLORS.textSecondary },
-                ]}
-              >
-                {opp.riskLevel} risk
-              </Text>
-            </View>
-          )}
-          {opp.minimumInvestment != null && (
-            <View style={styles.chip}>
-              <Text style={styles.chipText}>
-                Min ${opp.minimumInvestment >= 1000
-                  ? `${(opp.minimumInvestment / 1000).toFixed(0)}k`
-                  : opp.minimumInvestment}
-              </Text>
-            </View>
-          )}
+          {/* CTA footer */}
+          <View style={styles.cardFooter}>
+            <Text style={[styles.cardCta, { color: catAccent }]}>View details →</Text>
+          </View>
         </View>
-      </View>
-    </Pressable>
+      </Pressable>
+    </Animated.View>
   );
 }
 
-// ── Styles ───────────────────────────────────────────────────────────────────
+// ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.promiseBg },
-  content: { padding: SPACING.lg, paddingBottom: 40 },
+  root: { flex: 1, backgroundColor: D.bg },
 
-  // Header
-  header: { marginBottom: SPACING.lg },
-  title: { fontSize: 26, fontWeight: '700', color: COLORS.text },
-  subtitle: { fontSize: 14, color: COLORS.textSecondary, marginTop: 3 },
-
-  // Graph banner
-  graphBanner: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#EFF6FF',
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.accent,
-    gap: SPACING.sm,
+  // Hero
+  hero: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 20,
   },
-  bannerIcon: { marginTop: 1 },
-  graphBannerText: {
-    flex: 1,
-    fontSize: 13,
-    color: COLORS.text,
-    lineHeight: 19,
-    fontStyle: 'italic',
-  },
-
-  // Tab bar
-  tabRow: { marginBottom: SPACING.md },
-  tabRowContent: { gap: SPACING.sm, paddingRight: SPACING.lg },
-  tabTouch: {},
-  tab: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: RADIUS.xl,
-    backgroundColor: '#E2E8F0',
-  },
-  tabActive: { backgroundColor: COLORS.accent },
-  tabText: { fontSize: 13, fontWeight: '500', color: COLORS.textSecondary },
-  tabActiveText: { color: '#FFFFFF' },
-
-  // States
-  center: { alignItems: 'center', paddingVertical: 40, gap: SPACING.md },
-  loadingText: { fontSize: 14, color: COLORS.textSecondary },
-  errorText: { fontSize: 14, color: '#DC2626', textAlign: 'center' },
-  emptyText: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center' },
-
-  // Card
-  card: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.bgCard,
-    borderRadius: RADIUS.lg,
-    marginBottom: SPACING.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.border,
-    overflow: 'hidden',
-  },
-  cardPressed: { opacity: 0.75 },
-  categoryStripe: { width: 4 },
-  cardBody: { flex: 1, padding: SPACING.lg },
-  cardTop: {
+  heroTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: SPACING.xs,
-    gap: SPACING.sm,
+    marginBottom: 16,
   },
-  cardTopRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    flexShrink: 0,
+  heroEyebrow: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.45)',
+    letterSpacing: 1.5,
+    marginBottom: 4,
   },
-  cardName: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.text,
-    lineHeight: 20,
+  heroTitle: {
+    fontSize: 30,
+    fontWeight: '800',
+    color: D.white,
+    letterSpacing: -0.5,
   },
-  scoreBadge: {
-    backgroundColor: COLORS.scoreBg,
-    borderRadius: RADIUS.sm,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  scoreText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
-  cardTagline: {
+  heroSubtitle: {
     fontSize: 13,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.sm,
-    lineHeight: 18,
+    color: 'rgba(255,255,255,0.55)',
+    marginTop: 3,
+  },
+  heroIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
-  // Graph rationale
-  rationaleBadge: {
+  // Stats strip
+  statsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  statPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 99,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  statValue: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: D.white,
+  },
+  statLabel: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.5)',
+    fontWeight: '500',
+  },
+
+  // Tab bar
+  tabBarWrap: {
+    backgroundColor: D.white,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: D.cardBorder,
+  },
+  tabBarContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  tabPill: { borderRadius: 99 },
+  tabPillInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 99,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: D.cardBorder,
+  },
+  tabPillActive: { borderColor: 'transparent' },
+  tabLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: D.textSecondary,
+  },
+  tabLabelActive: { color: D.white, fontWeight: '600' },
+
+  // Banner
+  bannerWrap: {
+    backgroundColor: D.white,
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: D.cardBorder,
+  },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: D.indigoFaint,
+    borderRadius: D.r12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: D.indigo,
+  },
+  bannerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  bannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#312E81',
+    fontWeight: '500',
+    lineHeight: 17,
+  },
+
+  // List
+  listContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  sectionHeader: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    color: D.textMuted,
+    marginBottom: 12,
+    marginLeft: 2,
+  },
+
+  // Center states
+  center: {
+    alignItems: 'center',
+    paddingVertical: 60,
+    gap: 10,
+  },
+  centerText: { fontSize: 14, color: D.textSecondary, textAlign: 'center' },
+  errorIconWrap: {
+    width: 52, height: 52, borderRadius: 26,
+    backgroundColor: D.redFaint,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  errorTitle: { fontSize: 16, fontWeight: '700', color: D.textPrimary },
+  emptyIconWrap: {
+    width: 52, height: 52, borderRadius: 26,
+    backgroundColor: D.bg,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: D.textPrimary },
+
+  // Card
+  card: {
+    backgroundColor: D.card,
+    borderRadius: D.r20,
+    marginBottom: 14,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    elevation: 3,
+    overflow: 'hidden',
+  },
+  cardAccentLine: {
+    height: 3,
+    width: '100%',
+  },
+  cardInner: { padding: 18 },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  cardHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 5,
-    backgroundColor: '#EFF6FF',
-    borderRadius: RADIUS.sm,
-    padding: SPACING.sm,
-    marginBottom: SPACING.sm,
+    flex: 1,
+    gap: 12,
+  },
+  scoreWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    backgroundColor: D.offWhite,
+  },
+  scoreNum: {
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  cardTitleWrap: { flex: 1 },
+  cardName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: D.textPrimary,
+    letterSpacing: -0.2,
+    lineHeight: 22,
+    marginBottom: 2,
+  },
+  cardTagline: {
+    fontSize: 12,
+    color: D.textSecondary,
+    lineHeight: 17,
+  },
+  saveBtn: { paddingLeft: 8 },
+
+  // Graph rationale
+  rationaleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: D.indigoFaint,
+    borderRadius: D.r8,
+    padding: 10,
+    marginBottom: 12,
+  },
+  rationaleIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: `${D.indigo}18`,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+    marginTop: 1,
   },
   rationaleText: {
     flex: 1,
     fontSize: 12,
-    color: '#1D4ED8',
+    color: '#3730A3',
     lineHeight: 17,
     fontStyle: 'italic',
   },
 
-  // Meta chips
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: {
-    backgroundColor: '#F1F5F9',
-    borderRadius: 99,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+  // Meta
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 14,
   },
-  chipText: { fontSize: 11, color: COLORS.textSecondary, fontWeight: '500' },
+  metaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: D.bg,
+    borderRadius: 99,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+  },
+  metaChipRight: { marginLeft: 'auto' },
+  metaChipText: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: D.textSecondary,
+  },
+
+  // Footer
+  cardFooter: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: D.cardBorder,
+    paddingTop: 12,
+  },
+  cardCta: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
 });

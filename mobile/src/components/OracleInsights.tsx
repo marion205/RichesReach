@@ -559,43 +559,102 @@ export default function OracleInsights({ onInsightPress, onGenerateInsight, fina
           </View>
         </View>
 
-        {/* Financial Intelligence Section — cross-silo graph edges */}
+        {/* ── Financial Intelligence Graph — 2026 premium redesign ── */}
         {financialGraph && financialGraph.edges && financialGraph.edges.length > 0 && (
           <View style={styles.graphSection}>
-            <Text style={styles.graphSectionTitle}>🔗 Financial Intelligence</Text>
-            <Text style={styles.graphSectionSubtitle}>Cross-silo insights powering this Oracle</Text>
-            {financialGraph.edges.map((edge) => (
-              <View
-                key={edge.relationshipId}
-                style={[
-                  styles.graphEdgeCard,
-                  {
-                    borderLeftColor:
-                      edge.direction === 'positive'
-                        ? '#34C759'
-                        : edge.direction === 'negative'
-                        ? '#FF9500'
-                        : '#8E8E93',
-                  },
-                ]}
-              >
-                <Text style={styles.graphEdgeRoute}>
-                  {edge.sourceLabel}
-                  <Text style={styles.graphEdgeArrow}> → </Text>
-                  {edge.targetLabel}
-                </Text>
-                <Text style={styles.graphEdgeExplanation}>{edge.explanation}</Text>
-                {edge.numericImpact != null && edge.unit && (
-                  <Text style={styles.graphEdgeMeta}>
-                    {edge.direction === 'positive' ? '↑' : '↓'}{' '}
-                    {typeof edge.numericImpact === 'number' &&
-                    edge.unit.startsWith('$')
-                      ? `$${edge.numericImpact.toLocaleString()}`
-                      : `${edge.numericImpact.toFixed(1)} ${edge.unit}`}
-                  </Text>
-                )}
+            {/* Section header */}
+            <LinearGradient
+              colors={['#0B1426', '#0F1E35']}
+              style={styles.graphSectionHeader}
+            >
+              <View style={styles.graphSectionHeaderLeft}>
+                <View style={styles.graphSectionIconWrap}>
+                  <Text style={{ fontSize: 14 }}>🕸️</Text>
+                </View>
+                <View>
+                  <Text style={styles.graphSectionEyebrow}>FINANCIAL INTELLIGENCE</Text>
+                  <Text style={styles.graphSectionTitle}>Cross-Silo Graph</Text>
+                </View>
               </View>
-            ))}
+              <View style={styles.graphSectionBadge}>
+                <Text style={styles.graphSectionBadgeText}>
+                  {financialGraph.edges.length} signals
+                </Text>
+              </View>
+            </LinearGradient>
+
+            {/* Edge cards */}
+            <View style={styles.graphEdgeList}>
+              {financialGraph.edges.map((edge, idx) => {
+                const isPositive = edge.direction === 'positive';
+                const isNegative = edge.direction === 'negative';
+                const accentColor = isPositive ? '#10B981' : isNegative ? '#F59E0B' : '#94A3B8';
+                const accentBg   = isPositive ? '#D1FAE5' : isNegative ? '#FEF3C7' : '#F1F5F9';
+                const dirIcon    = isPositive ? '↑' : isNegative ? '↓' : '→';
+
+                // Format numeric impact
+                let impactStr = '';
+                if (edge.numericImpact != null && edge.unit) {
+                  const n = edge.numericImpact;
+                  if (edge.unit.includes('$') || edge.unit.startsWith('/')) {
+                    impactStr = `$${Math.abs(n).toLocaleString()} ${edge.unit}`;
+                  } else {
+                    impactStr = `${Math.abs(n).toFixed(1)} ${edge.unit}`;
+                  }
+                }
+
+                return (
+                  <View key={edge.relationshipId} style={styles.graphEdgeCard}>
+                    {/* Route label */}
+                    <View style={styles.graphEdgeRouteRow}>
+                      <View style={[styles.graphEdgeNodePill, { backgroundColor: '#EEF2FF' }]}>
+                        <Text style={styles.graphEdgeNodeText}>{edge.sourceLabel}</Text>
+                      </View>
+                      <Text style={styles.graphEdgeConnector}>→</Text>
+                      <View style={[styles.graphEdgeNodePill, { backgroundColor: accentBg }]}>
+                        <Text style={[styles.graphEdgeNodeText, { color: accentColor }]}>
+                          {edge.targetLabel}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Explanation */}
+                    <Text style={styles.graphEdgeExplanation}>{edge.explanation}</Text>
+
+                    {/* Impact row */}
+                    {impactStr !== '' && (
+                      <View style={styles.graphEdgeImpactRow}>
+                        <View style={[styles.graphEdgeImpactBadge, { backgroundColor: accentBg }]}>
+                          <Text style={[styles.graphEdgeImpactText, { color: accentColor }]}>
+                            {dirIcon} {impactStr}
+                          </Text>
+                        </View>
+                        <View style={styles.graphEdgeConfidenceWrap}>
+                          <View
+                            style={[
+                              styles.graphEdgeConfidenceDot,
+                              { backgroundColor: accentColor, opacity: edge.confidence },
+                            ]}
+                          />
+                          <Text style={styles.graphEdgeConfidenceText}>
+                            {Math.round(edge.confidence * 100)}% confidence
+                          </Text>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+
+            {/* Summary sentence footer */}
+            {financialGraph.summarySentences && financialGraph.summarySentences.length > 1 && (
+              <View style={styles.graphSummaryFooter}>
+                <Text style={styles.graphSummaryFooterText}>
+                  +{financialGraph.summarySentences.length - 1} more cross-silo relationships
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -984,58 +1043,147 @@ const styles = StyleSheet.create({
     width: 4,
   },
 
-  // ── Financial Intelligence Graph section ───────────────────────────────────
+  // ── Financial Intelligence Graph — 2026 premium styles ────────────────────
   graphSection: {
-    marginBottom: 16,
-    backgroundColor: '#F8FAFF',
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: '#DBEAFE',
+    marginBottom: 20,
+    borderRadius: 20,
+    overflow: 'hidden',
+    shadowColor: '#0B1426',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 5,
+  },
+  graphSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  graphSectionHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  graphSectionIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  graphSectionEyebrow: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.45)',
+    letterSpacing: 1.5,
+    marginBottom: 1,
   },
   graphSectionTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
-    color: '#1E3A5F',
-    marginBottom: 2,
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
   },
-  graphSectionSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
-    marginBottom: 10,
+  graphSectionBadge: {
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    borderRadius: 99,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  graphSectionBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.75)',
+  },
+  graphEdgeList: {
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 4,
+    gap: 8,
   },
   graphEdgeCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 10,
+    borderRadius: 14,
+    padding: 14,
     marginBottom: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#34C759',
-    shadowColor: '#000',
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
     elevation: 1,
   },
-  graphEdgeRoute: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#1E293B',
-    marginBottom: 3,
+  graphEdgeRouteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+    flexWrap: 'wrap',
   },
-  graphEdgeArrow: {
+  graphEdgeNodePill: {
+    borderRadius: 99,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  graphEdgeNodeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#3730A3',
+  },
+  graphEdgeConnector: {
+    fontSize: 12,
     color: '#94A3B8',
-    fontWeight: '400',
+    fontWeight: '500',
   },
   graphEdgeExplanation: {
-    fontSize: 12,
-    color: '#475569',
-    lineHeight: 17,
-    marginBottom: 3,
+    fontSize: 13,
+    color: '#334155',
+    lineHeight: 19,
+    marginBottom: 10,
   },
-  graphEdgeMeta: {
+  graphEdgeImpactRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  graphEdgeImpactBadge: {
+    borderRadius: 99,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  graphEdgeImpactText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  graphEdgeConfidenceWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  graphEdgeConfidenceDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  graphEdgeConfidenceText: {
     fontSize: 11,
-    color: '#3B82F6',
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+  graphSummaryFooter: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  graphSummaryFooterText: {
+    fontSize: 12,
+    color: '#6366F1',
     fontWeight: '600',
   },
 });
