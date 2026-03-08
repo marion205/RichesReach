@@ -26,7 +26,7 @@ RichesReach is a full-stack investment app with a **React Native (Expo)** mobile
 - **Trading & options** – Order entry, options chain, Greeks, options learning.
 - **Private Markets** – Evidence-based deal intelligence: **Deal Room** (browse opportunities), **Deal Detail** (AI Deal Score, confidence with factors, “What feeds this score,” “What would change this score,” risk framing, portfolio fit, decision guidance), **Compare** (2–4 deals with summary and best/worst callouts), **diligence workflow** (Not started → Requested → Received → Reviewed per item; “Request from issuer/GP” placeholder), **Learn** (deal-context education: how to read the score, confidence, key terms, what to do next), **Save** (watchlist with Saved tab). Execution via licensed partner.
 - **Learn** – Daily Brief, tutor modules, lesson library, quizzes, voice digest.
-- **AI** – Trading coach, portfolio insights, holding-level repair/education (demo + API).
+- **AI** – Trading coach, portfolio insights, holding-level repair/education (demo + API). **Ask** (home floating button) is context-aware: answers use your portfolio, credit, and saved Private Markets deals when available.
 - **DeFi** – Vaults, autopilot, positions (where enabled).
 - **Social / community** – Wealth circles, challenges, peer progress.
 - **Demo mode** – Set `EXPO_PUBLIC_DEMO_MODE=true` in `mobile/.env.local` for sample data and no live brokerage.

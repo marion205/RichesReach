@@ -1859,6 +1859,15 @@ async def assistant_query(request: Request):
             if not content:
                 content = "I'm having trouble processing that request. Could you rephrase it?"
             
+            # Safety: for "should I buy/add" style prompts with portfolio context, append a short disclaimer
+            context_str = (user_context or "") if isinstance(user_context, str) else (json.dumps(user_context) if user_context else "")
+            prompt_lower = (prompt or "").lower()
+            buy_add_phrases = ("should i buy", "should i add", "add to", "buy this", "add this", "worth buying", "worth adding")
+            has_buy_add_intent = any(p in prompt_lower for p in buy_add_phrases)
+            has_portfolio_context = context_str and ("portfolio" in context_str.lower() or "holdings" in context_str.lower())
+            if has_buy_add_intent and has_portfolio_context:
+                content = content.rstrip() + "\n\n*This isn't financial advice. Consider concentration risk and your overall portfolio before adding.*"
+            
             logger.info(f"✅ [Assistant] Generated response ({len(content)} chars)")
             
             return {

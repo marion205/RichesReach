@@ -3,7 +3,7 @@ import React, {
   } from 'react';
   import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView,
-    FlatList, TextInput, RefreshControl, DeviceEventEmitter,
+    FlatList, TextInput, RefreshControl, DeviceEventEmitter, AppState,
   } from 'react-native';
   import { TID } from '../testIDs';
   import { useNavigation } from '@react-navigation/native';
@@ -21,6 +21,7 @@ import RealTimePortfolioService, { PortfolioMetrics } from '../features/portfoli
 import webSocketService, { PortfolioUpdate } from '../services/WebSocketService';
 import UserProfileService, { ExtendedUserProfile } from '../features/user/services/UserProfileService';
 import { assistantQuery } from '../services/aiClient';
+import { getCopilotContext, serializeCopilotContextForPrompt } from '../services/copilotContext';
 import { usePortfolioHistory, setPortfolioHistory } from '../shared/portfolioHistory';
 import { useRAHASignals } from '../features/raha/hooks/useRAHASignals';
 
@@ -227,6 +228,8 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
   }
   
   const QUICK_PROMPTS = [
+    'Am I too concentrated?',
+    'Summarize my portfolio',
     'What is an ETF?',
     'Roth vs Traditional IRA',
     'Explain 50/30/20 budgeting',
@@ -249,10 +252,12 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
     open,
     onClose,
     generateAIResponse,
+    contextHint,
   }: {
     open: boolean;
     onClose: () => void;
     generateAIResponse: (q: string) => Promise<string>;
+    contextHint?: string | null;
   }) {
     const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
     const [chatInput, setChatInput] = useState('');
@@ -377,7 +382,10 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
             </TouchableOpacity>
           </View>
         </View>
-  
+        {contextHint ? (
+          <Text style={styles.chatContextHint}>{contextHint}</Text>
+        ) : null}
+
         {/* Quick prompts */}
         <View style={styles.quickPromptsContainer}>
           <FlatList
@@ -605,8 +613,31 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
     // Real-time service snapshot
     const [realPortfolio, setRealPortfolio] = useState<PortfolioMetrics | null>(null);
   
-    // Chat
+    // Chat / Copilot context (refreshed when Ask opens)
     const [chatOpen, setChatOpen] = useState(false);
+    const copilotContextRef = useRef<string | null>(null);
+    const [copilotContextHint, setCopilotContextHint] = useState<string | null>(null);
+    useEffect(() => {
+      if (!chatOpen) return;
+      getCopilotContext().then((ctx) => {
+        copilotContextRef.current = serializeCopilotContextForPrompt(ctx);
+        const hasData = ctx.portfolio || ctx.credit || (ctx.privateMarkets?.savedDealIds?.length ?? 0) > 0;
+        setCopilotContextHint(hasData
+          ? 'Answers use your portfolio, credit & saved deals when relevant.'
+          : 'Answers can use your portfolio, credit, and saved deals when connected.');
+      }).catch(() => {
+        setCopilotContextHint('Answers can use your portfolio, credit, and saved deals when connected.');
+      });
+    }, [chatOpen]);
+    // Invalidate copilot context when app returns to foreground so next open/message uses fresh data
+    useEffect(() => {
+      const sub = AppState.addEventListener('change', (nextState) => {
+        if (nextState === 'active') {
+          copilotContextRef.current = null;
+        }
+      });
+      return () => sub.remove();
+    }, []);
     const [showCalmSheet, setShowCalmSheet] = useState(false);
     const [showCalmNudge, setShowCalmNudge] = useState(false);
     const [nudgeCopy, setNudgeCopy] = useState<{title: string; subtitle: string}>({title: 'You seem anxious about spending.', subtitle: 'Want to set a calm investing goal?'});
@@ -829,7 +860,16 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
   
     /* ---------- AI service ---------- */
     const generateAIResponse = useCallback(async (userInput: string): Promise<string> => {
-      // Provide immediate fallback responses based on common questions (fast path)
+      let contextStr = copilotContextRef.current;
+      if (contextStr == null) {
+        try {
+          const ctx = await getCopilotContext();
+          contextStr = serializeCopilotContextForPrompt(ctx);
+          copilotContextRef.current = contextStr;
+        } catch {
+          contextStr = '';
+        }
+      }
       const lowerInput = userInput.toLowerCase();
       
       // Quick keyword-based responses for instant feedback
@@ -840,7 +880,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
           const timeoutPromise = new Promise<never>((_, reject) => {
             setTimeout(() => reject(new Error('Request timeout')), 5000); // 5 second timeout
           });
-          const apiPromise = assistantQuery({ user_id: userId, prompt: userInput });
+          const apiPromise = assistantQuery({ user_id: userId, prompt: userInput, context: contextStr || undefined });
           const response = await Promise.race([apiPromise, timeoutPromise]);
           if (response?.answer || response?.response) {
             return response.answer || response.response;
@@ -857,7 +897,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
           const timeoutPromise = new Promise<never>((_, reject) => {
             setTimeout(() => reject(new Error('Request timeout')), 5000);
           });
-          const apiPromise = assistantQuery({ user_id: userId, prompt: userInput });
+          const apiPromise = assistantQuery({ user_id: userId, prompt: userInput, context: contextStr || undefined });
           const response = await Promise.race([apiPromise, timeoutPromise]);
           if (response?.answer || response?.response) {
             return response.answer || response.response;
@@ -874,7 +914,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
           const timeoutPromise = new Promise<never>((_, reject) => {
             setTimeout(() => reject(new Error('Request timeout')), 5000);
           });
-          const apiPromise = assistantQuery({ user_id: userId, prompt: userInput });
+          const apiPromise = assistantQuery({ user_id: userId, prompt: userInput, context: contextStr || undefined });
           const response = await Promise.race([apiPromise, timeoutPromise]);
           if (response?.answer || response?.response) {
             return response.answer || response.response;
@@ -891,7 +931,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
           const timeoutPromise = new Promise<never>((_, reject) => {
             setTimeout(() => reject(new Error('Request timeout')), 5000);
           });
-          const apiPromise = assistantQuery({ user_id: userId, prompt: userInput });
+          const apiPromise = assistantQuery({ user_id: userId, prompt: userInput, context: contextStr || undefined });
           const response = await Promise.race([apiPromise, timeoutPromise]);
           if (response?.answer || response?.response) {
             return response.answer || response.response;
@@ -908,7 +948,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(() => reject(new Error('Request timeout')), 8000); // 8 second timeout
         });
-        const apiPromise = assistantQuery({ user_id: userId, prompt: userInput });
+        const apiPromise = assistantQuery({ user_id: userId, prompt: userInput, context: contextStr || undefined });
         const response = await Promise.race([apiPromise, timeoutPromise]);
         return response?.answer || response?.response || 'I hit a snag processing that—mind trying again?';
       } catch (error: unknown) {
@@ -1792,7 +1832,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
         </TouchableOpacity>
   
         {/* Chat modal */}
-        <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} generateAIResponse={generateAIResponse} />
+        <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} generateAIResponse={generateAIResponse} contextHint={copilotContextHint} />
 
         {/* Calm Goal Sheet */}
         <CalmGoalSheet
@@ -1952,6 +1992,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
     chatHeaderActions: { flexDirection: 'row' },
     chatActionButton: { marginLeft: 10 },
     chatCloseButton: { marginLeft: 10 },
+    chatContextHint: { fontSize: 12, color: '#666', marginBottom: 8, paddingHorizontal: 4 },
   
     quickPromptsContainer: {
       marginBottom: 10, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#E5E5EA',
