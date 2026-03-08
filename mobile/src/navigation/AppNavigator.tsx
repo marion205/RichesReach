@@ -127,6 +127,20 @@ import SignalUpdatesScreen from '../features/portfolio/screens/SignalUpdatesScre
 import PortfolioLeaderboardScreen from '../features/social/screens/PortfolioLeaderboardScreen';
 // V2 single-screen utilities used from Home
 import OracleInsights from '../components/OracleInsights';
+import { getOpportunityDiscoveryService } from '../features/invest/services/opportunityDiscoveryService';
+import type { FinancialGraph } from '../features/invest/types/opportunityTypes';
+
+// Wrapper that loads the Financial Intelligence Graph before rendering OracleInsights
+function OracleInsightsScreen() {
+  const [financialGraph, setFinancialGraph] = React.useState<FinancialGraph | null>(null);
+  React.useEffect(() => {
+    getOpportunityDiscoveryService()
+      .getFinancialGraph()
+      .then(setFinancialGraph)
+      .catch(() => {});
+  }, []);
+  return <OracleInsights financialGraph={financialGraph ?? undefined} />;
+}
 import VoiceAIAssistant from '../components/VoiceAIAssistant';
 import BlockchainIntegration from '../components/BlockchainIntegration';
 import MarketCommentaryScreen from '../features/news/screens/MarketCommentaryScreen';
@@ -239,7 +253,7 @@ function HomeStack() {
         options={{ headerShown: true, title: 'Subscription' }}
       />
       {/* V2 utility routes triggered from Home cards */}
-      <Stack.Screen name="oracle-insights" component={OracleInsights} />
+      <Stack.Screen name="oracle-insights" component={OracleInsightsScreen} />
       <Stack.Screen name="voice-ai" component={VoiceAIAssistant} />
       <Stack.Screen name="blockchain-integration" component={BlockchainIntegration} />
       <Stack.Screen name="bridge-screen" component={BridgeScreen} options={{ headerShown: true, title: 'Cross-Chain Bridge' }} />

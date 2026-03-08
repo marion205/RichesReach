@@ -77,6 +77,8 @@ import SecurityFortress from '../../components/SecurityFortress';
 import ScalabilityEngine from '../../components/ScalabilityEngine';
 import MarketingRocket from '../../components/MarketingRocket';
 import OracleInsights from '../../components/OracleInsights';
+import { getOpportunityDiscoveryService } from '../../features/invest/services/opportunityDiscoveryService';
+import type { FinancialGraph } from '../../features/invest/types/opportunityTypes';
 import VoiceAIAssistant from '../../components/VoiceAIAssistant';
 import BlockchainIntegration from '../../components/BlockchainIntegration';
 import ConnectivityTestScreen from '../../components/ConnectivityTestScreen';
@@ -89,6 +91,20 @@ import BehavioralAnalyticsScreen from '../../features/personalization/screens/Be
 import DynamicContentScreen from '../../features/personalization/screens/DynamicContentScreen';
 import TradingCoachScreen from '../../features/coach/screens/TradingCoachScreen';
 import AITradingCoachScreen from '../../features/coach/screens/AITradingCoachScreen';
+
+// Oracle Insights wrapper — loads the Financial Intelligence Graph and passes it down
+function OracleInsightsWithGraph(props: { onInsightPress?: (insight: any) => void; onGenerateInsight?: () => void }) {
+  const [financialGraph, setFinancialGraph] = React.useState<FinancialGraph | null>(null);
+
+  React.useEffect(() => {
+    getOpportunityDiscoveryService()
+      .getFinancialGraph()
+      .then(setFinancialGraph)
+      .catch(() => {}); // fail silently — graph section simply won't render
+  }, []);
+
+  return <OracleInsights {...props} financialGraph={financialGraph ?? undefined} />;
+}
 
 // Loading fallback
 const ScreenLoader = () => (
@@ -487,7 +503,7 @@ export function MainScreenRenderer({
 
     case 'oracle-insights':
       return (
-        <OracleInsights
+        <OracleInsightsWithGraph
           onInsightPress={insight => {
             logger.log('Oracle insight pressed:', insight);
           }}
