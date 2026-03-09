@@ -329,7 +329,7 @@ export function tutorMarketCommentary(req: { user_id?: string; horizon?: string;
 }
 
 // ---------- Assistant ----------
-export type SuggestedAction = { label: string; screen: string };
+export type SuggestedAction = { label: string; screen: string; params?: Record<string, unknown> };
 export type AssistantQueryResponse = {
   answer?: string;
   response?: string;
@@ -342,20 +342,22 @@ export function assistantQuery(req: { user_id?: string; prompt: string; context?
   return postJSON<AssistantQueryResponse>('/assistant/query', req, { timeoutMs: ASSISTANT_TIMEOUT_MS });
 }
 
-// ---------- Saved goal (goal-based orchestration) ----------
+// ---------- Saved goals (goal-based orchestration) ----------
+export type GoalType = 'millionaire' | 'retirement' | 'house' | 'emergency_fund' | 'concentration';
 export type SavedGoalPayload = {
+  goalType: GoalType;
   target: number;
   currentInvested: number;
   monthlyContribution: number;
   yearsToReach: number;
   targetAge: number;
 };
-export type SavedGoalResponse = { goal: SavedGoalPayload | null };
-export function getSavedGoalApi(userId: string) {
-  return getJSON<SavedGoalResponse>(`/api/user/goal?user_id=${encodeURIComponent(userId)}`);
+export type SavedGoalsResponse = { goals: Record<string, SavedGoalPayload> };
+export function getSavedGoalsApi(userId: string) {
+  return getJSON<SavedGoalsResponse>(`/api/user/goal?user_id=${encodeURIComponent(userId)}`);
 }
 export function saveGoalApi(userId: string, goal: SavedGoalPayload) {
-  return postJSON<{ success: boolean; goal?: SavedGoalPayload }>('/api/user/goal', { user_id: userId, ...goal });
+  return postJSON<{ success: boolean; goal?: SavedGoalPayload }>('/api/user/goal', { user_id: userId, goal_type: goal.goalType, ...goal });
 }
 
 // ---------- Coach ----------

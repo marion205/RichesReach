@@ -19,7 +19,10 @@ import MilestonesTimeline, { Milestone } from '../../../components/MilestonesTim
 import MilestoneUnlockOverlay from '../../../components/MilestoneUnlockOverlay';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import PortfolioHoldings, { Holding } from '../components/PortfolioHoldings';
-import { getSavedGoal, saveSavedGoal } from '../../../services/savedGoalService';
+import { getSavedGoals, saveSavedGoal } from '../../../services/savedGoalService';
+import type { SavedGoalPlan } from '../../../services/savedGoalService';
+import type { GoalType } from '../../../services/aiClient';
+import GoalPlanCard from '../components/GoalPlanCard';
 import { getMockMyPortfolios } from '../../../services/mockPortfolioData';
 import ConstellationOrb from '../components/ConstellationOrb';
 import { useMoneySnapshot } from '../hooks/useMoneySnapshot';
@@ -96,48 +99,50 @@ interface StablePortfolioData {
   }>;
 }
 
-export type OneMillionPlanParams = {
-  target: number;
-  currentInvested: number;
-  monthlyContribution: number;
-  yearsToReach: number;
-  targetAge: number;
-};
-
-function formatGoalTarget(amount: number): string {
-  if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(amount % 1_000_000 === 0 ? 0 : 1)}M`;
-  if (amount >= 1_000) return `$${(amount / 1_000).toFixed(amount % 1_000 === 0 ? 0 : 1)}K`;
-  return `$${amount.toLocaleString()}`;
-}
-
-type PortfolioRouteParams = { oneMillionPlan?: OneMillionPlanParams };
+type PortfolioRouteParams = { oneMillionPlan?: SavedGoalPlan; newGoal?: SavedGoalPlan };
 
 const PortfolioScreen: React.FC<PortfolioScreenProps> = React.memo(({ navigateTo }) => {
 const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const route = useRoute();
-  const oneMillionPlanFromRoute = (route.params as PortfolioRouteParams | undefined)?.oneMillionPlan ?? null;
-  const [dismissedPlan, setDismissedPlan] = useState(false);
-  const [savedPlan, setSavedPlan] = useState<OneMillionPlanParams | null>(null);
-  const oneMillionPlan = oneMillionPlanFromRoute ?? savedPlan;
-  const showPlanCard = oneMillionPlan != null && !dismissedPlan;
+  const routeParams = route.params as PortfolioRouteParams | undefined;
+  const newGoalFromRoute = routeParams?.newGoal ?? routeParams?.oneMillionPlan ?? null;
+  const [savedGoals, setSavedGoals] = useState<Record<string, SavedGoalPlan>>({});
+  const [dismissedGoalTypes, setDismissedGoalTypes] = useState<Set<string>>(new Set());
 
   const { data: meData } = useQuery(GET_ME_ID, { errorPolicy: 'ignore', fetchPolicy: 'cache-first' });
   const userId = (meData?.me as { id?: string } | undefined)?.id ?? '1';
 
-  // Load saved goal on mount; persist route plan when arriving from "Start this plan"
+  // Load all saved goals on mount
   useEffect(() => {
     let mounted = true;
     (async () => {
-      const loaded = await getSavedGoal(userId);
-      if (mounted && loaded) setSavedPlan(loaded as OneMillionPlanParams);
+      const loaded = await getSavedGoals(userId);
+      if (mounted) setSavedGoals(loaded as Record<string, SavedGoalPlan>);
     })();
     return () => { mounted = false; };
   }, [userId]);
+
+  // When arriving from "Start this plan", merge newGoal into saved and persist
   useEffect(() => {
-    if (!oneMillionPlanFromRoute) return;
-    saveSavedGoal(userId, oneMillionPlanFromRoute).catch(() => {});
-  }, [userId, oneMillionPlanFromRoute]);
+    if (!newGoalFromRoute?.goalType) return;
+    const gt = newGoalFromRoute.goalType;
+    setSavedGoals((prev) => ({ ...prev, [gt]: newGoalFromRoute }));
+    saveSavedGoal(userId, newGoalFromRoute).catch(() => {});
+  }, [userId, newGoalFromRoute?.goalType]);
+
+  const handleSaveGoal = useCallback(async (uid: string, plan: SavedGoalPlan) => {
+    await saveSavedGoal(uid, plan);
+    setSavedGoals((prev) => ({ ...prev, [plan.goalType]: plan }));
+  }, []);
+
+  const goalList = useMemo(() => {
+    const list = Object.values(savedGoals).filter(Boolean);
+    if (newGoalFromRoute?.goalType && !savedGoals[newGoalFromRoute.goalType]) {
+      list.push(newGoalFromRoute);
+    }
+    return list;
+  }, [savedGoals, newGoalFromRoute]);
 
   // ALL HOOKS MUST BE AT THE TOP - before any conditional returns
   const [refreshing, setRefreshing] = useState(false);
@@ -681,33 +686,29 @@ return (
       }
       showsVerticalScrollIndicator={false}
     >
-    {/* Your goal plan card — shown when arriving from Goal Plan "Start this plan" */}
-    {showPlanCard && oneMillionPlan && (
-      <View style={styles.oneMillionPlanCard}>
-        <View style={styles.oneMillionPlanCardHeader}>
-          <Text style={styles.oneMillionPlanCardTitle}>Your {formatGoalTarget(oneMillionPlan.target)} plan</Text>
-          <TouchableOpacity onPress={() => setDismissedPlan(true)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-            <Icon name="x" size={20} color="#8E8E93" />
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.oneMillionPlanCardRow}>
-          Target: {formatGoalTarget(oneMillionPlan.target)} · ${oneMillionPlan.monthlyContribution.toLocaleString()}/mo · {oneMillionPlan.yearsToReach} years
-        </Text>
-        <Text style={styles.oneMillionPlanCardSubtext}>
-          Current: ${oneMillionPlan.currentInvested.toLocaleString()} invested · Reach by age {oneMillionPlan.targetAge}
-        </Text>
-        <TouchableOpacity
-          style={styles.oneMillionPlanCardEdit}
-          onPress={() => {
-            setDismissedPlan(true);
-            const root = (navigation as any).getParent?.();
-            if (root) root.navigate('Home', { screen: 'goal-plan' });
-            else (navigation as any).navigate('goal-plan');
-          }}
-        >
-          <Text style={styles.oneMillionPlanCardEditText}>Edit plan</Text>
-          <Icon name="chevron-right" size={16} color="#00cc99" />
-        </TouchableOpacity>
+    {/* Your goals — prominent, inline-adjustable, live-updating timeline */}
+    {goalList.length > 0 && (
+      <View style={styles.goalsSection}>
+        <Text style={styles.goalsSectionTitle}>Your plans</Text>
+        <Text style={styles.goalsSectionSubtitle}>Adjust target or monthly — timeline updates instantly</Text>
+        {goalList
+          .filter((p) => !dismissedGoalTypes.has(p.goalType))
+          .map((plan) => (
+            <GoalPlanCard
+              key={plan.goalType}
+              plan={plan}
+              currentInvested={typeof totalValue === 'number' ? totalValue : plan.currentInvested}
+              userId={userId}
+              onSave={handleSaveGoal}
+              onDismiss={() => setDismissedGoalTypes((prev) => new Set(prev).add(plan.goalType))}
+              onEditFull={(goalType: GoalType) => {
+                setDismissedGoalTypes((prev) => new Set(prev).add(goalType));
+                const root = (navigation as any).getParent?.();
+                if (root) root.navigate('Home', { screen: 'goal-plan', params: { goalType } });
+                else (navigation as any).navigate('goal-plan', { goalType });
+              }}
+            />
+          ))}
       </View>
     )}
     {/* Portfolio Overview - Constellation Orb or Shared Orb */}
@@ -1321,6 +1322,22 @@ container: {
 flex: 1,
 backgroundColor: '#f8f9fa',
 paddingTop: 0,
+},
+goalsSection: {
+  marginHorizontal: 20,
+  marginTop: 16,
+  marginBottom: 8,
+},
+goalsSectionTitle: {
+  fontSize: 22,
+  fontWeight: '700',
+  color: '#0f172a',
+  marginBottom: 4,
+},
+goalsSectionSubtitle: {
+  fontSize: 14,
+  color: '#64748B',
+  marginBottom: 12,
 },
 oneMillionPlanCard: {
   marginHorizontal: 20,

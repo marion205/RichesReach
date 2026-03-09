@@ -1,7 +1,6 @@
 /**
- * Goal Plan — destination after tapping "Set your $1M plan" (or any savings goal) from Ask.
- * User can set any target amount; default is $1M. Shows current invested, suggested monthly,
- * timeline, and "Start this plan". Levers: target amount, monthly contribution, target age.
+ * Goal Plan — destination after tapping a goal CTA from Ask (millionaire, retirement, house, emergency fund, concentration).
+ * Shows current invested, suggested monthly, timeline, and "Start this plan". Levers: target, monthly, target age.
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -21,19 +20,22 @@ import Icon from 'react-native-vector-icons/Feather';
 import { useRoute } from '@react-navigation/native';
 import RealTimePortfolioService from '../services/RealTimePortfolioService';
 import { saveSavedGoal } from '../../../services/savedGoalService';
+import {
+  type GoalType,
+  MIN_TARGET,
+  MAX_TARGET,
+  DEFAULT_RATE,
+  formatGoalTarget,
+  yearsToTargetAge,
+  monthlyPmtToReach,
+  yearsToGoal,
+  getDefaultTarget,
+  getGoalTitle,
+  getGoalSubtitle,
+} from '../lib/goalPlanUtils';
 
 const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
 const DEMO_PORTFOLIO = 14303;
-const DEFAULT_TARGET = 1_000_000;
-const MIN_TARGET = 10_000;
-const MAX_TARGET = 100_000_000;
-const DEFAULT_RATE = 0.07;
-
-function formatTargetAmount(amount: number): string {
-  if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(amount % 1_000_000 === 0 ? 0 : 1)}M`;
-  if (amount >= 1_000) return `$${(amount / 1_000).toFixed(amount % 1_000 === 0 ? 0 : 1)}K`;
-  return `$${amount.toLocaleString()}`;
-}
 
 const GET_USER_PROFILE = gql`
   query GetUserProfileForGoal {
@@ -48,48 +50,29 @@ const GET_USER_PROFILE = gql`
   }
 `;
 
-function yearsToTargetAge(age: number | null, targetAge: number): number | null {
-  if (age == null || age >= targetAge) return null;
-  const y = targetAge - age;
-  return y > 0 && y <= 50 ? y : null;
-}
-
-function monthlyPmtToReach(goal: number, years: number, annualRate: number, pv: number): number {
-  if (years <= 0) return 0;
-  const r = annualRate / 12;
-  const n = years * 12;
-  const fvPv = pv * Math.pow(1 + r, n);
-  if (fvPv >= goal) return 0;
-  return Math.round(((goal - fvPv) * r) / (Math.pow(1 + r, n) - 1));
-}
-
-function yearsToGoal(goal: number, pmt: number, annualRate: number, pv: number): number {
-  if (pmt <= 0 && pv <= 0) return 99;
-  const r = annualRate / 12;
-  let months = 1;
-  while (months < 600) {
-    const fv = pv * Math.pow(1 + r, months) + pmt * (Math.pow(1 + r, months) - 1) / r;
-    if (fv >= goal) return Math.round(months / 12);
-    months++;
-  }
-  return 99;
-}
-
 interface GoalPlanScreenProps {
   navigateTo?: (screen: string, params?: Record<string, unknown>) => void;
 }
 
-type GoalPlanRouteParams = { target?: number };
+type GoalPlanRouteParams = { target?: number; goalType?: GoalType };
 
 export default function GoalPlanScreen({ navigateTo }: GoalPlanScreenProps) {
   const insets = useSafeAreaInsets();
   const route = useRoute();
-  const initialTarget = (route.params as GoalPlanRouteParams | undefined)?.target;
-  const [targetAmount, setTargetAmount] = useState<number>(
-    initialTarget != null && initialTarget >= MIN_TARGET && initialTarget <= MAX_TARGET
-      ? initialTarget
-      : DEFAULT_TARGET
+  const params = route.params as GoalPlanRouteParams | undefined;
+  const goalType = params?.goalType ?? 'millionaire';
+  const defaultTarget = getDefaultTarget(goalType);
+  const initialTarget = params?.target;
+  const [targetInputString, setTargetInputString] = useState<string>(
+    initialTarget != null && initialTarget >= MIN_TARGET && initialTarget <= MAX_TARGET && initialTarget !== defaultTarget
+      ? String(initialTarget)
+      : ''
   );
+  const targetAmount = useMemo(() => {
+    if (targetInputString.trim() === '' || targetInputString === '0') return defaultTarget;
+    const n = parseInt(targetInputString.replace(/\D/g, ''), 10);
+    return Number.isNaN(n) ? defaultTarget : Math.min(MAX_TARGET, n);
+  }, [targetInputString, defaultTarget]);
   const [currentInvested, setCurrentInvested] = useState<number>(IS_DEMO ? DEMO_PORTFOLIO : 0);
   const [portfolioLoading, setPortfolioLoading] = useState(true);
   const [monthlyOverride, setMonthlyOverride] = useState<number | null>(null);
@@ -142,6 +125,7 @@ export default function GoalPlanScreen({ navigateTo }: GoalPlanScreenProps) {
 
   const handleStartPlan = useCallback(async () => {
     const plan = {
+      goalType,
       target: targetClamped,
       currentInvested,
       monthlyContribution: monthly,
@@ -150,9 +134,9 @@ export default function GoalPlanScreen({ navigateTo }: GoalPlanScreenProps) {
     };
     await saveSavedGoal(userId, plan);
     if (navigateTo) {
-      navigateTo('portfolio', { oneMillionPlan: plan });
+      navigateTo('portfolio', { newGoal: plan });
     }
-  }, [navigateTo, userId, targetClamped, currentInvested, monthly, yearsToReach, targetAge]);
+  }, [navigateTo, userId, goalType, targetClamped, currentInvested, monthly, yearsToReach, targetAge]);
 
   if (portfolioLoading) {
     return (
@@ -169,11 +153,11 @@ export default function GoalPlanScreen({ navigateTo }: GoalPlanScreenProps) {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={styles.title}>Your {formatTargetAmount(targetClamped)} plan</Text>
-      <Text style={styles.subtitle}>Based on your profile and current portfolio</Text>
+      <Text style={styles.title}>{getGoalTitle(goalType, targetClamped)}</Text>
+      <Text style={styles.subtitle}>{getGoalSubtitle(goalType)}</Text>
 
       <View style={styles.card}>
-        <Row label="Target" value={formatTargetAmount(targetClamped)} />
+        <Row label="Target" value={formatGoalTarget(targetClamped)} />
         <Row label="Current invested" value={`$${currentInvested.toLocaleString()}`} />
         <Row label="Suggested monthly contribution" value={`$${suggestedMonthly.toLocaleString()}`} />
         <Row label="Target timeline" value={`${yearsToReach} years`} />
@@ -186,19 +170,9 @@ export default function GoalPlanScreen({ navigateTo }: GoalPlanScreenProps) {
           <TextInput
             style={styles.input}
             keyboardType="number-pad"
-            placeholder={String(DEFAULT_TARGET)}
-            value={targetAmount === DEFAULT_TARGET ? '' : String(targetAmount)}
-            onChangeText={(t) => {
-              const trimmed = t.replace(/\D/g, '').trim();
-              if (trimmed === '' || trimmed === '0') {
-                setTargetAmount(DEFAULT_TARGET);
-                return;
-              }
-              const n = parseInt(trimmed, 10);
-              if (Number.isNaN(n)) return;
-              // Allow intermediate values while typing (e.g. 5, 50, 500, 500000) — targetClamped is used for math
-              setTargetAmount(Math.min(MAX_TARGET, n));
-            }}
+            placeholder={String(defaultTarget)}
+            value={targetInputString}
+            onChangeText={(t) => setTargetInputString(t.replace(/\D/g, ''))}
           />
         </View>
         <View style={styles.leverRow}>
@@ -227,9 +201,9 @@ export default function GoalPlanScreen({ navigateTo }: GoalPlanScreenProps) {
             }}
           />
         </View>
-        {(monthlyOverride != null || targetAgeOverride != null || targetAmount !== DEFAULT_TARGET) && (
+        {(monthlyOverride != null || targetAgeOverride != null || targetInputString.trim() !== '') && (
           <Text style={styles.recalcHint}>
-            At ${monthly.toLocaleString()}/month you reach {formatTargetAmount(targetClamped)} in {yearsToReach} years.
+            At ${monthly.toLocaleString()}/month you reach {formatGoalTarget(targetClamped)} in {yearsToReach} years.
           </Text>
         )}
       </View>

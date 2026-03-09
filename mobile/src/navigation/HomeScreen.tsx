@@ -238,13 +238,14 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
   `;
   
   /* ===================== Types ===================== */
+  type ActionCard = { label: string; screen: string; params?: Record<string, unknown> };
   interface ChatMsg {
     id: string;
     role: 'user' | 'assistant';
     content: string;
-    actionCard?: { label: string; screen: string } | null;
+    actionCard?: ActionCard | null;
   }
-  
+
   // In demo mode we surface chips that show off personalisation with Alex's real numbers.
   // In live mode we show the same personalised set when portfolio data is available,
   // falling back to the generic educational list otherwise.
@@ -277,15 +278,21 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
   const QUICK_PROMPTS = IS_DEMO ? QUICK_PROMPTS_DEMO : QUICK_PROMPTS_GENERIC;
   
   /* ===================== Action card helpers ===================== */
-  type AskResult = string | { text: string; suggestedAction?: { label: string; screen: string } | null };
-  function detectActionCard(text: string): { label: string; screen: string } | null {
+  type AskResult = string | { text: string; suggestedAction?: ActionCard | null };
+  function detectActionCard(text: string): ActionCard | null {
     const t = text.toLowerCase();
     if (/(million|millionaire|1m|path to \$1m|path to 1m)/.test(t))
-      return { label: 'Set your $1M plan →', screen: 'goal-plan' };
-    if (/(retire|on track|financial goal|build wealth|get rich)/.test(t))
-      return { label: 'Set a goal →', screen: 'portfolio' };
+      return { label: 'Set your $1M plan →', screen: 'goal-plan', params: { goalType: 'millionaire' } };
+    if (/(retire|retirement|on track.*retire|nest egg)/.test(t))
+      return { label: 'See retirement plan →', screen: 'goal-plan', params: { goalType: 'retirement' } };
+    if (/(house|down payment|buy a home|first home)/.test(t))
+      return { label: 'Set house fund →', screen: 'goal-plan', params: { goalType: 'house' } };
+    if (/(emergency fund|rainy day|3\.6 months|months of expenses)/.test(t))
+      return { label: 'Build emergency fund →', screen: 'goal-plan', params: { goalType: 'emergency_fund' } };
     if (/(concentration|overweight|too large|single stock|diversif)/.test(t))
-      return { label: 'Review portfolio →', screen: 'portfolio' };
+      return { label: 'Reduce concentration →', screen: 'goal-plan', params: { goalType: 'concentration' } };
+    if (/(financial goal|build wealth|get rich)/.test(t))
+      return { label: 'Set a goal →', screen: 'portfolio' };
     if (/(budget|spending|spend|50.30.20)/.test(t))
       return { label: 'Open Budgeting →', screen: 'budgeting' };
     if (/(invest|contribute|add money|index fund|etf)/.test(t))
@@ -305,7 +312,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
     onClose: () => void;
     generateAIResponse: (q: string) => Promise<AskResult>;
     contextHint?: string | null;
-    onNavigate?: (screen: string) => void;
+    onNavigate?: (screen: string, params?: Record<string, unknown>) => void;
   }) {
     const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
     const [chatInput, setChatInput] = useState('');
@@ -373,10 +380,10 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
       AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
     }, [STORAGE_KEY]);
   
-    const resolveTextAndAction = useCallback((out: AskResult): { text: string; actionCard: { label: string; screen: string } | null } => {
+    const resolveTextAndAction = useCallback((out: AskResult): { text: string; actionCard: ActionCard | null } => {
       const text = typeof out === 'string' ? out : out.text;
       const action = (typeof out === 'object' && out.suggestedAction != null)
-        ? out.suggestedAction
+        ? out.suggestedAction as ActionCard
         : detectActionCard(text);
       return { text, actionCard: action ?? null };
     }, []);
@@ -481,7 +488,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
               {item.role === 'assistant' && item.actionCard && (
                 <TouchableOpacity
                   style={styles.actionCardBtn}
-                  onPress={() => onNavigate?.(item.actionCard!.screen)}
+                  onPress={() => onNavigate?.(item.actionCard!.screen, item.actionCard!.params)}
                   activeOpacity={0.8}
                 >
                   <Text style={styles.actionCardBtnText}>{item.actionCard.label}</Text>
@@ -1862,7 +1869,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
         </TouchableOpacity>
   
         {/* Chat modal */}
-        <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} generateAIResponse={generateAIResponse} contextHint={copilotContextHint} onNavigate={(screen) => { setChatOpen(false); go(screen); }} />
+        <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} generateAIResponse={generateAIResponse} contextHint={copilotContextHint} onNavigate={(screen, params) => { setChatOpen(false); go(screen, params); }} />
 
         {/* Calm Goal Sheet */}
         <CalmGoalSheet

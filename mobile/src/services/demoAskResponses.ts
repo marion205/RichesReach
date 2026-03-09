@@ -145,6 +145,92 @@ Try next:
 • "What if I increase contributions 10% every year?"`;
   }
 
+  // ── Retirement / on track to retire / nest egg ───────────────────────────────
+  if (
+    (q.includes('retire') && (q.includes('when') || q.includes('on track') || q.includes('ready'))) ||
+    q.includes('retirement') || q.includes('nest egg')
+  ) {
+    const yearsLeft = yearsTo(age) ?? 33;
+    const target = 1_500_000;
+    const targetPMT = monthlyPMT(target, yearsLeft, 0.07, DEMO_PORTFOLIO);
+    return `${namePrefix}Here’s your retirement picture.
+
+📍 Your situation
+At ${age} with $${DEMO_PORTFOLIO.toLocaleString()} invested, you have about ${yearsLeft} years to build a nest egg. A common target is 10–12× income by 65.
+
+📊 Path to $${(target / 1e6).toFixed(1)}M by 65
+• About $${targetPMT.toLocaleString()}/month at 7% gets you there in ${yearsLeft} years.
+• Your current portfolio grows to ~$${Math.round(DEMO_PORTFOLIO * Math.pow(1.07, yearsLeft)).toLocaleString()} on its own — the rest is closing the gap with contributions.
+
+💡 Key insight
+Retirement is a number, not an age. With your nest egg target and timeline, automating contributions matters more than timing the market.
+
+✅ Best next step
+Set your retirement number and monthly plan so you can track progress. Adjust as income grows.
+
+Try next:
+• "How much do I need to retire at 60?"
+• "What if I save 20% for retirement?"`;
+  }
+
+  // ── House / down payment / first home ────────────────────────────────────────
+  if (
+    q.includes('house') || q.includes('down payment') || q.includes('first home') ||
+    q.includes('buy a home') || q.includes('save for a home')
+  ) {
+    const target = 80_000;
+    const years = 5;
+    const targetPMT = monthlyPMT(target, years, 0.05, 0);
+    return `${namePrefix}Here’s a simple house fund plan.
+
+📍 Your situation
+A typical down payment target is 10–20% of the home price. For a $${(target / 1000).toFixed(0)}K goal over ${years} years, you’d aim for about $${targetPMT.toLocaleString()}/month (assuming ~5% growth in a savings or conservative mix).
+
+📊 Options
+• Aggressive — save more per month and reach the target sooner.
+• Steady — $${targetPMT.toLocaleString()}/month gets you there in ${years} years.
+• Stretch — lower monthly, longer timeline.
+
+💡 Key insight
+Keeping the down payment in something stable (high-yield savings or short-term bonds) reduces the risk of a market dip right when you’re ready to buy.
+
+✅ Best next step
+Set your down payment target and monthly amount so you can track progress.
+
+Try next:
+• "How much should I save for a down payment?"
+• "When can I afford a house?"`;
+  }
+
+  // ── Emergency fund ───────────────────────────────────────────────────────────
+  if (
+    q.includes('emergency fund') || q.includes('rainy day') || q.includes('3 months') ||
+    q.includes('6 months') || q.includes('months of expenses')
+  ) {
+    const monthsExpenses = Math.round(monthlyIncome * 4);
+    const target = Math.round(monthlyIncome * 6);
+    const targetPMT = Math.round(monthlyIncome * 0.15);
+    const monthsToFill = Math.ceil(target / targetPMT);
+    return `${namePrefix}Here’s your emergency fund plan.
+
+📍 Your situation
+A common target is 3–6 months of expenses. At ~$${monthlyIncome.toLocaleString()}/month that’s about $${target.toLocaleString()} for 6 months.
+
+📊 Path
+• Saving $${targetPMT.toLocaleString()}/month gets you to $${target.toLocaleString()} in about ${monthsToFill} months.
+• Keep it in a high-yield savings account so it’s available and not in the market.
+
+💡 Key insight
+Your emergency fund is your buffer — it’s not for growth, it’s for security. Once you hit 3–6 months, you can focus extra savings on investing.
+
+✅ Best next step
+Set your emergency fund target (e.g. 6 months of expenses) and a monthly amount; track until you hit it.
+
+Try next:
+• "How much should I keep in cash?"
+• "Where should I keep my emergency fund?"`;
+  }
+
   // ── Am I too concentrated? ───────────────────────────────────────────────────
   if (
     q.includes('concentrat') ||
