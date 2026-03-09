@@ -275,13 +275,15 @@ const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigateTo: navigateToPro
     }
   }, [commentSignal, selectedSignal, commentText]);
 
-  const getSignalTypeDisplay = (signalType: string) => {
-    return signalType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  const getSignalTypeDisplay = (signalType: string | undefined) => {
+    const s = signalType ?? '';
+    return s.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
   };
 
-  const getSignalTypeColor = (signalType: string) => {
-    if (signalType.includes('long')) return '#10B981';
-    if (signalType.includes('short')) return '#EF4444';
+  const getSignalTypeColor = (signalType: string | undefined) => {
+    const s = (signalType ?? '').toLowerCase();
+    if (s.includes('long')) return '#10B981';
+    if (s.includes('short')) return '#EF4444';
     return '#6B7280';
   };
 
@@ -408,7 +410,7 @@ const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigateTo: navigateToPro
         <View style={styles.timeContainer}>
           <Icon name="clock" size={14} color="#6B7280" />
           <Text style={styles.timeText}>
-            {item.daysSinceTriggered}d ago
+            {item.daysSinceTriggered ?? 0}d ago
           </Text>
         </View>
         <View style={styles.actionsContainer}>
@@ -417,11 +419,11 @@ const SignalsScreen: React.FC<SignalsScreenProps> = ({ navigateTo: navigateToPro
             onPress={() => handleLikeSignal(item.id)}
           >
             <Icon
-              name={item.isLikedByUser ? 'heart' : 'heart'}
+              name="heart"
               size={16}
               color={item.isLikedByUser ? '#EF4444' : '#6B7280'}
             />
-            <Text style={styles.actionText}>{item.userLikeCount}</Text>
+            <Text style={styles.actionText}>{item.userLikeCount ?? 0}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionButton}

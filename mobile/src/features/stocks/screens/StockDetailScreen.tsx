@@ -1354,7 +1354,7 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
   const { data: analysisData, loading: analysisLoading } = useQuery(GET_STOCK_ANALYSIS, {
     variables: { symbol },
     skip: !symbol,
-    fetchPolicy: 'cache-first',
+    fetchPolicy: IS_DEMO ? 'network-only' : 'cache-first',
     onCompleted: (data) => {
       const endTime = Date.now();
       if (queryPerformance.startTime) {
@@ -1596,7 +1596,7 @@ export default function StockDetailScreen({ navigation, route }: StockDetailScre
         onOpenTrade={() => setShowTradeModal(true)}
       />
     ),
-  }), [stockData, chartData, changePercent, timeframe, chartLoading, symbol]);
+  }), [stockData, chartData, changePercent, timeframe, chartLoading, symbol, analysisData, analysisLoading]);
 
   if (stockLoading) {
     return (

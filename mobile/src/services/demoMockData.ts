@@ -448,67 +448,110 @@ export const DEMO_DAY_TRADING_PICKS = {
   __typename: 'DayTradingPicksResult',
 };
 
-// ─── Swing Trading Signals ───────────────────────────────────────────────────
+// ─── Swing Trading Signals (schema matches GetSwingSignals query) ─────────────
+const now = Date.now();
+const demoCreatedBy = { id: 'demo-1', username: 'system', name: 'AI Signals', __typename: 'User' as const };
+
+function demoTechnicalIndicatorsList(obj: Record<string, number | string>) {
+  return Object.entries(obj).map(([name, value]) => ({
+    name: name.toUpperCase(),
+    value: typeof value === 'number' ? value : 0,
+    signal: typeof value === 'string' ? value : 'neutral',
+    strength: 'medium',
+    description: `${name}: ${value}`,
+    __typename: 'TechnicalIndicator' as const,
+  }));
+}
+
+function demoPatternsList(names: string[], timeframe: string) {
+  return names.map(name => ({
+    name,
+    confidence: 0.85,
+    signal: 'bullish',
+    description: `Pattern: ${name.replace(/_/g, ' ')}`,
+    timeframe,
+    __typename: 'PatternRecognition' as const,
+  }));
+}
+
 export const DEMO_SWING_SIGNALS = [
   {
     id: 'sig-1',
     symbol: 'MSFT',
     companyName: 'Microsoft Corporation',
-    side: 'LONG',
+    timeframe: '2-4 weeks',
+    triggeredAt: new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    signalType: 'LONG',
+    entryPrice: 415.00,
+    stopPrice: 398.00,
+    targetPrice: 455.00,
     mlScore: 0.87,
     thesis: 'Azure growth re-acceleration; AI Copilot uptake stronger than expected. Technical: consolidation above 20-week MA with rising volume.',
-    entryPrice: 415.00,
-    stopLoss: 398.00,
-    targetPrice: 455.00,
     riskRewardRatio: 2.35,
-    timeframe: '2-4 weeks',
-    sector: 'Technology',
-    technicalIndicators: { rsi: 58, macd: 'bullish_cross', bb_position: 'mid', adx: 32 },
-    patterns: ['ascending_triangle', 'volume_accumulation'],
-    catalysts: ['Earnings next week', 'Azure monthly metrics'],
-    likes: 142,
-    comments: 18,
-    __typename: 'SwingSignal',
+    daysSinceTriggered: 2,
+    isLikedByUser: false,
+    userLikeCount: 142,
+    features: {},
+    isActive: true,
+    isValidated: true,
+    validationPrice: 416.50,
+    validationTimestamp: new Date(now - 1 * 24 * 60 * 60 * 1000).toISOString(),
+    createdBy: demoCreatedBy,
+    technicalIndicators: demoTechnicalIndicatorsList({ rsi: 58, macd: 'bullish_cross', bb_position: 'mid', adx: 32 }),
+    patterns: demoPatternsList(['ascending_triangle', 'volume_accumulation'], '2-4 weeks'),
+    __typename: 'SwingSignal' as const,
   },
   {
     id: 'sig-2',
     symbol: 'JPM',
     companyName: 'JPMorgan Chase',
-    side: 'LONG',
+    timeframe: '3-6 weeks',
+    triggeredAt: new Date(now - 3 * 24 * 60 * 60 * 1000).toISOString(),
+    signalType: 'LONG',
+    entryPrice: 198.50,
+    stopPrice: 190.00,
+    targetPrice: 218.00,
     mlScore: 0.81,
     thesis: 'Net interest income still expanding; credit quality holding. Trading below historical P/B with 2.8% dividend yield as cushion.',
-    entryPrice: 198.50,
-    stopLoss: 190.00,
-    targetPrice: 218.00,
     riskRewardRatio: 2.24,
-    timeframe: '3-6 weeks',
-    sector: 'Financials',
-    technicalIndicators: { rsi: 52, macd: 'positive', bb_position: 'lower_mid', adx: 28 },
-    patterns: ['bull_flag', 'support_hold'],
-    catalysts: ['Fed minutes', 'Q2 bank earnings'],
-    likes: 98,
-    comments: 12,
-    __typename: 'SwingSignal',
+    daysSinceTriggered: 3,
+    isLikedByUser: false,
+    userLikeCount: 98,
+    features: {},
+    isActive: true,
+    isValidated: true,
+    validationPrice: 199.20,
+    validationTimestamp: new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    createdBy: demoCreatedBy,
+    technicalIndicators: demoTechnicalIndicatorsList({ rsi: 52, macd: 'positive', bb_position: 'lower_mid', adx: 28 }),
+    patterns: demoPatternsList(['bull_flag', 'support_hold'], '3-6 weeks'),
+    __typename: 'SwingSignal' as const,
   },
   {
     id: 'sig-3',
     symbol: 'LLY',
     companyName: 'Eli Lilly',
-    side: 'LONG',
+    timeframe: '4-8 weeks',
+    triggeredAt: new Date(now - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    signalType: 'LONG',
+    entryPrice: 780.00,
+    stopPrice: 748.00,
+    targetPrice: 850.00,
     mlScore: 0.79,
     thesis: 'GLP-1 demand continues to outpace supply. Pipeline optionality in Alzheimer\'s space. Defensive growth in uncertain macro.',
-    entryPrice: 780.00,
-    stopLoss: 748.00,
-    targetPrice: 850.00,
     riskRewardRatio: 2.19,
-    timeframe: '4-8 weeks',
-    sector: 'Healthcare',
-    technicalIndicators: { rsi: 61, macd: 'bullish', bb_position: 'upper_mid', adx: 38 },
-    patterns: ['cup_and_handle', 'breakout_pending'],
-    catalysts: ['FDA decision', 'Mounjaro prescriptions data'],
-    likes: 203,
-    comments: 31,
-    __typename: 'SwingSignal',
+    daysSinceTriggered: 5,
+    isLikedByUser: false,
+    userLikeCount: 203,
+    features: {},
+    isActive: true,
+    isValidated: true,
+    validationPrice: 782.00,
+    validationTimestamp: new Date(now - 4 * 24 * 60 * 60 * 1000).toISOString(),
+    createdBy: demoCreatedBy,
+    technicalIndicators: demoTechnicalIndicatorsList({ rsi: 61, macd: 'bullish', bb_position: 'upper_mid', adx: 38 }),
+    patterns: demoPatternsList(['cup_and_handle', 'breakout_pending'], '4-8 weeks'),
+    __typename: 'SwingSignal' as const,
   },
 ];
 
@@ -686,8 +729,8 @@ export const DEMO_QUANT_SCREENER = [
 ];
 
 // ─── Transparency Dashboard ───────────────────────────────────────────────────
-const now = new Date();
-const daysAgo = (d: number) => new Date(now.getTime() - d * 86_400_000).toISOString();
+const transparencyBase = new Date();
+const daysAgo = (d: number) => new Date(transparencyBase.getTime() - d * 86_400_000).toISOString();
 
 export const DEMO_TRANSPARENCY_SIGNALS = [
   { id: 1, symbol: 'NVDA', action: 'BUY', confidence: 0.89, entryPrice: 820.00, entryTimestamp: daysAgo(18), exitPrice: 875.40, exitTimestamp: daysAgo(11), pnl: 554.00, pnlPercent: 0.0677, status: 'CLOSED', reasoning: 'Blackwell ramp confirmed; data-centre demand exceeding supply estimates.', tradingMode: 'PAPER', signalId: 'sig-001', __typename: 'SignalRecordType' },
@@ -712,7 +755,7 @@ export const DEMO_TRANSPARENCY_STATISTICS = {
   avgLoss: 0,
   totalPnl: 1242.00,
   profitFactor: null,
-  lastUpdated: now.toISOString(),
+  lastUpdated: transparencyBase.toISOString(),
   __typename: 'TransparencyStatisticsType',
 };
 
@@ -856,27 +899,42 @@ export const DEMO_BUDGET_DATA = {
   monthlyIncome: 8500,
   monthlyExpenses: 5200,
   savingsRate: 38.8,
+  remaining: 3300,
   categories: [
-    { name: 'Housing', budgeted: 2000, spent: 1950, __typename: 'BudgetCategory' },
-    { name: 'Food', budgeted: 700, spent: 820, __typename: 'BudgetCategory' },
-    { name: 'Transport', budgeted: 400, spent: 385, __typename: 'BudgetCategory' },
-    { name: 'Subscriptions', budgeted: 150, spent: 148, __typename: 'BudgetCategory' },
-    { name: 'Entertainment', budgeted: 300, spent: 270, __typename: 'BudgetCategory' },
-    { name: 'Investing', budgeted: 1500, spent: 1500, __typename: 'BudgetCategory' },
+    { name: 'Housing', budgeted: 2000, spent: 1950, percentage: 97.5, __typename: 'BudgetCategory' },
+    { name: 'Food', budgeted: 700, spent: 820, percentage: 117.1, __typename: 'BudgetCategory' },
+    { name: 'Transport', budgeted: 400, spent: 385, percentage: 96.3, __typename: 'BudgetCategory' },
+    { name: 'Subscriptions', budgeted: 150, spent: 148, percentage: 98.7, __typename: 'BudgetCategory' },
+    { name: 'Entertainment', budgeted: 300, spent: 270, percentage: 90, __typename: 'BudgetCategory' },
+    { name: 'Investing', budgeted: 1500, spent: 1500, percentage: 100, __typename: 'BudgetCategory' },
   ],
   __typename: 'BudgetData',
 };
 
+// Spending analysis schema: categories use amount/percentage/transactions/trend (not budgeted/spent)
+const _demoSpendingCategories = [
+  { name: 'Housing', amount: 1950, percentage: 37.5, transactions: 3, trend: 'stable' as const, __typename: 'SpendingCategory' as const },
+  { name: 'Food', amount: 820, percentage: 15.8, transactions: 42, trend: 'up' as const, __typename: 'SpendingCategory' as const },
+  { name: 'Transport', amount: 385, percentage: 7.4, transactions: 18, trend: 'down' as const, __typename: 'SpendingCategory' as const },
+  { name: 'Subscriptions', amount: 148, percentage: 2.8, transactions: 6, trend: 'stable' as const, __typename: 'SpendingCategory' as const },
+  { name: 'Entertainment', amount: 270, percentage: 5.2, transactions: 12, trend: 'up' as const, __typename: 'SpendingCategory' as const },
+  { name: 'Investing', amount: 1500, percentage: 28.8, transactions: 4, trend: 'stable' as const, __typename: 'SpendingCategory' as const },
+];
+
 export const DEMO_SPENDING_ANALYSIS = {
   totalSpent: 5200,
-  categories: DEMO_BUDGET_DATA.categories,
+  categories: _demoSpendingCategories,
   topMerchants: [
-    { name: 'Trader Joe\'s', amount: 420, category: 'Food', __typename: 'MerchantSpend' },
-    { name: 'Netflix', amount: 22, category: 'Subscriptions', __typename: 'MerchantSpend' },
-    { name: 'Shell', amount: 185, category: 'Transport', __typename: 'MerchantSpend' },
+    { name: 'Trader Joe\'s', amount: 420, category: 'Food', count: 14, __typename: 'MerchantSpend' as const },
+    { name: 'Netflix', amount: 22, category: 'Subscriptions', count: 1, __typename: 'MerchantSpend' as const },
+    { name: 'Shell', amount: 185, category: 'Transport', count: 8, __typename: 'MerchantSpend' as const },
   ],
-  trends: 'Spending is 3% under budget this month. Food category slightly over — consider meal planning.',
-  __typename: 'SpendingAnalysis',
+  trends: [
+    { period: 'Jan', amount: 5100, change: 0 },
+    { period: 'Feb', amount: 5350, change: 4.9 },
+    { period: 'Mar', amount: 5200, change: -2.8 },
+  ],
+  __typename: 'SpendingAnalysis' as const,
 };
 
 // ─── Futures (REST /api/futures/) ─────────────────────────────────────────────

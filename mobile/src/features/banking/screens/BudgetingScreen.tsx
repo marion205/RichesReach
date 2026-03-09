@@ -145,25 +145,25 @@ export default function BudgetingScreen() {
         <View style={[styles.summaryCard, { backgroundColor: C.card }]}>
           <Text style={[styles.summaryLabel, { color: C.sub }]}>Monthly Income</Text>
           <Text style={[styles.summaryValue, { color: C.text }]}>
-            ${budget.monthlyIncome.toLocaleString()}
+            ${Number(budget.monthlyIncome ?? 0).toLocaleString()}
           </Text>
         </View>
         <View style={[styles.summaryCard, { backgroundColor: C.card }]}>
           <Text style={[styles.summaryLabel, { color: C.sub }]}>Monthly Expenses</Text>
           <Text style={[styles.summaryValue, { color: C.danger }]}>
-            ${budget.monthlyExpenses.toLocaleString()}
+            ${Number(budget.monthlyExpenses ?? 0).toLocaleString()}
           </Text>
         </View>
         <View style={[styles.summaryCard, { backgroundColor: C.card }]}>
           <Text style={[styles.summaryLabel, { color: C.sub }]}>Remaining</Text>
           <Text style={[styles.summaryValue, { color: C.success }]}>
-            ${budget.remaining.toLocaleString()}
+            ${Number(budget.remaining ?? 0).toLocaleString()}
           </Text>
         </View>
         <View style={[styles.summaryCard, { backgroundColor: C.card }]}>
           <Text style={[styles.summaryLabel, { color: C.sub }]}>Savings Rate</Text>
           <Text style={[styles.summaryValue, { color: C.primary }]}>
-            {budget.savingsRate}%
+            {Number(budget.savingsRate ?? 0)}%
           </Text>
         </View>
       </View>
@@ -172,8 +172,9 @@ export default function BudgetingScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Category Breakdown</Text>
         {budget.categories.map((category, index) => {
-          const isOverBudget = category.percentage > 100;
-          const color = isOverBudget ? C.danger : category.percentage > 90 ? C.warning : C.success;
+          const pct = Number(category.percentage ?? 0);
+          const isOverBudget = pct > 100;
+          const color = isOverBudget ? C.danger : pct > 90 ? C.warning : C.success;
 
           return (
             <View key={index} style={[styles.categoryCard, { backgroundColor: C.card }]}>
@@ -181,10 +182,10 @@ export default function BudgetingScreen() {
                 <Text style={[styles.categoryName, { color: C.text }]}>{category.name}</Text>
                 <View style={styles.categoryAmounts}>
                   <Text style={[styles.categorySpent, { color }]}>
-                    ${category.spent.toLocaleString()}
+                    ${Number(category.spent ?? 0).toLocaleString()}
                   </Text>
                   <Text style={[styles.categoryBudgeted, { color: C.sub }]}>
-                    / ${category.budgeted.toLocaleString()}
+                    / ${Number(category.budgeted ?? 0).toLocaleString()}
                   </Text>
                 </View>
               </View>
@@ -193,14 +194,14 @@ export default function BudgetingScreen() {
                   style={[
                     styles.progressFill,
                     {
-                      width: `${Math.min(category.percentage, 100)}%`,
+                      width: `${Math.min(pct, 100)}%`,
                       backgroundColor: color,
                     },
                   ]}
                 />
               </View>
               <Text style={[styles.categoryPercentage, { color: C.sub }]}>
-                {category.percentage.toFixed(1)}% of budget
+                {pct.toFixed(1)}% of budget
               </Text>
             </View>
           );

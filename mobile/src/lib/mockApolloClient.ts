@@ -17,7 +17,6 @@ import {
   DEMO_AI_RECOMMENDATIONS,
   DEMO_TRADE_DEBRIEF,
   DEMO_DAY_TRADING_PICKS,
-  DEMO_SWING_SIGNALS,
   DEMO_MARKET_DATA,
   DEMO_SECTOR_DATA,
   DEMO_VOLATILITY_DATA,
@@ -35,6 +34,111 @@ import {
   DEMO_TRANSPARENCY_PERFORMANCE,
   DEMO_ORACLE_INSIGHTS,
 } from '../services/demoMockData';
+
+// Build swing signals with full GetSwingSignals schema (triggeredAt, signalType, stopPrice, etc.)
+// so Apollo cache never sees missing fields. Inlined here so demo mode always returns correct shape.
+function getMockSwingSignals(): Record<string, unknown>[] {
+  const now = Date.now();
+  const createdBy = { id: 'demo-1', username: 'system', name: 'AI Signals', __typename: 'User' as const };
+  const techList = (obj: Record<string, number | string>) =>
+    Object.entries(obj).map(([name, value]) => ({
+      name: name.toUpperCase(),
+      value: typeof value === 'number' ? value : 0,
+      signal: typeof value === 'string' ? value : 'neutral',
+      strength: 'medium',
+      description: `${name}: ${value}`,
+      __typename: 'TechnicalIndicator' as const,
+    }));
+  const patternList = (names: string[], tf: string) =>
+    names.map(name => ({
+      name,
+      confidence: 0.85,
+      signal: 'bullish',
+      description: `Pattern: ${name.replace(/_/g, ' ')}`,
+      timeframe: tf,
+      __typename: 'PatternRecognition' as const,
+    }));
+  return [
+    {
+      id: 'sig-1',
+      symbol: 'MSFT',
+      companyName: 'Microsoft Corporation',
+      timeframe: '2-4 weeks',
+      triggeredAt: new Date(now - 2 * 86400000).toISOString(),
+      signalType: 'LONG',
+      entryPrice: 415,
+      stopPrice: 398,
+      targetPrice: 455,
+      mlScore: 0.87,
+      thesis: 'Azure growth re-acceleration; AI Copilot uptake stronger than expected. Technical: consolidation above 20-week MA with rising volume.',
+      riskRewardRatio: 2.35,
+      daysSinceTriggered: 2,
+      isLikedByUser: false,
+      userLikeCount: 142,
+      features: {},
+      isActive: true,
+      isValidated: true,
+      validationPrice: 416.5,
+      validationTimestamp: new Date(now - 86400000).toISOString(),
+      createdBy,
+      technicalIndicators: techList({ rsi: 58, macd: 'bullish_cross', bb_position: 'mid', adx: 32 }),
+      patterns: patternList(['ascending_triangle', 'volume_accumulation'], '2-4 weeks'),
+      __typename: 'SwingSignal' as const,
+    },
+    {
+      id: 'sig-2',
+      symbol: 'JPM',
+      companyName: 'JPMorgan Chase',
+      timeframe: '3-6 weeks',
+      triggeredAt: new Date(now - 3 * 86400000).toISOString(),
+      signalType: 'LONG',
+      entryPrice: 198.5,
+      stopPrice: 190,
+      targetPrice: 218,
+      mlScore: 0.81,
+      thesis: 'Net interest income still expanding; credit quality holding. Trading below historical P/B with 2.8% dividend yield as cushion.',
+      riskRewardRatio: 2.24,
+      daysSinceTriggered: 3,
+      isLikedByUser: false,
+      userLikeCount: 98,
+      features: {},
+      isActive: true,
+      isValidated: true,
+      validationPrice: 199.2,
+      validationTimestamp: new Date(now - 2 * 86400000).toISOString(),
+      createdBy,
+      technicalIndicators: techList({ rsi: 52, macd: 'positive', bb_position: 'lower_mid', adx: 28 }),
+      patterns: patternList(['bull_flag', 'support_hold'], '3-6 weeks'),
+      __typename: 'SwingSignal' as const,
+    },
+    {
+      id: 'sig-3',
+      symbol: 'LLY',
+      companyName: 'Eli Lilly',
+      timeframe: '4-8 weeks',
+      triggeredAt: new Date(now - 5 * 86400000).toISOString(),
+      signalType: 'LONG',
+      entryPrice: 780,
+      stopPrice: 748,
+      targetPrice: 850,
+      mlScore: 0.79,
+      thesis: 'GLP-1 demand continues to outpace supply. Pipeline optionality in Alzheimer\'s space. Defensive growth in uncertain macro.',
+      riskRewardRatio: 2.19,
+      daysSinceTriggered: 5,
+      isLikedByUser: false,
+      userLikeCount: 203,
+      features: {},
+      isActive: true,
+      isValidated: true,
+      validationPrice: 782,
+      validationTimestamp: new Date(now - 4 * 86400000).toISOString(),
+      createdBy,
+      technicalIndicators: techList({ rsi: 61, macd: 'bullish', bb_position: 'upper_mid', adx: 38 }),
+      patterns: patternList(['cup_and_handle', 'breakout_pending'], '4-8 weeks'),
+      __typename: 'SwingSignal' as const,
+    },
+  ];
+}
 
 // ─── Operation → mock data map ────────────────────────────────────────────────
 // Keys match operationName from the client query.
@@ -149,6 +253,68 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
   GetAIRecommendations:  { aiRecommendations: DEMO_AI_RECOMMENDATIONS },
   GetQuantScreener:      { advancedStockScreening: DEMO_QUANT_SCREENER },
 
+  // AI stock recommendations (profile-based) — shape: aiRecommendations { buyRecommendations, spendingInsights }
+  GetAIStockRecommendations: (() => {
+    const buy = DEMO_AI_RECOMMENDATIONS.buyRecommendations.slice(0, 3).map((r: Record<string, unknown>) => ({
+      symbol: r.symbol,
+      companyName: r.companyName,
+      recommendation: r.recommendation,
+      confidence: r.confidence,
+      reasoning: r.reasoning,
+      targetPrice: r.targetPrice,
+      currentPrice: r.currentPrice,
+      expectedReturn: r.expectedReturn,
+      spendingGrowth: r.spendingGrowth ?? null,
+      __typename: 'StockRecommendation',
+    }));
+    return {
+      aiRecommendations: {
+        buyRecommendations: buy,
+        spendingInsights: {
+          discretionaryIncome: 1850,
+          suggestedBudget: 400,
+          spendingHealth: 'good',
+          topCategories: ['Technology', 'Travel', 'Dining'],
+          sectorPreferences: ['Technology', 'Healthcare'],
+          __typename: 'SpendingInsightsType',
+        },
+        __typename: 'AIRecommendationsType',
+      },
+    };
+  })(),
+
+  // Advanced stock screening (search/filters) — full screener shape with volatility, debtRatio, reasoning
+  GetAdvancedStockScreening: (() => {
+    const base = DEMO_QUANT_SCREENER as Array<Record<string, unknown>>;
+    return {
+      advancedStockScreening: base.map((r, i) => ({
+        ...r,
+        volatility: 0.18 + (i * 0.02),
+        debtRatio: 0.12 + (i * 0.05),
+        reasoning: `Strong ${r.sector} name with score ${r.score}; ML score ${r.mlScore}.`,
+        __typename: 'ScreenerResult',
+      })),
+    };
+  })(),
+
+  // ML stock screening (same root field, subset of fields)
+  GetMLStockScreening: { advancedStockScreening: DEMO_QUANT_SCREENER },
+
+  // Alpaca brokerage account (demo: not linked)
+  GetAlpacaAccount: {
+    alpacaAccount: {
+      id: 0,
+      status: 'NOT_LINKED',
+      alpacaAccountId: null,
+      approvedAt: null,
+      buyingPower: 0,
+      cash: 0,
+      portfolioValue: 0,
+      createdAt: null,
+      __typename: 'AlpacaAccountType',
+    },
+  },
+
   // Trade Debrief
   GetTradeDebrief:       { tradeDebrief: DEMO_TRADE_DEBRIEF },
 
@@ -173,8 +339,8 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
     },
   },
 
-  // Swing Trading
-  GetSwingSignals:        { swingSignals: DEMO_SWING_SIGNALS },
+  // Swing Trading (full schema inlined so cache never sees missing fields)
+  GetSwingSignals:        { swingSignals: getMockSwingSignals() },
   GetMarketData:          { marketData: DEMO_MARKET_DATA },
   GetSectorData:          { sectorData: DEMO_SECTOR_DATA },
   GetVolatilityData:      { volatilityData: DEMO_VOLATILITY_DATA },
@@ -507,25 +673,28 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
         __typename: 'OptionsFlowDataPoint',
       };
     });
+    const signalContributions = [
+      { name: 'Momentum', contribution: 0.38, color: '#22c55e', description: 'Price momentum and trend strength', __typename: 'SignalContribution' as const },
+      { name: 'Volume', contribution: 0.25, color: '#3b82f6', description: 'Trading volume and liquidity', __typename: 'SignalContribution' as const },
+      { name: 'Options Flow', contribution: 0.22, color: '#8b5cf6', description: 'Options and smart money flow', __typename: 'SignalContribution' as const },
+      { name: 'Sentiment', contribution: 0.15, color: '#f59e0b', description: 'News and social sentiment', __typename: 'SignalContribution' as const },
+    ];
+    const shapValues = [
+      { feature: 'RSI', value: 0.18, importance: 0.18, __typename: 'ShapValue' as const },
+      { feature: 'MACD', value: 0.14, importance: 0.14, __typename: 'ShapValue' as const },
+      { feature: 'Volume Surge', value: 0.22, importance: 0.22, __typename: 'ShapValue' as const },
+      { feature: 'Options Gamma', value: 0.19, importance: 0.19, __typename: 'ShapValue' as const },
+      { feature: 'News Sentiment', value: 0.12, importance: 0.12, __typename: 'ShapValue' as const },
+    ];
     return {
       rustStockAnalysis: {
         symbol: 'NVDA',
         spendingData,
         optionsFlowData,
-        signalContributions: [
-          { signal: 'Momentum', contribution: 0.38, direction: 'bullish', __typename: 'SignalContribution' },
-          { signal: 'Volume', contribution: 0.25, direction: 'bullish', __typename: 'SignalContribution' },
-          { signal: 'Options Flow', contribution: 0.22, direction: 'bullish', __typename: 'SignalContribution' },
-          { signal: 'Sentiment', contribution: 0.15, direction: 'neutral', __typename: 'SignalContribution' },
-        ],
-        shapValues: [
-          { feature: 'RSI', value: 0.18, __typename: 'ShapValue' },
-          { feature: 'MACD', value: 0.14, __typename: 'ShapValue' },
-          { feature: 'Volume Surge', value: 0.22, __typename: 'ShapValue' },
-          { feature: 'Options Gamma', value: 0.19, __typename: 'ShapValue' },
-          { feature: 'News Sentiment', value: 0.12, __typename: 'ShapValue' },
-        ],
-        __typename: 'RustStockAnalysis',
+        signalContributions,
+        shapValues,
+        shapExplanation: 'Multi-factor model combining momentum, volume, options flow, and sentiment. Current reading is moderately bullish with momentum and volume leading.',
+        __typename: 'RustStockAnalysis' as const,
       },
     };
   })(),

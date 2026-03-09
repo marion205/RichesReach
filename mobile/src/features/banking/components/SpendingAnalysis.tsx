@@ -112,11 +112,29 @@ export default function SpendingAnalysis({ period = 'month' }: { period?: string
   };
 
   // Use real data if available, otherwise use mock (even on error)
-  const spendingData = analysis || mockAnalysis;
-  
+  const rawData = analysis || mockAnalysis;
+
+  // Normalize: ensure categories have amount (some APIs return budgeted/spent only) and guard undefined
+  const spendingData = useMemo(() => {
+    const totalSpent = typeof rawData?.totalSpent === 'number' ? rawData.totalSpent : 0;
+    const categories = (rawData?.categories ?? []).map((cat: Record<string, unknown>) => ({
+      name: String(cat?.name ?? ''),
+      amount: typeof cat?.amount === 'number' ? cat.amount : (typeof (cat as any)?.spent === 'number' ? (cat as any).spent : 0),
+      percentage: typeof cat?.percentage === 'number' ? cat.percentage : (totalSpent > 0 && (typeof (cat as any)?.amount === 'number' || typeof (cat as any)?.spent === 'number') ? (((cat as any).amount ?? (cat as any).spent) / totalSpent) * 100 : 0),
+      transactions: typeof cat?.transactions === 'number' ? cat.transactions : 0,
+      trend: (cat?.trend === 'up' || cat?.trend === 'down' || cat?.trend === 'stable') ? cat.trend : 'stable' as const,
+    }));
+    const topMerchants = (rawData?.topMerchants ?? []).map((m: Record<string, unknown>) => ({
+      name: String(m?.name ?? ''),
+      amount: typeof m?.amount === 'number' ? m.amount : 0,
+      count: typeof m?.count === 'number' ? m.count : 0,
+    }));
+    const trends = Array.isArray(rawData?.trends) ? rawData.trends : [];
+    return { totalSpent, categories, topMerchants, trends };
+  }, [rawData]);
+
   // Show warning banner if using mock data due to error
   const showErrorBanner = error && !analysis;
-
   const chartData = useMemo(() => {
     return spendingData.categories.map((cat, index) => ({
       name: cat.name,
@@ -150,7 +168,7 @@ export default function SpendingAnalysis({ period = 'month' }: { period?: string
       <View style={[styles.totalCard, { backgroundColor: C.card }]}>
         <Text style={[styles.totalLabel, { color: C.sub }]}>Total Spent</Text>
         <Text style={[styles.totalAmount, { color: C.text }]}>
-          ${spendingData.totalSpent.toLocaleString()}
+          ${Number(spendingData.totalSpent).toLocaleString()}
         </Text>
       </View>
 
@@ -192,10 +210,10 @@ export default function SpendingAnalysis({ period = 'month' }: { period?: string
             </View>
             <View style={styles.categoryAmount}>
               <Text style={[styles.categoryValue, { color: C.text }]}>
-                ${category.amount.toLocaleString()}
+                ${Number(category.amount).toLocaleString()}
               </Text>
               <Text style={[styles.categoryPercent, { color: C.sub }]}>
-                {category.percentage.toFixed(1)}%
+                {Number(category.percentage).toFixed(1)}%
               </Text>
             </View>
             <Icon
@@ -231,7 +249,7 @@ export default function SpendingAnalysis({ period = 'month' }: { period?: string
               </Text>
             </View>
             <Text style={[styles.merchantAmount, { color: C.text }]}>
-              ${merchant.amount.toLocaleString()}
+              ${Number(merchant.amount).toLocaleString()}
             </Text>
           </View>
         ))}
