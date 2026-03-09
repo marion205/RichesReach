@@ -29,7 +29,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Feather from '@expo/vector-icons/Feather';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -120,11 +120,16 @@ const LIQUIDITY_ICON: Record<string, keyof typeof Feather.glyphMap> = {
 
 export default function OpportunityDiscoveryScreen() {
   const navigation = useNavigation<any>();
+  const route = useRoute();
   const insets = useSafeAreaInsets();
+  const opportunityId = (route.params as { opportunityId?: string } | undefined)?.opportunityId;
+
   const [activeTab, setActiveTab] = useState<Tab>('fixed_income');
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [financialGraph, setFinancialGraph] = useState<FinancialGraph | null>(null);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [detailOpportunity, setDetailOpportunity] = useState<Opportunity | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -162,6 +167,23 @@ export default function OpportunityDiscoveryScreen() {
     });
   }, [loadData]);
 
+  // Detail mode: when navigated with opportunityId, load and show single opportunity
+  useEffect(() => {
+    if (!opportunityId) {
+      setDetailOpportunity(null);
+      return;
+    }
+    setDetailLoading(true);
+    setDetailOpportunity(null);
+    Promise.all([
+      service.getOpportunityDetail(opportunityId),
+      service.getSavedOpportunityIds(),
+    ]).then(([opp, saved]) => {
+      setDetailOpportunity(opp ?? null);
+      setSavedIds(new Set(saved));
+    }).catch(() => setDetailOpportunity(null)).finally(() => setDetailLoading(false));
+  }, [opportunityId, service]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadData();
@@ -195,6 +217,179 @@ export default function OpportunityDiscoveryScreen() {
       graphStats.push({ label: 'Utilization', value: `${(financialGraph.avgCreditUtilization * 100).toFixed(0)}%`, icon: 'credit-card' });
     if (financialGraph.investableSurplusMonthly)
       graphStats.push({ label: 'Surplus', value: `$${financialGraph.investableSurplusMonthly.toLocaleString()}`, icon: 'zap' });
+  }
+
+  // Detail view when navigated with opportunityId
+  if (opportunityId) {
+    const detailAccent = detailOpportunity
+      ? (ASSET_ACCENT[detailOpportunity.assetClass] ?? D.blue)
+      : D.blue;
+    const detailRiskStyle = detailOpportunity
+      ? (RISK_STYLES[detailOpportunity.riskLevel ?? ''] ?? null)
+      : null;
+    const detailLiquidityIcon = detailOpportunity
+      ? (LIQUIDITY_ICON[detailOpportunity.liquidity ?? ''] ?? 'clock')
+      : 'clock';
+    return (
+      <View style={styles.root}>
+        <StatusBar barStyle="light-content" />
+        <LinearGradient colors={[D.navy, D.navyMid]} style={[styles.hero, { paddingTop: insets.top + 8 }]}>
+          <View style={styles.heroTop}>
+            <Pressable
+              onPress={() => navigation.goBack()}
+              style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }, { marginRight: 12 }]}
+              accessibilityLabel="Back to Discover"
+            >
+              <Feather name="arrow-left" size={24} color={D.white} />
+            </Pressable>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroEyebrow}>OPPORTUNITY DETAIL</Text>
+              <Text style={styles.heroTitle} numberOfLines={1}>
+                {detailLoading ? 'Loading…' : detailOpportunity?.name ?? 'Opportunity'}
+              </Text>
+            </View>
+            {detailOpportunity && (
+              <Pressable
+                onPress={() => toggleSave(detailOpportunity.id)}
+                hitSlop={10}
+                style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
+              >
+                <Feather
+                  name="bookmark"
+                  size={22}
+                  color={savedIds.has(detailOpportunity.id) ? detailAccent : D.white}
+                  style={{ opacity: savedIds.has(detailOpportunity.id) ? 1 : 0.6 }}
+                />
+              </Pressable>
+            )}
+          </View>
+        </LinearGradient>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={[styles.listContent, { paddingTop: 20 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          {detailLoading ? (
+            <View style={styles.center}>
+              <ActivityIndicator size="large" color={detailAccent} />
+              <Text style={styles.centerText}>Loading details…</Text>
+            </View>
+          ) : !detailOpportunity ? (
+            <View style={styles.center}>
+              <Feather name="alert-circle" size={28} color={D.red} />
+              <Text style={styles.emptyTitle}>Not found</Text>
+              <Text style={styles.centerText}>This opportunity may no longer be available.</Text>
+              <Pressable onPress={() => navigation.goBack()} style={{ marginTop: 16 }}>
+                <Text style={[styles.cardCta, { color: detailAccent }]}>Back to Discover</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              <View style={styles.card}>
+                <View style={[styles.cardAccentLine, { backgroundColor: detailAccent }]} />
+                <View style={styles.cardInner}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                    <View style={[styles.scoreWrap, { borderColor: detailAccent }]}>
+                      <Text style={[styles.scoreNum, { color: detailAccent }]}>{detailOpportunity.score}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.detailSectionLabel}>Match score</Text>
+                      <Text style={[styles.cardTagline, { marginTop: 2 }]}>
+                        How well this opportunity fits your financial picture (0–100). Higher means stronger fit.
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.cardName, { fontSize: 22 }]}>{detailOpportunity.name}</Text>
+                  <Text style={[styles.cardTagline, { marginTop: 6, color: D.textSecondary }]}>
+                    {detailOpportunity.tagline}
+                  </Text>
+                </View>
+              </View>
+
+              {detailOpportunity.graphRationale ? (
+                <View style={[styles.card, { marginTop: 16 }]}>
+                  <View style={[styles.cardAccentLine, { backgroundColor: D.indigo }]} />
+                  <View style={styles.cardInner}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <Feather name="link-2" size={16} color={D.indigo} />
+                      <Text style={styles.detailSectionLabel}>Why we surfaced this for you</Text>
+                    </View>
+                    <Text style={styles.detailBody}>{detailOpportunity.graphRationale}</Text>
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={[styles.card, { marginTop: 16 }]}>
+                <View style={[styles.cardAccentLine, { backgroundColor: detailAccent }]} />
+                <View style={styles.cardInner}>
+                  <Text style={[styles.detailSectionLabel, { marginBottom: 12 }]}>Key details</Text>
+                  {detailOpportunity.expectedReturnRange ? (
+                    <View style={styles.detailRow}>
+                      <Feather name="trending-up" size={16} color={D.green} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.detailRowLabel}>Expected return</Text>
+                        <Text style={styles.detailRowValue}>{detailOpportunity.expectedReturnRange}</Text>
+                        <Text style={styles.detailRowHint}>Typical range; not guaranteed. Past performance ≠ future results.</Text>
+                      </View>
+                    </View>
+                  ) : null}
+                  {detailOpportunity.liquidity ? (
+                    <View style={[styles.detailRow, { marginTop: 14 }]}>
+                      <Feather name={detailLiquidityIcon} size={16} color={D.textSecondary} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.detailRowLabel}>Liquidity</Text>
+                        <Text style={styles.detailRowValue}>
+                          {detailOpportunity.liquidity === 'daily' && 'Daily — you can sell or redeem on any trading day.'}
+                          {detailOpportunity.liquidity === 'quarterly' && 'Quarterly — redemptions or exits typically available every quarter.'}
+                          {detailOpportunity.liquidity === 'illiquid' && 'Illiquid — your capital may be locked for a period (e.g. to maturity).'}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null}
+                  {detailRiskStyle ? (
+                    <View style={[styles.detailRow, { marginTop: 14 }]}>
+                      <Feather name="shield" size={16} color={detailRiskStyle.color} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.detailRowLabel}>Risk level</Text>
+                        <Text style={[styles.detailRowValue, { color: detailRiskStyle.color }]}>{detailRiskStyle.label}</Text>
+                        <Text style={styles.detailRowHint}>
+                          {detailOpportunity.riskLevel === 'low' && 'Principal is relatively stable; suitable for capital preservation.'}
+                          {detailOpportunity.riskLevel === 'moderate' && 'Some volatility; balance of growth and stability.'}
+                          {detailOpportunity.riskLevel === 'high' && 'Higher volatility and/or complexity; understand before investing.'}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null}
+                  {detailOpportunity.minimumInvestment != null ? (
+                    <View style={[styles.detailRow, { marginTop: 14 }]}>
+                      <Feather name="dollar-sign" size={16} color={D.textSecondary} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.detailRowLabel}>Minimum investment</Text>
+                        <Text style={styles.detailRowValue}>
+                          {detailOpportunity.minimumInvestment >= 1000
+                            ? `$${(detailOpportunity.minimumInvestment / 1000).toFixed(0)}k`
+                            : `$${detailOpportunity.minimumInvestment}`}
+                        </Text>
+                        <Text style={styles.detailRowHint}>Amount typically required to get started.</Text>
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+
+              <View style={[styles.card, { marginTop: 16, marginBottom: 24 }]}>
+                <View style={styles.cardInner}>
+                  <Text style={[styles.detailSectionLabel, { marginBottom: 8 }]}>Next steps</Text>
+                  <Text style={styles.detailBody}>
+                    Save this opportunity to your watchlist to revisit later. When you’re ready to act, full terms, risk disclosure, and execution are provided through our licensed partner — this screen is for discovery and education only, not advice or an offer to sell.
+                  </Text>
+                </View>
+              </View>
+            </>
+          )}
+        </ScrollView>
+      </View>
+    );
   }
 
   return (
@@ -723,5 +918,42 @@ const styles = StyleSheet.create({
   cardCta: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  // Detail view
+  detailSectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    color: D.textSecondary,
+    textTransform: 'uppercase',
+  },
+  detailBody: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: D.textPrimary,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  detailRowLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: D.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  detailRowValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: D.textPrimary,
+    marginTop: 2,
+  },
+  detailRowHint: {
+    fontSize: 12,
+    color: D.textMuted,
+    marginTop: 4,
+    lineHeight: 18,
   },
 });
