@@ -329,9 +329,33 @@ export function tutorMarketCommentary(req: { user_id?: string; horizon?: string;
 }
 
 // ---------- Assistant ----------
+export type SuggestedAction = { label: string; screen: string };
+export type AssistantQueryResponse = {
+  answer?: string;
+  response?: string;
+  model?: string;
+  confidence?: number;
+  suggested_action?: SuggestedAction | null;
+};
 export function assistantQuery(req: { user_id?: string; prompt: string; context?: any; market_context?: any }) {
   // Use shorter timeout for assistant queries for better UX
-  return postJSON<any>('/assistant/query', req, { timeoutMs: ASSISTANT_TIMEOUT_MS });
+  return postJSON<AssistantQueryResponse>('/assistant/query', req, { timeoutMs: ASSISTANT_TIMEOUT_MS });
+}
+
+// ---------- Saved goal (goal-based orchestration) ----------
+export type SavedGoalPayload = {
+  target: number;
+  currentInvested: number;
+  monthlyContribution: number;
+  yearsToReach: number;
+  targetAge: number;
+};
+export type SavedGoalResponse = { goal: SavedGoalPayload | null };
+export function getSavedGoalApi(userId: string) {
+  return getJSON<SavedGoalResponse>(`/api/user/goal?user_id=${encodeURIComponent(userId)}`);
+}
+export function saveGoalApi(userId: string, goal: SavedGoalPayload) {
+  return postJSON<{ success: boolean; goal?: SavedGoalPayload }>('/api/user/goal', { user_id: userId, ...goal });
 }
 
 // ---------- Coach ----------

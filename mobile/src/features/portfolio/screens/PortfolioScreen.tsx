@@ -19,6 +19,7 @@ import MilestonesTimeline, { Milestone } from '../../../components/MilestonesTim
 import MilestoneUnlockOverlay from '../../../components/MilestoneUnlockOverlay';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import PortfolioHoldings, { Holding } from '../components/PortfolioHoldings';
+import { getSavedGoal, saveSavedGoal } from '../../../services/savedGoalService';
 import { getMockMyPortfolios } from '../../../services/mockPortfolioData';
 import ConstellationOrb from '../components/ConstellationOrb';
 import { useMoneySnapshot } from '../hooks/useMoneySnapshot';
@@ -44,6 +45,12 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
 const GET_PORTFOLIO_RISK_REPORT = gql`
   query GetPortfolioRiskReport {
     portfolioRiskReport
+  }
+`;
+
+const GET_ME_ID = gql`
+  query GetMeIdForGoal {
+    me { id }
   }
 `;
 interface PortfolioScreenProps {
@@ -109,10 +116,29 @@ const PortfolioScreen: React.FC<PortfolioScreenProps> = React.memo(({ navigateTo
 const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const route = useRoute();
-  const oneMillionPlan = (route.params as PortfolioRouteParams | undefined)?.oneMillionPlan ?? null;
+  const oneMillionPlanFromRoute = (route.params as PortfolioRouteParams | undefined)?.oneMillionPlan ?? null;
   const [dismissedPlan, setDismissedPlan] = useState(false);
+  const [savedPlan, setSavedPlan] = useState<OneMillionPlanParams | null>(null);
+  const oneMillionPlan = oneMillionPlanFromRoute ?? savedPlan;
   const showPlanCard = oneMillionPlan != null && !dismissedPlan;
-  
+
+  const { data: meData } = useQuery(GET_ME_ID, { errorPolicy: 'ignore', fetchPolicy: 'cache-first' });
+  const userId = (meData?.me as { id?: string } | undefined)?.id ?? '1';
+
+  // Load saved goal on mount; persist route plan when arriving from "Start this plan"
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const loaded = await getSavedGoal(userId);
+      if (mounted && loaded) setSavedPlan(loaded as OneMillionPlanParams);
+    })();
+    return () => { mounted = false; };
+  }, [userId]);
+  useEffect(() => {
+    if (!oneMillionPlanFromRoute) return;
+    saveSavedGoal(userId, oneMillionPlanFromRoute).catch(() => {});
+  }, [userId, oneMillionPlanFromRoute]);
+
   // ALL HOOKS MUST BE AT THE TOP - before any conditional returns
   const [refreshing, setRefreshing] = useState(false);
   const [celebrateTitle, setCelebrateTitle] = useState<string | null>(null);

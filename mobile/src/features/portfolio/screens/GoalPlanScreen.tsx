@@ -20,6 +20,7 @@ import { gql } from '@apollo/client';
 import Icon from 'react-native-vector-icons/Feather';
 import { useRoute } from '@react-navigation/native';
 import RealTimePortfolioService from '../services/RealTimePortfolioService';
+import { saveSavedGoal } from '../../../services/savedGoalService';
 
 const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
 const DEMO_PORTFOLIO = 14303;
@@ -37,6 +38,7 @@ function formatTargetAmount(amount: number): string {
 const GET_USER_PROFILE = gql`
   query GetUserProfileForGoal {
     me {
+      id
       name
       incomeProfile {
         age
@@ -136,19 +138,21 @@ export default function GoalPlanScreen({ navigateTo }: GoalPlanScreenProps) {
     [targetClamped, monthly, currentInvested]
   );
 
-  const handleStartPlan = useCallback(() => {
+  const userId = profileData?.me?.id ?? '1';
+
+  const handleStartPlan = useCallback(async () => {
+    const plan = {
+      target: targetClamped,
+      currentInvested,
+      monthlyContribution: monthly,
+      yearsToReach,
+      targetAge,
+    };
+    await saveSavedGoal(userId, plan);
     if (navigateTo) {
-      navigateTo('portfolio', {
-        oneMillionPlan: {
-          target: targetClamped,
-          currentInvested,
-          monthlyContribution: monthly,
-          yearsToReach,
-          targetAge,
-        },
-      });
+      navigateTo('portfolio', { oneMillionPlan: plan });
     }
-  }, [navigateTo, targetClamped, currentInvested, monthly, yearsToReach, targetAge]);
+  }, [navigateTo, userId, targetClamped, currentInvested, monthly, yearsToReach, targetAge]);
 
   if (portfolioLoading) {
     return (
@@ -185,9 +189,15 @@ export default function GoalPlanScreen({ navigateTo }: GoalPlanScreenProps) {
             placeholder={String(DEFAULT_TARGET)}
             value={targetAmount === DEFAULT_TARGET ? '' : String(targetAmount)}
             onChangeText={(t) => {
-              const n = parseInt(t.replace(/\D/g, ''), 10);
-              if (t.trim() === '') setTargetAmount(DEFAULT_TARGET);
-              else if (!Number.isNaN(n)) setTargetAmount(Math.max(MIN_TARGET, Math.min(MAX_TARGET, n)));
+              const trimmed = t.replace(/\D/g, '').trim();
+              if (trimmed === '' || trimmed === '0') {
+                setTargetAmount(DEFAULT_TARGET);
+                return;
+              }
+              const n = parseInt(trimmed, 10);
+              if (Number.isNaN(n)) return;
+              // Allow intermediate values while typing (e.g. 5, 50, 500, 500000) — targetClamped is used for math
+              setTargetAmount(Math.min(MAX_TARGET, n));
             }}
           />
         </View>

@@ -243,6 +243,10 @@ _mock_user_profile_store: Dict[str, Dict] = {
     }
 }
 
+# In-memory saved goal store (goal-based orchestration)
+# Key: user_id, Value: { target, currentInvested, monthlyContribution, yearsToReach, targetAge }
+_saved_goal_store: Dict[str, Dict] = {}
+
 # Stock metadata (sector, marketCap, peRatio, dividendYield) - fallback data
 # In production, this would come from company profile APIs
 _STOCK_METADATA = {
@@ -1799,11 +1803,29 @@ async def tutor_ask(request: Request):
             status_code=500
         )
 
+def _detect_suggested_action(prompt: str, content: str) -> dict | None:
+    """Backend-driven CTA: derive suggested_action from prompt + response (mirrors mobile detectActionCard)."""
+    import re
+    t = (prompt + " " + (content or "")).lower()
+    if re.search(r"million|millionaire|1m|path to \$1m|path to 1m", t):
+        return {"label": "Set your $1M plan →", "screen": "goal-plan"}
+    if re.search(r"retire|on track|financial goal|build wealth|get rich", t):
+        return {"label": "Set a goal →", "screen": "portfolio"}
+    if re.search(r"concentration|overweight|too large|single stock|diversif", t):
+        return {"label": "Review portfolio →", "screen": "portfolio"}
+    if re.search(r"budget|spending|spend|50.30.20", t):
+        return {"label": "Open Budgeting →", "screen": "budgeting"}
+    if re.search(r"invest|contribute|add money|index fund|etf", t):
+        return {"label": "Go to Invest →", "screen": "ai-portfolio"}
+    return None
+
+
 @app.post("/assistant/query")
 async def assistant_query(request: Request):
     """
     Assistant Query endpoint - Main AI chat interface for mobile app.
     Routes to AI Orchestrator with function calling support.
+    Returns suggested_action for backend-driven CTAs (goal-plan, portfolio, budgeting, etc.).
     """
     import logging
     logger = logging.getLogger(__name__)
@@ -1873,12 +1895,14 @@ async def assistant_query(request: Request):
                 except Exception:
                     pass
             logger.info(f"✅ [Assistant] Generated response ({len(content)} chars)")
+            suggested_action = _detect_suggested_action(prompt, content)
             
             return {
                 "answer": content,
                 "response": content,  # Support both formats
                 "model": response.get("model_used", "unknown"),
-                "confidence": response.get("confidence", 0.8)
+                "confidence": response.get("confidence", 0.8),
+                "suggested_action": suggested_action,
             }
             
         except Exception as e:
@@ -1888,7 +1912,8 @@ async def assistant_query(request: Request):
                 "answer": f"I understand you're asking about: {prompt}. I'm having trouble processing that right now, but I'd be happy to help with investment strategies, portfolio analysis, or tax optimization.",
                 "response": f"I understand you're asking about: {prompt}. I'm having trouble processing that right now, but I'd be happy to help with investment strategies, portfolio analysis, or tax optimization.",
                 "model": None,
-                "confidence": 0.5
+                "confidence": 0.5,
+                "suggested_action": None,
             }
             
     except Exception as e:
@@ -1899,6 +1924,36 @@ async def assistant_query(request: Request):
             {"answer": "Internal server error", "response": "Internal server error", "detail": str(e)},
             status_code=500
         )
+
+
+@app.get("/api/user/goal")
+async def get_user_goal(request: Request):
+    """Get the user's saved goal (target, monthly, timeline) for goal-based orchestration."""
+    user_id = request.query_params.get("user_id", "1")
+    goal = _saved_goal_store.get(user_id)
+    if not goal:
+        return {"goal": None}
+    return {"goal": goal}
+
+
+@app.post("/api/user/goal")
+async def save_user_goal(request: Request):
+    """Save the user's goal from GoalPlanScreen 'Start this plan'."""
+    try:
+        data = await request.json()
+        user_id = data.get("user_id", "1")
+        goal = {
+            "target": int(data.get("target", 0)),
+            "currentInvested": int(data.get("currentInvested", 0)),
+            "monthlyContribution": int(data.get("monthlyContribution", 0)),
+            "yearsToReach": int(data.get("yearsToReach", 0)),
+            "targetAge": int(data.get("targetAge", 65)),
+        }
+        _saved_goal_store[user_id] = goal
+        return {"success": True, "goal": goal}
+    except Exception as e:
+        return JSONResponse({"success": False, "detail": str(e)}, status_code=400)
+
 
 @app.post("/tutor/explain")
 async def tutor_explain(request: Request):

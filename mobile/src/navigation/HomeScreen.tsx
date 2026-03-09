@@ -277,6 +277,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
   const QUICK_PROMPTS = IS_DEMO ? QUICK_PROMPTS_DEMO : QUICK_PROMPTS_GENERIC;
   
   /* ===================== Action card helpers ===================== */
+  type AskResult = string | { text: string; suggestedAction?: { label: string; screen: string } | null };
   function detectActionCard(text: string): { label: string; screen: string } | null {
     const t = text.toLowerCase();
     if (/(million|millionaire|1m|path to \$1m|path to 1m)/.test(t))
@@ -302,7 +303,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
   }: {
     open: boolean;
     onClose: () => void;
-    generateAIResponse: (q: string) => Promise<string>;
+    generateAIResponse: (q: string) => Promise<AskResult>;
     contextHint?: string | null;
     onNavigate?: (screen: string) => void;
   }) {
@@ -372,13 +373,22 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
       AsyncStorage.removeItem(STORAGE_KEY).catch(() => {});
     }, [STORAGE_KEY]);
   
+    const resolveTextAndAction = useCallback((out: AskResult): { text: string; actionCard: { label: string; screen: string } | null } => {
+      const text = typeof out === 'string' ? out : out.text;
+      const action = (typeof out === 'object' && out.suggestedAction != null)
+        ? out.suggestedAction
+        : detectActionCard(text);
+      return { text, actionCard: action ?? null };
+    }, []);
+
     const handleQuickPrompt = useCallback(async (prompt: string) => {
       const user: ChatMsg = { id: String(Date.now()), role: 'user', content: prompt };
       append(user);
       setSending(true);
       try {
-        const text = await generateAIResponse(prompt);
-        append({ id: String(Date.now() + 1), role: 'assistant', content: text, actionCard: detectActionCard(text) });
+        const out = await generateAIResponse(prompt);
+        const { text, actionCard } = resolveTextAndAction(out);
+        append({ id: String(Date.now() + 1), role: 'assistant', content: text, actionCard });
       } catch {
         append({
           id: String(Date.now() + 1),
@@ -388,7 +398,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
       } finally {
         setSending(false);
       }
-    }, [append, generateAIResponse]);
+    }, [append, generateAIResponse, resolveTextAndAction]);
 
     const send = useCallback(async () => {
       const trimmed = chatInput.trim();
@@ -398,8 +408,9 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
       setChatInput('');
       setSending(true);
       try {
-        const text = await generateAIResponse(trimmed);
-        append({ id: String(Date.now() + 1), role: 'assistant', content: text, actionCard: detectActionCard(text) });
+        const out = await generateAIResponse(trimmed);
+        const { text, actionCard } = resolveTextAndAction(out);
+        append({ id: String(Date.now() + 1), role: 'assistant', content: text, actionCard });
       } catch {
         append({
           id: String(Date.now() + 1),
@@ -409,7 +420,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
       } finally {
         setSending(false);
       }
-    }, [append, chatInput, sending, generateAIResponse]);
+    }, [append, chatInput, sending, generateAIResponse, resolveTextAndAction]);
   
     if (!open) return null;
   
@@ -933,14 +944,14 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
     }, []);
   
     /* ---------- AI service ---------- */
-    const generateAIResponse = useCallback(async (userInput: string): Promise<string> => {
-      // Demo mode: fully offline, deterministic, uses Alex's profile
+    const generateAIResponse = useCallback(async (userInput: string): Promise<AskResult> => {
+      // Demo mode: fully offline, deterministic, uses Alex's profile (action card from detectActionCard at call site)
       if (IS_DEMO) {
         const profile = userProfileData?.me ?? null;
         return getDemoAskResponse(userInput, profile);
       }
 
-      // Live mode: build full context — portfolio + credit + profile — then single API call
+      // Live mode: build full context — portfolio + credit + profile — then single API call; backend may return suggested_action
       let contextStr = copilotContextRef.current;
       if (contextStr == null) {
         try {
@@ -969,7 +980,8 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
           context: contextStr || undefined,
         });
         const response = await Promise.race([apiPromise, timeoutPromise]);
-        return response?.answer || response?.response || 'I hit a snag — mind trying again?';
+        const text = response?.answer || response?.response || 'I hit a snag — mind trying again?';
+        return { text, suggestedAction: response?.suggested_action ?? undefined };
       } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
         logger.log('AI query error:', msg);
