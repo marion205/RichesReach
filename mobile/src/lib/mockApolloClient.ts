@@ -315,6 +315,69 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
     },
   },
 
+  // Security Fortress / Zero Trust
+  ZeroTrustSummary: {
+    zeroTrustSummary: {
+      userId: 'demo-user-1',
+      devices: 2,
+      averageTrustScore: 85,
+      lastVerification: new Date().toISOString(),
+      requiresMfa: true,
+      riskLevel: 'LOW',
+      __typename: 'ZeroTrustSummaryType',
+    },
+  },
+  SecurityInsights: {
+    securityScore: {
+      id: 'demo-score-1',
+      score: 85,
+      factors: ['MFA enabled', 'Device trust verified', 'No recent threats'],
+      calculatedAt: new Date().toISOString(),
+      __typename: 'SecurityScoreType',
+    },
+    zeroTrustSummary: {
+      averageTrustScore: 85,
+      riskLevel: 'LOW',
+      requiresMfa: true,
+      __typename: 'ZeroTrustSummaryType',
+    },
+    securityEvents: [
+      {
+        id: 'evt-1',
+        eventType: 'LOGIN',
+        threatLevel: 'LOW',
+        description: 'Successful login from trusted device',
+        createdAt: new Date(Date.now() - 86400000).toISOString(),
+        __typename: 'SecurityEventType',
+      },
+    ],
+  },
+  SecurityScore: {
+    securityScore: {
+      id: 'demo-score-1',
+      score: 85,
+      factors: ['MFA enabled', 'Device trust verified'],
+      calculatedAt: new Date().toISOString(),
+      __typename: 'SecurityScoreType',
+    },
+  },
+  SecurityEvents: {
+    securityEvents: [
+      {
+        id: 'evt-1',
+        eventType: 'LOGIN',
+        threatLevel: 'LOW',
+        description: 'Successful login from trusted device',
+        metadata: null,
+        resolved: true,
+        resolvedAt: new Date().toISOString(),
+        timestamp: new Date(Date.now() - 86400000).toISOString(),
+        createdAt: new Date(Date.now() - 86400000).toISOString(),
+        __typename: 'SecurityEventType',
+      },
+    ],
+  },
+
   // Trade Debrief
   GetTradeDebrief:       { tradeDebrief: DEMO_TRADE_DEBRIEF },
 
@@ -397,6 +460,7 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
   },
 
   // Options chain analysis — OptionChainCard and options tab overview
+  // Include contracts for the first expiration (2026-03-21) so default tab shows rows
   GetOptionsAnalysis: {
     optionsAnalysis: {
       underlyingSymbol: 'AAPL',
@@ -406,13 +470,22 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
         __typename: 'OptionsChainType',
         expirationDates: ['2026-03-21', '2026-04-18', '2026-05-16'],
         calls: [
-          { strike: 185, bid: 5.80, ask: 5.90, volume: 12400, expirationDate: '2026-04-18', delta: 0.62,  gamma: 0.028, theta: -0.08, vega: 0.18, impliedVolatility: 0.28, __typename: 'OptionContractType' },
-          { strike: 190, bid: 3.90, ask: 4.00, volume: 28600, expirationDate: '2026-04-18', delta: 0.48,  gamma: 0.032, theta: -0.09, vega: 0.21, impliedVolatility: 0.26, __typename: 'OptionContractType' },
-          { strike: 195, bid: 2.40, ask: 2.50, volume: 19200, expirationDate: '2026-04-18', delta: 0.35,  gamma: 0.030, theta: -0.08, vega: 0.20, impliedVolatility: 0.25, __typename: 'OptionContractType' },
-          { strike: 200, bid: 1.30, ask: 1.40, volume: 14800, expirationDate: '2026-04-18', delta: 0.22,  gamma: 0.024, theta: -0.06, vega: 0.16, impliedVolatility: 0.24, __typename: 'OptionContractType' },
-          { strike: 205, bid: 0.65, ask: 0.70, volume: 9100,  expirationDate: '2026-04-18', delta: 0.13,  gamma: 0.016, theta: -0.04, vega: 0.11, impliedVolatility: 0.23, __typename: 'OptionContractType' },
+          { strike: 185, bid: 6.20, ask: 6.35, volume: 15200, expirationDate: '2026-03-21', delta: 0.68, gamma: 0.032, theta: -0.12, vega: 0.14, impliedVolatility: 0.30, __typename: 'OptionContractType' },
+          { strike: 190, bid: 4.10, ask: 4.25, volume: 31200, expirationDate: '2026-03-21', delta: 0.52, gamma: 0.035, theta: -0.11, vega: 0.16, impliedVolatility: 0.28, __typename: 'OptionContractType' },
+          { strike: 195, bid: 2.55, ask: 2.70, volume: 22100, expirationDate: '2026-03-21', delta: 0.38, gamma: 0.033, theta: -0.10, vega: 0.15, impliedVolatility: 0.26, __typename: 'OptionContractType' },
+          { strike: 200, bid: 1.35, ask: 1.48, volume: 16800, expirationDate: '2026-03-21', delta: 0.24, gamma: 0.028, theta: -0.08, vega: 0.12, impliedVolatility: 0.25, __typename: 'OptionContractType' },
+          { strike: 205, bid: 0.58, ask: 0.72, volume: 10200, expirationDate: '2026-03-21', delta: 0.14, gamma: 0.018, theta: -0.05, vega: 0.09, impliedVolatility: 0.24, __typename: 'OptionContractType' },
+          { strike: 185, bid: 5.80, ask: 5.90, volume: 12400, expirationDate: '2026-04-18', delta: 0.62, gamma: 0.028, theta: -0.08, vega: 0.18, impliedVolatility: 0.28, __typename: 'OptionContractType' },
+          { strike: 190, bid: 3.90, ask: 4.00, volume: 28600, expirationDate: '2026-04-18', delta: 0.48, gamma: 0.032, theta: -0.09, vega: 0.21, impliedVolatility: 0.26, __typename: 'OptionContractType' },
+          { strike: 195, bid: 2.40, ask: 2.50, volume: 19200, expirationDate: '2026-04-18', delta: 0.35, gamma: 0.030, theta: -0.08, vega: 0.20, impliedVolatility: 0.25, __typename: 'OptionContractType' },
+          { strike: 200, bid: 1.30, ask: 1.40, volume: 14800, expirationDate: '2026-04-18', delta: 0.22, gamma: 0.024, theta: -0.06, vega: 0.16, impliedVolatility: 0.24, __typename: 'OptionContractType' },
+          { strike: 205, bid: 0.65, ask: 0.70, volume: 9100,  expirationDate: '2026-04-18', delta: 0.13, gamma: 0.016, theta: -0.04, vega: 0.11, impliedVolatility: 0.23, __typename: 'OptionContractType' },
         ],
         puts: [
+          { strike: 185, bid: 2.35, ask: 2.48, volume: 9200,  expirationDate: '2026-03-21', delta: -0.32, gamma: 0.032, theta: -0.09, vega: 0.14, impliedVolatility: 0.31, __typename: 'OptionContractType' },
+          { strike: 190, bid: 3.85, ask: 3.98, volume: 17800, expirationDate: '2026-03-21', delta: -0.48, gamma: 0.035, theta: -0.10, vega: 0.16, impliedVolatility: 0.29, __typename: 'OptionContractType' },
+          { strike: 195, bid: 6.10, ask: 6.25, volume: 11800, expirationDate: '2026-03-21', delta: -0.62, gamma: 0.033, theta: -0.09, vega: 0.15, impliedVolatility: 0.28, __typename: 'OptionContractType' },
+          { strike: 200, bid: 9.00, ask: 9.18, volume: 8100,  expirationDate: '2026-03-21', delta: -0.76, gamma: 0.025, theta: -0.07, vega: 0.13, impliedVolatility: 0.27, __typename: 'OptionContractType' },
           { strike: 185, bid: 2.10, ask: 2.20, volume: 8400,  expirationDate: '2026-04-18', delta: -0.38, gamma: 0.028, theta: -0.07, vega: 0.18, impliedVolatility: 0.29, __typename: 'OptionContractType' },
           { strike: 190, bid: 3.60, ask: 3.70, volume: 16200, expirationDate: '2026-04-18', delta: -0.52, gamma: 0.032, theta: -0.08, vega: 0.21, impliedVolatility: 0.27, __typename: 'OptionContractType' },
           { strike: 195, bid: 5.80, ask: 5.90, volume: 10500, expirationDate: '2026-04-18', delta: -0.65, gamma: 0.030, theta: -0.07, vega: 0.20, impliedVolatility: 0.26, __typename: 'OptionContractType' },

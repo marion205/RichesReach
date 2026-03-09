@@ -158,6 +158,9 @@ export default function PortfolioKellyMetricsCard({ style }: PortfolioKellyMetri
 
           {/* Kelly Metrics */}
           <View style={styles.kellySection}>
+            <Text style={styles.kellyExplainer}>
+              Kelly optimal is the mathematically ideal % of portfolio to risk per trade for long‑term growth; recommended uses a fraction of that to reduce drawdowns.
+            </Text>
             <View style={styles.kellyRow}>
               <View style={styles.kellyItem}>
                 <Text style={styles.kellyLabel}>KELLY OPTIMAL</Text>
@@ -301,6 +304,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
     borderRadius: 12,
     padding: 16,
+  },
+  kellyExplainer: {
+    fontSize: 12,
+    color: '#6B7280',
+    lineHeight: 18,
+    marginBottom: 12,
+    paddingHorizontal: 4,
   },
   kellyRow: {
     flexDirection: 'row',

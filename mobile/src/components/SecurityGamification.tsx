@@ -89,7 +89,7 @@ export const SecurityGamification: React.FC = () => {
           id: 'biometric_master',
           name: 'Biometric Master',
           description: 'Enable all biometric authentication methods',
-          icon: 'fingerprint',
+          icon: 'lock',
           color: '#FF9800',
           earned: false, // Would check biometric settings
         },
@@ -105,7 +105,7 @@ export const SecurityGamification: React.FC = () => {
           id: 'compliance_king',
           name: 'Compliance King',
           description: 'All compliance checks passed',
-          icon: 'file-check',
+          icon: 'check-circle',
           color: '#00BCD4',
           earned: false, // Would check compliance status
         },
@@ -274,7 +274,7 @@ export const SecurityGamification: React.FC = () => {
             <View key={index} style={styles.streakCard}>
               <View style={styles.streakHeader}>
                 <Icon
-                  name={streak.type === 'security' ? 'shield' : streak.type === 'login' ? 'log-in' : 'fingerprint'}
+                  name={streak.type === 'security' ? 'shield' : streak.type === 'login' ? 'log-in' : 'lock'}
                   size={24}
                   color="#FF6B6B"
                 />
