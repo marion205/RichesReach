@@ -1,8 +1,122 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  FlatList,
+  ActivityIndicator,
+  ScrollView,
+} from 'react-native';
 import { assistantQuery } from '../../../services/aiClient';
+import UserProfileService, { ExtendedUserProfile } from '../../user/services/UserProfileService';
+import realTimePortfolioService, { PortfolioMetrics } from '../../portfolio/services/RealTimePortfolioService';
+import type { ScreenName } from '../../../navigation/types';
 
-interface Message { id: string; role: 'user'|'assistant'; text: string }
+interface Message {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  actionCard?: ActionCard;
+}
+
+interface ActionCard {
+  label: string;
+  screen: ScreenName;
+  params?: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Build a compact text context block from profile + portfolio. */
+function buildContext(
+  profile: ExtendedUserProfile | null,
+  portfolio: PortfolioMetrics | null,
+): Record<string, unknown> | undefined {
+  if (!profile && !portfolio) return undefined;
+  const ctx: Record<string, unknown> = {};
+  if (profile) {
+    ctx.experience = profile.experienceLevel;
+    ctx.risk_tolerance = profile.riskTolerance;
+    ctx.time_horizon = profile.timeHorizon;
+    ctx.investment_goals = profile.investmentGoals;
+    ctx.monthly_investment = profile.monthlyInvestment;
+  }
+  if (portfolio) {
+    ctx.portfolio_value = portfolio.totalValue;
+    ctx.total_return_pct = portfolio.totalReturnPercent;
+    ctx.day_change_pct = portfolio.dayChangePercent;
+    const topHoldings = portfolio.holdings
+      .slice(0, 5)
+      .map(h => ({ symbol: h.symbol, pct: portfolio.totalValue > 0 ? +(h.totalValue / portfolio.totalValue * 100).toFixed(1) : 0 }));
+    ctx.top_holdings = topHoldings;
+    // Concentration risk: largest holding weight
+    const maxWeight = topHoldings.reduce((m, h) => Math.max(m, h.pct), 0);
+    ctx.max_holding_weight_pct = maxWeight;
+  }
+  return ctx;
+}
+
+/** Detect which action card (if any) is relevant for an assistant response. */
+function detectAction(text: string): ActionCard | undefined {
+  const lower = text.toLowerCase();
+  if (/(million|retire|retirement|on track|financial goal|save.*million|path to)/.test(lower)) {
+    return { label: 'Set a retirement goal', screen: 'portfolio' };
+  }
+  if (/(concentration|overweight|single stock|too much in|diversif)/.test(lower)) {
+    return { label: 'Review my portfolio', screen: 'portfolio' };
+  }
+  if (/(budget|spend|track.*spend|monthly)/.test(lower)) {
+    return { label: 'Open Budgeting', screen: 'budgeting' };
+  }
+  if (/(invest|add money|contribute|buy|stock)/.test(lower)) {
+    return { label: 'Go to Invest', screen: 'ai-portfolio' };
+  }
+  return undefined;
+}
+
+/** Suggestion chips shown above the input bar. */
+function buildSuggestions(
+  profile: ExtendedUserProfile | null,
+  portfolio: PortfolioMetrics | null,
+): string[] {
+  const suggestions: string[] = [];
+
+  if (portfolio && portfolio.totalValue > 0) {
+    suggestions.push('Am I on track to retire?');
+
+    if (portfolio.holdings.length > 0 && portfolio.totalValue > 0) {
+      const maxWeight = portfolio.holdings.reduce(
+        (m, h) => Math.max(m, h.totalValue / portfolio.totalValue),
+        0,
+      );
+      if (maxWeight > 0.25) {
+        const top = portfolio.holdings.sort((a, b) => b.totalValue - a.totalValue)[0];
+        suggestions.push(`Is my ${top.symbol} position too large?`);
+      }
+    }
+    suggestions.push('How do I reach $1M with my portfolio?');
+  } else {
+    suggestions.push('How much should I save each month?');
+    suggestions.push('Am I saving enough for retirement?');
+  }
+
+  if (profile?.investmentGoals?.includes('retirement')) {
+    if (!suggestions.some(s => s.includes('retire'))) {
+      suggestions.push('When can I retire?');
+    }
+  }
+
+  suggestions.push('Help me build a budget');
+  return suggestions.slice(0, 4);
+}
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
 export default function AssistantChatScreen() {
   const [userId] = useState('demo-user');
@@ -10,40 +124,153 @@ export default function AssistantChatScreen() {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
 
-  const onSend = async () => {
-    const text = input.trim();
-    if (!text || sending) return;
+  const [profile, setProfile] = useState<ExtendedUserProfile | null>(null);
+  const [portfolio, setPortfolio] = useState<PortfolioMetrics | null>(null);
+  const [loadingContext, setLoadingContext] = useState(true);
+
+  const flatListRef = useRef<FlatList>(null);
+
+  // Load profile + portfolio once on mount
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const [p, port] = await Promise.all([
+          UserProfileService.getInstance().getProfile(),
+          realTimePortfolioService.getPortfolioData().catch(() => null),
+        ]);
+        if (!cancelled) {
+          setProfile(p);
+          setPortfolio(port ?? null);
+        }
+      } catch {
+        // context is best-effort; silently ignore
+      } finally {
+        if (!cancelled) setLoadingContext(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  const suggestions = buildSuggestions(profile, portfolio);
+
+  const onSend = async (text?: string) => {
+    const prompt = (text ?? input).trim();
+    if (!prompt || sending) return;
     const id = String(Date.now());
-    setMessages(prev => [...prev, { id, role: 'user', text }]);
+    setMessages(prev => [...prev, { id, role: 'user', text: prompt }]);
     setInput('');
     setSending(true);
     try {
-      const res = await assistantQuery({ user_id: userId, prompt: text });
-      const answer = typeof res?.answer === 'string'
-        ? res.answer
-        : typeof res?.response === 'string'
+      const ctx = buildContext(profile, portfolio);
+      const res = await assistantQuery({ user_id: userId, prompt, context: ctx });
+      const answer =
+        typeof res?.answer === 'string'
+          ? res.answer
+          : typeof res?.response === 'string'
           ? res.response
           : JSON.stringify(res);
-      setMessages(prev => [...prev, { id: id + '-a', role: 'assistant', text: answer }]);
+      const actionCard = detectAction(answer);
+      setMessages(prev => [
+        ...prev,
+        { id: id + '-a', role: 'assistant', text: answer, actionCard },
+      ]);
     } catch (e: any) {
-      setMessages(prev => [...prev, { id: id + '-e', role: 'assistant', text: e.message || 'Request failed' }]);
+      setMessages(prev => [
+        ...prev,
+        { id: id + '-e', role: 'assistant', text: e.message || 'Request failed' },
+      ]);
     } finally {
       setSending(false);
     }
   };
 
+  const navigateTo = (screen: ScreenName, params?: Record<string, unknown>) => {
+    const w = window as any;
+    if (typeof w.__navigateToGlobal === 'function') {
+      w.__navigateToGlobal(screen, params);
+    }
+  };
+
+  const renderItem = ({ item }: { item: Message }) => (
+    <View>
+      <View
+        style={[
+          styles.bubble,
+          item.role === 'user' ? styles.userBubble : styles.assistantBubble,
+        ]}
+      >
+        <Text style={[styles.text, item.role === 'user' && styles.userText]}>
+          {item.text}
+        </Text>
+      </View>
+      {item.role === 'assistant' && item.actionCard && (
+        <TouchableOpacity
+          style={styles.actionCard}
+          onPress={() => navigateTo(item.actionCard!.screen, item.actionCard!.params)}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.actionCardText}>{item.actionCard.label} →</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
+  const contextBanner =
+    !loadingContext && (profile || portfolio) ? (
+      <View style={styles.contextBanner}>
+        <Text style={styles.contextBannerText}>
+          {portfolio && portfolio.totalValue > 0
+            ? `Using your portfolio ($${portfolio.totalValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}) + profile`
+            : 'Using your profile'}
+        </Text>
+      </View>
+    ) : null;
+
   return (
     <View style={styles.container}>
+      {contextBanner}
       <FlatList
+        ref={flatListRef}
         data={messages}
-        keyExtractor={(m) => m.id}
-        renderItem={({ item }) => (
-          <View style={[styles.bubble, item.role==='user'? styles.userBubble : styles.assistantBubble]}>
-            <Text style={styles.text}>{item.text}</Text>
+        keyExtractor={m => m.id}
+        renderItem={renderItem}
+        contentContainerStyle={styles.listContent}
+        onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>Ask me anything about your money</Text>
+            <Text style={styles.emptySubtitle}>
+              {portfolio && portfolio.totalValue > 0
+                ? 'I can see your real portfolio and profile — answers are tailored to you.'
+                : 'Add your profile to get answers tailored to your situation.'}
+            </Text>
           </View>
-        )}
-        contentContainerStyle={{ padding: 16 }}
+        }
       />
+
+      {/* Suggestion chips */}
+      {messages.length === 0 && !loadingContext && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.chipsRow}
+          contentContainerStyle={styles.chipsContent}
+        >
+          {suggestions.map(s => (
+            <TouchableOpacity
+              key={s}
+              style={styles.chip}
+              onPress={() => onSend(s)}
+              activeOpacity={0.75}
+            >
+              <Text style={styles.chipText}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
+
       <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
@@ -52,23 +279,160 @@ export default function AssistantChatScreen() {
           placeholder="Ask anything…"
           placeholderTextColor="#8b8b94"
           multiline
+          onSubmitEditing={() => onSend()}
+          blurOnSubmit={false}
         />
-        <TouchableOpacity onPress={onSend} style={[styles.sendBtn, (!input.trim() || sending) && { opacity: 0.5 }]} disabled={!input.trim() || sending}>
-          {sending ? <ActivityIndicator color="#fff" /> : <Text style={styles.sendText}>Send</Text>}
+        <TouchableOpacity
+          onPress={() => onSend()}
+          style={[styles.sendBtn, (!input.trim() || sending) && styles.sendBtnDisabled]}
+          disabled={!input.trim() || sending}
+        >
+          {sending ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Text style={styles.sendText}>Send</Text>
+          )}
         </TouchableOpacity>
       </View>
     </View>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f8f9fa' },
-  bubble: { marginVertical: 6, padding: 10, borderRadius: 12, maxWidth: '85%' },
-  userBubble: { alignSelf: 'flex-end', backgroundColor: '#3b82f6' },
-  assistantBubble: { alignSelf: 'flex-start', backgroundColor: '#ffffff', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
-  text: { color: '#1f2937' },
-  inputRow: { flexDirection: 'row', padding: 12, borderTopWidth: 1, borderTopColor: '#e5e7eb', backgroundColor: '#ffffff' },
-  input: { flex: 1, backgroundColor: '#f3f4f6', color: '#1f2937', padding: 10, borderRadius: 10, marginRight: 8, maxHeight: 120, borderWidth: 1, borderColor: '#d1d5db' },
-  sendBtn: { backgroundColor: '#22c55e', paddingHorizontal: 14, justifyContent: 'center', borderRadius: 10, minWidth: 72, alignItems: 'center' },
-  sendText: { color: '#ffffff', fontWeight: '700' },
+
+  contextBanner: {
+    backgroundColor: '#eff6ff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#bfdbfe',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+  },
+  contextBannerText: {
+    fontSize: 11,
+    color: '#3b82f6',
+    fontWeight: '500',
+  },
+
+  listContent: { padding: 16, paddingBottom: 8 },
+
+  bubble: {
+    marginVertical: 4,
+    padding: 12,
+    borderRadius: 14,
+    maxWidth: '85%',
+  },
+  userBubble: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#3b82f6',
+    borderBottomRightRadius: 4,
+  },
+  assistantBubble: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#ffffff',
+    borderBottomLeftRadius: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  text: { color: '#1f2937', fontSize: 15, lineHeight: 22 },
+  userText: { color: '#ffffff' },
+
+  // Action card shown below assistant bubble
+  actionCard: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    marginBottom: 8,
+    marginLeft: 2,
+    backgroundColor: '#0f172a',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+  },
+  actionCardText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  // Empty state
+  emptyState: {
+    paddingTop: 40,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#111827',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+
+  // Suggestion chips
+  chipsRow: {
+    maxHeight: 46,
+    marginBottom: 4,
+  },
+  chipsContent: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    gap: 8,
+  },
+  chip: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+  },
+  chipText: {
+    fontSize: 13,
+    color: '#374151',
+    fontWeight: '500',
+  },
+
+  // Input row
+  inputRow: {
+    flexDirection: 'row',
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e7eb',
+    backgroundColor: '#ffffff',
+  },
+  input: {
+    flex: 1,
+    backgroundColor: '#f3f4f6',
+    color: '#1f2937',
+    padding: 10,
+    borderRadius: 12,
+    marginRight: 8,
+    maxHeight: 120,
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    fontSize: 15,
+  },
+  sendBtn: {
+    backgroundColor: '#22c55e',
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+    borderRadius: 12,
+    minWidth: 72,
+    alignItems: 'center',
+  },
+  sendBtnDisabled: { opacity: 0.45 },
+  sendText: { color: '#ffffff', fontWeight: '700', fontSize: 15 },
 });

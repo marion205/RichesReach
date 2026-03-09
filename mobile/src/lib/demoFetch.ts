@@ -175,6 +175,107 @@ const HANDLERS: Handler[] = [
     return null;
   },
 
+  // Assistant / Ask — keyword-matched demo responses using Alex's real numbers
+  (url, options) => {
+    if (!url.includes('/assistant/query')) return null;
+
+    let prompt = '';
+    try {
+      const body = options?.body ? JSON.parse(options.body as string) : {};
+      prompt = (body.prompt || '').toLowerCase();
+    } catch {
+      prompt = '';
+    }
+
+    // Demo user profile: Alex, 32, $14,303 portfolio, ~$500/month, moderate risk, 5-10yr horizon
+    const DEMO_PORTFOLIO_VALUE = 14303;
+    const DEMO_MONTHLY = 500;
+    const DEMO_AGE = 32;
+
+    // Shared helper: compound a lump sum forward
+    const fv = (pv: number, r: number, years: number) => +(pv * Math.pow(1 + r, years)).toFixed(0);
+    const portfolioIn20 = fv(DEMO_PORTFOLIO_VALUE, 0.08, 20); // ~$66,700
+    const gapFor1M = 1_000_000 - portfolioIn20; // ~$933,300
+
+    let answer: string;
+
+    if (/million|1m|reach.*goal|path to wealth|build.*wealth|how long|on track/.test(prompt)) {
+      answer =
+        `Here's your actual picture, Alex.\n\n` +
+        `Your $${DEMO_PORTFOLIO_VALUE.toLocaleString()} portfolio compounded at 8% for 20 years grows to ~$${portfolioIn20.toLocaleString()} on its own. ` +
+        `That leaves a ~$${gapFor1M.toLocaleString()} gap to close with contributions.\n\n` +
+        `At your current $${DEMO_MONTHLY}/month, that gap closes in roughly **26 years** — putting you at $1M around age 58. ` +
+        `To hit it by 55, you'd need ~$650/month. By 50, closer to $1,150/month.\n\n` +
+        `**Your path:** Path A fits you — consistent index investing on a moderate-risk, 5-10 year horizon. ` +
+        `Chasing higher-risk plays at your stage mostly adds volatility, not speed.\n\n` +
+        `**The behavioral risk:** The biggest threat isn't picking the wrong fund — it's skipping months when life gets expensive. ` +
+        `Automate that $${DEMO_MONTHLY} so the decision is already made.\n\n` +
+        `**One next step:** Set a goal in the app so you can track your actual gap every month, not just guess.`;
+    } else if (/retire|retirement|when can i retire/.test(prompt)) {
+      answer =
+        `At 32 with $${DEMO_PORTFOLIO_VALUE.toLocaleString()} invested and $${DEMO_MONTHLY}/month going in, here's the math.\n\n` +
+        `Assuming 8% annual growth and a target of $1M (standard 4% withdrawal rule = ~$40K/year):\n` +
+        `  • Retire at 55 → need ~$1,150/month from today\n` +
+        `  • Retire at 58 → your current $${DEMO_MONTHLY}/month gets you there\n` +
+        `  • Retire at 62 → you're already ahead — current pace overshoots $1M\n\n` +
+        `Your moderate risk tolerance and 5-10 year horizon suggest a growth-tilted portfolio is appropriate — ` +
+        `80% equities, 20% bonds is reasonable for your age.\n\n` +
+        `**One next step:** The retirement simulator in the app can run your exact numbers with a success probability. ` +
+        `That's more useful than a rough estimate.`;
+    } else if (/budget|spending|spend|50.30.20|how much should i save/.test(prompt)) {
+      answer =
+        `With your income bracket ($75K–$100K), a practical baseline after tax (~$5,500/month take-home):\n\n` +
+        `  • Needs (rent, food, transport): ~$2,750 (50%)\n` +
+        `  • Wants (dining, subscriptions, fun): ~$1,100 (20%)\n` +
+        `  • Saving + investing: ~$1,650 (30%)\n\n` +
+        `You're currently at $${DEMO_MONTHLY}/month invested. That's 9% of take-home — good start, ` +
+        `but the 30% target means ~$1,650/month. The gap is about $1,150/month.\n\n` +
+        `**Most impactful cut to find that:** recurring subscriptions and dining out. ` +
+        `Those two categories typically hide $200–$400/month of painless cuts.\n\n` +
+        `**One next step:** Open Budgeting in the app — it connects your actual spending so you can see where the real gap is.`;
+    } else if (/concentration|too much in|overweight|single stock|diversif/.test(prompt)) {
+      answer =
+        `Looking at your portfolio ($${DEMO_PORTFOLIO_VALUE.toLocaleString()}): NVDA is your largest position at ~38% of holdings. ` +
+        `That's above the standard 25% single-stock threshold where concentration risk becomes meaningful.\n\n` +
+        `The case for keeping it: NVDA's AI infrastructure tailwind is real and you're up significantly. ` +
+        `The case for trimming: a 40% drawdown in one name (not unusual for high-growth stocks) would cut your total portfolio by ~15%.\n\n` +
+        `**A middle path:** trim to 20–25% of portfolio over two or three tranches — spreads tax impact and keeps upside exposure.\n\n` +
+        `**One next step:** Review your full allocation in the portfolio screen. ` +
+        `If you want to diversify the concentrated position without a big tax hit, the tax-smart transition tool can model it.`;
+    } else if (/debt|pay off|loan|credit card|interest rate/.test(prompt)) {
+      answer =
+        `The math on debt is straightforward: paying off high-interest debt is a guaranteed return equal to that rate.\n\n` +
+        `Credit cards at 20–25% APR? Paying those off beats almost any investment on a risk-adjusted basis. ` +
+        `Student loans at 5–7%? Less clear — your portfolio returning 8% means investing might edge it out, ` +
+        `but the certainty of the debt payoff is worth something.\n\n` +
+        `**Rule of thumb:** eliminate anything above 8% before increasing investments. ` +
+        `Below 8%, run both in parallel.\n\n` +
+        `**One next step:** If you tell me your balance and rate, I'll calculate the exact payoff timeline and total interest saved.`;
+    } else if (/emergency fund|cash|liquid|safety net/.test(prompt)) {
+      answer =
+        `Standard target: 3–6 months of expenses in a high-yield savings account. ` +
+        `At your spend level, that's roughly $8,000–$16,500.\n\n` +
+        `Current high-yield savings rates are around 4.5–5% APY — not investing, but not losing to inflation either. ` +
+        `This money should be boring and accessible, not trying to grow.\n\n` +
+        `**If you don't have this yet:** pause extra investing until you have $8K saved. ` +
+        `The cost of being forced to sell investments in an emergency is higher than the returns you'd miss.\n\n` +
+        `**One next step:** If your emergency fund is funded, keep investing. If not, that's the first dollar.`;
+    } else {
+      // Generic fallback — still uses their real numbers
+      answer =
+        `Happy to run through that with your actual numbers.\n\n` +
+        `Your current position: $${DEMO_PORTFOLIO_VALUE.toLocaleString()} portfolio, $${DEMO_MONTHLY}/month investing, ` +
+        `moderate risk, 5-10 year horizon, age ${DEMO_AGE}.\n\n` +
+        `Can you be more specific about what you want to figure out? For example:\n` +
+        `  • "Am I on track for $1M?"\n` +
+        `  • "How should I split my $${DEMO_MONTHLY}/month?"\n` +
+        `  • "Is my NVDA position too concentrated?"\n\n` +
+        `The more specific the question, the more useful the answer.`;
+    }
+
+    return jsonResponse({ answer, response: answer, model: 'demo', confidence_score: 0.95 });
+  },
+
   // Futures
   (url) => {
     if (url.includes('/api/futures/recommendations')) {
