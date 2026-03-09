@@ -932,106 +932,46 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
   
     /* ---------- AI service ---------- */
     const generateAIResponse = useCallback(async (userInput: string): Promise<string> => {
+      // Demo mode: fully offline, deterministic, uses Alex's profile
       if (IS_DEMO) {
         const profile = userProfileData?.me ?? null;
         return getDemoAskResponse(userInput, profile);
       }
+
+      // Live mode: build full context — portfolio + credit + profile — then single API call
       let contextStr = copilotContextRef.current;
       if (contextStr == null) {
         try {
           const ctx = await getCopilotContext();
-          contextStr = serializeCopilotContextForPrompt(ctx);
+          let serialized = serializeCopilotContextForPrompt(ctx);
+          // Always append profile so the AI has age, income, risk tolerance, horizon
+          if (userProfileData?.me) {
+            const profileStr = serializeProfileForPrompt(userProfileData.me);
+            if (profileStr) serialized += ' ' + profileStr;
+          }
+          contextStr = serialized;
           copilotContextRef.current = contextStr;
         } catch {
           contextStr = '';
         }
       }
-      const lowerInput = userInput.toLowerCase();
-      
-      // Quick keyword-based responses for instant feedback
-      if (lowerInput.includes('investment') || lowerInput.includes('invest') || lowerInput.includes('portfolio')) {
-        // Try API first, but with quick timeout
-        try {
-          const userId = userData?.me?.id || (userProfile as any)?.id || 'demo-user';
-          const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error('Request timeout')), 5000); // 5 second timeout
-          });
-          const apiPromise = assistantQuery({ user_id: userId, prompt: userInput, context: contextStr || undefined });
-          const response = await Promise.race([apiPromise, timeoutPromise]);
-          if (response?.answer || response?.response) {
-            return response.answer || response.response;
-          }
-        } catch (error: unknown) {
-          // Fall through to fast fallback
-        }
-        return 'For portfolio and investment questions I need a moment to pull your data — try again in a second, or ask something more specific like "Am I too concentrated?" or "How do I reach $1M?"';
-      }
-      
-      if (lowerInput.includes('budget') || lowerInput.includes('saving') || lowerInput.includes('spend')) {
-        try {
-          const userId = userData?.me?.id || (userProfile as any)?.id || 'demo-user';
-          const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error('Request timeout')), 5000);
-          });
-          const apiPromise = assistantQuery({ user_id: userId, prompt: userInput, context: contextStr || undefined });
-          const response = await Promise.race([apiPromise, timeoutPromise]);
-          if (response?.answer || response?.response) {
-            return response.answer || response.response;
-          }
-        } catch (error: unknown) {
-          // Fall through to fast fallback
-        }
-        return 'For budgeting questions I need a moment to pull your data — try again in a second, or ask "Help me build a budget" or "How do I save more each month?" for a specific plan.';
-      }
-      
-      if (lowerInput.includes('stock') || lowerInput.includes('market') || lowerInput.includes('trading')) {
-        try {
-          const userId = userData?.me?.id || (userProfile as any)?.id || 'demo-user';
-          const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error('Request timeout')), 5000);
-          });
-          const apiPromise = assistantQuery({ user_id: userId, prompt: userInput, context: contextStr || undefined });
-          const response = await Promise.race([apiPromise, timeoutPromise]);
-          if (response?.answer || response?.response) {
-            return response.answer || response.response;
-          }
-        } catch (error: unknown) {
-          // Fall through to fast fallback
-        }
-        return 'For stock and market questions I need a moment to pull live data — try again in a second, or ask something specific like "Should I hold my NVDA?" or "What is dollar-cost averaging?"';
-      }
-      
-      if (lowerInput.includes('retirement') || lowerInput.includes('401k') || lowerInput.includes('ira')) {
-        try {
-          const userId = userData?.me?.id || (userProfile as any)?.id || 'demo-user';
-          const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error('Request timeout')), 5000);
-          });
-          const apiPromise = assistantQuery({ user_id: userId, prompt: userInput, context: contextStr || undefined });
-          const response = await Promise.race([apiPromise, timeoutPromise]);
-          if (response?.answer || response?.response) {
-            return response.answer || response.response;
-          }
-        } catch (error: unknown) {
-          // Fall through to fast fallback
-        }
-        return 'For retirement questions I need a moment to pull your numbers — try again in a second, or ask "When can I retire?" or "Am I on track to retire?" for a personalised answer.';
-      }
-      
-      // For other questions, try API with timeout, then fallback
+
       try {
-        const userId = userData?.me?.id || (userProfile as any)?.id || 'demo-user';
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error('Request timeout')), 8000); // 8 second timeout
+        const userId = userData?.me?.id || (userProfile as any)?.id || 'anonymous';
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), 15000)
+        );
+        const apiPromise = assistantQuery({
+          user_id: userId,
+          prompt: userInput,
+          context: contextStr || undefined,
         });
-        const apiPromise = assistantQuery({ user_id: userId, prompt: userInput, context: contextStr || undefined });
         const response = await Promise.race([apiPromise, timeoutPromise]);
-        return response?.answer || response?.response || 'I hit a snag processing that—mind trying again?';
+        return response?.answer || response?.response || 'I hit a snag — mind trying again?';
       } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        logger.log('AI query timeout or error, using fallback:', errorMessage);
-        // Provide helpful generic fallback
-        return 'Having trouble reaching the server — try again in a moment. In the meantime, try a specific question like "How do I become a millionaire?", "Am I too concentrated?", or "When can I retire?" and I\'ll run the numbers for you.';
+        const msg = error instanceof Error ? error.message : String(error);
+        logger.log('AI query error:', msg);
+        return 'Having trouble reaching the server right now — try again in a moment. You can also ask something specific like "How do I become a millionaire?", "Am I too concentrated?", or "When can I retire?" and I\'ll run the numbers for you.';
       }
     }, [userData?.me?.id, (userProfile as any)?.id, userProfileData?.me]);
   
