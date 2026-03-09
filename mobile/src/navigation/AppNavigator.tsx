@@ -260,13 +260,27 @@ function GoalPlanScreenWrapper(props: any) {
   );
 }
 
+function HomeScreenWrapper(props: any) {
+  return (
+    <HomeScreen
+      navigateTo={(screen, params) => {
+        try {
+          props.navigation.navigate(screen as never, params as never);
+        } catch (e) {
+          logger.error('HomeScreen navigate error:', e);
+        }
+      }}
+    />
+  );
+}
+
 function HomeStack() {
   const StackNavigator = Stack.Navigator as any;
   return (
     <StackNavigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="HomeMain" component={HomeScreen} />
+      <Stack.Screen name="HomeMain" component={HomeScreenWrapper} />
       {/* Legacy alias to preserve existing navigations */}
-      <Stack.Screen name="home" component={HomeScreen} />
+      <Stack.Screen name="home" component={HomeScreenWrapper} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="profile" component={ProfileScreen} />
       <Stack.Screen name="bank-accounts" component={BankAccountScreen} options={{ headerShown: true, title: 'Bank Accounts' }} />
@@ -277,6 +291,7 @@ function HomeStack() {
         component={SubscriptionScreenWrapper}
         options={{ headerShown: true, title: 'Subscription' }}
       />
+      <Stack.Screen name="premium-analytics" component={PremiumAnalyticsScreen} options={{ headerShown: true, title: 'Premium Analytics' }} />
       {/* V2 utility routes triggered from Home cards */}
       <Stack.Screen name="oracle-insights" component={OracleInsightsScreen} />
       <Stack.Screen name="voice-ai" component={VoiceAIAssistant} />

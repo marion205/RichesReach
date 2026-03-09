@@ -714,6 +714,7 @@ logger.log('🔍 renderScreen called:', { currentScreen, isLoggedIn, isLoading, 
     'strategy-blend-builder',
     'raha-auto-trading-settings',
     'goal-plan', // Your $1M Plan — from Ask CTA; must render here so navigateTo('goal-plan') shows GoalPlanScreen
+    'premium-analytics', // Home "Premium Analytics" link must switch to this screen
   ];
   
   if (isLoggedIn && hasCompletedOnboarding && !isShellScreen && !screensThatNeedDirectRendering.includes(currentScreen)) {
