@@ -199,7 +199,7 @@ const HANDLERS: Handler[] = [
 
     let answer: string;
 
-    if (/million|1m|reach.*goal|path to wealth|build.*wealth|how long|on track/.test(prompt)) {
+    if (/million|millionaire|1m|reach.*goal|path to wealth|build.*wealth|how long|on track|get rich|financially free|financial freedom|retire early|fastest way|how do i get to|become.*rich|build.*money|grow.*wealth|how.*wealthy/.test(prompt)) {
       answer =
         `Here's your actual picture, Alex.\n\n` +
         `Your $${DEMO_PORTFOLIO_VALUE.toLocaleString()} portfolio compounded at 8% for 20 years grows to ~$${portfolioIn20.toLocaleString()} on its own. ` +

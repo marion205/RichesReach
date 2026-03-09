@@ -119,6 +119,12 @@ class AIServiceAsync:
 
             "2. RUN THE MATH.\n"
             "Do not describe concepts — calculate the outcome for their situation. "
+            "For ANY question about building wealth, becoming a millionaire, getting rich, financial freedom, "
+            "retiring early, reaching a number goal, or 'how do I get to $X' — treat it as a wealth-building "
+            "question and apply the full math + path framework below. "
+            "This includes casual phrasings like 'how do I become a millionaire', 'how do I get rich', "
+            "'how do I build wealth', 'I want to be financially free', 'how do I retire early', "
+            "'what's the fastest way to $1M', 'can I retire by 50', etc. "
             "For savings and wealth questions use ~8% annual growth (compound monthly) as the baseline. "
             "Key benchmarks to reach $1M from zero:\n"
             "  10 yrs → ~$5,450/month  |  15 yrs → ~$2,900/month  |  20 yrs → ~$1,700/month\n"
