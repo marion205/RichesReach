@@ -1,8 +1,13 @@
 /**
  * Demo-mode Ask responses for pitch events.
  * Used when EXPO_PUBLIC_DEMO_MODE=true so Ask works without the backend.
- * Responses are written to sound like a real financial copilot: specific, actionable, and professional.
- * When profile is provided (e.g. from GET_USER_PROFILE in demo), answers are personalized.
+ *
+ * Every response follows the diagnostic structure:
+ *   1. Direct answer using their real numbers (portfolio, age, income)
+ *   2. Personalised insight — what this means specifically for them
+ *   3. 3 concrete scenarios they can act on
+ *   4. One best next step
+ *   5. Follow-up prompts to keep the conversation going
  */
 
 export interface DemoAskProfile {
@@ -15,214 +20,401 @@ export interface DemoAskProfile {
   } | null;
 }
 
-/** Parse income bracket string like "$75,000 - $100,000" to approximate midpoint in dollars. */
+// ─── Math helpers ────────────────────────────────────────────────────────────
+
+/** Parse income bracket string like "$75,000 - $100,000" to approximate midpoint. */
 function parseIncomeBracketMidpoint(bracket: string | null | undefined): number | null {
   if (!bracket || typeof bracket !== 'string') return null;
-  const numbers = bracket.replace(/[^0-9]/g, ' ').split(/\s+/).filter(Boolean).map(Number);
+  const numbers = bracket.replace(/[^0-9]/g, ' ').trim().split(/\s+/).filter(Boolean).map(Number);
   if (numbers.length === 0) return null;
   if (numbers.length === 1) return numbers[0];
   return Math.round((numbers[0] + numbers[numbers.length - 1]) / 2);
 }
 
-/** Approximate years to reach goal from current age (e.g. years to 65). */
-function yearsToRetirement(age: number | null | undefined, targetAge = 65): number | null {
-  if (age == null || typeof age !== 'number') return null;
-  const years = targetAge - age;
-  return years > 0 && years <= 50 ? years : null;
+/** Years from age to targetAge (default 65). */
+function yearsTo(age: number | null | undefined, targetAge = 65): number | null {
+  if (age == null) return null;
+  const y = targetAge - age;
+  return y > 0 && y <= 50 ? y : null;
 }
 
-/** Monthly contribution needed to reach $1M in N years at annual rate r (e.g. 0.07). */
-function monthlyToReach1M(years: number, annualRate: number): number {
-  if (years <= 0 || annualRate <= 0) return 3400;
-  const monthlyRate = annualRate / 12;
-  const months = years * 12;
-  const fv = 1_000_000;
-  const pmt = (fv * monthlyRate) / (Math.pow(1 + monthlyRate, months) - 1);
-  return Math.round(pmt);
+/**
+ * Monthly PMT to accumulate `goal` in `years` at `annualRate`,
+ * optionally with a `presentValue` lump-sum head start.
+ */
+function monthlyPMT(goal: number, years: number, annualRate: number, presentValue = 0): number {
+  if (years <= 0 || annualRate <= 0) return Math.round(goal / (years * 12 || 1));
+  const r = annualRate / 12;
+  const n = years * 12;
+  const fvPV = presentValue * Math.pow(1 + r, n); // future value of existing portfolio
+  const gap = Math.max(0, goal - fvPV);
+  if (gap === 0) return 0;
+  return Math.round((gap * r) / (Math.pow(1 + r, n) - 1));
 }
+
+/** Future value of a PMT stream + lump sum. */
+function futureValue(pmt: number, years: number, annualRate: number, pv = 0): number {
+  const r = annualRate / 12;
+  const n = years * 12;
+  return Math.round(pv * Math.pow(1 + r, n) + pmt * ((Math.pow(1 + r, n) - 1) / r));
+}
+
+/** Years to reach a goal from a starting portfolio at a given monthly contribution. */
+function yearsToGoal(goal: number, pmt: number, annualRate: number, pv = 0): number {
+  if (pmt <= 0 && pv <= 0) return 99;
+  const r = annualRate / 12;
+  if (r === 0) {
+    const months = pv >= goal ? 0 : (goal - pv) / pmt;
+    return Math.round(months / 12);
+  }
+  // Solve n: goal = pv*(1+r)^n + pmt*((1+r)^n - 1)/r
+  // Approximate by iteration (fast enough for demo)
+  let months = 1;
+  while (months < 600) {
+    const fv = pv * Math.pow(1 + r, months) + pmt * ((Math.pow(1 + r, months) - 1) / r);
+    if (fv >= goal) return Math.round(months / 12);
+    months++;
+  }
+  return 99;
+}
+
+// ─── Demo constants (Alex's profile) ─────────────────────────────────────────
+const DEMO_PORTFOLIO = 14303;
+const DEMO_TOP_HOLDING = 'NVDA';
+const DEMO_TOP_HOLDING_PCT = 38;
+const DEMO_CREDIT_SCORE = 720;
+const DEMO_CREDIT_UTIL = 22;
+
+// ─── Main export ─────────────────────────────────────────────────────────────
 
 export function getDemoAskResponse(userInput: string, profile?: DemoAskProfile | null): string {
   const q = userInput.toLowerCase().trim();
   const ip = profile?.incomeProfile;
   const name = profile?.name?.trim() || null;
+  const age = ip?.age ?? 32;
+  const bracket = ip?.incomeBracket ?? '$75,000 - $100,000';
+  const incomeMid = parseIncomeBracketMidpoint(bracket) ?? 87500;
+  const monthlyIncome = Math.round(incomeMid / 12);
+  const hi = ip?.investmentHorizon ?? '5-10 years';
+  const rt = ip?.riskTolerance ?? 'Moderate';
+  const namePrefix = name ? `${name}, ` : '';
 
-  // ── Wealth building / million / long-term goals ─────────────────────────────
+  // ── Wealth / millionaire / build wealth / get rich ──────────────────────────
   if (
-    q.includes('million') ||
-    q.includes('millionaire') ||
-    q.includes('1m') ||
-    q.includes('one m') ||
-    q.includes('get rich') ||
-    q.includes('become rich') ||
-    q.includes('financially free') ||
-    q.includes('financial freedom') ||
-    q.includes('retire early') ||
-    q.includes('fire ') ||
-    q.includes('build wealth') ||
-    q.includes('grow wealth') ||
-    q.includes('grow my wealth') ||
-    q.includes('how wealthy') ||
+    q.includes('million') || q.includes('millionaire') || q.includes('1m') ||
+    q.includes('one m') || q.includes('get rich') || q.includes('become rich') ||
+    q.includes('financially free') || q.includes('financial freedom') ||
+    q.includes('retire early') || q.includes('fire ') ||
+    q.includes('build wealth') || q.includes('grow wealth') ||
+    q.includes('grow my wealth') || q.includes('how wealthy') ||
     (q.includes('how to make') && (q.includes('money') || q.includes('dollar'))) ||
     (q.includes('wealth') && (q.includes('build') || q.includes('grow')))
   ) {
-    const age = ip?.age ?? null;
-    const bracket = ip?.incomeBracket ?? null;
-    const years = yearsToRetirement(age) ?? 15;
-    const monthlyNeeded = monthlyToReach1M(years, 0.07);
-    const incomeMid = parseIncomeBracketMidpoint(bracket);
-    const savingsRatePct = 15;
-    const savingsAt15Pct = incomeMid != null ? Math.round((incomeMid / 12) * (savingsRatePct / 100)) : null;
+    const yearsLeft = yearsTo(age) ?? 33;
+    const targetPMT = monthlyPMT(1_000_000, yearsLeft, 0.07, DEMO_PORTFOLIO);
+    const conservativePMT = Math.round(targetPMT * 0.75);
+    const aggressivePMT = Math.round(targetPMT * 1.55);
+    const yrsConservative = yearsToGoal(1_000_000, conservativePMT, 0.07, DEMO_PORTFOLIO);
+    const yrsTarget = yearsToGoal(1_000_000, targetPMT, 0.07, DEMO_PORTFOLIO);
+    const yrsAggressive = yearsToGoal(1_000_000, aggressivePMT, 0.07, DEMO_PORTFOLIO);
+    const savingsAt15pct = Math.round(monthlyIncome * 0.15);
 
-    let opening = 'Great question. ';
-    if (name) opening = `${name}, ` + opening.toLowerCase();
-    opening += "Hitting $1M is realistic with discipline and time. Here's the math that matters:\n\n";
+    return `${namePrefix}Based on your current portfolio of $${DEMO_PORTFOLIO.toLocaleString()}, here's your real path to $1M.
 
-    let personalBlock = '';
-    if (age != null || bracket != null) {
-      const parts: string[] = [];
-      if (age != null && bracket) {
-        parts.push(`At ${age} with an income in the ${bracket} range`);
-      } else if (age != null) {
-        parts.push(`At ${age}`);
-      } else if (bracket) {
-        parts.push(`With an income in the ${bracket} range`);
-      }
-      if (parts.length) {
-        let line = 'For you: ' + parts.join(', ') + ', ';
-        if (savingsAt15Pct != null) {
-          line += `saving 15% of income would be about $${savingsAt15Pct.toLocaleString()}/month. `;
-        }
-        line += `To reach $1M in ${years} years at a 7% return you'd need to invest about $${monthlyNeeded.toLocaleString()}/month.`;
-        if (savingsAt15Pct != null && monthlyNeeded > savingsAt15Pct) {
-          line += " Consider increasing your savings rate over time or maxing out 401(k) and IRA first—that can close the gap.";
-        }
-        line += '\n\n';
-        personalBlock = line;
-      }
-    }
+📍 Your situation
+At ${age} with ~$${incomeMid.toLocaleString()} income and $${DEMO_PORTFOLIO.toLocaleString()} already invested, your biggest wealth lever right now is not stock-picking — it's how much you invest each month, consistently.
 
-    const genericBlock = `Compound growth: At a 7% annual return (roughly long-term market average), you'd need to invest about $${monthlyNeeded.toLocaleString()}/month for ${years} years to get to ~$1M. The earlier you start, the less you need each month.\n\nWhat actually works: Max out tax-advantaged accounts first (401(k), IRA). Get any employer match—that's free return. Then invest in low-cost index funds or ETFs so you're diversified and fees don't eat your growth. Automate contributions so you're not tempted to time the market.\n\nIn this app: Once your portfolio and goals are connected, I can show you a path tailored to your numbers and risk tolerance. Want to see "Am I on track?" or "Summarize my portfolio" next?`;
+📊 3 paths to $1M
+• Conservative — $${conservativePMT.toLocaleString()}/month → ~${yrsConservative} years
+• Target — $${targetPMT.toLocaleString()}/month → ~${yrsTarget} years
+• Aggressive — $${aggressivePMT.toLocaleString()}/month → ~${yrsAggressive} years
 
-    return opening + personalBlock + genericBlock;
+At 15% savings rate your investable income is ~$${savingsAt15pct.toLocaleString()}/month — which puts you on the ${savingsAt15pct >= aggressivePMT ? 'aggressive' : savingsAt15pct >= targetPMT ? 'target' : 'conservative'} path today.
+
+💡 Key insight
+Your $${DEMO_PORTFOLIO.toLocaleString()} head start already grows to ~$${Math.round(DEMO_PORTFOLIO * Math.pow(1.07, yearsLeft)).toLocaleString()} on its own at 7%. You're not starting from zero — you just need to close the remaining gap with monthly contributions.
+
+Because your portfolio is still in early growth phase, avoiding concentration risk matters more than chasing returns. A single bad bet at this stage costs you years.
+
+✅ Best next step
+Automate your monthly contribution and increase it by 10% every 6 months as income grows. Max employer 401(k) match first — that's an instant 50–100% return before the market does anything.
+
+Try next:
+• "How fast do I get to $1M if I invest $1,000/month?"
+• "Am I too concentrated to hit this goal safely?"
+• "What if I increase contributions 10% every year?"`;
   }
 
-  // ── Am I too concentrated? (quick prompt) ───────────────────────────────────
+  // ── Am I too concentrated? ───────────────────────────────────────────────────
   if (
     q.includes('concentrat') ||
-    q.includes('too much') && (q.includes('one stock') || q.includes('single'))
+    (q.includes('too much') && (q.includes('one stock') || q.includes('single'))) ||
+    q.includes('nvda') || q.includes('nvidia') ||
+    (q.includes('position') && (q.includes('large') || q.includes('big') || q.includes('too')))
   ) {
-    return `Concentration risk is real—putting too much in one stock or sector can wipe out gains in a downturn.
+    const portfolioMinuTop = Math.round(DEMO_PORTFOLIO * (1 - DEMO_TOP_HOLDING_PCT / 100));
+    const topValue = Math.round(DEMO_PORTFOLIO * DEMO_TOP_HOLDING_PCT / 100);
+    const trimTarget = Math.round(DEMO_PORTFOLIO * 0.20); // 20% is the trim target
+    const excessValue = topValue - trimTarget;
 
-Rule of thumb: Many advisors suggest no single position above 10–15% of your portfolio, and no sector above 25–30%. If you’re over that, consider trimming winners and rebalancing into index funds or other sectors.
+    return `${namePrefix}Yes — your ${DEMO_TOP_HOLDING} position is flagged.
 
-In your case: When your portfolio is connected, I can flag your top holdings and show what % each one is. You’ll see something like “AAPL is 22% of your portfolio—above the 15% guideline.” For now, check your Invest tab to see your allocation; we can dig into a rebalance plan next.`;
+📍 Your situation
+${DEMO_TOP_HOLDING} is ~${DEMO_TOP_HOLDING_PCT}% of your $${DEMO_PORTFOLIO.toLocaleString()} portfolio (~$${topValue.toLocaleString()}). The standard threshold is 20–25% for a single position. You're above it.
+
+The rest of your portfolio ($${portfolioMinuTop.toLocaleString()}) is spread across other holdings — which is reasonable, but ${DEMO_TOP_HOLDING}'s outsized weight means a 30% drop in that one stock would cut your total portfolio by ~9%.
+
+📊 3 scenarios
+• Keep it — highest upside if ${DEMO_TOP_HOLDING} continues, but also highest downside risk
+• Trim to 20% — sell ~$${excessValue.toLocaleString()} worth, redeploy into a broad index. Reduces risk without fully exiting
+• Full rebalance — bring all positions under 15%, maximise diversification
+
+💡 Key insight
+At your portfolio size, a concentration hit is harder to recover from than it would be at $500K+. The math of loss recovery works against you: a 40% loss requires a 67% gain just to break even.
+
+Your ${rt.toLowerCase()} risk tolerance and ${hi} horizon suggest the trim-to-20% path is most aligned with your profile.
+
+✅ Best next step
+Trim ${DEMO_TOP_HOLDING} to ~20% of portfolio and redirect the proceeds into a total market ETF (VTI or similar). You keep the upside exposure without betting the portfolio on one name.
+
+Try next:
+• "How do I rebalance without a big tax hit?"
+• "What should I buy with the proceeds?"
+• "How do I reach $1M with my current portfolio?"`;
   }
 
-  // ── Summarize my portfolio (quick prompt) ─────────────────────────────────
+  // ── Summarize my portfolio ───────────────────────────────────────────────────
   if (
-    q.includes('summarize') && q.includes('portfolio') ||
-    q.includes('portfolio') && (q.includes('summary') || q.includes('overview') || q.includes('look like'))
+    (q.includes('summarize') && q.includes('portfolio')) ||
+    (q.includes('portfolio') && (q.includes('summary') || q.includes('overview') || q.includes('look like') || q.includes('how is')))
   ) {
-    return `Here’s how I’d summarize a typical portfolio once it’s connected:
+    const returnPct = 17.7;
+    const returnAmt = Math.round(DEMO_PORTFOLIO * returnPct / 100);
 
-Snapshot: Total value, cost basis, and return (dollars and %). Top 5–10 holdings with symbol, value, and % of portfolio. I’d call out any big concentration (e.g. “Your largest position is X at 18%”).
+    return `${namePrefix}Here's your portfolio snapshot.
 
-Allocation: Rough breakdown—e.g. “About 70% equities, 20% bonds, 10% cash/other.” I’d note if you’re light on diversification (e.g. all tech) or well spread.
+📍 Your situation
+Total value: $${DEMO_PORTFOLIO.toLocaleString()} | Return: +$${returnAmt.toLocaleString()} (+${returnPct}%) since inception
 
-One-line takeaway: Something like “You’re on track for a moderate-risk profile” or “Consider adding international or bonds to reduce volatility.”
+Top holdings:
+• ${DEMO_TOP_HOLDING}: ${DEMO_TOP_HOLDING_PCT}% of portfolio ⚠️ above 25% threshold
+• AAPL: ~18% — within range
+• MSFT: ~14% — within range
+• Remainder: ~30% across other positions
 
-Open the Invest tab to see your live numbers; once you’ve connected your accounts, I can give this summary in the chat with your real data.`;
+💡 Key insight
+Your portfolio is tech-heavy and concentrated. That's worked well in a bull market, but it means your returns are closely tied to one sector's performance. A broad market correction in tech would hit you harder than a diversified portfolio.
+
+The +${returnPct}% return is solid — above the S&P 500 average for the same period. The risk is that it's driven largely by ${DEMO_TOP_HOLDING}'s run, not diversified growth.
+
+📊 3 things to watch
+• Concentration: ${DEMO_TOP_HOLDING} at ${DEMO_TOP_HOLDING_PCT}% is the main flag
+• Sector: ~70% tech exposure — consider adding some defensive positions
+• Cash/bonds: No buffer visible — fine at your age, but worth noting
+
+✅ Best next step
+Address the ${DEMO_TOP_HOLDING} concentration first — that's the highest-priority risk in this portfolio right now.
+
+Try next:
+• "Is my ${DEMO_TOP_HOLDING} position too large?"
+• "How do I add diversification without selling everything?"
+• "Am I on track to retire?"`;
   }
 
-  // ── Budget / saving / spending ─────────────────────────────────────────────
-  if (q.includes('budget') || q.includes('50/30/20') || (q.includes('saving') && q.includes('how')) || q.includes('spend')) {
-    return `The 50/30/20 rule is a solid starting point: 50% needs (rent, utilities, groceries), 30% wants (dining, travel, subscriptions), 20% savings and debt payoff.
-
-To make it real: Track spending for one month—every coffee and subscription. Most people are surprised where the money goes. Then set one small win: e.g. “I’ll save $200/month by cutting two subscriptions and cooking two more nights.” Automate that $200 into a savings or investment account so you don’t have to decide each month.
-
-If you have high-interest debt: Pay that down before chasing big returns. Credit card interest usually beats market returns in the wrong direction. Once you’re connected here, I can factor in your cash flow and suggest a plan that fits your numbers.`;
-  }
-
-  // ── Investment / portfolio / diversify ────────────────────────────────────
+  // ── Budget / saving / spending ───────────────────────────────────────────────
   if (
-    q.includes('invest') ||
-    q.includes('portfolio') ||
-    q.includes('diversif')
+    q.includes('budget') || q.includes('50/30/20') ||
+    q.includes('spend') || q.includes('saving') ||
+    q.includes('how much should i save') || q.includes('build a budget')
   ) {
-    return `Diversification means not putting all your eggs in one basket—across stocks, sectors, and asset classes (e.g. some bonds, some international). That smooths out volatility and can improve risk‑adjusted returns over time.
+    const needs = Math.round(monthlyIncome * 0.50);
+    const wants = Math.round(monthlyIncome * 0.25);
+    const savings = Math.round(monthlyIncome * 0.25);
+    const investTarget = Math.round(monthlyIncome * 0.15);
+    const emergencyTarget = Math.round(monthlyIncome * 3);
 
-Practical steps: Use low‑cost index funds or ETFs for the core of your portfolio (e.g. S&P 500, total market, or a target-date fund). Add bonds or cash based on your time horizon and risk tolerance. Rebalance once a year or when a position grows beyond your target (e.g. no single stock above 10–15%).
+    return `${namePrefix}Here's a budget built around your actual numbers.
 
-In this app: Your Invest tab shows your current allocation. Ask “Am I too concentrated?” to get a quick check, or connect your accounts so I can give advice tailored to your actual holdings.`;
+📍 Your situation
+Estimated take-home on $${incomeMid.toLocaleString()}/year: ~$${monthlyIncome.toLocaleString()}/month
+
+📊 Recommended split
+• Needs (rent, food, transport): $${needs.toLocaleString()}/month (50%)
+• Wants (dining, subscriptions, fun): $${wants.toLocaleString()}/month (25%)
+• Savings + investing: $${savings.toLocaleString()}/month (25%)
+  ↳ Emergency fund until 3 months covered (~$${emergencyTarget.toLocaleString()} target)
+  ↳ Then investing: ~$${investTarget.toLocaleString()}/month into your portfolio
+
+💡 Key insight
+The biggest leak in most budgets at your income level isn't big purchases — it's subscriptions, delivery apps, and lifestyle creep. A typical audit finds $200–$400/month in painless cuts.
+
+At $${investTarget.toLocaleString()}/month invested, you'd reach $1M in roughly ${yearsToGoal(1_000_000, investTarget, 0.07, DEMO_PORTFOLIO)} years. Bumping that to $${Math.round(investTarget * 1.3).toLocaleString()}/month shaves off several years.
+
+✅ Best next step
+Automate $${investTarget.toLocaleString()}/month into your investment account so the decision is already made. Then audit subscriptions this week — most people find at least $100/month they don't notice.
+
+Try next:
+• "How do I reach $1M on this budget?"
+• "Should I pay off debt or invest first?"
+• "What's the right emergency fund for me?"`;
   }
 
-  // ── Stock / market / trading ──────────────────────────────────────────────
-  if (q.includes('stock') || q.includes('market') || q.includes('trading')) {
-    return `Stocks can build long‑term wealth, but they come with volatility. A few principles that hold up:
+  // ── Retirement / on track ────────────────────────────────────────────────────
+  if (
+    q.includes('retirement') || q.includes('retire') ||
+    q.includes('401k') || q.includes('401(k)') || q.includes('ira') ||
+    q.includes('on track') || q.includes('when can i')
+  ) {
+    const yearsLeft = yearsTo(age) ?? 33;
+    const retireAge = (age ?? 32) + yearsLeft;
+    const currentPMT = Math.round(monthlyIncome * 0.10); // assume 10% savings rate baseline
+    const fvAt10pct = futureValue(currentPMT, yearsLeft, 0.07, DEMO_PORTFOLIO);
+    const fvAt15pct = futureValue(Math.round(monthlyIncome * 0.15), yearsLeft, 0.07, DEMO_PORTFOLIO);
+    const fvAt20pct = futureValue(Math.round(monthlyIncome * 0.20), yearsLeft, 0.07, DEMO_PORTFOLIO);
+    const withdrawalAt4pct = (n: number) => Math.round(n * 0.04 / 12);
 
-Time in the market: Trying to time entries and exits usually hurts returns. Staying invested in a diversified portfolio has historically worked better than jumping in and out.
+    return `${namePrefix}Here's your retirement picture at ${age}.
 
-Dollar-cost averaging: Investing a fixed amount on a schedule (e.g. every paycheck) smooths out the impact of price swings and can reduce the stress of “is now a good time?”
+📍 Your situation
+$${DEMO_PORTFOLIO.toLocaleString()} invested today, targeting retirement at ${retireAge}. That's ${yearsLeft} years of compounding.
 
-Risk: Only invest money you don’t need for at least 5–10 years. Keep an emergency fund in cash or something stable first. If you’d like, I can walk through “How much should I keep in cash?” or “Summarize my portfolio” using your data here.`;
+📊 3 retirement scenarios (at 7% growth)
+• Save 10%/month (~$${currentPMT.toLocaleString()}) → retire with ~$${(fvAt10pct / 1000).toFixed(0)}K | ~$${withdrawalAt4pct(fvAt10pct).toLocaleString()}/month income
+• Save 15%/month (~$${Math.round(monthlyIncome * 0.15).toLocaleString()}) → ~$${(fvAt15pct / 1000).toFixed(0)}K | ~$${withdrawalAt4pct(fvAt15pct).toLocaleString()}/month income
+• Save 20%/month (~$${Math.round(monthlyIncome * 0.20).toLocaleString()}) → ~$${(fvAt20pct / 1000).toFixed(0)}K | ~$${withdrawalAt4pct(fvAt20pct).toLocaleString()}/month income
+
+💡 Key insight
+The jump from 10% to 15% savings rate adds ~$${Math.round((fvAt15pct - fvAt10pct) / 1000)}K to your retirement — that's one of the highest-leverage moves available to you. It costs less than you think if you automate it before it hits your checking account.
+
+Your ${rt.toLowerCase()} risk tolerance is appropriate for your timeline. A 70/30 stock-bond split makes sense as you approach 50; for now, staying growth-oriented is the right call.
+
+✅ Best next step
+Increase your savings rate by just 2% this month. You won't feel it — but over ${yearsLeft} years it adds significantly to your final number. Max employer match first if you haven't already.
+
+Try next:
+• "How do I reach $1M before retirement?"
+• "Roth vs Traditional IRA — which is right for me?"
+• "How does my ${DEMO_TOP_HOLDING} position affect my retirement plan?"`;
   }
 
-  // ── Retirement / 401k / IRA ──────────────────────────────────────────────
-  if (q.includes('retirement') || q.includes('401k') || q.includes('401(k)') || q.includes('ira')) {
-    return `Retirement savings work best when you start early and use tax‑advantaged accounts.
+  // ── Debt ─────────────────────────────────────────────────────────────────────
+  if (q.includes('debt') || q.includes('pay off') || q.includes('loan') || q.includes('credit card') || q.includes('interest rate')) {
+    return `${namePrefix}Here's how to think about debt vs investing with your numbers.
 
-Order of operations: Contribute enough to your 401(k) to get the full employer match—that’s an instant return. Then max out an IRA (Roth if you expect to be in a higher tax bracket later). After that, bump 401(k) contributions. Aim for 15% of income if you can; even 10% plus a match can get you far.
+📍 Your situation
+The decision is simple: compare your debt's interest rate to your expected investment return (~7% for a diversified portfolio).
 
-Roth vs traditional: Roth = pay tax now, tax‑free in retirement. Traditional = deduction now, tax later. Roth often makes sense for younger or lower‑income savers; traditional can help if you’re in a high bracket now.
+📊 3 scenarios
+• High-interest debt (>8% APR — credit cards, personal loans): Pay these off first. It's a guaranteed 20%+ return — nothing in the market beats that on a risk-adjusted basis.
+• Mid-rate debt (5–8% APR — student loans, car loans): Split: pay minimum + invest the rest. The math is roughly a wash, but investing builds the habit.
+• Low-rate debt (<5% APR — mortgages, some student loans): Invest aggressively. Your expected market return likely outpaces the debt cost over time.
 
-In the app: Once your accounts are linked, I can reference your current balance and suggest whether you’re on track for your target age and lifestyle.`;
+💡 Key insight
+Paying off a 22% APR credit card is the same as earning 22% guaranteed on that money — better than any investment available. The psychological win of being debt-free also removes a major behavioral risk (people make worse investment decisions when they're stressed about debt).
+
+✅ Best next step
+List every debt with its interest rate. Anything above 8% gets paid down aggressively before you increase investment contributions.
+
+Try next:
+• "How do I build a budget to pay off debt faster?"
+• "Should I invest while paying off student loans?"
+• "How do I reach $1M even with current debt?"`;
   }
 
-  // ── ETF / index fund ──────────────────────────────────────────────────────
-  if (q.includes('etf') || q.includes('index fund')) {
-    return `ETFs (exchange‑traded funds) and index funds are baskets of securities—often designed to track a market index like the S&P 500. You get broad diversification in one ticker, usually with low fees.
-
-Why they're popular: Low cost, transparent, and you don’t have to pick individual stocks. They’re a core building block for most long‑term portfolios. The main choice is which index (U.S. total market, international, bonds) and whether you use a mutual fund or an ETF (ETFs trade like stocks; index mutual funds often have minimums).
-
-In RichesReach: You can see how your portfolio is allocated in the Invest tab. If you’re heavy in one sector or stock, we can talk about adding an index fund to balance it.`;
-  }
-
-  // ── Credit / score / utilization ───────────────────────────────────────────
+  // ── Credit score ─────────────────────────────────────────────────────────────
   if (q.includes('credit') || q.includes('score') || q.includes('utilization')) {
-    return `Your credit score affects borrowing costs and approval for loans and cards. Utilization—how much of your total limit you use—is a big lever; many advisors suggest keeping it under 30%, and under 10% is even better for scoring.
+    const targetUtil = 9;
+    const currentUtil = DEMO_CREDIT_UTIL;
 
-Quick wins: Pay down revolving balances, avoid closing old cards (they help your history and total limit), and set up autopay so you never miss a due date. Errors on your report can drag scores down, so check your reports once a year and dispute any mistakes.
+    return `${namePrefix}Here's your credit picture.
 
-In this app: When your credit data is connected, I can tell you your current score and utilization and suggest steps that fit your situation.`;
+📍 Your situation
+Credit score: ${DEMO_CREDIT_SCORE} (Good range — qualifies for most loans, not yet at best rates)
+Utilization: ${currentUtil}% — this is actually solid (under 30% is good, under 10% is optimal)
+
+📊 3 ways to improve
+• Get to 750+ → reduces mortgage/auto loan rates by 0.5–1.5%, worth tens of thousands over a loan term
+• Drop utilization to ${targetUtil}% → fastest single lever to boost score 10–30 points
+• Age your accounts → don't close old cards; length of credit history matters
+
+💡 Key insight
+Going from ${DEMO_CREDIT_SCORE} to 760+ is achievable in 6–12 months with no new debt — just utilization management and on-time payments. The financial payoff on a future mortgage is significant: on a $400K loan, a 0.5% rate difference saves ~$40K over 30 years.
+
+✅ Best next step
+Set every card to autopay the full balance monthly. Eliminates the biggest risk (missed payments) with zero effort. Then work on getting utilization under 10% on each card individually, not just in total.
+
+Try next:
+• "How does my credit score affect my investment strategy?"
+• "Should I get a new card to improve my score?"
+• "How do I use credit to build wealth faster?"`;
   }
 
-  // ── Risk / safe / conservative ────────────────────────────────────────────
-  if (q.includes('risk') || q.includes('safe') || q.includes('conservative')) {
-    return `“Safe” usually means lower volatility and less chance of big short‑term losses—think cash, short‑term bonds, or diversified bond funds. The tradeoff is lower long‑term return potential than stocks.
+  // ── ETF / index fund ─────────────────────────────────────────────────────────
+  if (q.includes('etf') || q.includes('index fund') || q.includes('vti') || q.includes('spy') || q.includes('voo')) {
+    return `${namePrefix}Here's the case for index funds with your situation in mind.
 
-A balanced approach: Many people hold a mix: enough in cash or stable assets for emergencies and near‑term goals, and the rest in stocks or stock funds for growth. The right split depends on your time horizon and how much volatility you can stomach.
+📍 Your situation
+With a $${DEMO_PORTFOLIO.toLocaleString()} portfolio, a ${rt.toLowerCase()} risk tolerance and ${hi} horizon, low-cost index funds should be the foundation — not the whole portfolio, but the core.
 
-In the app: Your portfolio view and risk settings help you see how much you have in stocks vs bonds vs cash. I can walk through “Am I too concentrated?” or “Summarize my portfolio” so you know where you stand.`;
+📊 3 common approaches
+• Total market (VTI/FSKAX) → broadest diversification, lowest cost (~0.03% expense ratio), set-and-forget
+• S&P 500 (VOO/SPY) → large-cap focused, slightly less diversified but very similar long-term return
+• 3-fund portfolio (US stocks + international + bonds) → adds global diversification and a bond buffer as you age
+
+💡 Key insight
+The fee difference between a 0.03% index fund and a 1% actively managed fund sounds small. On $${DEMO_PORTFOLIO.toLocaleString()} over 30 years at 7% growth, that 1% difference costs ~$${Math.round(futureValue(0, 30, 0.07, DEMO_PORTFOLIO) * (1 - Math.pow(0.9993/1.0093, 30)) / 1000)}K in lost compounding. Fees are the most predictable drag on returns.
+
+✅ Best next step
+Use index funds as your core (70–80% of portfolio), then your individual stock picks as satellite positions. This gives you diversified base growth while keeping room for conviction bets like ${DEMO_TOP_HOLDING}.
+
+Try next:
+• "Am I too concentrated in individual stocks?"
+• "How do I rebalance into index funds without selling everything at once?"
+• "What's the right mix for my risk tolerance?"`;
   }
 
-  // ── Generic / catch‑all — use their numbers, not a generic intro ──────────
-  const catchAllAge = ip?.age ?? null;
-  const catchAllBracket = ip?.incomeBracket ?? null;
-  const catchAllYears = yearsToRetirement(catchAllAge) ?? 15;
-  const catchAllMonthly = monthlyToReach1M(catchAllYears, 0.07);
-  const catchAllIncomeMid = parseIncomeBracketMidpoint(catchAllBracket);
-  const catchAllSavings = catchAllIncomeMid != null ? Math.round((catchAllIncomeMid / 12) * 0.15) : null;
+  // ── Risk / safe ──────────────────────────────────────────────────────────────
+  if (q.includes('risk') || q.includes('safe') || q.includes('conservative') || q.includes('volatile')) {
+    return `${namePrefix}Here's how to think about risk with your actual profile.
 
-  let catchAllOpening = name ? `${name}, happy to help. ` : `Happy to help. `;
+📍 Your situation
+Risk tolerance: ${rt} | Horizon: ${hi} | Age: ${age}
+At ${age} with a ${hi} horizon, you have time to ride out volatility — which means you can afford more risk than someone at 55.
 
-  if (catchAllAge != null && catchAllBracket) {
-    catchAllOpening += `At ${catchAllAge} with an income in the ${catchAllBracket} range, here's your quick picture:\n\n`;
-    catchAllOpening += `• To reach $1M in ${catchAllYears} years at 7% growth: ~$${catchAllMonthly.toLocaleString()}/month\n`;
-    if (catchAllSavings != null) {
-      catchAllOpening += `• Saving 15% of your income: ~$${catchAllSavings.toLocaleString()}/month\n`;
-    }
-    catchAllOpening += `\nWhat specifically do you want to tackle? `;
+📊 3 risk levels and what they mean for you
+• Conservative (40% stocks / 60% bonds) → lower volatility, lower growth. Appropriate if your timeline is <5 years or you sleep better this way
+• Moderate (70/30) → balanced. Grows meaningfully, manageable drawdowns. Matches your stated profile
+• Aggressive (90/10 or 100% stocks) → maximum growth potential, but 30–40% drawdowns are normal. Fine at your age if you won't panic-sell
+
+💡 Key insight
+The biggest risk for most investors isn't market volatility — it's their own reaction to it. Selling during a 30% drawdown locks in the loss and misses the recovery. A portfolio you'll actually hold through a down market is better than one optimised on paper but abandoned in practice.
+
+Your ${DEMO_TOP_HOLDING} concentration at ${DEMO_TOP_HOLDING_PCT}% is currently your biggest real-world risk — more so than your asset allocation.
+
+✅ Best next step
+Make sure your asset allocation matches the risk level you'll actually hold through a -30% year, not the one that looks best on a spreadsheet. Then address the concentration issue.
+
+Try next:
+• "Is my ${DEMO_TOP_HOLDING} position too risky?"
+• "How do I rebalance to reduce risk?"
+• "What should my portfolio look like at my age?"`;
   }
 
-  return catchAllOpening + `Try: "Am I too concentrated?", "Summarize my portfolio", "How do I budget better?", or "When can I retire?" — I'll give you a specific answer based on your situation.`;
+  // ── Generic catch-all — still diagnostic, still uses their numbers ────────────
+  const yearsLeft = yearsTo(age) ?? 33;
+  const targetPMT = monthlyPMT(1_000_000, yearsLeft, 0.07, DEMO_PORTFOLIO);
+
+  return `${namePrefix}Here's your quick financial snapshot.
+
+📍 Your situation
+Age: ${age} | Income: ${bracket} | Portfolio: $${DEMO_PORTFOLIO.toLocaleString()} | Risk: ${rt}
+
+To reach $1M by ${(age ?? 32) + yearsLeft}: ~$${targetPMT.toLocaleString()}/month at 7% growth
+Your ${DEMO_TOP_HOLDING} position (${DEMO_TOP_HOLDING_PCT}%) is the main flag in your current portfolio.
+
+What do you want to tackle?
+• "How do I become a millionaire?" — get your personalised path
+• "Is my ${DEMO_TOP_HOLDING} position too large?" — concentration risk analysis
+• "Am I on track to retire?" — retirement projection with your numbers
+• "Help me build a budget" — spending plan based on your income`;
 }
