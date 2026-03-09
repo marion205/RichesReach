@@ -17,7 +17,7 @@ import { GET_MY_PORTFOLIOS } from '../../../portfolioQueries';
 import { usePortfolioPriceFetch } from '../../../hooks/usePortfolioPriceFetch';
 import MilestonesTimeline, { Milestone } from '../../../components/MilestonesTimeline';
 import MilestoneUnlockOverlay from '../../../components/MilestoneUnlockOverlay';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import PortfolioHoldings, { Holding } from '../components/PortfolioHoldings';
 import { getMockMyPortfolios } from '../../../services/mockPortfolioData';
 import ConstellationOrb from '../components/ConstellationOrb';
@@ -89,9 +89,29 @@ interface StablePortfolioData {
   }>;
 }
 
+export type OneMillionPlanParams = {
+  target: number;
+  currentInvested: number;
+  monthlyContribution: number;
+  yearsToReach: number;
+  targetAge: number;
+};
+
+function formatGoalTarget(amount: number): string {
+  if (amount >= 1_000_000) return `$${(amount / 1_000_000).toFixed(amount % 1_000_000 === 0 ? 0 : 1)}M`;
+  if (amount >= 1_000) return `$${(amount / 1_000).toFixed(amount % 1_000 === 0 ? 0 : 1)}K`;
+  return `$${amount.toLocaleString()}`;
+}
+
+type PortfolioRouteParams = { oneMillionPlan?: OneMillionPlanParams };
+
 const PortfolioScreen: React.FC<PortfolioScreenProps> = React.memo(({ navigateTo }) => {
 const insets = useSafeAreaInsets();
   const navigation = useNavigation();
+  const route = useRoute();
+  const oneMillionPlan = (route.params as PortfolioRouteParams | undefined)?.oneMillionPlan ?? null;
+  const [dismissedPlan, setDismissedPlan] = useState(false);
+  const showPlanCard = oneMillionPlan != null && !dismissedPlan;
   
   // ALL HOOKS MUST BE AT THE TOP - before any conditional returns
   const [refreshing, setRefreshing] = useState(false);
@@ -635,6 +655,35 @@ return (
       }
       showsVerticalScrollIndicator={false}
     >
+    {/* Your goal plan card — shown when arriving from Goal Plan "Start this plan" */}
+    {showPlanCard && oneMillionPlan && (
+      <View style={styles.oneMillionPlanCard}>
+        <View style={styles.oneMillionPlanCardHeader}>
+          <Text style={styles.oneMillionPlanCardTitle}>Your {formatGoalTarget(oneMillionPlan.target)} plan</Text>
+          <TouchableOpacity onPress={() => setDismissedPlan(true)} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+            <Icon name="x" size={20} color="#8E8E93" />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.oneMillionPlanCardRow}>
+          Target: {formatGoalTarget(oneMillionPlan.target)} · ${oneMillionPlan.monthlyContribution.toLocaleString()}/mo · {oneMillionPlan.yearsToReach} years
+        </Text>
+        <Text style={styles.oneMillionPlanCardSubtext}>
+          Current: ${oneMillionPlan.currentInvested.toLocaleString()} invested · Reach by age {oneMillionPlan.targetAge}
+        </Text>
+        <TouchableOpacity
+          style={styles.oneMillionPlanCardEdit}
+          onPress={() => {
+            setDismissedPlan(true);
+            const root = (navigation as any).getParent?.();
+            if (root) root.navigate('Home', { screen: 'goal-plan' });
+            else (navigation as any).navigate('goal-plan');
+          }}
+        >
+          <Text style={styles.oneMillionPlanCardEditText}>Edit plan</Text>
+          <Icon name="chevron-right" size={16} color="#00cc99" />
+        </TouchableOpacity>
+      </View>
+    )}
     {/* Portfolio Overview - Constellation Orb or Shared Orb */}
     {/* Show SharedOrb if user has family group, otherwise ConstellationOrb */}
 {snapshot ? (
@@ -1246,6 +1295,47 @@ container: {
 flex: 1,
 backgroundColor: '#f8f9fa',
 paddingTop: 0,
+},
+oneMillionPlanCard: {
+  marginHorizontal: 20,
+  marginTop: 16,
+  marginBottom: 8,
+  padding: 16,
+  backgroundColor: '#E8FBF7',
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: '#00cc99',
+},
+oneMillionPlanCardHeader: {
+  flexDirection: 'row',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: 8,
+},
+oneMillionPlanCardTitle: {
+  fontSize: 17,
+  fontWeight: '700',
+  color: '#0D9488',
+},
+oneMillionPlanCardRow: {
+  fontSize: 15,
+  color: '#1C1C1E',
+  marginBottom: 4,
+},
+oneMillionPlanCardSubtext: {
+  fontSize: 13,
+  color: '#6B7280',
+  marginBottom: 12,
+},
+oneMillionPlanCardEdit: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 4,
+},
+oneMillionPlanCardEditText: {
+  fontSize: 15,
+  fontWeight: '600',
+  color: '#00cc99',
 },
 header: {
 flexDirection: 'row',

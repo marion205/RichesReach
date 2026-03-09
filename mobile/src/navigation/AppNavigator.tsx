@@ -105,6 +105,7 @@ import StockScreen from '../features/stocks/screens/StockScreen';
 import StockScreenWrapper from './StockScreenWrapper';
 import StockDetailScreen from '../features/stocks/screens/StockDetailScreen';
 import PortfolioScreen from '../features/portfolio/screens/PortfolioScreen';
+import GoalPlanScreen from '../features/portfolio/screens/GoalPlanScreen';
 import PortfolioManagementScreen from '../features/portfolio/screens/PortfolioManagementScreen';
 import SocialTrading from '../components/SocialTrading';
 import FiresideRoomsScreen from '../features/community/screens/FiresideRoomsScreen';
@@ -235,6 +236,30 @@ function OnboardingScreenWrapper(props: any) {
   );
 }
 
+function GoalPlanScreenWrapper(props: any) {
+  return (
+    <GoalPlanScreen
+      navigateTo={(screen, params) => {
+        try {
+          // "Start this plan" goes to Portfolio, which lives in the Invest tab
+          if (screen === 'portfolio') {
+            const root = props.navigation.getParent?.();
+            if (root) {
+              root.navigate('Invest' as never, { screen: 'portfolio', params } as never);
+            } else {
+              props.navigation.navigate('Invest' as never, { screen: 'portfolio', params } as never);
+            }
+            return;
+          }
+          props.navigation.navigate(screen as never, params as never);
+        } catch (e) {
+          logger.error('GoalPlanScreen navigate error:', e);
+        }
+      }}
+    />
+  );
+}
+
 function HomeStack() {
   const StackNavigator = Stack.Navigator as any;
   return (
@@ -266,6 +291,7 @@ function HomeStack() {
       <Stack.Screen name="ai-trading-coach" component={AITradingCoachScreen} />
       <Stack.Screen name="daily-voice-digest" component={DailyVoiceDigestScreen} />
       <Stack.Screen name="daily-brief" component={require('../features/learning/screens/DailyBriefScreen').default} options={{ headerShown: false }} />
+      <Stack.Screen name="goal-plan" component={GoalPlanScreenWrapper} options={{ headerShown: true, title: 'Your $1M Plan' }} />
       <Stack.Screen name="streak-progress" component={require('../features/learning/screens/StreakProgressScreen').default} options={{ headerShown: false }} />
       <Stack.Screen name="lesson-library" component={require('../features/learning/screens/LessonLibraryScreen').default} options={{ headerShown: false }} />
       <Stack.Screen name="notification-center" component={NotificationCenterScreen} />

@@ -16,6 +16,7 @@ export type ScreenName =
   | 'crypto'
   | 'ai-portfolio'
   | 'portfolio'
+  | 'goal-plan'
   | 'portfolio-management'
   | 'premium-analytics'
   | 'subscription'

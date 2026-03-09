@@ -32,6 +32,7 @@ import AccountManagementScreen from '../../features/user/screens/AccountManageme
 import StockScreen from '../../features/stocks/screens/StockScreen';
 import CryptoScreen from '../../navigation/CryptoScreen';
 import PortfolioScreen from '../../features/portfolio/screens/PortfolioScreen';
+import GoalPlanScreen from '../../features/portfolio/screens/GoalPlanScreen';
 import PremiumAnalyticsScreen from '../../navigation/PremiumAnalyticsScreen';
 import SubscriptionScreen from '../../features/user/screens/SubscriptionScreen';
 import LearningPathsScreen from '../../features/learning/screens/LearningPathsScreen';
@@ -198,6 +199,9 @@ export function MainScreenRenderer({
 
     case 'portfolio':
       return <PortfolioScreen navigateTo={navigateTo} />;
+
+    case 'goal-plan':
+      return <GoalPlanScreen navigateTo={navigateTo} />;
 
     case 'portfolio-management':
       return (

@@ -47,6 +47,7 @@ const TopHeader: React.FC<TopHeaderProps> = ({
       case 'ai-portfolio': return 'AI Portfolio';
       case 'trading': return 'Trading';
       case 'portfolio': return 'Portfolio';
+      case 'goal-plan': return 'Your $1M Plan';
       case 'social': return 'Community';
       case 'tutor': return 'Learn';
       case 'ai-options': return 'AI Options';

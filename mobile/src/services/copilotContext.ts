@@ -130,3 +130,27 @@ export function serializeCopilotContextForPrompt(ctx: CopilotContext): string {
   if (parts.length === 0) return 'No portfolio, credit, or private markets data available.';
   return parts.join(' ');
 }
+
+/**
+ * Serialize user profile for the assistant prompt so the backend can personalize
+ * answers (e.g. "how to make 1 million" using age, income bracket, name).
+ */
+export function serializeProfileForPrompt(me: {
+  name?: string | null;
+  incomeProfile?: {
+    age?: number | null;
+    incomeBracket?: string | null;
+    riskTolerance?: string | null;
+    investmentHorizon?: string | null;
+  } | null;
+}): string {
+  const ip = me?.incomeProfile;
+  if (!me?.name && !ip) return '';
+  const parts: string[] = ['User profile:'];
+  if (me?.name) parts.push(`name ${me.name}`);
+  if (ip?.age != null) parts.push(`age ${ip.age}`);
+  if (ip?.incomeBracket) parts.push(`income bracket ${ip.incomeBracket}`);
+  if (ip?.riskTolerance) parts.push(`risk tolerance ${ip.riskTolerance}`);
+  if (ip?.investmentHorizon) parts.push(`investment horizon ${ip.investmentHorizon}`);
+  return parts.join(', ') + '.';
+}

@@ -279,7 +279,9 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
   /* ===================== Action card helpers ===================== */
   function detectActionCard(text: string): { label: string; screen: string } | null {
     const t = text.toLowerCase();
-    if (/(million|millionaire|retire|on track|financial goal|path to|build wealth|get rich)/.test(t))
+    if (/(million|millionaire|1m|path to \$1m|path to 1m)/.test(t))
+      return { label: 'Set your $1M plan →', screen: 'goal-plan' };
+    if (/(retire|on track|financial goal|build wealth|get rich)/.test(t))
       return { label: 'Set a goal →', screen: 'portfolio' };
     if (/(concentration|overweight|too large|single stock|diversif)/.test(t))
       return { label: 'Review portfolio →', screen: 'portfolio' };

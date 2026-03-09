@@ -62,6 +62,7 @@ import PriceChartScreen from './features/stocks/screens/PriceChartScreen';
 // StockDetailScreen, AIPortfolioScreen, PortfolioManagementScreen moved to lazy imports below
 import SocialScreen from './features/social/screens/SocialScreen';
 import PortfolioScreen from './features/portfolio/screens/PortfolioScreen';
+import GoalPlanScreen from './features/portfolio/screens/GoalPlanScreen';
 import PremiumAnalyticsScreen from './navigation/PremiumAnalyticsScreen';
 import SubscriptionScreen from './features/user/screens/SubscriptionScreen';
 import LearningPathsScreen from './features/learning/screens/LearningPathsScreen';
@@ -712,6 +713,7 @@ logger.log('🔍 renderScreen called:', { currentScreen, isLoggedIn, isLoading, 
     'ml-training',
     'strategy-blend-builder',
     'raha-auto-trading-settings',
+    'goal-plan', // Your $1M Plan — from Ask CTA; must render here so navigateTo('goal-plan') shows GoalPlanScreen
   ];
   
   if (isLoggedIn && hasCompletedOnboarding && !isShellScreen && !screensThatNeedDirectRendering.includes(currentScreen)) {
@@ -756,6 +758,8 @@ return (
 );
 case 'portfolio':
 return <PortfolioScreen navigateTo={navigateTo} />;
+case 'goal-plan':
+return <GoalPlanScreen navigateTo={navigateTo} />;
 case 'portfolio-management':
 return (
   <Suspense fallback={<ScreenLoader />}>
