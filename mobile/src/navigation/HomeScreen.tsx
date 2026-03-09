@@ -21,7 +21,8 @@ import RealTimePortfolioService, { PortfolioMetrics } from '../features/portfoli
 import webSocketService, { PortfolioUpdate } from '../services/WebSocketService';
 import UserProfileService, { ExtendedUserProfile } from '../features/user/services/UserProfileService';
 import { assistantQuery } from '../services/aiClient';
-import { getCopilotContext, serializeCopilotContextForPrompt } from '../services/copilotContext';
+import { getCopilotContext, serializeCopilotContextForPrompt, serializeProfileForPrompt } from '../services/copilotContext';
+import { getDemoAskResponse } from '../services/demoAskResponses';
 import { usePortfolioHistory, setPortfolioHistory } from '../shared/portfolioHistory';
 import { useRAHASignals } from '../features/raha/hooks/useRAHASignals';
 
@@ -219,45 +220,89 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
       }
     }
   `;
+
+  const GET_USER_PROFILE = gql`
+    query GetUserProfile {
+      me {
+        id
+        name
+        incomeProfile {
+          age
+          incomeBracket
+          investmentGoals
+          riskTolerance
+          investmentHorizon
+        }
+      }
+    }
+  `;
   
   /* ===================== Types ===================== */
   interface ChatMsg {
     id: string;
     role: 'user' | 'assistant';
     content: string;
+    actionCard?: { label: string; screen: string } | null;
   }
   
-  const QUICK_PROMPTS = [
+  // In demo mode we surface chips that show off personalisation with Alex's real numbers.
+  // In live mode we show the same personalised set when portfolio data is available,
+  // falling back to the generic educational list otherwise.
+  const DEMO_PORTFOLIO_VALUE = 14303;
+  const DEMO_TOP_HOLDING = 'NVDA';
+  const DEMO_TOP_HOLDING_PCT = 38;
+
+  const QUICK_PROMPTS_DEMO = [
+    'How do I become a millionaire?',
+    `Is my ${DEMO_TOP_HOLDING} position too large?`,
+    'Am I on track to retire?',
+    'Help me build a budget',
+  ] as const;
+
+  const QUICK_PROMPTS_GENERIC = [
     'Am I too concentrated?',
     'Summarize my portfolio',
+    'How do I become a millionaire?',
+    'Am I on track to retire?',
+    'Help me build a budget',
     'What is an ETF?',
     'Roth vs Traditional IRA',
     'Explain 50/30/20 budgeting',
     'How do index funds work?',
-    'What is an expense ratio?',
-    'Diversification basics',
     'Dollar-cost averaging',
-    'How to analyze stocks?',
-    'What is market cap?',
     'Emergency fund basics',
     'Credit score importance',
-    'Compound interest explained',
-    'Options trading basics',
-    'How to trade options',
-    'Trading fundamentals',
   ] as const;
+
+  const QUICK_PROMPTS = IS_DEMO ? QUICK_PROMPTS_DEMO : QUICK_PROMPTS_GENERIC;
   
+  /* ===================== Action card helpers ===================== */
+  function detectActionCard(text: string): { label: string; screen: string } | null {
+    const t = text.toLowerCase();
+    if (/(million|millionaire|retire|on track|financial goal|path to|build wealth|get rich)/.test(t))
+      return { label: 'Set a goal →', screen: 'portfolio' };
+    if (/(concentration|overweight|too large|single stock|diversif)/.test(t))
+      return { label: 'Review portfolio →', screen: 'portfolio' };
+    if (/(budget|spending|spend|50.30.20)/.test(t))
+      return { label: 'Open Budgeting →', screen: 'budgeting' };
+    if (/(invest|contribute|add money|index fund|etf)/.test(t))
+      return { label: 'Go to Invest →', screen: 'ai-portfolio' };
+    return null;
+  }
+
   /* ===================== Chat Panel ===================== */
   const ChatPanel = memo(function ChatPanel({
     open,
     onClose,
     generateAIResponse,
     contextHint,
+    onNavigate,
   }: {
     open: boolean;
     onClose: () => void;
     generateAIResponse: (q: string) => Promise<string>;
     contextHint?: string | null;
+    onNavigate?: (screen: string) => void;
   }) {
     const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
     const [chatInput, setChatInput] = useState('');
@@ -331,7 +376,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
       setSending(true);
       try {
         const text = await generateAIResponse(prompt);
-        append({ id: String(Date.now() + 1), role: 'assistant', content: text });
+        append({ id: String(Date.now() + 1), role: 'assistant', content: text, actionCard: detectActionCard(text) });
       } catch {
         append({
           id: String(Date.now() + 1),
@@ -342,7 +387,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
         setSending(false);
       }
     }, [append, generateAIResponse]);
-  
+
     const send = useCallback(async () => {
       const trimmed = chatInput.trim();
       if (!trimmed || sending) return;
@@ -352,7 +397,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
       setSending(true);
       try {
         const text = await generateAIResponse(trimmed);
-        append({ id: String(Date.now() + 1), role: 'assistant', content: text });
+        append({ id: String(Date.now() + 1), role: 'assistant', content: text, actionCard: detectActionCard(text) });
       } catch {
         append({
           id: String(Date.now() + 1),
@@ -408,16 +453,27 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
           data={chatMessages}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <View style={[
-              styles.chatMessage,
-              item.role === 'user' ? styles.userMessage : styles.assistantMessage,
-            ]}>
-              <Text style={[
-                styles.chatMessageText,
-                item.role === 'user' ? styles.userMessageText : styles.assistantMessageText,
+            <View>
+              <View style={[
+                styles.chatMessage,
+                item.role === 'user' ? styles.userMessage : styles.assistantMessage,
               ]}>
-                {item.content}
-              </Text>
+                <Text style={[
+                  styles.chatMessageText,
+                  item.role === 'user' ? styles.userMessageText : styles.assistantMessageText,
+                ]}>
+                  {item.content}
+                </Text>
+              </View>
+              {item.role === 'assistant' && item.actionCard && (
+                <TouchableOpacity
+                  style={styles.actionCardBtn}
+                  onPress={() => onNavigate?.(item.actionCard!.screen)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.actionCardBtnText}>{item.actionCard.label}</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
           style={styles.chatMessages}
@@ -490,6 +546,11 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
       errorPolicy: 'ignore',
       fetchPolicy: 'cache-first',
       notifyOnNetworkStatusChange: false,
+    });
+
+    const { data: userProfileData } = useQuery(GET_USER_PROFILE, {
+      errorPolicy: 'ignore',
+      fetchPolicy: 'cache-first',
     });
 
     // Smart portfolio metrics: Check market data health when component mounts
@@ -619,16 +680,27 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
     const [copilotContextHint, setCopilotContextHint] = useState<string | null>(null);
     useEffect(() => {
       if (!chatOpen) return;
+      // Demo mode: context is already baked into getDemoAskResponse — just show a
+      // convincing banner using Alex's known portfolio value so the demo looks live.
+      if (IS_DEMO) {
+        setCopilotContextHint(`Using your portfolio ($${DEMO_PORTFOLIO_VALUE.toLocaleString()}) + profile`);
+        return;
+      }
       getCopilotContext().then((ctx) => {
-        copilotContextRef.current = serializeCopilotContextForPrompt(ctx);
+        let serialized = serializeCopilotContextForPrompt(ctx);
+        if (userProfileData?.me) {
+          const profileStr = serializeProfileForPrompt(userProfileData.me);
+          if (profileStr) serialized += ' ' + profileStr;
+        }
+        copilotContextRef.current = serialized;
         const hasData = ctx.portfolio || ctx.credit || (ctx.privateMarkets?.savedDealIds?.length ?? 0) > 0;
         setCopilotContextHint(hasData
-          ? 'Answers use your portfolio, credit & saved deals when relevant.'
+          ? `Using your portfolio ($${ctx.portfolio?.totalValue?.toLocaleString('en-US', { maximumFractionDigits: 0 }) ?? '—'}) + profile`
           : 'Answers can use your portfolio, credit, and saved deals when connected.');
       }).catch(() => {
         setCopilotContextHint('Answers can use your portfolio, credit, and saved deals when connected.');
       });
-    }, [chatOpen]);
+    }, [chatOpen, userProfileData?.me]);
     // Invalidate copilot context when app returns to foreground so next open/message uses fresh data
     useEffect(() => {
       const sub = AppState.addEventListener('change', (nextState) => {
@@ -860,6 +932,10 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
   
     /* ---------- AI service ---------- */
     const generateAIResponse = useCallback(async (userInput: string): Promise<string> => {
+      if (IS_DEMO) {
+        const profile = userProfileData?.me ?? null;
+        return getDemoAskResponse(userInput, profile);
+      }
       let contextStr = copilotContextRef.current;
       if (contextStr == null) {
         try {
@@ -888,7 +964,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
         } catch (error: unknown) {
           // Fall through to fast fallback
         }
-        return 'Diversification across different asset classes (stocks, bonds, ETFs) is a fundamental investment strategy. Consider your risk tolerance and time horizon when making investment decisions. For long-term growth, index funds and ETFs are excellent starting points.';
+        return 'For portfolio and investment questions I need a moment to pull your data — try again in a second, or ask something more specific like "Am I too concentrated?" or "How do I reach $1M?"';
       }
       
       if (lowerInput.includes('budget') || lowerInput.includes('saving') || lowerInput.includes('spend')) {
@@ -905,7 +981,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
         } catch (error: unknown) {
           // Fall through to fast fallback
         }
-        return 'The 50/30/20 rule allocates 50% to needs (housing, food, utilities), 30% to wants (entertainment, dining), and 20% to savings and debt repayment. This is a great starting point for financial planning. Start by tracking your expenses for a month to see where your money goes.';
+        return 'For budgeting questions I need a moment to pull your data — try again in a second, or ask "Help me build a budget" or "How do I save more each month?" for a specific plan.';
       }
       
       if (lowerInput.includes('stock') || lowerInput.includes('market') || lowerInput.includes('trading')) {
@@ -922,7 +998,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
         } catch (error: unknown) {
           // Fall through to fast fallback
         }
-        return 'Stock market investing involves risk, and it\'s important to do your research, diversify your portfolio, and invest for the long term rather than trying to time the market. Consider dollar-cost averaging to reduce the impact of volatility.';
+        return 'For stock and market questions I need a moment to pull live data — try again in a second, or ask something specific like "Should I hold my NVDA?" or "What is dollar-cost averaging?"';
       }
       
       if (lowerInput.includes('retirement') || lowerInput.includes('401k') || lowerInput.includes('ira')) {
@@ -939,7 +1015,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
         } catch (error: unknown) {
           // Fall through to fast fallback
         }
-        return 'Start early, take advantage of employer 401(k) matching, and consider both traditional and Roth IRAs. The power of compound interest over time is your greatest ally in retirement planning. Aim to save at least 15% of your income for retirement.';
+        return 'For retirement questions I need a moment to pull your numbers — try again in a second, or ask "When can I retire?" or "Am I on track to retire?" for a personalised answer.';
       }
       
       // For other questions, try API with timeout, then fallback
@@ -955,9 +1031,9 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
         const errorMessage = error instanceof Error ? error.message : String(error);
         logger.log('AI query timeout or error, using fallback:', errorMessage);
         // Provide helpful generic fallback
-        return 'I\'m here to help with investment strategies, portfolio analysis, budgeting, retirement planning, and market insights. Could you rephrase your question or ask about a specific topic like "How do I start investing?" or "What is dollar-cost averaging?"';
+        return 'Having trouble reaching the server — try again in a moment. In the meantime, try a specific question like "How do I become a millionaire?", "Am I too concentrated?", or "When can I retire?" and I\'ll run the numbers for you.';
       }
-    }, [userData?.me?.id, (userProfile as any)?.id]);
+    }, [userData?.me?.id, (userProfile as any)?.id, userProfileData?.me]);
   
     /* ---------- helpers ---------- */
     const go = useCallback((screen: string, params?: NavigateParams) => {
@@ -1832,7 +1908,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
         </TouchableOpacity>
   
         {/* Chat modal */}
-        <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} generateAIResponse={generateAIResponse} contextHint={copilotContextHint} />
+        <ChatPanel open={chatOpen} onClose={() => setChatOpen(false)} generateAIResponse={generateAIResponse} contextHint={copilotContextHint} onNavigate={(screen) => { setChatOpen(false); go(screen); }} />
 
         {/* Calm Goal Sheet */}
         <CalmGoalSheet
@@ -2014,6 +2090,11 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
     chatMessageText: { fontSize: 15, lineHeight: 20 },
     userMessageText: { color: '#fff' },
     assistantMessageText: { color: '#333' },
+    actionCardBtn: {
+      alignSelf: 'flex-start', marginTop: 2, marginBottom: 10, marginLeft: 2,
+      backgroundColor: '#0f172a', paddingVertical: 7, paddingHorizontal: 14, borderRadius: 20,
+    },
+    actionCardBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   
     chatInputContainer: {
       flexDirection: 'row', alignItems: 'flex-end', borderTopWidth: 1, borderTopColor: '#E5E5EA',
