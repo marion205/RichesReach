@@ -5,6 +5,26 @@
 import { API_BASE_URL } from '../config/api';
 import logger from '../utils/logger';
 
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
+const DEMO_OPTIMIZATION_SUMMARY = {
+  summary: {
+    estimatedAnnualTax: 0,
+    totalPortfolioValue: 14303.52,
+    totalUnrealizedGains: 2145.53,
+    effectiveRate: 0,
+    holdings: [],
+  },
+  holdings: [
+    { symbol: 'NVDA', companyName: 'NVIDIA Corporation', shares: 2, currentPrice: 875.40, totalValue: 1750.80, costBasis: 1200, returnAmount: 550.80, returnPercent: 45.9, sector: 'Technology', type: 'stock', name: 'NVIDIA Corporation', taxImpact: 0.15, recommendation: 'Hold for long-term gains' },
+    { symbol: 'AAPL', companyName: 'Apple Inc.', shares: 10, currentPrice: 189.30, totalValue: 1893.00, costBasis: 1650, returnAmount: 243.00, returnPercent: 14.7, sector: 'Technology', type: 'stock', name: 'Apple Inc.', taxImpact: 0.15, recommendation: 'Hold for long-term gains' },
+  ],
+  loss_harvesting: [],
+  capital_gains: {},
+  rebalancing: {},
+  bracket_analysis: {},
+};
+
 export interface TaxOptimizationRequest {
   target_cash?: number;
   lots?: Array<{
@@ -88,6 +108,9 @@ class TaxOptimizationService {
    * Get tax optimization summary
    */
   async getOptimizationSummary(token: string): Promise<any> {
+    if (IS_DEMO) {
+      return Promise.resolve(DEMO_OPTIMIZATION_SUMMARY);
+    }
     try {
       const response = await fetch(`${API_BASE_URL}/api/tax/optimization-summary`, {
         method: 'GET',

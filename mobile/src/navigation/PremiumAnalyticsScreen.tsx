@@ -599,7 +599,17 @@ const PremiumAnalyticsScreen = ({ navigateTo }) => {
                 <Text style={styles.metricLabel}>Diversification</Text>
               </View>
               <Text style={styles.metricValue}>
-                {displayMetrics.riskMetrics ? JSON.parse(displayMetrics.riskMetrics).diversificationScore ? `${(JSON.parse(displayMetrics.riskMetrics).diversificationScore * 100).toFixed(0)}%` : 'N/A' : 'N/A'}
+                {(() => {
+                  try {
+                    const rm = typeof displayMetrics.riskMetrics === 'string'
+                      ? JSON.parse(displayMetrics.riskMetrics)
+                      : displayMetrics.riskMetrics;
+                    const score = rm?.diversificationScore;
+                    return score != null ? `${(score * 100).toFixed(0)}%` : 'N/A';
+                  } catch {
+                    return 'N/A';
+                  }
+                })()}
               </Text>
             </View>
           </View>

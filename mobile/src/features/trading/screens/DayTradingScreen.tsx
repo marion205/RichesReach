@@ -1136,7 +1136,9 @@ export default function DayTradingScreen({ navigateTo }: { navigateTo?: (screen:
               <Icon name="x" size={20} color={C.sub} />
             </TouchableOpacity>
           </View>
-          <ExecutionQualityDashboard signalType="day_trading" days={30} />
+          <View style={{ minHeight: 380 }}>
+            <ExecutionQualityDashboard signalType="day_trading" days={30} />
+          </View>
         </View>
       )}
 
@@ -2175,6 +2177,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     maxHeight: 600,
+    zIndex: 10,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
   },
   executionQualityHeader: {
     flexDirection: 'row',

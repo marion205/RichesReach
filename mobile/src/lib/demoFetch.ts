@@ -429,6 +429,30 @@ const HANDLERS: Handler[] = [
     return null;
   },
 
+  // Tax optimization summary — avoid real network call and "Network request failed" in demo
+  (url) => {
+    if (url.includes('/api/tax/optimization-summary')) {
+      return jsonResponse({
+        summary: {
+          estimatedAnnualTax: 0,
+          totalPortfolioValue: 14303.52,
+          totalUnrealizedGains: 2145.53,
+          effectiveRate: 0,
+          holdings: [],
+        },
+        holdings: [
+          { symbol: 'NVDA', companyName: 'NVIDIA Corporation', shares: 2, currentPrice: 875.40, totalValue: 1750.80, costBasis: 1200, returnAmount: 550.80, returnPercent: 45.9, sector: 'Technology', type: 'stock', name: 'NVIDIA Corporation', taxImpact: 0.15, recommendation: 'Hold for long-term gains' },
+          { symbol: 'AAPL', companyName: 'Apple Inc.', shares: 10, currentPrice: 189.30, totalValue: 1893.00, costBasis: 1650, returnAmount: 243.00, returnPercent: 14.7, sector: 'Technology', type: 'stock', name: 'Apple Inc.', taxImpact: 0.15, recommendation: 'Hold for long-term gains' },
+        ],
+        loss_harvesting: [],
+        capital_gains: {},
+        rebalancing: {},
+        bracket_analysis: {},
+      });
+    }
+    return null;
+  },
+
   // Credit — full snapshot + individual endpoints
   (url) => {
     if (url.includes('/api/credit/snapshot')) {

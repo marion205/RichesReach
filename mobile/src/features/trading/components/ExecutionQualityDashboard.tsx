@@ -73,8 +73,8 @@ export default function ExecutionQualityDashboard({
     periodDays: days,
   });
 
-  // Use mock data only in demo mode when there's an error or no data
-  const effectiveStats = stats || (error && IS_DEMO ? getMockStats() : null);
+  // Use mock when no stats: always in demo (so card is never empty), or on error outside demo
+  const effectiveStats = stats || ((IS_DEMO || error) ? getMockStats() : null);
 
   if (loading && !effectiveStats) {
     return (
@@ -119,8 +119,8 @@ export default function ExecutionQualityDashboard({
   const qualityColor = safeCompare(effectiveStats.avgQualityScore, 8) ? C.success : 
                        safeCompare(effectiveStats.avgQualityScore, 6) ? C.warning : C.danger;
   
-  // Show warning banner only in demo mode when using mock data
-  const isUsingMockData = IS_DEMO && !stats && !!error;
+  // Show banner when showing fallback mock (demo with no backend data, or error fallback)
+  const isUsingMockData = !stats && (IS_DEMO || !!error);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -251,6 +251,7 @@ export default function ExecutionQualityDashboard({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    minHeight: 320,
     backgroundColor: C.bg,
   },
   content: {

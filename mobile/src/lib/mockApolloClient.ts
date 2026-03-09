@@ -166,6 +166,53 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
     },
   },
 
+  // Benchmark series (SPY, QQQ, etc.) — used by PortfolioPerformanceCardWithBenchmark, PortfolioComparison
+  GetBenchmarkSeries: (() => {
+    const now = Date.now();
+    let val = 500;
+    const dataPoints = Array.from({ length: 30 }, (_, i) => {
+      const ts = new Date(now - (29 - i) * 24 * 60 * 60 * 1000).toISOString();
+      const prev = val;
+      val = parseFloat((val * (1 + (Math.random() - 0.48) * 0.02)).toFixed(2));
+      const change = val - prev;
+      const changePercent = prev ? (change / prev) * 100 : 0;
+      return { timestamp: ts, value: val, change, changePercent };
+    });
+    const startValue = dataPoints[0]?.value ?? 500;
+    const endValue = dataPoints[dataPoints.length - 1]?.value ?? val;
+    const totalReturn = endValue - startValue;
+    const totalReturnPercent = startValue ? (totalReturn / startValue) * 100 : 0;
+    return {
+      benchmarkSeries: {
+        symbol: 'SPY',
+        name: 'S&P 500',
+        timeframe: '1D',
+        dataPoints,
+        startValue,
+        endValue,
+        totalReturn,
+        totalReturnPercent,
+        volatility: 0.12,
+        __typename: 'BenchmarkSeriesType',
+      },
+    };
+  })(),
+
+  // Portfolio history (time series for portfolio value chart)
+  GetPortfolioHistory: (() => {
+    const now = Date.now();
+    let v = 12158;
+    const portfolioHistory = Array.from({ length: 90 }, (_, i) => {
+      const date = new Date(now - (89 - i) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const prev = v;
+      v = parseFloat((v * (1 + (Math.random() - 0.48) * 0.015)).toFixed(2));
+      const change = v - prev;
+      const changePercent = prev ? (change / prev) * 100 : 0;
+      return { date, value: v, change, changePercent, __typename: 'PortfolioHistoryPoint' };
+    });
+    return { portfolioHistory };
+  })(),
+
   // Stock Chart Data (demo: generate candles so Price & P&L chart renders)
   GetStockChartData: (() => {
     const points = 30;
@@ -459,13 +506,67 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
     ],
   },
 
-  // Options chain analysis — OptionChainCard and options tab overview
-  // Include contracts for the first expiration (2026-03-21) so default tab shows rows
+  // Options chain analysis — OptionChainCard, Premium Analytics Options tab
+  // Include contracts for the first expiration (2026-03-21) + premium fields (marketSentiment, recommendedStrategies)
   GetOptionsAnalysis: {
     optionsAnalysis: {
       underlyingSymbol: 'AAPL',
       underlyingPrice: 189.30,
       __typename: 'OptionsAnalysisType',
+      marketSentiment: {
+        sentiment: 'BULLISH',
+        sentimentDescription: 'Call volume and open interest favor upside; put/call ratio below 1.',
+        __typename: 'MarketSentimentType',
+      },
+      putCallRatio: 0.82,
+      impliedVolatilityRank: 42,
+      skew: -0.04,
+      sentimentScore: 68,
+      sentimentDescription: 'Moderately bullish — call volume elevated relative to puts.',
+      unusualFlow: {
+        symbol: 'AAPL',
+        totalVolume: 52000000,
+        unusualVolume: 12400000,
+        unusualVolumePercent: 24,
+        sweepTrades: 8,
+        blockTrades: 3,
+        lastUpdated: new Date().toISOString(),
+        __typename: 'UnusualFlowType',
+      },
+      recommendedStrategies: [
+        {
+          strategyName: 'Bull Call Spread',
+          strategyType: 'DEBIT_SPREAD',
+          description: 'Buy 190C, sell 195C — defined risk with upside to resistance.',
+          riskLevel: 'MODERATE',
+          marketOutlook: 'BULLISH',
+          maxProfit: 540,
+          maxLoss: 210,
+          breakevenPoints: [192.1],
+          probabilityOfProfit: 0.64,
+          riskRewardRatio: 2.57,
+          daysToExpiration: 21,
+          totalCost: 210,
+          totalCredit: 0,
+          __typename: 'RecommendedStrategyType',
+        },
+        {
+          strategyName: 'Cash-Secured Put',
+          strategyType: 'INCOME',
+          description: 'Sell 185P to collect premium; acquire shares at discount if assigned.',
+          riskLevel: 'LOW',
+          marketOutlook: 'NEUTRAL',
+          maxProfit: 220,
+          maxLoss: 18280,
+          breakevenPoints: [182.8],
+          probabilityOfProfit: 0.72,
+          riskRewardRatio: 0.01,
+          daysToExpiration: 14,
+          totalCost: 0,
+          totalCredit: 220,
+          __typename: 'RecommendedStrategyType',
+        },
+      ],
       optionsChain: {
         __typename: 'OptionsChainType',
         expirationDates: ['2026-03-21', '2026-04-18', '2026-05-16'],
@@ -790,6 +891,43 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
       __typename: 'PremiumPortfolioMetrics',
     },
   },
+
+  // Premium Analytics screen — query uses root field portfolioMetrics (not premiumPortfolioMetrics)
+  // riskMetrics must be a JSON string (screen uses JSON.parse(displayMetrics.riskMetrics))
+  GetPremiumPortfolioMetrics: (() => {
+    const holdings = (DEMO_GQL_PORTFOLIO_METRICS as any).holdings || [];
+    const riskMetricsObj = { beta: 1.15, alpha: 2.3, volatility: 18.5, sharpeRatio: 1.42, maxDrawdown: -8.2, diversificationScore: 0.72 };
+    return {
+      portfolioMetrics: {
+        totalValue: DEMO_GQL_PORTFOLIO_METRICS.totalValue,
+        totalCost: DEMO_GQL_PORTFOLIO_METRICS.totalCost,
+        totalReturn: DEMO_GQL_PORTFOLIO_METRICS.totalReturn,
+        totalReturnPercent: DEMO_GQL_PORTFOLIO_METRICS.totalReturnPercent,
+        dayChange: 142.50,
+        dayChangePercent: 1.0,
+        volatility: 18.5,
+        sharpeRatio: 1.42,
+        maxDrawdown: -8.2,
+        beta: 1.15,
+        alpha: 2.3,
+        sectorAllocation: { Technology: 45.2, ETF: 44.1, 'Consumer Cyclical': 2.8, Automotive: 5.5, Other: 2.4 },
+        riskMetrics: JSON.stringify(riskMetricsObj),
+        holdings: holdings.map((h: any) => ({
+          symbol: h.symbol,
+          companyName: h.companyName,
+          shares: h.shares,
+          currentPrice: h.currentPrice,
+          totalValue: h.totalValue,
+          costBasis: h.costBasis,
+          returnAmount: h.returnAmount,
+          returnPercent: h.returnPercent,
+          sector: h.sector,
+          __typename: 'HoldingMetric',
+        })),
+        __typename: 'PortfolioMetrics',
+      },
+    };
+  })(),
   GetExecutionQualityTrends: {
     executionQualityTrends: {
       avgSlippagePct: 0.08,
@@ -797,6 +935,22 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
       chasedCount: 2,
       totalFills: 12,
       __typename: 'ExecutionQualityTrends',
+    },
+  },
+  // Day Trading / Swing Trading — Execution Quality Dashboard (ExecutionQualityDashboard.tsx)
+  GetExecutionQualityStats: {
+    executionQualityStats: {
+      avgSlippagePct: 0.18,
+      avgQualityScore: 7.5,
+      chasedCount: 3,
+      totalFills: 24,
+      periodDays: 30,
+      improvementTips: [
+        'Consider using limit orders to reduce slippage',
+        'Avoid chasing price movements — wait for pullbacks',
+        'Your execution quality is improving — keep it up!',
+      ],
+      __typename: 'ExecutionQualityStatsType',
     },
   },
   GetCreditScoreHistory: {
