@@ -486,8 +486,8 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
     return (
       <View style={[styles.container, isCompact && styles.containerCompact]}>
         <View style={styles.skeletonRow}>
-          <ActivityIndicator size="small" color="#0B0B0F" />
-          <Text style={styles.skeletonText}>Updating…</Text>
+          <ActivityIndicator size="small" color="#00cc99" />
+          <Text style={styles.skeletonText}>Fetching live data…</Text>
         </View>
       </View>
     );
@@ -518,30 +518,27 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
     );
   }
 
-  // Compact mode stays simple
+  // Compact mode — clean price + signal strip
   if (isCompact) {
     return (
       <View style={styles.compactWrap}>
-        <View style={styles.compactTop}>
-          <View style={[styles.dot, { backgroundColor: computed.tColor }]} />
-          <Text style={styles.compactPair}>{computed.pairPretty}</Text>
-        </View>
-
         <View style={styles.compactPrices}>
           <View style={styles.compactPriceItem}>
-            <Text style={styles.compactLabel}>Bid</Text>
+            <Text style={styles.compactLabel}>BID</Text>
             <Text style={styles.compactValue}>{fmt5(computed.bid)}</Text>
           </View>
+          <View style={styles.compactDivider} />
           <View style={styles.compactPriceItem}>
-            <Text style={styles.compactLabel}>Ask</Text>
+            <Text style={styles.compactLabel}>ASK</Text>
             <Text style={styles.compactValue}>{fmt5(computed.ask)}</Text>
           </View>
         </View>
-
-        <View style={styles.compactFooter}>
-          <Text style={styles.compactFooterText}>
-            {computed.vLabel} • {computed.exLabel}
-          </Text>
+        <View style={styles.compactSignalRow}>
+          <View style={[styles.compactSignalChip, { backgroundColor: computed.tColor + '18', borderColor: computed.tColor + '40' }]}>
+            <View style={[styles.compactSignalDot, { backgroundColor: computed.tColor }]} />
+            <Text style={[styles.compactSignalText, { color: computed.tColor }]}>{computed.tLabel}</Text>
+          </View>
+          <Text style={styles.compactVolText}>{computed.vLabel}</Text>
         </View>
       </View>
     );
@@ -595,28 +592,28 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+      {/* Header row */}
       <View style={styles.topHeader}>
         <View style={styles.topHeaderLeft}>
-          <View style={[styles.dot, { backgroundColor: computed.tColor }]} />
+          <View style={[styles.trendIndicator, { backgroundColor: computed.tColor }]} />
           <Text style={styles.topTitle}>Today's Read</Text>
         </View>
-
         <TouchableOpacity onPress={() => fetchForexAnalysis(pair)} style={styles.refreshBtn} activeOpacity={0.8}>
-          <Icon name="refresh-ccw" size={16} color="#0B0B0F" />
+          <Icon name="refresh-ccw" size={15} color="#6B7280" />
         </TouchableOpacity>
       </View>
 
+      {/* Headline */}
       <Text style={styles.heroLine}>{computed.headline}</Text>
-      <Text style={styles.heroSubline}>{computed.subline}</Text>
 
       {/* Search */}
       <View style={styles.searchContainer}>
-        <Text style={styles.searchLabel}>Currency pair</Text>
         <View style={styles.searchRow}>
+          <Icon name="search" size={15} color="#AEAEB2" style={styles.searchIcon} />
           <TextInput
             style={styles.searchInput}
-            placeholder="EURUSD"
+            placeholder="Search pair (e.g. GBPUSD)"
+            placeholderTextColor="#AEAEB2"
             value={inputValue}
             onChangeText={setInputValue}
             autoCapitalize="characters"
@@ -625,46 +622,54 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
             onSubmitEditing={handleSearch}
           />
           <TouchableOpacity style={styles.searchButton} onPress={handleSearch} activeOpacity={0.85}>
-            <Icon name="search" size={16} color="#FFFFFF" />
+            <Text style={styles.searchButtonText}>Go</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Prices */}
-      <View style={styles.prices}>
-        <View style={styles.priceCard}>
-          <Text style={styles.priceLabel}>Bid</Text>
-          <Text style={styles.priceValue}>{fmt5(computed.bid)}</Text>
+      {/* Mid price + Bid/Ask */}
+      <View style={styles.pricesBlock}>
+        <View style={styles.midPriceRow}>
+          <Text style={styles.midLabel}>MID</Text>
+          <Text style={styles.midValue}>{computed.mid !== null ? fmt5(computed.mid) : '—'}</Text>
+          <View style={[styles.trendChip, { backgroundColor: computed.tColor + '18', borderColor: computed.tColor + '40' }]}>
+            <Text style={[styles.trendChipText, { color: computed.tColor }]}>{computed.tLabel}</Text>
+          </View>
         </View>
-        <View style={styles.priceCard}>
-          <Text style={styles.priceLabel}>Ask</Text>
-          <Text style={styles.priceValue}>{fmt5(computed.ask)}</Text>
-        </View>
-        <View style={styles.priceCard}>
-          <Text style={styles.priceLabel}>Spread</Text>
-          <Text style={styles.priceValue}>{computed.spread !== null ? computed.spread.toFixed(5) : '—'}</Text>
+        <View style={styles.bidAskRow}>
+          <View style={styles.bidAskItem}>
+            <Text style={styles.bidAskLabel}>BID</Text>
+            <Text style={styles.bidAskValue}>{fmt5(computed.bid)}</Text>
+          </View>
+          <View style={styles.bidAskSep} />
+          <View style={styles.bidAskItem}>
+            <Text style={styles.bidAskLabel}>ASK</Text>
+            <Text style={styles.bidAskValue}>{fmt5(computed.ask)}</Text>
+          </View>
+          <View style={styles.bidAskSep} />
+          <View style={styles.bidAskItem}>
+            <Text style={styles.bidAskLabel}>SPREAD</Text>
+            <Text style={styles.bidAskValue}>{computed.spread !== null ? computed.spread.toFixed(5) : '—'}</Text>
+          </View>
         </View>
       </View>
 
-      {/* 3 lights */}
-      <View style={styles.lightsRow}>
-        <View style={styles.lightCard}>
-          <Text style={styles.lightTitle}>Trend</Text>
-          <View style={[styles.pill, { backgroundColor: computed.tColor + '22' }]}>
-            <Text style={[styles.pillText, { color: computed.tColor }]} numberOfLines={1} adjustsFontSizeToFit>{computed.tLabel}</Text>
-          </View>
+      {/* Signal chips */}
+      <View style={styles.signalRow}>
+        <View style={[styles.signalChip, { backgroundColor: computed.tColor + '14', borderColor: computed.tColor + '35' }]}>
+          <Icon name={computed.tLabel === 'Up' ? 'trending-up' : computed.tLabel === 'Down' ? 'trending-down' : 'minus'} size={13} color={computed.tColor} />
+          <Text style={[styles.signalChipLabel, { color: computed.tColor }]}>Trend</Text>
+          <Text style={[styles.signalChipValue, { color: computed.tColor }]}>{computed.tLabel}</Text>
         </View>
-        <View style={styles.lightCard}>
-          <Text style={styles.lightTitle}>Volatility</Text>
-          <View style={[styles.pill, { backgroundColor: computed.vColor + '22' }]}>
-            <Text style={[styles.pillText, { color: computed.vColor }]} numberOfLines={1} adjustsFontSizeToFit>{computed.vLabel}</Text>
-          </View>
+        <View style={[styles.signalChip, { backgroundColor: computed.vColor + '14', borderColor: computed.vColor + '35' }]}>
+          <Icon name="activity" size={13} color={computed.vColor} />
+          <Text style={[styles.signalChipLabel, { color: computed.vColor }]}>Vol</Text>
+          <Text style={[styles.signalChipValue, { color: computed.vColor }]}>{computed.vLabel}</Text>
         </View>
-        <View style={styles.lightCard}>
-          <Text style={styles.lightTitle}>Execution</Text>
-          <View style={[styles.pill, { backgroundColor: computed.exColor + '22' }]}>
-            <Text style={[styles.pillText, { color: computed.exColor }]} numberOfLines={1} adjustsFontSizeToFit>{computed.exLabel}</Text>
-          </View>
+        <View style={[styles.signalChip, { backgroundColor: computed.exColor + '14', borderColor: computed.exColor + '35' }]}>
+          <Icon name="zap" size={13} color={computed.exColor} />
+          <Text style={[styles.signalChipLabel, { color: computed.exColor }]}>Exec</Text>
+          <Text style={[styles.signalChipValue, { color: computed.exColor }]}>{computed.exLabel}</Text>
         </View>
       </View>
 
@@ -672,14 +677,16 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
       <TouchableOpacity
         activeOpacity={0.9}
         onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setShowOracle(v => !v); }}
-        style={styles.toggle}
+        style={[styles.toggle, styles.toggleAccent]}
       >
         <View style={styles.toggleLeft}>
-          <Icon name="zap" size={16} color="#0B0B0F" />
+          <View style={styles.toggleIconWrap}>
+            <Icon name="zap" size={14} color="#00cc99" />
+          </View>
           <Text style={styles.toggleText}>Alpha Oracle</Text>
           <View style={styles.miniBadge}><Text style={styles.miniBadgeText}>1 tap</Text></View>
         </View>
-        <Icon name={showOracle ? 'chevron-up' : 'chevron-down'} size={18} color="#0B0B0F" />
+        <Icon name={showOracle ? 'chevron-up' : 'chevron-down'} size={17} color="#6B7280" />
       </TouchableOpacity>
 
       {showOracle && (
@@ -805,11 +812,13 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
         style={styles.toggle}
       >
         <View style={styles.toggleLeft}>
-          <Icon name="check-circle" size={16} color="#0B0B0F" />
+          <View style={[styles.toggleIconWrap, styles.toggleIconWrapSecondary]}>
+            <Icon name="check-circle" size={14} color="#6366F1" />
+          </View>
           <Text style={styles.toggleText}>Prove it</Text>
           <View style={styles.miniBadgeLight}><Text style={styles.miniBadgeLightText}>backtest</Text></View>
         </View>
-        <Icon name={showBacktest ? 'chevron-up' : 'chevron-down'} size={18} color="#0B0B0F" />
+        <Icon name={showBacktest ? 'chevron-up' : 'chevron-down'} size={17} color="#6B7280" />
       </TouchableOpacity>
 
       {showBacktest && (
@@ -891,11 +900,13 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
         style={styles.toggle}
       >
         <View style={styles.toggleLeft}>
-          <Icon name="shuffle" size={16} color="#0B0B0F" />
+          <View style={[styles.toggleIconWrap, styles.toggleIconWrapSecondary]}>
+            <Icon name="shuffle" size={14} color="#6366F1" />
+          </View>
           <Text style={styles.toggleText}>Across markets</Text>
           <View style={styles.miniBadgeLight}><Text style={styles.miniBadgeLightText}>fusion</Text></View>
         </View>
-        <Icon name={showFusion ? 'chevron-up' : 'chevron-down'} size={18} color="#0B0B0F" />
+        <Icon name={showFusion ? 'chevron-up' : 'chevron-down'} size={17} color="#6B7280" />
       </TouchableOpacity>
 
       {showFusion && (
@@ -939,11 +950,13 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
         style={styles.toggle}
       >
         <View style={styles.toggleLeft}>
-          <Icon name="cpu" size={16} color="#0B0B0F" />
+          <View style={[styles.toggleIconWrap, styles.toggleIconWrapSecondary]}>
+            <Icon name="cpu" size={14} color="#6366F1" />
+          </View>
           <Text style={styles.toggleText}>Personalize</Text>
           <View style={styles.miniBadgeLight}><Text style={styles.miniBadgeLightText}>RL</Text></View>
         </View>
-        <Icon name={showRL ? 'chevron-up' : 'chevron-down'} size={18} color="#0B0B0F" />
+        <Icon name={showRL ? 'chevron-up' : 'chevron-down'} size={17} color="#6B7280" />
       </TouchableOpacity>
 
       {showRL && (
@@ -994,10 +1007,12 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
         style={styles.toggle}
       >
         <View style={styles.toggleLeft}>
-          <Icon name="info" size={16} color="#0B0B0F" />
+          <View style={[styles.toggleIconWrap, styles.toggleIconWrapSecondary]}>
+            <Icon name="info" size={14} color="#6366F1" />
+          </View>
           <Text style={styles.toggleText}>Explain it simply</Text>
         </View>
-        <Icon name={showExplain ? 'chevron-up' : 'chevron-down'} size={18} color="#0B0B0F" />
+        <Icon name={showExplain ? 'chevron-up' : 'chevron-down'} size={17} color="#6B7280" />
       </TouchableOpacity>
 
       {showExplain && (
@@ -1023,274 +1038,247 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
 }
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, borderWidth: 1, borderColor: '#F1F1F4' },
+  // Base container
+  container: { backgroundColor: '#FFFFFF', borderRadius: 0, padding: 0 },
   containerCompact: { padding: 0, borderWidth: 0, backgroundColor: 'transparent' },
 
-  skeletonRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
-  skeletonText: { marginLeft: 10, color: '#52525B', fontWeight: '600' },
+  // Loading / Error states
+  skeletonRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 10 },
+  skeletonText: { color: '#6B7280', fontWeight: '600', fontSize: 13 },
   inlineHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  inlineHeaderText: { fontSize: 14, fontWeight: '800', color: '#111827' },
-  muted: { marginTop: 6, color: '#71717A', fontWeight: '600' },
-  mutedTiny: { marginTop: 8, color: '#A1A1AA', fontWeight: '700', fontSize: 11 },
+  inlineHeaderText: { fontSize: 14, fontWeight: '700', color: '#1C1C1E' },
+  muted: { marginTop: 6, color: '#8E8E93', fontWeight: '500', fontSize: 13 },
+  mutedTiny: { marginTop: 8, color: '#AEAEB2', fontWeight: '600', fontSize: 11 },
 
-  compactWrap: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 10, borderWidth: 1, borderColor: '#F2F2F6' },
-  compactTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
-  compactPair: { fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
-  compactPrices: { flexDirection: 'row', justifyContent: 'space-between', gap: 8 },
-  compactPriceItem: {
-    flex: 1, backgroundColor: '#FAFAFB', borderRadius: 12, paddingVertical: 8, paddingHorizontal: 10,
-    borderWidth: 1, borderColor: '#F1F1F4',
+  // Compact mode
+  compactWrap: { gap: 8 },
+  compactPrices: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  compactPriceItem: { flex: 1 },
+  compactDivider: { width: 1, height: 28, backgroundColor: '#EBEBF0' },
+  compactLabel: { fontSize: 9, color: '#AEAEB2', fontWeight: '700', letterSpacing: 0.5, marginBottom: 2 },
+  compactValue: { fontSize: 13, fontWeight: '800', color: '#0B0B0F' },
+  compactSignalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  compactSignalChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999, borderWidth: 1,
   },
-  compactLabel: { fontSize: 10, color: '#71717A', fontWeight: '700' },
-  compactValue: { marginTop: 2, fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
-  compactFooter: { marginTop: 8, alignItems: 'center' },
-  compactFooterText: { fontSize: 11, color: '#71717A', fontWeight: '700' },
+  compactSignalDot: { width: 5, height: 5, borderRadius: 2.5 },
+  compactSignalText: { fontSize: 11, fontWeight: '700' },
+  compactVolText: { fontSize: 11, fontWeight: '600', color: '#AEAEB2' },
 
-  topHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  topHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  topTitle: { fontSize: 14, fontWeight: '900', color: '#0B0B0F' },
+  // Large widget header
+  topHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  topHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  trendIndicator: { width: 8, height: 8, borderRadius: 4 },
+  topTitle: { fontSize: 13, fontWeight: '700', color: '#6B7280', letterSpacing: 0.2 },
   refreshBtn: {
-    width: 36, height: 36, borderRadius: 12, backgroundColor: '#FAFAFB',
-    borderWidth: 1, borderColor: '#F1F1F4', alignItems: 'center', justifyContent: 'center',
+    width: 32, height: 32, borderRadius: 10, backgroundColor: '#F8F9FB',
+    borderWidth: 1, borderColor: '#EBEBF0', alignItems: 'center', justifyContent: 'center',
   },
 
-  dot: { width: 10, height: 10, borderRadius: 5 },
+  // Headline
+  heroLine: { fontSize: 17, fontWeight: '800', color: '#0B0B0F', letterSpacing: -0.3, lineHeight: 24, marginBottom: 14 },
 
-  heroLine: { marginTop: 10, fontSize: 18, fontWeight: '900', color: '#0B0B0F', letterSpacing: -0.2 },
-  heroSubline: { marginTop: 6, fontSize: 13, color: '#71717A', fontWeight: '700' },
-
-  searchContainer: { marginTop: 14 },
-  searchLabel: { fontSize: 12, color: '#71717A', fontWeight: '700', marginBottom: 8 },
-  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  // Search
+  searchContainer: { marginBottom: 16 },
+  searchRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#F8F9FB', borderWidth: 1, borderColor: '#EBEBF0',
+    borderRadius: 14, paddingHorizontal: 12, height: 44, gap: 8,
+  },
+  searchIcon: {},
   searchInput: {
-    flex: 1, height: 44, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E5E7EB',
-    borderRadius: 14, paddingHorizontal: 14, fontSize: 14, fontWeight: '700', color: '#0B0B0F',
+    flex: 1, height: 44, fontSize: 14, fontWeight: '600', color: '#0B0B0F',
   },
-  searchButton: { width: 44, height: 44, backgroundColor: '#0B0B0F', borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-
-  prices: { marginTop: 14, flexDirection: 'row', gap: 10 },
-  priceCard: {
-    flex: 1, backgroundColor: '#FAFAFB', borderRadius: 14, paddingVertical: 12, paddingHorizontal: 12,
-    borderWidth: 1, borderColor: '#F1F1F4',
+  searchButton: {
+    backgroundColor: '#0B0B0F', borderRadius: 10, paddingHorizontal: 12,
+    height: 30, justifyContent: 'center', alignItems: 'center',
   },
-  priceLabel: { fontSize: 11, color: '#71717A', fontWeight: '800' },
-  priceValue: { marginTop: 5, fontSize: 15, fontWeight: '900', color: '#0B0B0F' },
+  searchButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
 
-  lightsRow: { marginTop: 12, flexDirection: 'row', gap: 10 },
-  lightCard: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#F1F1F4' },
-  lightTitle: { fontSize: 11, color: '#71717A', fontWeight: '900', marginBottom: 8 },
-  pill: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
-  pillText: { fontSize: 13, fontWeight: '900' },
+  // Prices block
+  pricesBlock: {
+    backgroundColor: '#F8F9FB', borderRadius: 16, borderWidth: 1, borderColor: '#EBEBF0',
+    paddingVertical: 14, paddingHorizontal: 16, marginBottom: 12,
+  },
+  midPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  midLabel: { fontSize: 10, fontWeight: '800', color: '#AEAEB2', letterSpacing: 0.6 },
+  midValue: { fontSize: 24, fontWeight: '800', color: '#0B0B0F', letterSpacing: -0.5, flex: 1 },
+  trendChip: {
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, borderWidth: 1,
+  },
+  trendChipText: { fontSize: 12, fontWeight: '700' },
+  bidAskRow: { flexDirection: 'row', alignItems: 'center' },
+  bidAskItem: { flex: 1 },
+  bidAskSep: { width: 1, height: 28, backgroundColor: '#EBEBF0', marginHorizontal: 8 },
+  bidAskLabel: { fontSize: 9, fontWeight: '800', color: '#AEAEB2', letterSpacing: 0.6, marginBottom: 3 },
+  bidAskValue: { fontSize: 13, fontWeight: '700', color: '#3A3A3C' },
 
+  // Signal chips row
+  signalRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  signalChip: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 9, borderRadius: 14, borderWidth: 1,
+  },
+  signalChipLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.4, flex: 1 },
+  signalChipValue: { fontSize: 12, fontWeight: '800' },
+
+  // Accordion toggles
   toggle: {
-    marginTop: 12,
-    backgroundColor: '#FAFAFB',
+    marginBottom: 8,
+    backgroundColor: '#F8F9FB',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#F1F1F4',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    borderColor: '#EBEBF0',
+    paddingVertical: 13,
+    paddingHorizontal: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  toggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  toggleText: { fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
+  toggleAccent: {
+    backgroundColor: '#00cc9908',
+    borderColor: '#00cc9925',
+  },
+  toggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  toggleIconWrap: {
+    width: 28, height: 28, borderRadius: 8,
+    backgroundColor: '#00cc9915', alignItems: 'center', justifyContent: 'center',
+  },
+  toggleIconWrapSecondary: {
+    backgroundColor: '#6366F110',
+  },
+  toggleText: { fontSize: 13, fontWeight: '700', color: '#0B0B0F' },
 
-  miniBadge: { backgroundColor: '#0B0B0F', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, marginLeft: 6 },
-  miniBadgeText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
-  miniBadgeLight: { backgroundColor: '#EDEDF2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, marginLeft: 6 },
-  miniBadgeLightText: { color: '#0B0B0F', fontSize: 10, fontWeight: '900' },
+  miniBadge: {
+    backgroundColor: '#00cc99', paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 999, marginLeft: 4,
+  },
+  miniBadgeText: { color: '#FFFFFF', fontSize: 9, fontWeight: '800', letterSpacing: 0.3 },
+  miniBadgeLight: {
+    backgroundColor: '#F0F0F5', paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: 999, marginLeft: 4,
+  },
+  miniBadgeLightText: { color: '#6B7280', fontSize: 9, fontWeight: '700' },
 
-  panel: { marginTop: 10, backgroundColor: '#FFFFFF', borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#F1F1F4' },
-  panelHint: { fontSize: 12, color: '#52525B', fontWeight: '800', lineHeight: 18 },
+  // Panel (expanded accordion content)
+  panel: {
+    marginBottom: 8, backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14,
+    borderWidth: 1, borderColor: '#EBEBF0',
+  },
+  panelHint: { fontSize: 12, color: '#6B7280', fontWeight: '600', lineHeight: 18, marginBottom: 4 },
 
   inputRow: { marginTop: 12, flexDirection: 'row', gap: 10, alignItems: 'flex-end' },
-  smallLabel: { fontSize: 11, color: '#71717A', fontWeight: '900', marginBottom: 6 },
+  smallLabel: { fontSize: 11, color: '#6B7280', fontWeight: '700', marginBottom: 5, letterSpacing: 0.2 },
 
   input: {
-    height: 44,
-    backgroundColor: '#FAFAFB',
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#0B0B0F',
+    height: 42, backgroundColor: '#F8F9FB', borderWidth: 1, borderColor: '#EBEBF0',
+    borderRadius: 12, paddingHorizontal: 12, fontSize: 13, fontWeight: '700', color: '#0B0B0F',
   },
   moneyInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FAFAFB',
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    height: 44,
-    gap: 8,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8F9FB',
+    borderWidth: 1, borderColor: '#EBEBF0', borderRadius: 12, paddingHorizontal: 12, height: 42, gap: 6,
   },
-  moneyPrefix: { fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
-  moneyInput: { flex: 1, height: 44, fontSize: 13, fontWeight: '900', color: '#0B0B0F' },
+  moneyPrefix: { fontSize: 13, fontWeight: '700', color: '#6B7280' },
+  moneyInput: { flex: 1, height: 42, fontSize: 13, fontWeight: '700', color: '#0B0B0F' },
 
+  // Buttons
   primaryBtn: {
-    marginTop: 12,
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: '#0B0B0F',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
+    marginTop: 12, height: 46, borderRadius: 14, backgroundColor: '#00cc99',
+    alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8,
   },
-  primaryBtnText: { marginLeft: 10, color: '#FFFFFF', fontWeight: '900', fontSize: 13 },
+  primaryBtnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 13 },
 
   twoBtnRow: { marginTop: 12, flexDirection: 'row', gap: 10 },
   secondaryBtn: {
-    flex: 1,
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: '#FAFAFB',
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 10,
+    flex: 1, height: 44, borderRadius: 12, backgroundColor: '#F8F9FB',
+    borderWidth: 1, borderColor: '#EBEBF0', alignItems: 'center',
+    justifyContent: 'center', flexDirection: 'row', gap: 8,
   },
   secondaryBtnFull: {
-    marginTop: 12,
-    height: 46,
-    borderRadius: 14,
-    backgroundColor: '#FAFAFB',
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 10,
+    marginTop: 12, height: 44, borderRadius: 12, backgroundColor: '#F8F9FB',
+    borderWidth: 1, borderColor: '#EBEBF0', alignItems: 'center',
+    justifyContent: 'center', flexDirection: 'row', gap: 8,
   },
-  secondaryBtnText: { fontWeight: '900', color: '#0B0B0F', fontSize: 13 },
+  secondaryBtnText: { fontWeight: '700', color: '#0B0B0F', fontSize: 13 },
 
   errorBox: {
-    marginTop: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
-    padding: 10,
-    borderRadius: 14,
+    marginTop: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 8,
+    backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FEE2E2',
+    padding: 12, borderRadius: 12,
   },
-  errorText: { flex: 1, color: '#B91C1C', fontWeight: '800', fontSize: 12 },
+  errorText: { flex: 1, color: '#B91C1C', fontWeight: '700', fontSize: 12, lineHeight: 18 },
 
-  bigSentence: { fontSize: 14, fontWeight: '900', color: '#0B0B0F', lineHeight: 20 },
+  bigSentence: { fontSize: 15, fontWeight: '700', color: '#0B0B0F', lineHeight: 22 },
 
   scoreRow: { marginTop: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 },
-  scoreValue: { marginTop: 2, fontSize: 18, fontWeight: '900', color: '#0B0B0F' },
-  scoreOutOf: { fontSize: 12, fontWeight: '900', color: '#71717A' },
+  scoreValue: { marginTop: 2, fontSize: 20, fontWeight: '800', color: '#0B0B0F' },
+  scoreOutOf: { fontSize: 12, fontWeight: '700', color: '#8E8E93' },
 
-  convictionPill: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 999 },
-  convictionText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
+  convictionPill: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999 },
+  convictionText: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
 
-  barTrack: { marginTop: 10, height: 10, backgroundColor: '#F1F1F4', borderRadius: 999, overflow: 'hidden' },
-  barFill: { height: 10, backgroundColor: '#0B0B0F', borderRadius: 999 },
+  barTrack: { marginTop: 10, height: 6, backgroundColor: '#EBEBF0', borderRadius: 999, overflow: 'hidden' },
+  barFill: { height: 6, backgroundColor: '#00cc99', borderRadius: 999 },
 
-  grid3: { marginTop: 12, flexDirection: 'row', gap: 10 },
+  grid3: { marginTop: 12, flexDirection: 'row', gap: 8 },
   cell: {
-    flex: 1,
-    backgroundColor: '#FAFAFB',
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    flex: 1, backgroundColor: '#F8F9FB', borderWidth: 1, borderColor: '#EBEBF0',
+    borderRadius: 12, paddingVertical: 10, paddingHorizontal: 10,
   },
-  cellLabel: { fontSize: 10, color: '#71717A', fontWeight: '900' },
-  cellValue: { marginTop: 4, fontSize: 12, color: '#0B0B0F', fontWeight: '900' },
+  cellLabel: { fontSize: 10, color: '#8E8E93', fontWeight: '700', letterSpacing: 0.3 },
+  cellValue: { marginTop: 4, fontSize: 13, color: '#0B0B0F', fontWeight: '800' },
 
   guardRow: { marginTop: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  guardDot: { width: 10, height: 10, borderRadius: 5 },
-  guardText: { color: '#52525B', fontWeight: '800', fontSize: 12 },
-  guardReason: { marginTop: 6, color: '#71717A', fontWeight: '800', fontSize: 12, lineHeight: 18 },
+  guardDot: { width: 8, height: 8, borderRadius: 4 },
+  guardText: { color: '#6B7280', fontWeight: '600', fontSize: 12 },
+  guardReason: { marginTop: 5, color: '#8E8E93', fontWeight: '600', fontSize: 12, lineHeight: 18 },
 
   whyBox: {
-    marginTop: 12,
-    backgroundColor: '#FAFAFB',
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-    borderRadius: 14,
-    padding: 10,
+    marginTop: 12, backgroundColor: '#F8F9FB', borderWidth: 1, borderColor: '#EBEBF0',
+    borderRadius: 12, padding: 12,
   },
-  whyLine: { fontSize: 12, color: '#52525B', fontWeight: '800', lineHeight: 18 },
+  whyLine: { fontSize: 12, color: '#3A3A3C', fontWeight: '600', lineHeight: 20 },
 
   feedbackRow: { marginTop: 12, flexDirection: 'row', gap: 10 },
   feedbackBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: '#FAFAFB',
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 10,
+    flex: 1, height: 42, borderRadius: 12, backgroundColor: '#F8F9FB', borderWidth: 1,
+    borderColor: '#EBEBF0', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 8,
   },
-  feedbackText: { fontWeight: '900', color: '#0B0B0F', fontSize: 13 },
+  feedbackText: { fontWeight: '700', color: '#3A3A3C', fontSize: 13 },
 
   scoreBox: {
-    marginTop: 12,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-    padding: 12,
+    marginTop: 12, backgroundColor: '#F8F9FB', borderRadius: 12,
+    borderWidth: 1, borderColor: '#EBEBF0', padding: 12,
   },
-  scoreBig: { marginTop: 4, fontSize: 22, fontWeight: '900', color: '#0B0B0F' },
+  scoreBig: { marginTop: 4, fontSize: 24, fontWeight: '800', color: '#0B0B0F' },
 
   btBox: { marginTop: 12 },
   detailsToggle: {
-    marginTop: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    marginTop: 10, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 10,
+    backgroundColor: '#F8F9FB', borderWidth: 1, borderColor: '#EBEBF0',
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
-  detailsToggleText: { fontSize: 12, fontWeight: '900', color: '#111827' },
+  detailsToggleText: { fontSize: 12, fontWeight: '700', color: '#6B7280' },
 
   mono: {
-    marginTop: 10,
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#111827',
+    marginTop: 10, fontSize: 11, fontWeight: '600', color: '#3A3A3C',
     fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }),
   },
 
   fusionBox: { marginTop: 12 },
   rlBox: { marginTop: 12 },
   rlRow: {
-    marginTop: 10,
-    backgroundColor: '#FAFAFB',
-    borderWidth: 1,
-    borderColor: '#F1F1F4',
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    marginTop: 8, backgroundColor: '#F8F9FB', borderWidth: 1, borderColor: '#EBEBF0',
+    borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
   },
-  rlStrategy: { fontWeight: '900', color: '#0B0B0F' },
-  rlScore: { fontWeight: '900', color: '#52525B' },
+  rlStrategy: { fontWeight: '700', color: '#0B0B0F', fontSize: 13 },
+  rlScore: { fontWeight: '700', color: '#6B7280', fontSize: 13 },
 
-  bulletRow: { flexDirection: 'row', gap: 10, marginBottom: 10, alignItems: 'flex-start', marginTop: 8 },
-  bulletDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#0B0B0F', marginTop: 6 },
-  bulletText: { flex: 1, fontSize: 12, color: '#52525B', fontWeight: '700', lineHeight: 18 },
+  bulletRow: { flexDirection: 'row', gap: 10, marginBottom: 8, alignItems: 'flex-start', marginTop: 8 },
+  bulletDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#00cc99', marginTop: 7 },
+  bulletText: { flex: 1, fontSize: 13, color: '#3A3A3C', fontWeight: '500', lineHeight: 20 },
 
-  disclaimer: { marginTop: 12, fontSize: 11, color: '#A1A1AA', fontWeight: '700', textAlign: 'center' },
+  disclaimer: { marginTop: 12, fontSize: 11, color: '#AEAEB2', fontWeight: '500', textAlign: 'center' },
 });
