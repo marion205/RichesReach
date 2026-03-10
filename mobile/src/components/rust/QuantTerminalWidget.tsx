@@ -361,9 +361,10 @@ export default function QuantTerminalWidget({
 
   return (
     <View style={styles.container}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginBottom: 4 }}>
-        <View style={{ backgroundColor: '#EFF6FF', padding: 12, borderRadius: 16 }}>
-          <Icon name="activity" size={24} color="#3B82F6" />
+      {/* Section header — matches the widget's topHeader pattern */}
+      <View style={styles.qtHeader}>
+        <View style={styles.qtIconWrap}>
+          <Icon name="activity" size={14} color="#6366F1" />
         </View>
         <Text style={styles.title}>Quant Terminal</Text>
       </View>
@@ -371,20 +372,24 @@ export default function QuantTerminalWidget({
       {/* Vol Surface Heatmap */}
       <TouchableOpacity
         style={styles.section}
+        activeOpacity={0.9}
         onPress={() => {
           setShowVolSurface(!showVolSurface);
           if (!showVolSurface && !volSurface) fetchVolSurface();
         }}
       >
-        <View style={styles.sectionHeader}>
+        <View style={styles.sectionLeft}>
+          <View style={styles.sectionIconWrap}>
+            <Icon name="bar-chart-2" size={13} color="#6366F1" />
+          </View>
           <Text style={styles.sectionTitle}>Volatility Surface</Text>
-          <Icon name={showVolSurface ? 'chevron-up' : 'chevron-down'} size={20} color="#1F1F1F" />
         </View>
+        <Icon name={showVolSurface ? 'chevron-up' : 'chevron-down'} size={17} color="#6B7280" />
       </TouchableOpacity>
       {showVolSurface && (
         <View style={styles.content}>
           {loading.volSurface ? (
-            <ActivityIndicator size="small" color="#3B82F6" />
+            <ActivityIndicator size="small" color="#00cc99" />
           ) : errors.volSurface ? (
             <Text style={styles.error}>{errors.volSurface}</Text>
           ) : volSurface ? (
@@ -404,20 +409,24 @@ export default function QuantTerminalWidget({
       {/* Edge Decay Curve */}
       <TouchableOpacity
         style={styles.section}
+        activeOpacity={0.9}
         onPress={() => {
           setShowEdgeDecay(!showEdgeDecay);
           if (!showEdgeDecay && !edgeDecay) fetchEdgeDecay();
         }}
       >
-        <View style={styles.sectionHeader}>
+        <View style={styles.sectionLeft}>
+          <View style={styles.sectionIconWrap}>
+            <Icon name="trending-down" size={13} color="#6366F1" />
+          </View>
           <Text style={styles.sectionTitle}>Edge Decay</Text>
-          <Icon name={showEdgeDecay ? 'chevron-up' : 'chevron-down'} size={20} color="#1F1F1F" />
         </View>
+        <Icon name={showEdgeDecay ? 'chevron-up' : 'chevron-down'} size={17} color="#6B7280" />
       </TouchableOpacity>
       {showEdgeDecay && (
         <View style={styles.content}>
           {loading.edgeDecay ? (
-            <ActivityIndicator size="small" color="#3B82F6" />
+            <ActivityIndicator size="small" color="#00cc99" />
           ) : errors.edgeDecay ? (
             <Text style={styles.error}>{errors.edgeDecay}</Text>
           ) : edgeDecay ? (
@@ -425,7 +434,7 @@ export default function QuantTerminalWidget({
               <Text style={styles.label}>Strategy: {edgeDecay.strategy_name}</Text>
               <Text style={styles.label}>Decay Rate: {(edgeDecay.decay_rate * 100).toFixed(1)}% per day</Text>
               <Text style={styles.label}>Half-Life: {edgeDecay.half_life_days.toFixed(1)} days</Text>
-              
+
               {/* Chart Type Selector */}
               <View style={styles.chartTypeSelector}>
                 {(['line', 'bar'] as const).map((type) => (
@@ -440,7 +449,7 @@ export default function QuantTerminalWidget({
                   </TouchableOpacity>
                 ))}
               </View>
-              
+
               {edgeDecayChartData && (
                 <View style={styles.chartContainer}>
                   {chartType === 'line' ? (
@@ -451,20 +460,14 @@ export default function QuantTerminalWidget({
                       chartConfig={{
                         backgroundColor: '#FFFFFF',
                         backgroundGradientFrom: '#FFFFFF',
-                        backgroundGradientTo: '#FAFBFF',
+                        backgroundGradientTo: '#F8F9FB',
                         decimalPlaces: 1,
-                        color: () => '#3B82F6',
+                        color: () => '#6366F1',
                         labelColor: () => '#6B7280',
-                        propsForBackgroundLines: { stroke: '#E5E7EB' },
+                        propsForBackgroundLines: { stroke: '#EBEBF0' },
                         propsForLabels: { fontWeight: '600' },
-                        style: {
-                          borderRadius: 16,
-                        },
-                        propsForDots: {
-                          r: '4',
-                          strokeWidth: '2',
-                          stroke: '#3B82F6',
-                        },
+                        style: { borderRadius: 12 },
+                        propsForDots: { r: '4', strokeWidth: '2', stroke: '#6366F1' },
                       }}
                       bezier
                       style={styles.chart}
@@ -486,15 +489,13 @@ export default function QuantTerminalWidget({
                       chartConfig={{
                         backgroundColor: '#FFFFFF',
                         backgroundGradientFrom: '#FFFFFF',
-                        backgroundGradientTo: '#FAFBFF',
+                        backgroundGradientTo: '#F8F9FB',
                         decimalPlaces: 1,
-                        color: () => '#3B82F6',
+                        color: () => '#6366F1',
                         labelColor: () => '#6B7280',
-                        propsForBackgroundLines: { stroke: '#E5E7EB' },
+                        propsForBackgroundLines: { stroke: '#EBEBF0' },
                         propsForLabels: { fontWeight: '600' },
-                        style: {
-                          borderRadius: 16,
-                        },
+                        style: { borderRadius: 12 },
                       }}
                       style={styles.chart}
                       showValuesOnTopOfBars={false}
@@ -516,20 +517,24 @@ export default function QuantTerminalWidget({
       {/* Regime Timeline */}
       <TouchableOpacity
         style={styles.section}
+        activeOpacity={0.9}
         onPress={() => {
           setShowRegimeTimeline(!showRegimeTimeline);
           if (!showRegimeTimeline && !regimeTimeline) fetchRegimeTimeline();
         }}
       >
-        <View style={styles.sectionHeader}>
+        <View style={styles.sectionLeft}>
+          <View style={styles.sectionIconWrap}>
+            <Icon name="clock" size={13} color="#6366F1" />
+          </View>
           <Text style={styles.sectionTitle}>Regime Timeline</Text>
-          <Icon name={showRegimeTimeline ? 'chevron-up' : 'chevron-down'} size={20} color="#1F1F1F" />
         </View>
+        <Icon name={showRegimeTimeline ? 'chevron-up' : 'chevron-down'} size={17} color="#6B7280" />
       </TouchableOpacity>
       {showRegimeTimeline && (
         <View style={styles.content}>
           {loading.regimeTimeline ? (
-            <ActivityIndicator size="small" color="#3B82F6" />
+            <ActivityIndicator size="small" color="#00cc99" />
           ) : errors.regimeTimeline ? (
             <Text style={styles.error}>{errors.regimeTimeline}</Text>
           ) : regimeTimeline ? (
@@ -554,20 +559,24 @@ export default function QuantTerminalWidget({
       {/* Portfolio DNA */}
       <TouchableOpacity
         style={styles.section}
+        activeOpacity={0.9}
         onPress={() => {
           setShowPortfolioDNA(!showPortfolioDNA);
           if (!showPortfolioDNA && !portfolioDNA) fetchPortfolioDNA();
         }}
       >
-        <View style={styles.sectionHeader}>
+        <View style={styles.sectionLeft}>
+          <View style={styles.sectionIconWrap}>
+            <Icon name="user" size={13} color="#6366F1" />
+          </View>
           <Text style={styles.sectionTitle}>Portfolio DNA</Text>
-          <Icon name={showPortfolioDNA ? 'chevron-up' : 'chevron-down'} size={20} color="#1F1F1F" />
         </View>
+        <Icon name={showPortfolioDNA ? 'chevron-up' : 'chevron-down'} size={17} color="#6B7280" />
       </TouchableOpacity>
       {showPortfolioDNA && (
         <View style={styles.content}>
           {loading.portfolioDNA ? (
-            <ActivityIndicator size="small" color="#3B82F6" />
+            <ActivityIndicator size="small" color="#00cc99" />
           ) : errors.portfolioDNA ? (
             <Text style={styles.error}>{errors.portfolioDNA}</Text>
           ) : portfolioDNA ? (
@@ -625,152 +634,160 @@ export default function QuantTerminalWidget({
 }
 
 const styles = StyleSheet.create({
+  // Container — sits inside the white featured card, no extra card shadow needed
   container: {
-    backgroundColor: '#FDFDFD',
-    borderRadius: 28,
-    padding: 24,
-    marginVertical: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.1,
-    shadowRadius: 40,
-    elevation: 24,
-    borderWidth: 1,
-    borderColor: '#E8E8ED',
+    backgroundColor: 'transparent',
+    marginTop: 8,
+    marginBottom: 8,
   },
 
+  // Header row — matches topHeader in RustForexWidget
+  qtHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  qtIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#6366F110',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   title: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#1F1F1F',
-    letterSpacing: -0.6,
-    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0B0B0F',
+    letterSpacing: 0.1,
   },
 
-  // Section Toggle (Collapsible Headers)
+  // Section toggle — matches the `toggle` style in RustForexWidget
   section: {
-    marginTop: 24,
-    backgroundColor: '#F5F7FF',
-    borderRadius: 24,
-    paddingVertical: 20,
-    paddingHorizontal: 22,
-    borderWidth: 1.5,
-    borderColor: '#E2E6F0',
-  },
-  sectionHeader: {
+    marginBottom: 8,
+    backgroundColor: '#F8F9FB',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#EBEBF0',
+    paddingVertical: 13,
+    paddingHorizontal: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  sectionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  sectionIconWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#6366F110',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   sectionTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#1F1F1F',
-    letterSpacing: -0.3,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0B0B0F',
   },
 
-  // Expandable Content Panels
+  // Content panel — matches `panel` in RustForexWidget
   content: {
-    marginTop: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
-    borderRadius: 24,
-    padding: 22,
+    marginBottom: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#E8E8F0',
+    borderColor: '#EBEBF0',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.08,
-    shadowRadius: 28,
-    elevation: 16,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
 
   label: {
-    fontSize: 14,
-    color: '#555E70',
+    fontSize: 12,
+    color: '#6B7280',
     fontWeight: '600',
-    marginBottom: 6,
-    letterSpacing: -0.1,
+    marginBottom: 4,
   },
 
   error: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#EF4444',
     fontWeight: '700',
     textAlign: 'center',
-    marginVertical: 12,
+    marginVertical: 8,
   },
 
   empty: {
-    fontSize: 15,
-    color: '#8B949E',
+    fontSize: 13,
+    color: '#AEAEB2',
     fontWeight: '600',
     fontStyle: 'italic',
     textAlign: 'center',
-    marginVertical: 20,
+    marginVertical: 16,
   },
 
   // Vol Surface Heatmap
   heatmapContainer: {
-    marginTop: 16,
+    marginTop: 12,
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    padding: 16,
-    borderWidth: 1.5,
-    borderColor: '#ECECF2',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 8,
+    backgroundColor: '#F8F9FB',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#EBEBF0',
   },
 
   legendContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 16,
-    gap: 12,
+    marginTop: 12,
+    gap: 10,
   },
   legendGradient: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 3,
   },
   legendColor: {
-    width: 28,
-    height: 16,
-    borderRadius: 8,
+    width: 24,
+    height: 14,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: '#EBEBF0',
   },
   legendLabel: {
-    fontSize: 12,
-    color: '#69707F',
+    fontSize: 11,
+    color: '#8E8E93',
     fontWeight: '700',
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
 
   // Edge Decay Chart
   chartContainer: {
-    marginTop: 16,
+    marginTop: 12,
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
-    paddingVertical: 20,
-    paddingHorizontal: 12,
-    borderWidth: 1.5,
-    borderColor: '#ECECF2',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 8,
+    backgroundColor: '#F8F9FB',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: '#EBEBF0',
   },
   chart: {
-    borderRadius: 16,
+    borderRadius: 12,
   },
   chartLabel: {
-    marginTop: 16,
-    fontSize: 13,
-    color: '#555E70',
+    marginTop: 10,
+    fontSize: 11,
+    color: '#8E8E93',
     fontWeight: '700',
     textAlign: 'center',
   },
@@ -778,25 +795,25 @@ const styles = StyleSheet.create({
   chartTypeSelector: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 12,
-    marginTop: 16,
+    gap: 8,
+    marginTop: 12,
   },
   chartTypeButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 16,
-    backgroundColor: '#F1F5FF',
-    borderWidth: 1.5,
-    borderColor: '#E2E6F0',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#F8F9FB',
+    borderWidth: 1,
+    borderColor: '#EBEBF0',
   },
   chartTypeButtonActive: {
-    backgroundColor: '#1F1F1F',
-    borderColor: '#1F1F1F',
+    backgroundColor: '#0B0B0F',
+    borderColor: '#0B0B0F',
   },
   chartTypeButtonText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#555E70',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6B7280',
   },
   chartTypeButtonTextActive: {
     color: '#FFFFFF',
@@ -804,88 +821,84 @@ const styles = StyleSheet.create({
 
   // Regime Timeline
   timelineContainer: {
-    maxHeight: 320,
+    maxHeight: 300,
   },
   timelineEvent: {
-    backgroundColor: '#FAFBFF',
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 14,
-    borderWidth: 1.5,
-    borderColor: '#E2E8FF',
+    backgroundColor: '#F8F9FB',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#EBEBF0',
   },
   eventDate: {
-    fontSize: 12,
-    color: '#8B949E',
+    fontSize: 10,
+    color: '#AEAEB2',
     fontWeight: '700',
-    marginBottom: 6,
-    letterSpacing: 0.6,
+    marginBottom: 4,
+    letterSpacing: 0.5,
   },
   eventRegime: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '800',
-    color: '#3B82F6',
-    marginBottom: 6,
+    color: '#6366F1',
+    marginBottom: 4,
   },
   eventHeadline: {
-    fontSize: 15,
-    color: '#1F1F1F',
+    fontSize: 13,
+    color: '#0B0B0F',
     fontWeight: '600',
-    lineHeight: 22,
-    marginBottom: 8,
+    lineHeight: 20,
+    marginBottom: 6,
   },
   eventConfidence: {
-    fontSize: 13,
-    color: '#555E70',
+    fontSize: 11,
+    color: '#8E8E93',
     fontWeight: '700',
   },
 
   // Portfolio DNA
   dnaCard: {
-    backgroundColor: '#EFF6FF',
-    borderRadius: 24,
-    padding: 28,
-    marginBottom: 24,
+    backgroundColor: '#6366F108',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: '#BFDBFE',
-    shadowColor: '#3B82F6',
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 12,
+    borderWidth: 1,
+    borderColor: '#6366F120',
   },
   dnaArchetype: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: '#1D4ED8',
-    letterSpacing: -0.8,
-    marginBottom: 8,
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0B0B0F',
+    letterSpacing: -0.5,
+    marginBottom: 6,
   },
   dnaSubtext: {
-    fontSize: 15,
-    color: '#2563EB',
+    fontSize: 12,
+    color: '#6B7280',
     fontWeight: '600',
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 18,
   },
 
   dnaSection: {
-    marginBottom: 24,
+    marginBottom: 16,
   },
   dnaLabel: {
-    fontSize: 17,
+    fontSize: 12,
     fontWeight: '800',
-    color: '#1F1F1F',
-    marginBottom: 14,
-    letterSpacing: -0.3,
+    color: '#0B0B0F',
+    marginBottom: 8,
+    letterSpacing: 0.1,
   },
   dnaText: {
-    fontSize: 15,
-    color: '#374151',
+    fontSize: 13,
+    color: '#3A3A3C',
     fontWeight: '600',
-    lineHeight: 24,
-    marginBottom: 8,
-    paddingLeft: 4,
+    lineHeight: 20,
+    marginBottom: 4,
+    paddingLeft: 2,
   },
 });
 
