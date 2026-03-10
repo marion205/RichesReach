@@ -120,6 +120,7 @@ function deriveDecision(
     pairPretty: string;
   },
   oraclePayload?: any,
+  regimePayload?: any,
 ): DecisionResult {
   const { tLabel, vLabel, exLabel, confidence, support, mid, pairPretty } = computed;
 
@@ -129,6 +130,10 @@ function deriveDecision(
   const oneSentence  = oraclePayload ? String(oraclePayload.one_sentence ?? '') : '';
   const riskGuard    = oraclePayload?.risk_guard ?? null;
   const hasOracleData = !!oraclePayload;
+
+  // Regime fields (from /v1/regime/simple — available on load, before oracle)
+  const regimeHeadlineAuto = regimePayload ? String(regimePayload.headline ?? regimePayload.regime_headline ?? '') : '';
+  const regimeAction       = regimePayload ? String(regimePayload.action ?? regimePayload.regime_action ?? '') : '';
 
   // ── 1. Verdict from market signals ──────────────────────────────────────────
   const isAvoid =
@@ -186,8 +191,9 @@ function deriveDecision(
   else if (tLabel === 'Down') pool.push('Trend is down');
   else                        pool.push('Price is moving sideways');
 
-  // Oracle one_sentence or regime headline (richest context)
+  // Oracle one_sentence takes priority; fall back to regime headline (auto-loaded) or oracle regime_headline
   if (oneSentence && oneSentence.length > 10)             pool.push(oneSentence);
+  else if (regimeHeadlineAuto && regimeHeadlineAuto.length > 5) pool.push(regimeHeadlineAuto);
   else if (oraclePayload?.regime_headline)                 pool.push(String(oraclePayload.regime_headline));
 
   // Volatility
@@ -235,7 +241,12 @@ function deriveDecision(
   // ── 7. Plain English ─────────────────────────────────────────────────────────
   let plainEnglish: string;
   if (oneSentence && oneSentence.length > 10) {
+    // Oracle has fired — richest context
     plainEnglish = oneSentence;
+  } else if (regimeAction && regimeAction.length > 5) {
+    // Regime auto-loaded — gives a macro action string before oracle fires
+    const volNote = vLabel === 'Wild' ? ' Volatility is elevated — size down.' : '';
+    plainEnglish = `${regimeAction}${volNote}`;
   } else {
     const direction = tLabel === 'Up' ? 'long' : tLabel === 'Down' ? 'short' : 'either direction';
     const volNote   = vLabel === 'Wild' ? ' Volatility is elevated — size down.' : '';
@@ -383,6 +394,9 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
     }
   }, []);
 
+  // Regime simple (auto-loaded on mount)
+  const [regime, setRegime] = useState<LoadState>({ status: 'idle' });
+
   const [analysis, setAnalysis] = useState<ForexAnalysisResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
@@ -438,11 +452,28 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
     }
   };
 
+  const fetchRegimeSimple = async () => {
+    if (!API_RUST_BASE) return;
+    setRegime({ status: 'loading' });
+    try {
+      const { json } = await getJson('/v1/regime/simple');
+      setRegime({ status: 'ready', payload: json });
+    } catch {
+      // Regime is best-effort — silent failure is fine, the card still works from signals
+      setRegime({ status: 'idle' });
+    }
+  };
+
   useEffect(() => {
     if (pair) {
       fetchForexAnalysis(pair);
     }
   }, [pair]);
+
+  // Fetch regime once on mount (pair-agnostic macro context)
+  useEffect(() => {
+    fetchRegimeSimple();
+  }, []);
 
   const handleSearch = () => {
     const trimmed = inputValue.trim().toUpperCase();
@@ -535,8 +566,12 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
   }, [analysis]);
 
   const decision = useMemo(
-    () => deriveDecision(computed, oracle.status === 'ready' ? oracle.payload : undefined),
-    [computed, oracle],
+    () => deriveDecision(
+      computed,
+      oracle.status === 'ready' ? oracle.payload : undefined,
+      regime.status === 'ready' ? regime.payload : undefined,
+    ),
+    [computed, oracle, regime],
   );
 
   // ---- Actions: Alpha Oracle / Backtest / Fusion / RL ----
@@ -897,7 +932,7 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
             {/* 4. Risk box — only shown once Alpha Oracle has fired */}
             {oracle.status === 'ready' && (
               <View style={styles.decisionRiskWrap}>
-                <View style={styles.grid3}>
+                <View style={[styles.grid3, { marginTop: 0 }]}>
                   <View style={styles.cell}>
                     <Text style={styles.cellLabel}>CONFIDENCE</Text>
                     <Text style={styles.cellValue}>{decision.confidencePct}%</Text>
@@ -928,7 +963,9 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
             {/* 6. Oracle hint — shown only while oracle hasn't been called */}
             {oracle.status === 'idle' && (
               <Text style={styles.decisionOracleHint}>
-                Tap Alpha Oracle below for a deeper analysis.
+                {regime.status === 'ready'
+                  ? 'Macro regime loaded. Tap Alpha Oracle for position sizing.'
+                  : 'Tap Alpha Oracle below for a deeper analysis.'}
               </Text>
             )}
 
