@@ -3,6 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
+  ScrollView,
   ActivityIndicator,
   TouchableOpacity,
   TextInput,
@@ -149,6 +150,7 @@ interface DecisionResult {
   invalidation: string;
   confidencePct: number;
   riskTier: 'conservative' | 'normal' | 'aggressive';
+  riskOneLiner: string;     // e.g. "Small size only", "Normal size"
   plainEnglish: string;
   hasOracleData: boolean;
 }
@@ -283,7 +285,12 @@ function deriveDecision(
     riskTier = 'conservative';
   }
 
-  // ── 7. Plain English ─────────────────────────────────────────────────────────
+  // ── 7. Risk one-liner (for "Should You Take This Trade?" card) ─────────────────
+  const riskOneLiner =
+    riskTier === 'conservative' ? 'Small size only' :
+    riskTier === 'normal' ? 'Reduced size' : 'Normal size';
+
+  // ── 8. Plain English ─────────────────────────────────────────────────────────
   let plainEnglish: string;
   if (oneSentence && oneSentence.length > 10) {
     // Oracle has fired — richest context
@@ -309,7 +316,7 @@ function deriveDecision(
   return {
     verdict, verdictColor, verdictBg, accentBorder,
     evidence, invalidation, confidencePct: confidence,
-    riskTier, plainEnglish, hasOracleData,
+    riskTier, riskOneLiner, plainEnglish, hasOracleData,
   };
 }
 
@@ -938,8 +945,13 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
         </View>
       </View>
 
-      {/* Signal chips */}
-      <View style={styles.signalRow}>
+      {/* Signal chips — horizontal scroll so full text shows (no ellipsis) */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.signalRowContent}
+        style={styles.signalRowScroll}
+      >
         <View style={[styles.signalChip, { backgroundColor: computed.tColor + '14', borderColor: computed.tColor + '35' }]}>
           <Icon name={computed.tLabel === 'Up' ? 'trending-up' : computed.tLabel === 'Down' ? 'trending-down' : 'minus'} size={13} color={computed.tColor} />
           <Text style={[styles.signalChipLabel, { color: computed.tColor }]}>Trend</Text>
@@ -955,7 +967,7 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
           <Text style={[styles.signalChipLabel, { color: computed.exColor }]}>Exec</Text>
           <Text style={[styles.signalChipValue, { color: computed.exColor }]}>{computed.exLabel}</Text>
         </View>
-      </View>
+      </ScrollView>
 
       {/* ═══════════ DECISION CARD ═══════════ */}
       <View style={styles.decisionCard}>
@@ -977,17 +989,29 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
           <Icon name={showDecision ? 'chevron-up' : 'chevron-down'} size={16} color="#6B7280" />
         </TouchableOpacity>
 
-        {/* Collapsible body */}
+        {/* Collapsible body — unified decision: Action, Confidence, Why, Risk, Invalidation, Simple view */}
         {showDecision && (
           <>
-            {/* 1. Verdict chip */}
-            <View style={[styles.verdictChip, { backgroundColor: decision.verdictBg }]}>
-              <Text style={[styles.verdictChipText, { color: decision.verdictColor }]}>
-                {decision.verdict}
-              </Text>
+            {/* 1. Simple view (one sentence that ties it together) */}
+            <View style={styles.decisionWhyWrap}>
+              <Text style={styles.simpleViewLabel}>Simple view</Text>
+              <Text style={styles.simpleViewText}>{decision.plainEnglish}</Text>
             </View>
 
-            {/* 2. Evidence — 3 bullet rows */}
+            {/* 2. Action + Confidence row — aligned, tight spacing */}
+            <View style={styles.actionConfidenceRow}>
+              <View style={[styles.verdictChipInRow, { backgroundColor: decision.verdictBg }]}>
+                <Text style={[styles.verdictChipText, { color: decision.verdictColor }]} numberOfLines={2}>
+                  {decision.verdict}
+                </Text>
+              </View>
+              <View style={styles.confidencePill}>
+                <Text style={styles.confidencePillLabel}>Confidence</Text>
+                <Text style={styles.confidencePillValue}>{decision.confidencePct}%</Text>
+              </View>
+            </View>
+
+            {/* 3. Why — evidence bullets + cross-asset when fusion has run */}
             <View style={styles.evidenceBox}>
               {decision.evidence.map((e, i) => (
                 <View key={`ev-${i}`} style={styles.bulletRow}>
@@ -995,18 +1019,30 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
                   <Text style={[styles.bulletText, e === 'Awaiting more data' && { color: '#AEAEB2' }]}>{e}</Text>
                 </View>
               ))}
+              {fusion.status === 'ready' && fusionSentence ? (
+                <View style={styles.bulletRow}>
+                  <View style={styles.bulletDot} />
+                  <Text style={styles.bulletText}>Cross-asset: {fusionSentence}</Text>
+                </View>
+              ) : null}
             </View>
 
-            {/* 3. Invalidation row */}
+            {/* 4. Risk one-liner */}
+            <View style={styles.riskOneLinerRow}>
+              <Text style={styles.riskOneLinerLabel}>Risk: </Text>
+              <Text style={styles.riskOneLinerValue}>{decision.riskOneLiner}</Text>
+            </View>
+
+            {/* 5. Invalidation */}
             <View style={styles.invalidationRow}>
               <Icon name="alert-triangle" size={13} color="#F59E0B" />
               <Text style={styles.invalidationText}>
-                <Text style={styles.invalidationLabel}>Breaks if: </Text>
+                <Text style={styles.invalidationLabel}>Invalidation: </Text>
                 {decision.invalidation}
               </Text>
             </View>
 
-            {/* 4. Risk box — only shown once Alpha Oracle has fired */}
+            {/* 6. Risk grid — when Alpha Oracle has fired */}
             {oracle.status === 'ready' && (
               <View style={styles.decisionRiskWrap}>
                 <View style={[styles.grid3, { marginTop: 0 }]}>
@@ -1030,14 +1066,7 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
               </View>
             )}
 
-            {/* 5. Plain English box */}
-            <View style={styles.decisionWhyWrap}>
-              <View style={styles.whyBox}>
-                <Text style={styles.whyLine}>{decision.plainEnglish}</Text>
-              </View>
-            </View>
-
-            {/* 6. Oracle hint — shown only while oracle hasn't been called */}
+            {/* 7. Oracle hint when oracle hasn't been called */}
             {oracle.status === 'idle' && (
               <Text style={styles.decisionOracleHint}>
                 {regime.status === 'ready'
@@ -1493,13 +1522,24 @@ const styles = StyleSheet.create({
   bidAskLabel: { fontSize: 9, fontWeight: '800', color: '#AEAEB2', letterSpacing: 0.6, marginBottom: 3 },
   bidAskValue: { fontSize: 13, fontWeight: '700', color: '#3A3A3C' },
 
-  // Signal chips row
-  signalRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  signalChip: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 10, paddingVertical: 9, borderRadius: 14, borderWidth: 1,
+  // Signal chips — horizontal scroll so full labels (Trend Sideways, Vol Calm, Exec Normal) show
+  signalRowScroll: { marginBottom: 16 },
+  signalRowContent: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingRight: 24,
   },
-  signalChipLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.4, flex: 1 },
+  signalChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  signalChipLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 0.2 },
   signalChipValue: { fontSize: 12, fontWeight: '800' },
 
   // Accordion toggles
@@ -1700,7 +1740,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
 
-  // Verdict pill
+  // Verdict pill (standalone)
   verdictChip: {
     marginHorizontal: 16,
     marginBottom: 14,
@@ -1709,10 +1749,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Verdict pill inside Action+Confidence row (no margin, flex, same height as confidence)
+  verdictChipInRow: {
+    flex: 1,
+    minHeight: 56,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   verdictChipText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.2,
+    textAlign: 'center',
   },
 
   // Evidence bullets
@@ -1753,10 +1804,67 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  // Plain-English box wrapper
+  // Plain-English box wrapper + Simple view (first in expanded body)
   decisionWhyWrap: {
     paddingHorizontal: 16,
+    paddingTop: 6,
+    marginBottom: 12,
+  },
+  simpleViewLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6B7280',
     marginBottom: 4,
+    letterSpacing: 0.2,
+  },
+  simpleViewText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0B0B0F',
+    lineHeight: 20,
+  },
+  actionConfidenceRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    paddingHorizontal: 16,
+    marginBottom: 14,
+    gap: 8,
+  },
+  confidencePill: {
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    minWidth: 80,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confidencePillLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#6B7280',
+    letterSpacing: 0.2,
+  },
+  confidencePillValue: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0B0B0F',
+  },
+  riskOneLinerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 16,
+    marginBottom: 10,
+  },
+  riskOneLinerLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6B7280',
+  },
+  riskOneLinerValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0B0B0F',
   },
 
   // Oracle hint
