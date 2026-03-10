@@ -1096,7 +1096,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
         g?.holdings ??
         (mockData ? mockData.portfolioMetrics.holdings : []);
   
-      // Transform holdings to match PortfolioHoldings interface
+      // Transform holdings to match PortfolioHoldings interface (and BasicRiskMetrics: sector, returnPercent)
       interface RawHolding {
         symbol?: string;
         stock?: { symbol?: string; companyName?: string };
@@ -1110,6 +1110,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
         changePercent?: number;
         companyName?: string;
         name?: string;
+        sector?: string | null;
         [key: string]: unknown;
       }
       const holdings = rawHoldings.map((h: RawHolding) => ({
@@ -1118,8 +1119,11 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
         currentPrice: h.currentPrice || 0,
         totalValue: h.totalValue || 0,
         change: h.returnAmount || h.change || 0,
-        changePercent: h.returnPercent || h.changePercent || 0,
+        changePercent: h.returnPercent ?? h.changePercent ?? 0,
         name: h.companyName || h.stock?.companyName || h.name,
+        sector: h.sector ?? undefined,
+        returnPercent: h.returnPercent ?? h.changePercent ?? 0,
+        companyName: h.companyName || h.stock?.companyName || h.name,
       }));
   
       return { totalValue, totalReturn, totalReturnPercent, holdings };

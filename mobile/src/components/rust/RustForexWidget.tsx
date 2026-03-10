@@ -15,6 +15,8 @@ import { API_RUST_BASE } from '../../config/api';
 import QuantTerminalWidget from './QuantTerminalWidget';
 import logger from '../../utils/logger';
 
+const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
+
 // REST API response type (matches Rust backend)
 interface ForexAnalysisResponse {
   pair: string;
@@ -27,6 +29,49 @@ interface ForexAnalysisResponse {
   resistance: number;
   timestamp: string;
 }
+
+function getDemoForexAnalysis(pairToFetch: string): ForexAnalysisResponse {
+  const now = new Date().toISOString();
+  const bid = 1.08452;
+  const ask = 1.08468;
+  return {
+    pair: pairToFetch,
+    bid,
+    ask,
+    spread_bps: 1.6,
+    atr_14: 0.0082,
+    trend: 'BULLISH',
+    support: 1.078,
+    resistance: 1.092,
+    timestamp: now,
+  };
+}
+
+const DEMO_RL_PAYLOAD = {
+  recommended_strategies: [
+    { strategy_name: 'fx_momentum', weight: 0.42, score: 0.42 },
+    { strategy_name: 'fx_orb', weight: 0.35, score: 0.35 },
+    { strategy_name: 'fx_mean_reversion', weight: 0.23, score: 0.23 },
+  ],
+};
+
+const DEMO_ORACLE_PAYLOAD = {
+  alpha_score: 6.8,
+  conviction: 'WEAK BUY',
+  one_sentence: 'EUR/USD shows a mild bullish bias with calm volatility — small long exposure fits current regime.',
+  regime_headline: 'Trend Up, Vol Calm',
+  ml_confidence: 0.72,
+  explanation: 'Model favors a small long based on trend and volatility regime.',
+  position_sizing: { quantity: 0.02, stop_loss: 1.078, risk_usd: 50 },
+  risk_guard: { approved: true, scale: 1, reason: 'Within risk limits.' },
+};
+
+const DEMO_BACKTEST_PAYLOAD = { sharpe_ratio: 1.24, win_rate: 0.58, total_return: 12.4 };
+const DEMO_FUSION_PAYLOAD = {
+  fusion_recommendation: { action: 'Cross-asset view supports a small long in EUR/USD; equities risk-on.', confidence: 0.65 },
+  action: 'Cross-asset view supports a small long in EUR/USD; equities risk-on.',
+  confidence: 0.65,
+};
 
 interface RustForexWidgetProps {
   defaultPair?: string;
@@ -403,19 +448,29 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
 
   const fetchForexAnalysis = async (pairToFetch: string) => {
     if (!pairToFetch) return;
-    
+
     setLoading(true);
     setError(null);
-    
+
+    if (IS_DEMO && !API_RUST_BASE) {
+      setAnalysis(getDemoForexAnalysis(pairToFetch));
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await fetch(`${API_RUST_BASE}/v1/forex/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pair: pairToFetch }),
       });
-      
+
       if (!response.ok) {
-        // Try to get error message from response
+        if (IS_DEMO) {
+          setAnalysis(getDemoForexAnalysis(pairToFetch));
+          setLoading(false);
+          return;
+        }
         let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
         try {
           const errorData = await response.text();
@@ -430,23 +485,24 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
         } catch {
           // Ignore parsing errors
         }
-        
-        // Provide user-friendly error messages
         if (response.status === 500) {
           errorMessage = 'Forex data service unavailable. Market data provider may not have forex data configured.';
         } else if (response.status === 400) {
           errorMessage = `Invalid forex pair: ${pairToFetch}`;
         }
-        
         throw new Error(errorMessage);
       }
-      
+
       const data: ForexAnalysisResponse = await response.json();
       setAnalysis(data);
     } catch (err: any) {
       logger.error('Forex analysis error:', err);
-      setError(err);
-      setAnalysis(null);
+      if (IS_DEMO) {
+        setAnalysis(getDemoForexAnalysis(pairToFetch));
+      } else {
+        setError(err);
+        setAnalysis(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -581,11 +637,14 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
     const eq = safeNum(equity);
     const open = Math.max(0, parseInt(openPositions || '0', 10));
 
-    if (!entry) return setOracle({ status: 'error', message: 'No price available yet.' });
-    if (!eq || eq <= 0) return setOracle({ status: 'error', message: 'Equity must be a positive number.' });
+    if (!entry && !IS_DEMO) return setOracle({ status: 'error', message: 'No price available yet.' });
+    if ((!eq || eq <= 0) && !IS_DEMO) return setOracle({ status: 'error', message: 'Equity must be a positive number.' });
 
     setOracle({ status: 'loading' });
-
+    if (IS_DEMO) {
+      setTimeout(() => setOracle({ status: 'ready', payload: DEMO_ORACLE_PAYLOAD, ms: 85 }), 400);
+      return;
+    }
     try {
       const { json, ms } = await postJson('/v1/alpha/signal', {
         symbol: pair,
@@ -605,11 +664,15 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
 
   async function runBacktest() {
     setBacktest({ status: 'loading' });
+    if (IS_DEMO) {
+      setTimeout(() => setBacktest({ status: 'ready', payload: DEMO_BACKTEST_PAYLOAD, ms: 120 }), 500);
+      return;
+    }
     try {
       const { json, ms } = await postJson('/v1/backtest/run', {
         strategy_name: strategy,
         symbol: pair,
-        signals: [], // In production, this would come from historical data
+        signals: [],
         config: null,
       });
       setBacktest({ status: 'ready', payload: json, ms });
@@ -620,6 +683,10 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
 
   async function fetchBacktestScore() {
     setScore({ status: 'loading' });
+    if (IS_DEMO) {
+      setTimeout(() => setScore({ status: 'ready', payload: { score: 78, strategy_score: 78 }, ms: 45 }), 200);
+      return;
+    }
     try {
       const { json, ms } = await getJson(`/v1/backtest/score/${encodeURIComponent(strategy)}/${encodeURIComponent(pair)}`);
       setScore({ status: 'ready', payload: json, ms });
@@ -630,6 +697,10 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
 
   async function runFusion() {
     setFusion({ status: 'loading' });
+    if (IS_DEMO) {
+      setTimeout(() => setFusion({ status: 'ready', payload: DEMO_FUSION_PAYLOAD, ms: 95 }), 350);
+      return;
+    }
     try {
       const { json, ms } = await postJson('/v1/cross-asset/signal', {
         primary_asset: pair,
@@ -642,6 +713,12 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
 
   async function rlRecommend() {
     setRlRec({ status: 'loading' });
+    if (IS_DEMO) {
+      setTimeout(() => {
+        setRlRec({ status: 'ready', payload: DEMO_RL_PAYLOAD, ms: 68 });
+      }, 300);
+      return;
+    }
     try {
       const { json, ms } = await postJson('/v1/rl/recommend', {
         user_id: userId,

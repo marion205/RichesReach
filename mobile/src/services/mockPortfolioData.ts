@@ -288,11 +288,64 @@ export function getMockMyPortfolios(): MockMyPortfolios {
 }
 
 /**
- * Get mock portfolio data for HomeScreen (matching chart values)
+ * Demo mock for HomeScreen Risk & Diversification + Portfolio Comparison.
+ * Matches one-pager screenshot: 3 holdings, 1 sector, top holding 46%, Total Return +1.22% / $160.
+ */
+function getDemoHomeScreenPortfolioMetrics() {
+  const totalValue = 13150;
+  const totalReturn = 160;
+  const totalReturnPercent = 1.22;
+  const totalCost = totalValue - totalReturn;
+  const holdings: MockPortfolioHolding[] = [
+    {
+      symbol: 'AAPL',
+      companyName: 'Apple Inc.',
+      shares: 28,
+      currentPrice: 216.04,
+      totalValue: Math.round(totalValue * 0.46),
+      costBasis: Math.round((totalValue * 0.46) - 72),
+      returnAmount: 72,
+      returnPercent: 1.2,
+      sector: 'Technology',
+    },
+    {
+      symbol: 'MSFT',
+      companyName: 'Microsoft Corporation',
+      shares: 10,
+      currentPrice: 394.50,
+      totalValue: Math.round(totalValue * 0.30),
+      costBasis: Math.round((totalValue * 0.30) - 48),
+      returnAmount: 48,
+      returnPercent: 1.3,
+      sector: 'Technology',
+    },
+    {
+      symbol: 'GOOGL',
+      companyName: 'Alphabet Inc.',
+      shares: 24,
+      currentPrice: 131.50,
+      totalValue: Math.round(totalValue * 0.24),
+      costBasis: Math.round((totalValue * 0.24) - 40),
+      returnAmount: 40,
+      returnPercent: 1.15,
+      sector: 'Technology',
+    },
+  ];
+  return {
+    totalValue,
+    totalCost,
+    totalReturn,
+    totalReturnPercent,
+    holdings,
+  };
+}
+
+/**
+ * Get mock portfolio data for HomeScreen (demo: screenshot-style; otherwise chart values)
  */
 export function getMockHomeScreenPortfolio() {
-  const metrics = getMockPortfolioMetrics();
-  
+  const metrics = getDemoHomeScreenPortfolioMetrics();
+
   return {
     portfolioMetrics: {
       totalValue: metrics.totalValue,
