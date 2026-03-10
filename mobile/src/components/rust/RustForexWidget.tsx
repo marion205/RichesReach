@@ -93,6 +93,172 @@ function convictionColor(conv: string) {
   return '#6B7280';
 }
 
+// ─── Decision Engine ──────────────────────────────────────────────────────────
+
+interface DecisionResult {
+  verdict: 'Take It' | 'Take It Small' | 'Wait for Confirmation' | 'Avoid This Setup';
+  verdictColor: string;
+  verdictBg: string;
+  accentBorder: boolean;
+  evidence: string[];       // always exactly 3 items
+  invalidation: string;
+  confidencePct: number;
+  riskTier: 'conservative' | 'normal' | 'aggressive';
+  plainEnglish: string;
+  hasOracleData: boolean;
+}
+
+function deriveDecision(
+  computed: {
+    tLabel: TrendLabel;
+    vLabel: VolLabel;
+    exLabel: ExecLabel;
+    confidence: number;
+    support: number | null;
+    resistance: number | null;
+    mid: number | null;
+    pairPretty: string;
+  },
+  oraclePayload?: any,
+): DecisionResult {
+  const { tLabel, vLabel, exLabel, confidence, support, mid, pairPretty } = computed;
+
+  // Oracle fields (only when available)
+  const alphaScore   = oraclePayload ? safeNum(oraclePayload.alpha_score) : null;
+  const conviction   = oraclePayload ? String(oraclePayload.conviction ?? '').toUpperCase() : '';
+  const oneSentence  = oraclePayload ? String(oraclePayload.one_sentence ?? '') : '';
+  const riskGuard    = oraclePayload?.risk_guard ?? null;
+  const hasOracleData = !!oraclePayload;
+
+  // ── 1. Verdict from market signals ──────────────────────────────────────────
+  const isAvoid =
+    exLabel === 'Wide' ||
+    (vLabel === 'Wild' && tLabel === 'Sideways') ||
+    conviction.includes('DUMP') ||
+    conviction.includes('SELL');
+
+  const isTakeItSmall =
+    !isAvoid && (
+      vLabel === 'Wild' ||
+      (exLabel === 'Normal' && vLabel !== 'Calm') ||
+      conviction.includes('WEAK BUY') ||
+      conviction.includes('NEUTRAL')
+    );
+
+  const isWait = !isAvoid && !isTakeItSmall && tLabel === 'Sideways';
+
+  let verdict: DecisionResult['verdict'];
+  if (isAvoid) {
+    verdict = 'Avoid This Setup';
+  } else if (isTakeItSmall) {
+    verdict = 'Take It Small';
+  } else if (isWait) {
+    verdict = 'Wait for Confirmation';
+  } else {
+    verdict = 'Take It';
+  }
+
+  // ── 2. Oracle promotion / demotion ──────────────────────────────────────────
+  if (alphaScore !== null) {
+    if (alphaScore > 6 && verdict !== 'Avoid This Setup') verdict = 'Take It';
+    if (alphaScore < 3) verdict = 'Avoid This Setup';
+  }
+  // Risk guard veto
+  if (riskGuard && riskGuard.approved === false) {
+    if (verdict === 'Take It') verdict = 'Take It Small';
+  }
+
+  // ── 3. Verdict colour ────────────────────────────────────────────────────────
+  const verdictColorMap: Record<DecisionResult['verdict'], { color: string; bg: string }> = {
+    'Take It':               { color: '#FFFFFF', bg: '#00cc99' },
+    'Take It Small':         { color: '#FFFFFF', bg: '#F59E0B' },
+    'Wait for Confirmation': { color: '#FFFFFF', bg: '#F59E0B' },
+    'Avoid This Setup':      { color: '#FFFFFF', bg: '#EF4444' },
+  };
+  const { color: verdictColor, bg: verdictBg } = verdictColorMap[verdict];
+  const accentBorder = verdict === 'Take It';
+
+  // ── 4. Evidence pool ─────────────────────────────────────────────────────────
+  const pool: string[] = [];
+
+  // Trend — always first
+  if (tLabel === 'Up')        pool.push('Trend is up');
+  else if (tLabel === 'Down') pool.push('Trend is down');
+  else                        pool.push('Price is moving sideways');
+
+  // Oracle one_sentence or regime headline (richest context)
+  if (oneSentence && oneSentence.length > 10)             pool.push(oneSentence);
+  else if (oraclePayload?.regime_headline)                 pool.push(String(oraclePayload.regime_headline));
+
+  // Volatility
+  if (vLabel === 'Calm')      pool.push('Volatility is calm');
+  else if (vLabel === 'Wild') pool.push('Volatility is elevated');
+  else                        pool.push('Volatility is normal');
+
+  // Execution cost
+  if (exLabel === 'Tight')    pool.push('Tight spread — low execution cost');
+  else if (exLabel === 'Wide') pool.push('Wide spread — entry cost is high');
+  else                        pool.push('Spread is normal');
+
+  // Price vs. support
+  if (support !== null && mid !== null && mid > 0) {
+    const pct = Math.abs((mid - support) / mid) * 100;
+    if (pct < 0.5) pool.push(`Support at ${fmt5(support)} holding`);
+  }
+
+  // De-dupe, cap at 3, pad
+  const evidence = [...new Set(pool)].slice(0, 3);
+  while (evidence.length < 3) evidence.push('Awaiting more data');
+
+  // ── 5. Invalidation ──────────────────────────────────────────────────────────
+  let invalidation: string;
+  if (riskGuard && riskGuard.approved === false && riskGuard.reason) {
+    invalidation = String(riskGuard.reason);
+  } else if (support !== null) {
+    invalidation = `Break below support at ${fmt5(support)}`;
+  } else if (vLabel === 'Normal') {
+    invalidation = 'Spike in volatility to Wild';
+  } else if (exLabel === 'Normal') {
+    invalidation = 'Spread widening further';
+  } else {
+    invalidation = 'Significant trend reversal';
+  }
+
+  // ── 6. Risk tier ─────────────────────────────────────────────────────────────
+  let riskTier: DecisionResult['riskTier'];
+  if (verdict === 'Take It') {
+    riskTier = confidence >= 75 ? 'aggressive' : 'normal';
+  } else {
+    riskTier = 'conservative';
+  }
+
+  // ── 7. Plain English ─────────────────────────────────────────────────────────
+  let plainEnglish: string;
+  if (oneSentence && oneSentence.length > 10) {
+    plainEnglish = oneSentence;
+  } else {
+    const direction = tLabel === 'Up' ? 'long' : tLabel === 'Down' ? 'short' : 'either direction';
+    const volNote   = vLabel === 'Wild' ? ' Volatility is elevated — size down.' : '';
+    if (verdict === 'Take It') {
+      plainEnglish = `${pairPretty} looks favorable for a ${direction}.${volNote}`;
+    } else if (verdict === 'Take It Small') {
+      plainEnglish = `${pairPretty} has potential but conditions are mixed. Consider a smaller position.${volNote}`;
+    } else if (verdict === 'Wait for Confirmation') {
+      plainEnglish = `${pairPretty} is range-bound. Wait for a clear directional move before entering.`;
+    } else {
+      plainEnglish = `Conditions don't favour entering ${pairPretty} right now. Review the risk factors above.`;
+    }
+  }
+
+  return {
+    verdict, verdictColor, verdictBg, accentBorder,
+    evidence, invalidation, confidencePct: confidence,
+    riskTier, plainEnglish, hasOracleData,
+  };
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+
 async function postJson(path: string, body: any) {
   if (!API_RUST_BASE) {
     const err: any = new Error('Rust API server not configured. Please set EXPO_PUBLIC_RUST_API_URL.');
@@ -183,6 +349,7 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
 
   const [showExplain, setShowExplain] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [showDecision, setShowDecision] = useState(true);
 
   // Alpha Oracle
   const [showOracle, setShowOracle] = useState(false);
@@ -366,6 +533,11 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
       pairPretty,
     };
   }, [analysis]);
+
+  const decision = useMemo(
+    () => deriveDecision(computed, oracle.status === 'ready' ? oracle.payload : undefined),
+    [computed, oracle],
+  );
 
   // ---- Actions: Alpha Oracle / Backtest / Fusion / RL ----
 
@@ -672,6 +844,99 @@ export default function RustForexWidget({ defaultPair = 'EURUSD', size = 'large'
           <Text style={[styles.signalChipValue, { color: computed.exColor }]}>{computed.exLabel}</Text>
         </View>
       </View>
+
+      {/* ═══════════ DECISION CARD ═══════════ */}
+      <View style={styles.decisionCard}>
+        {/* Teal accent bar — absolute-positioned to avoid iOS overflow:hidden clip */}
+        {decision.accentBorder && (
+          <View style={styles.decisionAccentBar} />
+        )}
+
+        {/* Card header — always visible, toggles body */}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => {
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setShowDecision(v => !v);
+          }}
+          style={styles.decisionHeader}
+        >
+          <Text style={styles.decisionTitle}>Should You Take This Trade?</Text>
+          <Icon name={showDecision ? 'chevron-up' : 'chevron-down'} size={16} color="#6B7280" />
+        </TouchableOpacity>
+
+        {/* Collapsible body */}
+        {showDecision && (
+          <>
+            {/* 1. Verdict chip */}
+            <View style={[styles.verdictChip, { backgroundColor: decision.verdictBg }]}>
+              <Text style={[styles.verdictChipText, { color: decision.verdictColor }]}>
+                {decision.verdict}
+              </Text>
+            </View>
+
+            {/* 2. Evidence — 3 bullet rows */}
+            <View style={styles.evidenceBox}>
+              {decision.evidence.map((e, i) => (
+                <View key={`ev-${i}`} style={styles.bulletRow}>
+                  <View style={[styles.bulletDot, e === 'Awaiting more data' && { backgroundColor: '#AEAEB2' }]} />
+                  <Text style={[styles.bulletText, e === 'Awaiting more data' && { color: '#AEAEB2' }]}>{e}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* 3. Invalidation row */}
+            <View style={styles.invalidationRow}>
+              <Icon name="alert-triangle" size={13} color="#F59E0B" />
+              <Text style={styles.invalidationText}>
+                <Text style={styles.invalidationLabel}>Breaks if: </Text>
+                {decision.invalidation}
+              </Text>
+            </View>
+
+            {/* 4. Risk box — only shown once Alpha Oracle has fired */}
+            {oracle.status === 'ready' && (
+              <View style={styles.decisionRiskWrap}>
+                <View style={styles.grid3}>
+                  <View style={styles.cell}>
+                    <Text style={styles.cellLabel}>CONFIDENCE</Text>
+                    <Text style={styles.cellValue}>{decision.confidencePct}%</Text>
+                  </View>
+                  <View style={styles.cell}>
+                    <Text style={styles.cellLabel}>SIZING</Text>
+                    <Text style={styles.cellValue}>
+                      {decision.riskTier === 'aggressive' ? 'Normal' : decision.riskTier === 'normal' ? 'Reduced' : 'Small'}
+                    </Text>
+                  </View>
+                  <View style={styles.cell}>
+                    <Text style={styles.cellLabel}>MAX RISK</Text>
+                    <Text style={styles.cellValue}>
+                      {decision.riskTier === 'conservative' ? 'Low' : decision.riskTier === 'normal' ? 'Medium' : 'Standard'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* 5. Plain English box */}
+            <View style={styles.decisionWhyWrap}>
+              <View style={styles.whyBox}>
+                <Text style={styles.whyLine}>{decision.plainEnglish}</Text>
+              </View>
+            </View>
+
+            {/* 6. Oracle hint — shown only while oracle hasn't been called */}
+            {oracle.status === 'idle' && (
+              <Text style={styles.decisionOracleHint}>
+                Tap Alpha Oracle below for a deeper analysis.
+              </Text>
+            )}
+
+            <Text style={[styles.disclaimer, { marginHorizontal: 16 }]}>Educational insights — not financial advice.</Text>
+          </>
+        )}
+      </View>
+      {/* ═══════════ END DECISION CARD ═══════════ */}
 
       {/* Alpha Oracle */}
       <TouchableOpacity
@@ -1281,4 +1546,113 @@ const styles = StyleSheet.create({
   bulletText: { flex: 1, fontSize: 13, color: '#3A3A3C', fontWeight: '500', lineHeight: 20 },
 
   disclaimer: { marginTop: 12, fontSize: 11, color: '#AEAEB2', fontWeight: '500', textAlign: 'center' },
+
+  // ── Decision Card ─────────────────────────────────────────────────────────
+  decisionCard: {
+    position: 'relative',
+    marginBottom: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EBEBF0',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  // Teal accent bar — absolute, avoids iOS overflow:hidden + borderLeftWidth clip issue
+  decisionAccentBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    backgroundColor: '#00cc99',
+    zIndex: 1,
+  },
+  decisionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  decisionTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0B0B0F',
+    letterSpacing: 0.1,
+  },
+
+  // Verdict pill
+  verdictChip: {
+    marginHorizontal: 16,
+    marginBottom: 14,
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  verdictChipText: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+
+  // Evidence bullets
+  evidenceBox: {
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+
+  // Invalidation amber row
+  invalidationRow: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  invalidationText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#92400E',
+    lineHeight: 18,
+  },
+  invalidationLabel: {
+    fontWeight: '800',
+    color: '#92400E',
+  },
+
+  // Risk grid wrapper (applies horizontal padding inside the card)
+  decisionRiskWrap: {
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+
+  // Plain-English box wrapper
+  decisionWhyWrap: {
+    paddingHorizontal: 16,
+    marginBottom: 4,
+  },
+
+  // Oracle hint
+  decisionOracleHint: {
+    marginHorizontal: 16,
+    marginTop: 6,
+    marginBottom: 4,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#00cc99',
+    textAlign: 'center',
+  },
 });
