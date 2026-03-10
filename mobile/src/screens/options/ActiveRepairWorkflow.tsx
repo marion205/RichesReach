@@ -172,6 +172,10 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
   const positions: Position[] = portfolioData?.positions || [];
   const repairPlans: RepairPlan[] = portfolioData?.repair_plans || [];
 
+  // Safe number formatting — avoid "Cannot read property 'toFixed' of undefined"
+  const n = (v: number | undefined | null, decimals: number = 0) =>
+    (v != null && Number.isFinite(v) ? v : 0).toFixed(decimals);
+
   // Map repair plans to positions
   const positionsWithRepairs = positions.map((pos) => ({
     position: pos,
@@ -222,17 +226,17 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
         {
           number: 1,
           title: 'Understand the Problem',
-          description: `Your ${selectedRepair.originalStrategy} has drifted from your original delta target by ${(selectedRepair.deltaDriftPct * 100).toFixed(1)}%.`,
+          description: `Your ${selectedRepair.originalStrategy} has drifted from your original delta target by ${n((selectedRepair.deltaDriftPct ?? 0) * 100, 1)}%.`,
         },
         {
           number: 2,
           title: 'The Repair Solution',
-          description: `A ${selectedRepair.repairType} will add ${selectedRepair.repairStrikes} strikes to realign your position and collect ${selectedRepair.repairCredit.toFixed(2)} in premium.`,
+          description: `A ${selectedRepair.repairType} will add ${selectedRepair.repairStrikes} strikes to realign your position and collect ${n(selectedRepair.repairCredit, 2)} in premium.`,
         },
         {
           number: 3,
           title: 'Risk Management',
-          description: `Your max loss will change from $${selectedRepair.currentMaxLoss.toFixed(0)} to $${selectedRepair.newMaxLoss.toFixed(0)}, while improving your statistical edge by ${(selectedRepair.confidenceBoost * 100).toFixed(0)}%.`,
+          description: `Your max loss will change from $${n(selectedRepair.currentMaxLoss, 0)} to $${n(selectedRepair.newMaxLoss, 0)}, while improving your statistical edge by ${n((selectedRepair.confidenceBoost ?? 0) * 100, 0)}%.`,
         },
         {
           number: 4,
@@ -241,10 +245,10 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
         },
       ],
       keyMetrics: {
-        currentDelta: selectedRepair.currentDelta,
-        newBreakeven: selectedRepair.newBreakEven,
-        creditReceived: selectedRepair.repairCredit,
-        maxLossReduction: selectedRepair.currentMaxLoss - selectedRepair.newMaxLoss,
+        currentDelta: selectedRepair.currentDelta ?? 0,
+        newBreakeven: selectedRepair.newBreakEven ?? 0,
+        creditReceived: selectedRepair.repairCredit ?? 0,
+        maxLossReduction: (selectedRepair.currentMaxLoss ?? 0) - (selectedRepair.newMaxLoss ?? 0),
       },
     };
     
@@ -293,15 +297,15 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
         <View style={styles.overviewGrid}>
           <View style={styles.overviewCard}>
             <Text style={styles.overviewLabel}>Portfolio Delta</Text>
-            <Text style={[styles.overviewValue, { color: Math.abs(portfolio.totalDelta) > 0.5 ? '#EF4444' : '#10B981' }]}>
-              {portfolio.totalDelta.toFixed(2)}
+            <Text style={[styles.overviewValue, { color: Math.abs(portfolio.totalDelta ?? 0) > 0.5 ? '#EF4444' : '#10B981' }]}>
+              {n(portfolio.totalDelta, 2)}
             </Text>
           </View>
 
           <View style={styles.overviewCard}>
             <Text style={styles.overviewLabel}>Max Daily Loss</Text>
             <Text style={styles.overviewValue}>
-              ${Math.abs(portfolio.totalMaxLoss).toFixed(0)}
+              ${n(Math.abs(portfolio.totalMaxLoss ?? 0), 0)}
             </Text>
           </View>
 
@@ -314,8 +318,8 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
 
           <View style={styles.overviewCard}>
             <Text style={styles.overviewLabel}>Theta Decay</Text>
-            <Text style={[styles.overviewValue, { color: portfolio.totalTheta > 0 ? '#10B981' : '#EF4444' }]}>
-              ${portfolio.totalTheta.toFixed(0)}/day
+            <Text style={[styles.overviewValue, { color: (portfolio.totalTheta ?? 0) > 0 ? '#10B981' : '#EF4444' }]}>
+              ${n(portfolio.totalTheta, 0)}/day
             </Text>
           </View>
         </View>
@@ -423,7 +427,7 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
                     <View style={styles.comparisonItem}>
                       <Text style={styles.comparisonLabel}>Delta Drift</Text>
                       <Text style={styles.comparisonBefore}>
-                        Current: {selectedRepair.currentDelta.toFixed(2)}
+                        Current: {n(selectedRepair.currentDelta, 2)}
                       </Text>
                       <Text style={styles.comparisonAfter}>
                         Target: ~0.10 (Neutral)
@@ -448,7 +452,7 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
                     <View style={styles.actionRow}>
                       <Text style={styles.actionRowLabel}>Credit</Text>
                       <Text style={[styles.actionRowValue, { color: '#10B981' }]}>
-                        +${selectedRepair.repairCredit.toFixed(0)}
+                        +${n(selectedRepair.repairCredit, 0)}
                       </Text>
                     </View>
                   </View>
@@ -462,7 +466,7 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
                     <View style={styles.riskRow}>
                       <Text style={styles.riskLabel}>Current Max Loss</Text>
                       <Text style={styles.riskValue}>
-                        ${selectedRepair.currentMaxLoss.toFixed(0)}
+                        ${n(selectedRepair.currentMaxLoss, 0)}
                       </Text>
                     </View>
                     <View style={styles.riskArrow}>
@@ -471,13 +475,13 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
                     <View style={styles.riskRow}>
                       <Text style={styles.riskLabel}>After Repair</Text>
                       <Text style={[styles.riskValue, { color: '#10B981' }]}>
-                        ${selectedRepair.newMaxLoss.toFixed(0)}
+                        ${n(selectedRepair.newMaxLoss, 0)}
                       </Text>
                     </View>
                   </View>
 
                   <Text style={styles.riskSubtext}>
-                    Reduces max loss by ${(selectedRepair.currentMaxLoss - selectedRepair.newMaxLoss).toFixed(0)}
+                    Reduces max loss by ${n((selectedRepair.currentMaxLoss ?? 0) - (selectedRepair.newMaxLoss ?? 0), 0)}
                   </Text>
                 </View>
 
@@ -495,7 +499,7 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
                   <Text style={styles.sectionTitle}>Edge Boost</Text>
                   <Text style={{ fontSize: 14, color: '#047857', marginTop: 8 }}>
                     This repair increases your statistical edge by{' '}
-                    <Text style={{ fontWeight: '700' }}>+{(selectedRepair.confidenceBoost * 100).toFixed(0)}%</Text>.
+                    <Text style={{ fontWeight: '700' }}>+{n((selectedRepair.confidenceBoost ?? 0) * 100, 0)}%</Text>.
                   </Text>
                 </View>
 
@@ -513,17 +517,17 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
                           {
                             number: 1,
                             title: 'Understand the Problem',
-                            description: `Your ${selectedRepair.originalStrategy} has drifted from your original delta target by ${(selectedRepair.deltaDriftPct * 100).toFixed(1)}%.`,
+                            description: `Your ${selectedRepair.originalStrategy} has drifted from your original delta target by ${n((selectedRepair.deltaDriftPct ?? 0) * 100, 1)}%.`,
                           },
                           {
                             number: 2,
                             title: 'The Repair Solution',
-                            description: `A ${selectedRepair.repairType} will add ${selectedRepair.repairStrikes} strikes to realign your position and collect ${selectedRepair.repairCredit.toFixed(2)} in premium.`,
+                            description: `A ${selectedRepair.repairType} will add ${selectedRepair.repairStrikes} strikes to realign your position and collect ${n(selectedRepair.repairCredit, 2)} in premium.`,
                           },
                           {
                             number: 3,
                             title: 'Risk Management',
-                            description: `Your max loss will change from $${selectedRepair.currentMaxLoss.toFixed(0)} to $${selectedRepair.newMaxLoss.toFixed(0)}, while improving your statistical edge by ${(selectedRepair.confidenceBoost * 100).toFixed(0)}%.`,
+                            description: `Your max loss will change from $${n(selectedRepair.currentMaxLoss, 0)} to $${n(selectedRepair.newMaxLoss, 0)}, while improving your statistical edge by ${n((selectedRepair.confidenceBoost ?? 0) * 100, 0)}%.`,
                           },
                           {
                             number: 4,
@@ -532,10 +536,10 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
                           },
                         ],
                         keyMetrics: {
-                          currentDelta: selectedRepair.currentDelta,
-                          newBreakeven: selectedRepair.newBreakEven,
-                          creditReceived: selectedRepair.repairCredit,
-                          maxLossReduction: selectedRepair.currentMaxLoss - selectedRepair.newMaxLoss,
+                          currentDelta: selectedRepair.currentDelta ?? 0,
+                          newBreakeven: selectedRepair.newBreakEven ?? 0,
+                          creditReceived: selectedRepair.repairCredit ?? 0,
+                          maxLossReduction: (selectedRepair.currentMaxLoss ?? 0) - (selectedRepair.newMaxLoss ?? 0),
                         },
                       });
                       setShowFlightManual(true);
@@ -650,19 +654,19 @@ export const ActiveRepairWorkflow: React.FC<ActiveRepairWorkflowProps> = ({
                   <View style={styles.metricsGrid}>
                     <View style={styles.metricCard}>
                       <Text style={styles.metricLabel}>Current Delta</Text>
-                      <Text style={styles.metricValue}>{flightManualContent.keyMetrics.currentDelta.toFixed(2)}</Text>
+                      <Text style={styles.metricValue}>{(flightManualContent.keyMetrics?.currentDelta ?? 0).toFixed(2)}</Text>
                     </View>
                     <View style={styles.metricCard}>
                       <Text style={styles.metricLabel}>New Breakeven</Text>
-                      <Text style={styles.metricValue}>${flightManualContent.keyMetrics.newBreakeven.toFixed(2)}</Text>
+                      <Text style={styles.metricValue}>${(flightManualContent.keyMetrics?.newBreakeven ?? 0).toFixed(2)}</Text>
                     </View>
                     <View style={styles.metricCard}>
                       <Text style={styles.metricLabel}>Credit</Text>
-                      <Text style={styles.metricValue}>${flightManualContent.keyMetrics.creditReceived.toFixed(2)}</Text>
+                      <Text style={styles.metricValue}>${(flightManualContent.keyMetrics?.creditReceived ?? 0).toFixed(2)}</Text>
                     </View>
                     <View style={styles.metricCard}>
                       <Text style={styles.metricLabel}>Loss Reduction</Text>
-                      <Text style={styles.metricValue}>${flightManualContent.keyMetrics.maxLossReduction.toFixed(0)}</Text>
+                      <Text style={styles.metricValue}>${(flightManualContent.keyMetrics?.maxLossReduction ?? 0).toFixed(0)}</Text>
                     </View>
                   </View>
                 </View>

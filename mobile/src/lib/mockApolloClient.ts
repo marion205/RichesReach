@@ -153,6 +153,40 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
   GetMyPortfolios:       { myPortfolios: DEMO_MY_PORTFOLIOS },
   MyPortfolios:          { myPortfolios: DEMO_MY_PORTFOLIOS },
   GetPortfolioRiskReport: { portfolioRiskReport: DEMO_PORTFOLIO_RISK_REPORT },
+
+  // Active Repairs (options repair workflow)
+  GetPortfolioWithRepairs: {
+    portfolio: {
+      totalDelta: 0.12,
+      totalGamma: 0.02,
+      totalTheta: 45,
+      totalVega: 120,
+      portfolioHealthStatus: 'healthy',
+      repairsAvailable: 0,
+      totalMaxLoss: 8500,
+      __typename: 'Portfolio',
+    },
+    positions: [
+      {
+        id: 'pos-demo-1',
+        ticker: 'AAPL',
+        strategyType: 'Covered Call',
+        entryPrice: 178.5,
+        currentPrice: 182.2,
+        quantity: 100,
+        unrealizedPnl: 370,
+        daysToExpiration: 42,
+        expirationDate: new Date(Date.now() + 42 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        greeks: { delta: 0.35, gamma: 0.02, theta: -0.8, vega: 12, rho: 0.1 },
+        maxLoss: 4200,
+        probabilityOfProfit: 0.72,
+        status: 'open',
+        __typename: 'Position',
+      },
+    ],
+    repair_plans: [],
+  },
+
   PortfolioKellyMetrics: {
     portfolioKellyMetrics: {
       totalPortfolioValue: 14303.52,
@@ -958,6 +992,63 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
       { date: '2025-01-01', score: 710, factors: ['On-time payments', 'Low utilisation'] },
       { date: '2025-02-01', score: 718, factors: ['Credit age improving'] },
       { date: '2025-03-01', score: 725, factors: ['New account mix'] },
+    ],
+  },
+
+  // AI Scans (AIScansScreen)
+  GetAIScans: {
+    aiScans: [
+      {
+        id: 'scan-demo-1',
+        name: 'Momentum Breakout',
+        description: 'Stocks breaking out on volume with positive momentum.',
+        category: 'MOMENTUM',
+        riskLevel: 'MODERATE',
+        timeHorizon: 'SWING',
+        isActive: true,
+        lastRun: new Date(Date.now() - 3600000).toISOString(),
+        results: [
+          { id: 'r1', symbol: 'NVDA', currentPrice: 138.5, changePercent: 2.4, confidence: 0.82, score: 0.78 },
+          { id: 'r2', symbol: 'META', currentPrice: 512.2, changePercent: 1.8, confidence: 0.75, score: 0.72 },
+        ],
+        playbook: { id: 'pb-1', name: 'Breakout Playbook', performance: { successRate: 0.68, averageReturn: 0.12 } },
+      },
+      {
+        id: 'scan-demo-2',
+        name: 'Value + Quality',
+        description: 'Undervalued names with strong fundamentals.',
+        category: 'VALUE',
+        riskLevel: 'LOW',
+        timeHorizon: 'LONG',
+        isActive: true,
+        lastRun: new Date(Date.now() - 7200000).toISOString(),
+        results: [
+          { id: 'r3', symbol: 'PYPL', currentPrice: 68.4, changePercent: -0.5, confidence: 0.71, score: 0.65 },
+        ],
+        playbook: { id: 'pb-2', name: 'Value Playbook', performance: { successRate: 0.62, averageReturn: 0.08 } },
+      },
+    ],
+  },
+
+  // Playbooks (AIScansScreen playbooks tab)
+  GetPlaybooks: {
+    playbooks: [
+      {
+        id: 'playbook-demo-1',
+        name: 'Momentum Breakout',
+        author: 'RichesReach Research',
+        riskLevel: 'MODERATE',
+        performance: { successRate: 0.68, averageReturn: 0.12 },
+        tags: ['momentum', 'breakout', 'swing'],
+      },
+      {
+        id: 'playbook-demo-2',
+        name: 'Value & Quality',
+        author: 'RichesReach Research',
+        riskLevel: 'LOW',
+        performance: { successRate: 0.62, averageReturn: 0.08 },
+        tags: ['value', 'fundamentals', 'long-term'],
+      },
     ],
   },
 
