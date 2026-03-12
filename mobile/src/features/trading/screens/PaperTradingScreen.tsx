@@ -82,6 +82,7 @@ const GET_PAPER_ACCOUNT_SUMMARY = gql`
         createdAt
       }
       statistics {
+        openPositions
         totalTrades
         winningTrades
         losingTrades
@@ -405,8 +406,12 @@ export default function PaperTradingScreen({ navigation: propNavigation }: Paper
           <Text style={styles.cardTitle}>Statistics</Text>
           <View style={styles.statsGrid}>
             <View style={styles.statItem}>
+              <Text style={styles.statValue}>{statistics?.openPositions ?? (positions?.length ?? 0)}</Text>
+              <Text style={styles.statLabel}>Open Positions</Text>
+            </View>
+            <View style={styles.statItem}>
               <Text style={styles.statValue}>{statistics?.totalTrades || displayAccount.totalTrades || 0}</Text>
-              <Text style={styles.statLabel}>Total Trades</Text>
+              <Text style={styles.statLabel}>Closed Trades</Text>
             </View>
             <View style={styles.statItem}>
               <Text style={[styles.statValue, styles.winRate]}>

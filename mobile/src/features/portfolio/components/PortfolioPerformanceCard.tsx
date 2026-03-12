@@ -68,9 +68,13 @@ export default function PortfolioPerformanceCard({
     labels: [],
   });
 
-  // Dynamic values that can change
+  // Dynamic values that can change; sync from parent when it updates (e.g. refetch shows 0)
   const [totalValue, setTotalValue] = useState(initialTotalValue);
   const [totalReturn, setTotalReturn] = useState(initialTotalReturn);
+  useEffect(() => {
+    setTotalValue(initialTotalValue);
+    setTotalReturn(initialTotalReturn);
+  }, [initialTotalValue, initialTotalReturn]);
 
   // Calculate totalReturnPercent if not provided
   const totalReturnPercent = useMemo(() => {
@@ -201,28 +205,24 @@ export default function PortfolioPerformanceCard({
     setChartData(newData);
   }, [tab, totalValue, totalReturn]);
 
-  // Simulate live updates every 5 seconds
+  // Simulate live updates every 5 seconds only when user has a non-zero portfolio (don't inflate 0 to 100K)
   useEffect(() => {
+    if (totalValue <= 0) return;
     const interval = setInterval(() => {
-      // Simulate small price changes
       const change = (Math.random() - 0.5) * 500;
-      setTotalValue((prev) => Math.max(prev + change, 100000));
+      setTotalValue((prev) => Math.max(prev + change, 0));
       setTotalReturn((prev) => prev + change);
 
-      // Update last point in chart
       setChartData((prev) => {
         const newPortfolio = [...prev.portfolio];
         const newBenchmark = [...prev.benchmark];
-
         if (newPortfolio.length > 0) {
           newPortfolio[newPortfolio.length - 1] = totalValue + change;
           newBenchmark[newBenchmark.length - 1] += change * 0.76;
         }
-
         return { ...prev, portfolio: newPortfolio, benchmark: newBenchmark };
       });
     }, 5000);
-
     return () => clearInterval(interval);
   }, [totalValue]);
 

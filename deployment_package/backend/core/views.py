@@ -3,6 +3,7 @@ from graphene_django.views import GraphQLView
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
 from .authentication import get_user_from_token
 import json
 
@@ -53,10 +54,11 @@ class AuthenticatedGraphQLView(GraphQLView):
         return result
     
     def get_context(self, request):
-        """Override to ensure user and DataLoaders are in GraphQL context"""
+        """Override to ensure user and DataLoaders are in GraphQL context.
+        Always set context.user so resolvers never see None (avoids 'NoneType' has no attribute 'is_anonymous')."""
         context = super().get_context(request)
-        if hasattr(request, "user") and request.user and not request.user.is_anonymous:
-            context.user = request.user
+        user = getattr(request, "user", None)
+        context.user = user if (user and not getattr(user, "is_anonymous", True)) else AnonymousUser()
         try:
             from core.graphql.dataloaders import create_loaders_for_request
             context.loaders = create_loaders_for_request()

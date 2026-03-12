@@ -33,16 +33,16 @@ class PaperTradingService:
             )
             return account
         except Exception as e:
-            # If database table doesn't exist, return a mock account
+            # If database table doesn't exist, return a mock account. Set all attrs on instance
+            # so we never reference function params inside the class body (avoids NameError in Py 3.13).
             logger.warning(f"⚠️ [Paper Trading] Database error (table may not exist): {e}")
-            logger.warning(f"⚠️ [Paper Trading] Returning mock account for user {user.id}")
+            logger.warning(f"⚠️ [Paper Trading] Returning mock account for user {getattr(user, 'id', None)}")
             
             class MockAccount:
                 id = 1
-                user = user
-                initial_balance = initial_balance
-                current_balance = initial_balance
-                total_value = initial_balance
+                initial_balance = Decimal('100000.00')
+                current_balance = Decimal('100000.00')
+                total_value = Decimal('100000.00')
                 realized_pnl = Decimal('0.00')
                 unrealized_pnl = Decimal('0.00')
                 total_pnl = Decimal('0.00')
@@ -52,7 +52,12 @@ class PaperTradingService:
                 losing_trades = 0
                 win_rate = Decimal('0.00')
             
-            return MockAccount()
+            mock = MockAccount()
+            mock.user = user
+            mock.initial_balance = initial_balance
+            mock.current_balance = initial_balance
+            mock.total_value = initial_balance
+            return mock
     
     def get_account(self, user):
         """Get paper trading account for a user"""
@@ -129,12 +134,22 @@ class PaperTradingService:
             raise ValidationError("Quantity must be greater than 0")
         
         from .models import Stock
-        try:
-            stock = Stock.objects.get(symbol=symbol.upper())
-        except Stock.DoesNotExist:
-            raise ValidationError(f"Stock {symbol} not found")
+        symbol_upper = symbol.upper()
+        stock, created = Stock.objects.get_or_create(
+            symbol=symbol_upper,
+            defaults={
+                'company_name': symbol_upper,
+                'sector': None,
+            }
+        )
+        if created:
+            logger.info(f"[Paper Trading] Created Stock record for {symbol_upper}")
         
         account = self.get_account(user)
+        if not getattr(account, '_meta', None):
+            raise ValidationError(
+                "Paper trading is not set up. Run: python manage.py migrate (from deployment_package/backend)."
+            )
         
         # Get current price
         try:
@@ -142,6 +157,9 @@ class PaperTradingService:
             if not current_price:
                 raise ValidationError(f"Could not get current price for {symbol}")
             current_price = Decimal(str(current_price))
+            # Optionally keep DB in sync for next time
+            if stock.current_price != current_price:
+                Stock.objects.filter(pk=stock.pk).update(current_price=current_price)
         except Exception as e:
             logger.error(f"Error getting price for {symbol}: {e}")
             raise ValidationError(f"Could not get current price for {symbol}")
@@ -367,6 +385,7 @@ class PaperTradingService:
             
             # Only return account if it's a real Django model instance, not a mock
             account_to_return = account if hasattr(account, '_meta') else None
+            open_positions_count = len([p for p in positions if getattr(p, 'shares', 0) > 0])
             
             return {
                 'account': account_to_return,
@@ -374,6 +393,7 @@ class PaperTradingService:
                 'open_orders': [o for o in orders if hasattr(o, 'status') and o.status == 'PENDING'],
                 'recent_trades': recent_trades,
                 'statistics': {
+                    'open_positions': open_positions_count,
                     'total_trades': total_trades,
                     'winning_trades': winning_trades,
                     'losing_trades': losing_trades,
@@ -395,6 +415,7 @@ class PaperTradingService:
                 'open_orders': [],
                 'recent_trades': [],
                 'statistics': {
+                    'open_positions': 0,
                     'total_trades': 0,
                     'winning_trades': 0,
                     'losing_trades': 0,

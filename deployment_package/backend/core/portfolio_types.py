@@ -96,8 +96,8 @@ class CreatePortfolioHolding(graphene.Mutation):
             portfolio_name,
             average_price=None,
             current_price=None):
-        user = info.context.user
-        if not user or user.is_anonymous:
+        user = getattr(info.context, "user", None)
+        if not user or getattr(user, "is_anonymous", True):
             return CreatePortfolioHolding(
                 success=False,
                 message="Authentication required"
@@ -137,8 +137,8 @@ class UpdatePortfolioHolding(graphene.Mutation):
     message = graphene.String()
     holding = graphene.Field(PortfolioHoldingType)
     def mutate(self, info, holding_id, new_portfolio_name):
-        user = info.context.user
-        if not user or user.is_anonymous:
+        user = getattr(info.context, "user", None)
+        if not user or getattr(user, "is_anonymous", True):
             return UpdatePortfolioHolding(
                 success=False,
                 message="Authentication required"
@@ -167,10 +167,8 @@ class UpdateHoldingShares(graphene.Mutation):
     message = graphene.String()
     holding = graphene.Field(PortfolioHoldingType)
     def mutate(self, info, holding_id, new_shares):
-
-
-        user = info.context.user
-        if not user or user.is_anonymous:
+        user = getattr(info.context, "user", None)
+        if not user or getattr(user, "is_anonymous", True):
             return UpdateHoldingShares(
                 success=False,
                 message="Authentication required"
@@ -201,8 +199,8 @@ class RemovePortfolioHolding(graphene.Mutation):
     success = graphene.Boolean()
     message = graphene.String()
     def mutate(self, info, holding_id):
-        user = info.context.user
-        if not user or user.is_anonymous:
+        user = getattr(info.context, "user", None)
+        if not user or getattr(user, "is_anonymous", True):
             return RemovePortfolioHolding(
                 success=False,
                 message="Authentication required"

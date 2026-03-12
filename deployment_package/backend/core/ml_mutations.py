@@ -39,12 +39,12 @@ recommendation = graphene.Field(MLPortfolioRecommendationType)
 market_analysis = graphene.JSONString()
 ml_insights = graphene.JSONString()
 def mutate(self, info, use_advanced_ml=True, include_market_analysis=True, include_risk_optimization=True):
-user = info.context.user
-if user.is_anonymous:
-return GenerateMLPortfolioRecommendation(
-success=False, 
-message="You must be logged in to generate ML portfolio recommendations"
-)
+    user = getattr(info.context, "user", None)
+    if not user or getattr(user, "is_anonymous", True):
+        return GenerateMLPortfolioRecommendation(
+            success=False, 
+            message="You must be logged in to generate ML portfolio recommendations"
+        )
 try:
 # Check if user has income profile
 try:

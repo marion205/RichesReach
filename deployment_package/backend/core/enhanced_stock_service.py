@@ -113,10 +113,48 @@ class EnhancedStockService:
                 }
                 logger.warning(f"Using fallback price for {symbol}: ${fallback_price['price']}")
                 return fallback_price
-            logger.error(f"No price data available for {symbol}")
-            return None
+            # Last resort: try Yahoo Finance (no API key required), then paper-trading default
+            try:
+                yahoo_data = await self._fetch_yahoo_price(symbol)
+                if yahoo_data and yahoo_data.get('price', 0) > 0:
+                    self._cache_price(symbol, yahoo_data)
+                    logger.info(f"Using Yahoo Finance price for {symbol}: ${yahoo_data['price']}")
+                    return yahoo_data
+            except Exception as e:
+                logger.debug(f"Yahoo Finance fallback failed for {symbol}: {e}")
+            # Paper-trading / dev fallback when no API is configured
+            default_price = 100.0
+            paper_fallback = {
+                'symbol': symbol,
+                'price': default_price,
+                'change': 0.0,
+                'change_percent': '0%',
+                'volume': 0,
+                'source': 'paper_trading_fallback',
+                'verified': False,
+                'last_updated': timezone.now().isoformat()
+            }
+            logger.warning(f"No price API configured; using paper-trading fallback for {symbol}: ${default_price}")
+            return paper_fallback
         except Exception as e:
             logger.error(f"Error getting real-time price for {symbol}: {e}")
+            return None
+
+    def get_current_price(self, symbol: str) -> Optional[float]:
+        """
+        Synchronous helper that returns current price as a float (for paper trading, etc.).
+        Runs get_real_time_price in an event loop. Returns None on error.
+        """
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                data = loop.run_until_complete(self.get_real_time_price(symbol))
+                return float(data['price']) if data and data.get('price') else None
+            finally:
+                loop.close()
+        except Exception as e:
+            logger.warning(f"get_current_price failed for {symbol}: {e}")
             return None
 
     async def get_multiple_prices(self, symbols: List[str]) -> Dict[str, Dict[str, Any]]:

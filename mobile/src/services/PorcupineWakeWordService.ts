@@ -31,23 +31,25 @@ class PorcupineWakeWordService {
     }
 
     try {
-      // Import Porcupine - dependency is now installed
+      // Import Porcupine - optional; may be missing in Expo Go / web / or when native deps not linked
       let PorcupineManager: any;
-      
+
       try {
-        // Try to require Porcupine - should work now that dependencies are installed
         const porcupineModule = require('@picovoice/porcupine-react-native');
         PorcupineManager = porcupineModule?.PorcupineManager;
       } catch (importError: any) {
-        // Handle any import errors gracefully
         const errorMsg = importError?.message || String(importError);
-        if (errorMsg.includes('@picovoice/react-native-voice-processor') || 
-            errorMsg.includes('MODULE_NOT_FOUND') ||
-            errorMsg.includes('Unable to resolve')) {
-          logger.log('ℹ️ Porcupine dependencies not available (using fallback services)');
+        const isKnownMissing =
+          errorMsg.includes('@picovoice/react-native-voice-processor') ||
+          errorMsg.includes('MODULE_NOT_FOUND') ||
+          errorMsg.includes('Unable to resolve') ||
+          errorMsg.includes('unknown module') ||
+          /Requiring unknown module '\d+'/.test(errorMsg);
+        if (isKnownMissing) {
+          logger.log('ℹ️ Porcupine not available (using fallback services)');
           return false;
         }
-        logger.error('❌ Unexpected error loading Porcupine:', importError);
+        logger.warn('Porcupine load failed:', errorMsg);
         return false;
       }
       

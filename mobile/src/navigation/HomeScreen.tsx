@@ -801,24 +801,25 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
           logger.log('ℹ️ Whisper wake word not available, trying Porcupine...');
         }
 
-        // Priority 3: Porcupine (requires API key and dependencies)
-        // Wrap in try-catch to handle bundling errors gracefully
+        // Priority 3: Porcupine (requires API key and native deps - often missing in Expo Go / web)
         try {
-          // Use dynamic import with error handling
           let porcupineModule;
           try {
             porcupineModule = await import('../services/PorcupineWakeWordService');
           } catch (importError: any) {
-            // If the module itself fails to load (bundling error), skip it
             const errorMsg = importError?.message || String(importError);
-            if (errorMsg.includes('@picovoice/react-native-voice-processor') || 
-                errorMsg.includes('Unable to resolve')) {
-              logger.log('ℹ️ Porcupine not available (missing dependencies - using fallback services)');
-              return; // Skip Porcupine, continue with other services
+            const skipPorcupine =
+              errorMsg.includes('@picovoice/react-native-voice-processor') ||
+              errorMsg.includes('Unable to resolve') ||
+              errorMsg.includes('unknown module') ||
+              /Requiring unknown module '\d+'/.test(errorMsg);
+            if (skipPorcupine) {
+              logger.log('ℹ️ Porcupine not available (using fallback services)');
+              return;
             }
-            throw importError; // Re-throw unexpected errors
+            throw importError;
           }
-          
+
           const { porcupineWakeWordService } = porcupineModule;
           const started = await porcupineWakeWordService.start();
           if (started) {
@@ -831,11 +832,14 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
             logger.log('ℹ️ Porcupine wake word not available (missing dependencies or API key)');
           }
         } catch (error: unknown) {
-          // Silently handle - Porcupine requires additional dependencies that may not be installed
           const errorMessage = error instanceof Error ? error.message : String(error);
-          if (errorMessage.includes('@picovoice/react-native-voice-processor') || 
-              errorMessage.includes('Unable to resolve')) {
-            logger.log('ℹ️ Porcupine not available (missing dependencies - using fallback services)');
+          const skipMsg =
+            errorMessage.includes('@picovoice') ||
+            errorMessage.includes('Unable to resolve') ||
+            errorMessage.includes('unknown module') ||
+            /Requiring unknown module '\d+'/.test(errorMessage);
+          if (skipMsg) {
+            logger.log('ℹ️ Porcupine not available (using fallback services)');
           } else {
             logger.log('ℹ️ Porcupine wake word not available:', errorMessage);
           }
@@ -1065,36 +1069,46 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
     }, []);
   
     // Unified resolver: prefers real -> live -> graphql. Mock only in demo mode (pitch events).
+    // When not in demo: show 0 until backend has responded; when backend says empty, use zeros and ignore local cache.
     const resolved = useMemo(() => {
       const g = portfolioData?.portfolioMetrics;
+      const gTotalValue = g != null ? (Number((g as any).totalValue ?? (g as any).total_value) || 0) : undefined;
+      const gHoldings = g?.holdings ?? (g as any)?.holdings;
       const liveVal = live?.totalValue;
       const liveRet = live?.totalReturn;
       const livePct = live?.totalReturnPercent;
       const mockData = IS_DEMO ? getMockHomeScreenPortfolio() : null;
+      const backendEmpty = !IS_DEMO && g != null && (gTotalValue === 0 || !(Array.isArray(gHoldings) && gHoldings.length));
+      const noBackendYet = !IS_DEMO && (portfolioData === undefined || g === undefined);
 
-      const totalValue =
-        realPortfolio?.totalValue ??
-        (isFinite(Number(liveVal)) ? Number(liveVal) : undefined) ??
-        g?.totalValue ??
-        (mockData ? mockData.portfolioMetrics.totalValue : 0);
+      const totalValue = (noBackendYet || backendEmpty)
+        ? 0
+        : (realPortfolio?.totalValue ??
+           (isFinite(Number(liveVal)) ? Number(liveVal) : undefined) ??
+           (gTotalValue ?? g?.totalValue ?? (g as any)?.total_value) ??
+           (mockData ? mockData.portfolioMetrics.totalValue : 0));
 
-      const totalReturn =
-        realPortfolio?.totalReturn ??
-        (isFinite(Number(liveRet)) ? Number(liveRet) : undefined) ??
-        g?.totalReturn ??
-        (mockData ? mockData.portfolioMetrics.totalReturn : 0);
+      const totalReturn = (noBackendYet || backendEmpty)
+        ? 0
+        : (realPortfolio?.totalReturn ??
+           (isFinite(Number(liveRet)) ? Number(liveRet) : undefined) ??
+           (g != null ? (Number((g as any).totalReturn ?? (g as any).total_return) ?? 0) : undefined) ?? g?.totalReturn ??
+           (mockData ? mockData.portfolioMetrics.totalReturn : 0));
 
-      const totalReturnPercent =
-        realPortfolio?.totalReturnPercent ??
-        (isFinite(Number(livePct)) ? Number(livePct) : undefined) ??
-        g?.totalReturnPercent ??
-        (mockData ? mockData.portfolioMetrics.totalReturnPercent : 0);
+      const totalReturnPercent = (noBackendYet || backendEmpty)
+        ? 0
+        : (realPortfolio?.totalReturnPercent ??
+           (isFinite(Number(livePct)) ? Number(livePct) : undefined) ??
+           (g != null ? (Number((g as any).totalReturnPercent ?? (g as any).total_return_percent) ?? 0) : undefined) ?? g?.totalReturnPercent ??
+           (mockData ? mockData.portfolioMetrics.totalReturnPercent : 0));
 
-      const rawHoldings =
-        realPortfolio?.holdings ??
-        live?.holdings ??
-        g?.holdings ??
-        (mockData ? mockData.portfolioMetrics.holdings : []);
+      const rawHoldingsSource = (noBackendYet || backendEmpty)
+        ? []
+        : (realPortfolio?.holdings ??
+           live?.holdings ??
+           gHoldings ?? g?.holdings ??
+           (mockData ? mockData.portfolioMetrics.holdings : []));
+      const rawHoldings = Array.isArray(rawHoldingsSource) ? rawHoldingsSource : [];
   
       // Transform holdings to match PortfolioHoldings interface (and BasicRiskMetrics: sector, returnPercent)
       interface RawHolding {
@@ -1125,9 +1139,30 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
         returnPercent: h.returnPercent ?? h.changePercent ?? 0,
         companyName: h.companyName || h.stock?.companyName || h.name,
       }));
-  
-      return { totalValue, totalReturn, totalReturnPercent, holdings };
+
+      // When not in demo and user has no positions, always show zero (ignore any stale or backend noise)
+      const noPositions = !IS_DEMO && holdings.length === 0;
+      const finalValue = noPositions ? 0 : totalValue;
+      const finalReturn = noPositions ? 0 : totalReturn;
+      const finalReturnPct = noPositions ? 0 : totalReturnPercent;
+      const finalHoldings = noPositions ? [] : holdings;
+
+      return { totalValue: finalValue, totalReturn: finalReturn, totalReturnPercent: finalReturnPct, holdings: finalHoldings };
     }, [realPortfolio, live, portfolioData]);
+
+    // When not in demo and backend says empty portfolio, clear local cache so we don't show stale data on next load
+    useEffect(() => {
+      if (IS_DEMO) return;
+      const g = portfolioData?.portfolioMetrics;
+      if (g == null) return;
+      const gTotalValue = Number((g as any).totalValue ?? (g as any).total_value) || 0;
+      const gHoldings = g?.holdings ?? (g as any)?.holdings;
+      const empty = gTotalValue === 0 && (!Array.isArray(gHoldings) || !gHoldings.length);
+      if (empty) {
+        AsyncStorage.removeItem('real_time_portfolio').catch(() => {});
+        setRealPortfolio(null);
+      }
+    }, [portfolioData?.portfolioMetrics]);
 
     const whisperHolding = useMemo(() => {
       if (!resolved.holdings?.length) return null;
@@ -1248,7 +1283,7 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
               </View>
 
               <PortfolioHoldings
-                holdings={(resolved.holdings || []) as any}
+                holdings={Array.isArray(resolved.holdings) ? resolved.holdings : []}
                 onStockPress={(symbol) => go('StockDetail', { symbol })}
                 onBuy={(holding) => {
                   go('trading', { symbol: holding.symbol, action: 'buy' });

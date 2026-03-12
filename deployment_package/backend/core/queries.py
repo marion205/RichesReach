@@ -102,10 +102,8 @@ class Query(graphene.ObjectType):
 
 
 def resolve_all_users(root, info):
-
-    user = info.context.user
-
-    if user.is_anonymous:
+    user = getattr(info.context, "user", None)
+    if not user or getattr(user, "is_anonymous", True):
         return []
 
     # Exclude current user and return users they don't follow
@@ -117,9 +115,8 @@ def resolve_all_users(root, info):
 
 
 def resolve_search_users(root, info, query=None):
-    user = info.context.user
-
-    if user.is_anonymous:
+    user = getattr(info.context, "user", None)
+    if not user or getattr(user, "is_anonymous", True):
         return []
 
     if query:
@@ -138,9 +135,8 @@ def resolve_search_users(root, info, query=None):
 
 
 def resolve_wall_posts(self, info):
-    user = info.context.user
-
-    if user.is_anonymous:
+    user = getattr(info.context, "user", None)
+    if not user or getattr(user, "is_anonymous", True):
         return []
 
     following_users = user.following.values_list('following', flat=True)
@@ -155,17 +151,15 @@ def resolve_wall_posts(self, info):
 
 
 def resolve_my_chat_sessions(self, info):
-    user = info.context.user
-
-    if user.is_anonymous:
+    user = getattr(info.context, "user", None)
+    if not user or getattr(user, "is_anonymous", True):
         return []
     return ChatSession.objects.filter(user=user).order_by('-updated_at')
 
 
 def resolve_chat_session(self, info, id):
-    user = info.context.user
-
-    if user.is_anonymous:
+    user = getattr(info.context, "user", None)
+    if not user or getattr(user, "is_anonymous", True):
         return None
 
     try:
@@ -177,9 +171,8 @@ def resolve_chat_session(self, info, id):
 
 
 def resolve_chat_messages(self, info, session_id):
-    user = info.context.user
-
-    if user.is_anonymous:
+    user = getattr(info.context, "user", None)
+    if not user or getattr(user, "is_anonymous", True):
         return []
 
     try:
@@ -286,8 +279,8 @@ def resolve_rust_stock_analysis(self, info, symbol):
 
 def resolve_my_watchlist(self, info):
     """Return the authenticated user's watchlist items."""
-    user = info.context.user
-    if user.is_anonymous:
+    user = getattr(info.context, "user", None)
+    if not user or getattr(user, "is_anonymous", True):
         return []
 
     try:

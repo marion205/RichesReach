@@ -78,18 +78,21 @@ class PremiumAnalyticsService:
     ) -> Dict[str, Any]:
         """
         Returns data for PortfolioMetricsType.
-
-        Expected keys:
-        - total_value, total_cost, total_return, total_return_percent
-        - volatility, sharpe_ratio, max_drawdown, beta, alpha
-        - holdings (list)
-        - sector_allocation (dict)
-        - risk_metrics (dict)
+        Prefers real data from Alpaca when the user has a linked account; otherwise
+        uses core Portfolio model or empty.
         """
         cache_key = f"premium:portfolio_metrics:{user_id}:{portfolio_name or 'all'}"
         cached = cache.get(cache_key)
         if cached:
             return cached
+
+        try:
+            metrics = self._get_metrics_from_alpaca(user_id)
+            if metrics is not None:
+                cache.set(cache_key, metrics, 60)  # 1 min TTL for real broker data
+                return metrics
+        except Exception as e:
+            logger.debug(f"Alpaca portfolio fetch skipped for user {user_id}: {e}")
 
         try:
             qs = Portfolio.objects.filter(user_id=user_id)
@@ -98,7 +101,6 @@ class PremiumAnalyticsService:
 
             portfolio = qs.first()
             if not portfolio:
-                logger.warning(f"No portfolio found for user {user_id}")
                 metrics = self._empty_portfolio_metrics()
             else:
                 metrics = self._build_portfolio_metrics_from_portfolio(portfolio)
@@ -109,6 +111,77 @@ class PremiumAnalyticsService:
         except Exception as e:
             logger.error(f"Error computing portfolio metrics for user {user_id}: {e}")
             return self._empty_portfolio_metrics()
+
+    def _get_metrics_from_alpaca(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Fetch real portfolio metrics from Alpaca when user has a linked account.
+        Returns None if no Alpaca connection or on error.
+        """
+        try:
+            from django.contrib.auth import get_user_model
+            from .broker_mutations import _get_trading_service_for_user
+
+            User = get_user_model()
+            user = User.objects.filter(id=user_id).first()
+            if not user:
+                return None
+            trading_service, is_oauth = _get_trading_service_for_user(user)
+            if not is_oauth or not trading_service:
+                return None
+            positions = trading_service.get_positions()
+            if not positions or not isinstance(positions, list):
+                return self._empty_portfolio_metrics()
+            total_value = 0.0
+            total_cost = 0.0
+            holdings = []
+            for p in positions:
+                symbol = (p.get("symbol") or "").strip()
+                if not symbol:
+                    continue
+                qty = float(p.get("qty") or p.get("quantity") or 0)
+                market_val = float(p.get("market_value") or p.get("marketValue") or 0)
+                cost_basis = float(p.get("cost_basis") or p.get("costBasis") or 0)
+                current_price = float(p.get("current_price") or p.get("currentPrice") or 0)
+                unrealized_pl = float(p.get("unrealized_pl") or p.get("unrealizedPl") or 0)
+                unrealized_plpc = float(p.get("unrealized_plpc") or p.get("unrealizedPlPc") or 0)
+                total_value += market_val
+                total_cost += cost_basis
+                holdings.append({
+                    "symbol": symbol,
+                    "company_name": symbol,
+                    "shares": int(round(qty)),
+                    "quantity": int(round(qty)),
+                    "current_price": current_price,
+                    "total_value": market_val,
+                    "cost_basis": cost_basis,
+                    "return_amount": unrealized_pl,
+                    "return_percent": unrealized_plpc,
+                    "sector": None,
+                })
+            total_return = total_value - total_cost
+            total_return_percent = (total_return / total_cost * 100.0) if total_cost > 0 else 0.0
+            sector_allocation = self._compute_sector_allocation(holdings)
+            return {
+                "total_value": round(total_value, 2),
+                "total_cost": round(total_cost, 2),
+                "total_return": round(total_return, 2),
+                "total_return_percent": round(total_return_percent, 2),
+                "volatility": 0.0,
+                "sharpe_ratio": 0.0,
+                "max_drawdown": 0.0,
+                "beta": 1.0,
+                "alpha": 0.0,
+                "holdings": holdings,
+                "sector_allocation": sector_allocation,
+                "risk_metrics": {
+                    "risk_score": 0.0,
+                    "concentration": 0.0,
+                    "notes": [],
+                },
+            }
+        except Exception as e:
+            logger.debug(f"Alpaca metrics failed for user {user_id}: {e}")
+            return None
 
     def _empty_portfolio_metrics(self) -> Dict[str, Any]:
         """Return a safe default metrics payload."""

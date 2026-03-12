@@ -31,6 +31,7 @@ class ZeroTrustMiddleware(MiddlewareMixin):
             '/media/',
             '/defi/validate-transaction/',
             '/defi/record-transaction/',
+            '/api/auth/alpaca/',  # OAuth initiate + callback (no auth until after redirect)
         ]
         if any(request.path.startswith(path) for path in public_paths):
             return None

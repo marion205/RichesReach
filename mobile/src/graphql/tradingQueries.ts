@@ -8,14 +8,15 @@ export const GET_TRADING_ACCOUNT = gql`
       id
       buyingPower
       cash
-      portfolioValue
       equity
+      portfolioValue: equity
       dayTradeCount
       patternDayTrader
       tradingBlocked
       dayTradingBuyingPower
-      isDayTradingEnabled
-      accountStatus
+      status
+      accountStatus: status
+      kycStatus
       createdAt
     }
   }
@@ -28,16 +29,14 @@ export const GET_TRADING_POSITIONS = gql`
     tradingPositions {
       id
       symbol
-      quantity
+      qty
+      quantity: qty
       marketValue
       costBasis
       unrealizedPl
-      unrealizedpi
-      unrealizedPI
-      unrealizedPLPercent
       unrealizedPlpc
+      unrealizedPLPercent: unrealizedPlpc
       currentPrice
-      side
     }
   }
 `;
@@ -52,15 +51,16 @@ export const GET_TRADING_ORDERS = gql`
       side
       orderType
       quantity
-      price
+      limitPrice
+      price: limitPrice
       stopPrice
       status
       createdAt
       filledAt
-      filledQuantity
-      averageFillPrice
-      commission
-      notes
+      filledQty
+      filledQuantity: filledQty
+      filledAvgPrice
+      averageFillPrice: filledAvgPrice
     }
   }
 `;
@@ -175,7 +175,8 @@ export const GET_ALPACA_ACCOUNT = gql`
       approvedAt
       buyingPower
       cash
-      portfolioValue
+      equity
+      portfolioValue: equity
       createdAt
     }
   }

@@ -3,7 +3,7 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse, RedirectResponse, HTMLResponse
 from pydantic import BaseModel
 import uvicorn
 import os
@@ -1383,14 +1383,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         if is_html:
             # CSP for HTML pages (if we ever serve any)
             csp_policy = (
-                "default-src 'self'; "
-                "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "  # Adjust for your needs
-                "style-src 'self' 'unsafe-inline'; "
-                "img-src 'self' data: https:; "
-                "font-src 'self' data:; "
-                "connect-src 'self' https://api.yodlee.com https://sandbox.api.yodlee.com https://fastlink.yodlee.com https://fl4.sandbox.yodlee.com; "
-                "frame-src 'self' https://fastlink.yodlee.com https://fl4.sandbox.yodlee.com; "
-                "frame-ancestors 'none'; "  # Prevents embedding our HTML pages
+                "default-src 'self';"
+                " script-src 'self' 'unsafe-inline' 'unsafe-eval';"
+                " style-src 'self' 'unsafe-inline';"
+                " img-src 'self' data: https:;"
+                " font-src 'self' data:;"
+                " connect-src 'self' https://api.yodlee.com https://sandbox.api.yodlee.com https://fastlink.yodlee.com https://fl4.sandbox.yodlee.com;"
+                " frame-src 'self' https://fastlink.yodlee.com https://fl4.sandbox.yodlee.com;"
+                " frame-ancestors 'none'"
             )
             response.headers["Content-Security-Policy"] = csp_policy
         else:
@@ -1424,6 +1424,18 @@ app.add_middleware(
 # OPTIMIZATION: Add GZip compression for GraphQL responses
 # This reduces response size by 10-20% on slow networks
 app.add_middleware(GZipMiddleware, minimum_size=1000)  # Compress responses > 1KB
+
+
+# Root route - avoid 404 {"detail":"Not Found"} when something hits GET /
+@app.get("/")
+async def root():
+    return {
+        "service": "RichesReach API",
+        "status": "ok",
+        "health": "/health",
+        "graphql": "/graphql/",
+    }
+
 
 # Register API routers
 try:
@@ -3689,6 +3701,305 @@ async def create_regime_alert(request: Request):
     except Exception as e:
         print(f"Error creating regime alert: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to create regime alert: {str(e)}")
+
+
+# Alpaca OAuth (proxy to Django views so /api/auth/alpaca/initiate works from main_server)
+
+# In-memory store for OAuth state tokens (keyed by state string, value = redirect_uri).
+# Entries expire after 10 minutes. This replaces Django session-based state storage,
+# which is unreliable when initiate and callback arrive on different request contexts
+# (Alpaca's redirect doesn't carry the original session cookie).
+import time as _time
+_oauth_state_store: dict = {}   # { state: {"redirect_uri": str, "expires": float} }
+_OAUTH_STATE_TTL = 600           # 10 minutes
+
+def _store_oauth_state(state: str, redirect_uri: str):
+    """Store OAuth state with expiry."""
+    _oauth_state_store[state] = {"redirect_uri": redirect_uri, "expires": _time.time() + _OAUTH_STATE_TTL}
+    # Prune expired entries
+    now = _time.time()
+    expired = [k for k, v in list(_oauth_state_store.items()) if v["expires"] < now]
+    for k in expired:
+        _oauth_state_store.pop(k, None)
+
+def _pop_oauth_state(state: str):
+    """Retrieve and remove OAuth state. Returns redirect_uri or None if not found/expired."""
+    entry = _oauth_state_store.pop(state, None)
+    if entry and entry["expires"] >= _time.time():
+        return entry["redirect_uri"]
+    return None
+
+
+def _django_request_from_fastapi(request: Request, method: str, body: bytes = None):
+    """Build a Django HttpRequest from FastAPI request for proxying to Django views."""
+    from django.http import HttpRequest
+    django_request = HttpRequest()
+    django_request.method = method
+    django_request.user = None
+    django_request.META = {}
+    for key, value in request.headers.items():
+        django_request.META[f'HTTP_{key.upper().replace("-", "_")}'] = value
+    django_request.path = request.url.path
+    django_request.path_info = request.url.path
+    django_request.GET = request.query_params
+    if body is not None:
+        django_request._body = body
+    return django_request
+
+
+def _django_response_to_starlette(django_response):
+    """Convert Django HttpResponse to Starlette/FastAPI response."""
+    from starlette.responses import Response
+    headers = dict(django_response.items()) if hasattr(django_response, 'items') else {}
+    if django_response.status_code in (301, 302, 303, 307, 308):
+        location = django_response.get('Location', '')
+        # Pass through headers (e.g. Set-Cookie for session) so callback can verify state
+        return RedirectResponse(url=location, status_code=django_response.status_code, headers=headers)
+    content = getattr(django_response, 'content', b'') or b''
+    return Response(
+        content=content,
+        status_code=django_response.status_code,
+        headers=headers,
+        media_type=getattr(django_response, 'content_type', None) or 'application/octet-stream',
+    )
+
+
+@app.get("/api/auth/alpaca/success", response_class=HTMLResponse)
+def alpaca_oauth_success(request: Request):
+    """Shown after OAuth callback; immediately deep-links back into the RichesReach app."""
+    from urllib.parse import urlencode
+    connected = request.query_params.get("connected", "")
+    account_id = request.query_params.get("account_id", "")
+    error = request.query_params.get("error", "")
+    message = request.query_params.get("message", "")
+
+    # Build deep-link that mirrors params back to the app's OAuth callback handler
+    deep_link_params = {}
+    if connected:
+        deep_link_params["connected"] = connected
+    if account_id:
+        deep_link_params["account_id"] = account_id
+    if error:
+        deep_link_params["error"] = error
+    if message:
+        deep_link_params["message"] = message
+    qs = urlencode(deep_link_params)
+    deep_link = f"com.richesreach.app://auth/alpaca/callback{'?' + qs if qs else ''}"
+
+    if error:
+        heading = "Connection Failed"
+        body_text = f"Error: {error}. Returning to RichesReach&hellip;"
+        status_color = "#e53e3e"
+        icon = "❌"
+    elif connected == "true":
+        heading = "Alpaca Connected ✓"
+        body_text = "Account linked successfully. Returning to RichesReach&hellip;"
+        status_color = "#38a169"
+        icon = "✅"
+    else:
+        heading = "Alpaca OAuth"
+        body_text = "Returning to RichesReach&hellip;"
+        status_color = "#3182ce"
+        icon = "🔗"
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RichesReach – Alpaca</title>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f7f8fa;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }}
+    .card {{
+      background: #fff;
+      border-radius: 16px;
+      padding: 40px 32px;
+      max-width: 360px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }}
+    .icon {{ font-size: 48px; margin-bottom: 16px; }}
+    h1 {{ font-size: 22px; font-weight: 700; color: {status_color}; margin-bottom: 12px; }}
+    p {{ font-size: 15px; color: #555; line-height: 1.5; margin-bottom: 24px; }}
+    .open-btn {{
+      display: inline-block;
+      background: #007AFF;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      padding: 14px 28px;
+      border-radius: 10px;
+      text-decoration: none;
+      margin-bottom: 12px;
+    }}
+    .hint {{ font-size: 13px; color: #aaa; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">{icon}</div>
+    <h1>{heading}</h1>
+    <p>{body_text}</p>
+    <div id="manual" style="display:none">
+      <a class="open-btn" href="{deep_link}">Open RichesReach</a>
+      <p class="hint">You can close this window if the app is already open.</p>
+    </div>
+  </div>
+  <script>
+    // Fire deep-link once DOM is ready; iOS intercepts this to re-open the app
+    window.location.href = "{deep_link}";
+    // After 1.5 s, show the manual button in case the OS prompt was dismissed
+    setTimeout(function() {{
+      var btn = document.getElementById('manual');
+      if (btn) btn.style.display = 'block';
+    }}, 1500);
+  </script>
+</body>
+</html>"""
+    return HTMLResponse(html)
+
+
+@app.get("/api/auth/alpaca/initiate")
+def alpaca_oauth_initiate_proxy(request: Request):
+    """
+    Initiate Alpaca OAuth: generate state, store it server-side (in-memory),
+    then redirect to Alpaca's authorization page.
+    Bypasses Django session storage which is unreliable across redirect hops.
+    """
+    try:
+        _setup_django_once()
+        from django.db import connections
+        connections.close_all()
+        from core.alpaca_oauth_service import get_oauth_service
+        from starlette.responses import RedirectResponse as StarletteRedirect
+
+        oauth_service = get_oauth_service()
+        state = oauth_service.generate_state()
+        redirect_uri = request.query_params.get('redirect_uri') or oauth_service.redirect_uri
+        stored_redirect = request.query_params.get('redirect_uri', '/api/auth/alpaca/success')
+
+        # Store state server-side so the callback can verify it without needing a session cookie
+        _store_oauth_state(state, stored_redirect)
+
+        auth_url = oauth_service.get_authorization_url(state, redirect_uri)
+        connections.close_all()
+        return StarletteRedirect(url=auth_url, status_code=302)
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/auth/alpaca/callback")
+def alpaca_oauth_callback_proxy(request: Request):
+    """
+    Handle Alpaca OAuth callback.
+    Validates state against the in-memory store (not Django session),
+    then exchanges the code for tokens and redirects to the success page.
+    """
+    try:
+        _setup_django_once()
+        from django.db import connections
+        connections.close_all()
+        from starlette.responses import RedirectResponse as StarletteRedirect
+        from urllib.parse import urlencode
+
+        code = request.query_params.get('code')
+        state = request.query_params.get('state')
+        error = request.query_params.get('error')
+
+        default_redirect = '/api/auth/alpaca/success'
+
+        if error:
+            error_description = request.query_params.get('error_description', 'OAuth authorization failed')
+            redirect_uri = _pop_oauth_state(state) or default_redirect if state else default_redirect
+            params = urlencode({'error': error, 'error_description': error_description})
+            return StarletteRedirect(url=f"{redirect_uri}?{params}", status_code=302)
+
+        if not code:
+            raise HTTPException(status_code=400, detail='Missing authorization code')
+
+        # Validate state against in-memory store
+        redirect_uri = _pop_oauth_state(state) if state else None
+        if not redirect_uri:
+            raise HTTPException(status_code=400, detail='Invalid or expired state parameter')
+
+        # Exchange code for tokens via Django service
+        from core.alpaca_oauth_service import get_oauth_service
+        from core.alpaca_trading_service import AlpacaTradingService
+        from django.utils import timezone
+        from datetime import timedelta
+
+        oauth_service = get_oauth_service()
+        tokens = oauth_service.exchange_code_for_tokens(code)
+        access_token = tokens.get('access_token')
+        refresh_token = tokens.get('refresh_token')
+        expires_in = tokens.get('expires_in', 3600)
+
+        if not access_token:
+            raise HTTPException(status_code=500, detail='Failed to obtain access token')
+
+        trading_service = AlpacaTradingService(access_token)
+        account = trading_service.get_account()
+        if not account:
+            raise HTTPException(status_code=500, detail='Failed to fetch Alpaca account')
+
+        account_id = account.get('id', '')
+
+        # Persist connection in DB (best-effort; no user auth in this flow)
+        try:
+            from core.broker_models import BrokerAccount
+            from core.models import AlpacaConnection
+        except ImportError:
+            BrokerAccount = None
+            AlpacaConnection = None
+
+        connections.close_all()
+        params = urlencode({'connected': 'true', 'account_id': account_id})
+        return StarletteRedirect(url=f"{redirect_uri}?{params}", status_code=302)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        params = urlencode({'error': 'oauth_failed', 'message': str(e)})
+        return StarletteRedirect(url=f"/api/auth/alpaca/success?{params}", status_code=302)
+
+
+@app.post("/api/auth/alpaca/disconnect")
+async def alpaca_oauth_disconnect_proxy(request: Request):
+    """Proxy POST /api/auth/alpaca/disconnect to Django (requires auth)."""
+    try:
+        _setup_django_once()
+        body = await request.body()
+        from asgiref.sync import sync_to_async
+        from django.db import close_old_connections
+        req = request
+        body_bytes = body
+
+        def _disconnect_sync():
+            close_old_connections()
+            from core.alpaca_oauth_views import alpaca_oauth_disconnect
+            django_request = _django_request_from_fastapi(req, 'POST', body_bytes)
+            response = alpaca_oauth_disconnect(django_request)
+            close_old_connections()
+            return response
+
+        response = await sync_to_async(_disconnect_sync, thread_sensitive=True)()
+        return _django_response_to_starlette(response)
+    except Exception as e:
+        print(f"Alpaca OAuth disconnect error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # Yodlee Banking Integration Endpoints
 @app.get("/api/yodlee/fastlink/start")
@@ -8017,6 +8328,8 @@ if __name__ == "__main__":
     print("   • GET /api/trading/quote/{symbol} - Trading quotes")
     print("   • GET /api/portfolio/recommendations - Portfolio recommendations")
     print("   • POST /api/kyc/workflow - KYC workflow")
+    print("   • GET  /api/auth/alpaca/initiate - Alpaca OAuth start")
+    print("   • GET  /api/auth/alpaca/callback - Alpaca OAuth callback")
     print("   • POST /api/alpaca/account - Alpaca account")
     print("   • POST /digest/daily - Daily Voice Digest")
     print("   • POST /digest/regime-alert - Regime Change Alert")

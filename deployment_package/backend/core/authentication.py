@@ -39,9 +39,9 @@ def get_user_from_token(token):
     if not token:
         return None
     
-    # DEVELOPMENT MODE: Handle dev tokens for testing
-    if token.startswith('dev-token-'):
-        # In development, try to get/create a user for dev tokens
+    # DEVELOPMENT / DEMO MODE: Handle dev and demo tokens (mobile app uses DEMO_TOKEN_*)
+    if token.startswith('dev-token-') or token.startswith('DEMO_TOKEN'):
+        # In development, try to get/create a user for dev/demo tokens
         # Priority: 1) demo@example.com (default login), 2) test@example.com (fallback)
         try:
             # First, try to get or create demo@example.com (default in login screen)

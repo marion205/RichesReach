@@ -200,15 +200,16 @@ return totalChange + dayChange;
 return totalChange;
 }, 0);
 }
-// Get current portfolio data
+// Get current portfolio data. Returns null when nothing is stored so the app
+// can show real backend data (e.g. zeros when user has no positions) instead of sample data.
 private async getCurrentPortfolio(): Promise<PortfolioMetrics | null> {
 try {
 const stored = await AsyncStorage.getItem('real_time_portfolio');
 if (stored) {
 return JSON.parse(stored);
 }
-// If no stored portfolio, create a sample portfolio for demonstration
-return this.createSamplePortfolio();
+// No stored portfolio: return null so HomeScreen uses backend portfolioMetrics (zeros when no positions)
+return null;
 } catch (error) {
 logger.error('Error loading portfolio:', error);
 return null;

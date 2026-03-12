@@ -32,8 +32,8 @@ class CreateOptionsAlert(graphene.Mutation):
     @staticmethod
     def mutate(root, info, symbol, alert_type, strike=None, expiration=None, 
                option_type=None, target_value=None, direction=None, **kwargs):
-        user = info.context.user
-        if not user or user.is_anonymous:
+        user = getattr(info.context, "user", None)
+        if not user or getattr(user, "is_anonymous", True):
             return CreateOptionsAlert(success=False, error="Authentication required")
         
         try:
@@ -92,8 +92,8 @@ class UpdateOptionsAlert(graphene.Mutation):
     
     @staticmethod
     def mutate(root, info, id, target_value=None, direction=None, status=None, **kwargs):
-        user = info.context.user
-        if not user or user.is_anonymous:
+        user = getattr(info.context, "user", None)
+        if not user or getattr(user, "is_anonymous", True):
             return UpdateOptionsAlert(success=False, error="Authentication required")
         
         try:
@@ -130,8 +130,8 @@ class DeleteOptionsAlert(graphene.Mutation):
     
     @staticmethod
     def mutate(root, info, id):
-        user = info.context.user
-        if not user or user.is_anonymous:
+        user = getattr(info.context, "user", None)
+        if not user or getattr(user, "is_anonymous", True):
             return DeleteOptionsAlert(success=False, error="Authentication required")
         
         try:

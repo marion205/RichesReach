@@ -26,13 +26,13 @@ class AlpacaOAuthService:
     def __init__(self):
         self.client_id = os.getenv('ALPACA_OAUTH_CLIENT_ID')
         self.client_secret = os.getenv('ALPACA_OAUTH_CLIENT_SECRET')
-        self.redirect_uri = os.getenv('ALPACA_OAUTH_REDIRECT_URI', 'https://api.richesreach.com/auth/alpaca/callback')
+        # Must be a URL the client (e.g. phone) can reach. Use LAN IP for device testing, not 127.0.0.1.
+        self.redirect_uri = os.getenv('ALPACA_OAUTH_REDIRECT_URI', 'https://api.richesreach.com/api/auth/alpaca/callback')
         
-        # OAuth scopes
+        # OAuth scopes (must match Alpaca docs: trading, account:write, data)
         self.scopes = [
-            'trading:write',  # Place orders
-            'account:read',   # Read account info
-            'positions:read', # Read positions
+            'trading',       # Place, cancel, modify orders
+            'account:write', # Account config and watchlists (read is default)
         ]
         
         if not self.client_id or not self.client_secret:

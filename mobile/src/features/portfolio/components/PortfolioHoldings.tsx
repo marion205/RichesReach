@@ -27,7 +27,7 @@ interface PortfolioHoldingsProps {
 }
 
 const PortfolioHoldings: React.FC<PortfolioHoldingsProps> = ({ 
-  holdings, 
+  holdings: holdingsProp, 
   onStockPress,
   onAddHoldings,
   onBuy,
@@ -35,6 +35,8 @@ const PortfolioHoldings: React.FC<PortfolioHoldingsProps> = ({
   onLearnMore,
   loading = false,
 }) => {
+  const holdings = Array.isArray(holdingsProp) ? holdingsProp : [];
+
   // Phase 3: Fade-in animation
   const fadeOpacity = useFadeIn(300);
 
@@ -50,13 +52,32 @@ const PortfolioHoldings: React.FC<PortfolioHoldingsProps> = ({
     [holdings]
   );
 
+  // Memoized render function for performance (must be before any early return to satisfy Rules of Hooks)
+  const renderHolding: ListRenderItem<Holding> = useCallback(
+    ({ item, index }) => {
+      const allocationPercent = totalValue > 0 ? ((item.totalValue || 0) / totalValue) * 100 : 0;
+      return (
+        <HoldingRow
+          holding={item}
+          allocationPercent={allocationPercent}
+          onPress={(holding) => onStockPress(holding.symbol)}
+          onBuy={onBuy}
+          onSell={onSell}
+          onLearnMore={onLearnMore}
+          isLast={index === holdings.length - 1}
+        />
+      );
+    },
+    [totalValue, onStockPress, onBuy, onSell, onLearnMore, holdings.length]
+  );
+
   // Phase 3: Show skeleton while loading
   if (loading) {
     return <SkeletonHoldings count={holdings.length || 3} />;
   }
 
   // Empty state - Steve Jobs style: Inspiring, not discouraging
-  if (!holdings || holdings.length === 0) {
+  if (holdings.length === 0) {
     return (
       <View style={styles.emptyContainer}>
         <View style={styles.emptyIllustration}>
@@ -79,25 +100,6 @@ const PortfolioHoldings: React.FC<PortfolioHoldingsProps> = ({
       </View>
     );
   }
-
-  // Memoized render function for performance
-  const renderHolding: ListRenderItem<Holding> = useCallback(
-    ({ item, index }) => {
-      const allocationPercent = totalValue > 0 ? ((item.totalValue || 0) / totalValue) * 100 : 0;
-      return (
-        <HoldingRow
-          holding={item}
-          allocationPercent={allocationPercent}
-          onPress={(holding) => onStockPress(holding.symbol)}
-          onBuy={onBuy}
-          onSell={onSell}
-          onLearnMore={onLearnMore}
-          isLast={index === holdings.length - 1}
-        />
-      );
-    },
-    [totalValue, onStockPress, onBuy, onSell, onLearnMore, holdings.length]
-  );
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeOpacity }]}>

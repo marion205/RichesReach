@@ -25,8 +25,8 @@ class OptionsAlertQueries(graphene.ObjectType):
     
     def resolve_options_alerts(self, info, status=None, symbol=None):
         """Get user's options alerts"""
-        user = info.context.user
-        if not user or user.is_anonymous:
+        user = getattr(info.context, "user", None)
+        if not user or getattr(user, "is_anonymous", True):
             return []
         
         queryset = OptionsAlert.objects.filter(user=user)
@@ -41,8 +41,8 @@ class OptionsAlertQueries(graphene.ObjectType):
     
     def resolve_options_alert(self, info, id):
         """Get a specific options alert"""
-        user = info.context.user
-        if not user or user.is_anonymous:
+        user = getattr(info.context, "user", None)
+        if not user or getattr(user, "is_anonymous", True):
             return None
         
         try:

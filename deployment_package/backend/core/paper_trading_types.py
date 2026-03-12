@@ -74,7 +74,9 @@ class PaperTradingTradeType(DjangoObjectType):
 
 
 class PaperTradingStatisticsType(graphene.ObjectType):
-    """Paper trading statistics"""
+    """Paper trading statistics (snake_case and camelCase for mobile)"""
+    open_positions = graphene.Int()
+    openPositions = graphene.Int()  # camelCase alias for mobile
     total_trades = graphene.Int()
     winning_trades = graphene.Int()
     losing_trades = graphene.Int()
@@ -83,6 +85,12 @@ class PaperTradingStatisticsType(graphene.ObjectType):
     total_pnl_percent = graphene.Float()
     realized_pnl = graphene.Float()
     unrealized_pnl = graphene.Float()
+
+    def resolve_open_positions(self, info):
+        return getattr(self, 'open_positions', 0)
+
+    def resolve_openPositions(self, info):
+        return getattr(self, 'open_positions', 0)
 
 
 class PaperTradingAccountSummaryType(graphene.ObjectType):
@@ -114,8 +122,9 @@ class PlacePaperOrder(graphene.Mutation):
     order = graphene.Field(PaperTradingOrderType)
     
     def mutate(self, info, symbol, side, quantity, order_type='MARKET', limit_price=None, stop_price=None):
-        user = getattr(info.context, 'user', None)
-        if not user or user.is_anonymous:
+        context = getattr(info, 'context', None)
+        user = getattr(context, 'user', None) if context else None
+        if not user or getattr(user, 'is_anonymous', True):
             return PlacePaperOrder(
                 success=False,
                 message="Authentication required"
@@ -143,9 +152,18 @@ class PlacePaperOrder(graphene.Mutation):
             )
         except Exception as e:
             logger.error(f"Error placing paper order: {e}", exc_info=True)
+            # Django ValidationError has .messages; avoid showing "['...']"
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            if isinstance(e, DjangoValidationError) and getattr(e, "messages", None):
+                msg = e.messages[0] if e.messages else str(e)
+            else:
+                msg = str(e)
+            # Avoid exposing internal NameError/AttributeError to user
+            if "is not defined" in msg or "has no attribute" in msg:
+                msg = "Order could not be placed. Please try again or sign in."
             return PlacePaperOrder(
                 success=False,
-                message=str(e)
+                message=msg
             )
 
 
@@ -159,8 +177,9 @@ class CancelPaperOrder(graphene.Mutation):
     message = graphene.String()
     
     def mutate(self, info, order_id):
-        user = getattr(info.context, 'user', None)
-        if not user or user.is_anonymous:
+        context = getattr(info, 'context', None)
+        user = getattr(context, 'user', None) if context else None
+        if not user or getattr(user, 'is_anonymous', True):
             return CancelPaperOrder(
                 success=False,
                 message="Authentication required"
@@ -195,40 +214,45 @@ class PaperTradingQueries(graphene.ObjectType):
     paper_account_summary = graphene.Field(PaperTradingAccountSummaryType)
     
     def resolve_paper_account(self, info):
-        user = getattr(info.context, 'user', None)
-        if not user or user.is_anonymous:
+        context = getattr(info, 'context', None)
+        user = getattr(context, 'user', None) if context else None
+        if not user or getattr(user, 'is_anonymous', True):
             return None
         
         service = PaperTradingService()
         return service.get_account(user)
     
     def resolve_paper_positions(self, info):
-        user = getattr(info.context, 'user', None)
-        if not user or user.is_anonymous:
+        context = getattr(info, 'context', None)
+        user = getattr(context, 'user', None) if context else None
+        if not user or getattr(user, 'is_anonymous', True):
             return []
         
         service = PaperTradingService()
         return service.get_positions(user)
     
     def resolve_paper_orders(self, info, status=None):
-        user = getattr(info.context, 'user', None)
-        if not user or user.is_anonymous:
+        context = getattr(info, 'context', None)
+        user = getattr(context, 'user', None) if context else None
+        if not user or getattr(user, 'is_anonymous', True):
             return []
         
         service = PaperTradingService()
         return service.get_orders(user, status=status)
     
     def resolve_paper_trade_history(self, info, limit=100):
-        user = getattr(info.context, 'user', None)
-        if not user or user.is_anonymous:
+        context = getattr(info, 'context', None)
+        user = getattr(context, 'user', None) if context else None
+        if not user or getattr(user, 'is_anonymous', True):
             return []
         
         service = PaperTradingService()
         return service.get_trade_history(user, limit=limit)
     
     def resolve_paper_account_summary(self, info):
-        user = getattr(info.context, 'user', None)
-        if not user or user.is_anonymous:
+        context = getattr(info, 'context', None)
+        user = getattr(context, 'user', None) if context else None
+        if not user or getattr(user, 'is_anonymous', True):
             return None
         
         try:
@@ -245,7 +269,7 @@ class PaperTradingQueries(graphene.ObjectType):
         except Exception as e:
             # If database table doesn't exist, return mock data
             logger.warning(f"⚠️ [Paper Trading] Database error (table may not exist): {e}")
-            logger.warning(f"⚠️ [Paper Trading] Returning mock data for user {user.id}")
+            logger.warning(f"⚠️ [Paper Trading] Returning mock data for user {getattr(user, 'id', None)}")
             
             # Return None instead of mock data - GraphQL will handle it gracefully
             # The frontend should handle None and show appropriate UI

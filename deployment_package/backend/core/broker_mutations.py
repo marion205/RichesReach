@@ -5,15 +5,51 @@ import graphene
 import logging
 from decimal import Decimal
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from .broker_types import BrokerAccountType, BrokerOrderType
 from .broker_models import BrokerAccount, BrokerOrder
 from .alpaca_broker_service import AlpacaBrokerService, BrokerGuardrails
-from django.utils import timezone
 import uuid
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
 alpaca_service = AlpacaBrokerService()
+
+
+def _get_trading_service_for_user(user):
+    """
+    If user linked via Alpaca Connect (OAuth), return (AlpacaTradingService(access_token), True).
+    Otherwise return (None, False) so caller uses Broker API.
+    """
+    try:
+        from .models import AlpacaConnection
+        from .alpaca_trading_service import AlpacaTradingService
+        from .alpaca_oauth_service import get_oauth_service
+    except ImportError:
+        return None, False
+    try:
+        conn = AlpacaConnection.objects.get(user=user)
+    except AlpacaConnection.DoesNotExist:
+        return None, False
+    # Refresh token if expired or expiring soon (e.g. within 5 min)
+    now = timezone.now()
+    if conn.token_expires_at and (conn.token_expires_at - now).total_seconds() < 300:
+        try:
+            refresh_token = conn.get_decrypted_refresh_token()
+            if refresh_token:
+                tokens = get_oauth_service().refresh_access_token(refresh_token)
+                new_access = tokens.get('access_token')
+                expires_in = int(tokens.get('expires_in', 3600))
+                if new_access:
+                    conn.access_token = new_access
+                    conn.token_expires_at = now + timezone.timedelta(seconds=expires_in)
+                    conn.save(update_fields=['access_token', 'token_expires_at'])
+        except Exception as e:
+            logger.warning(f"Alpaca token refresh failed for user {user.id}: {e}")
+    access_token = conn.get_decrypted_access_token()
+    if not access_token:
+        return None, False
+    return AlpacaTradingService(access_token), True
 
 
 class CreateBrokerAccount(graphene.Mutation):
@@ -143,13 +179,16 @@ class PlaceOrder(graphene.Mutation):
             
             if not broker_account.alpaca_account_id:
                 return PlaceOrder(success=False, error="Account not created yet")
-            
-            if broker_account.kyc_status != 'APPROVED':
+
+            # Allow trading for Connect (OAuth) users; broker-onboarded accounts need APPROVED
+            use_oauth = False
+            trading_svc, use_oauth = _get_trading_service_for_user(user)
+            if not use_oauth and broker_account.kyc_status != 'APPROVED':
                 return PlaceOrder(
                     success=False,
                     error=f"Account not approved. Status: {broker_account.kyc_status}"
                 )
-            
+
             # Calculate notional
             estimated_price = kwargs.get('limit_price') or kwargs.get('estimated_price', 0)
             notional = float(quantity) * float(estimated_price)
@@ -234,16 +273,27 @@ class PlaceOrder(graphene.Mutation):
                 if kwargs.get('stop_price'):
                     alpaca_order['stop_price'] = str(kwargs['stop_price'])
             
-            # Submit to Alpaca
-            result = alpaca_service.create_order(broker_account.alpaca_account_id, alpaca_order)
-            
-            if result and 'error' in result:
+            # Submit to Alpaca (Trading API with OAuth token for Connect users, else Broker API)
+            if use_oauth and trading_svc:
+                result = trading_svc.create_order(
+                    symbol=alpaca_order['symbol'],
+                    qty=float(alpaca_order['qty']) if alpaca_order.get('qty') else None,
+                    side=alpaca_order.get('side', 'buy'),
+                    order_type=alpaca_order.get('type', 'market'),
+                    time_in_force=alpaca_order.get('time_in_force', 'day'),
+                    limit_price=float(alpaca_order['limit_price']) if alpaca_order.get('limit_price') else None,
+                    stop_price=float(alpaca_order['stop_price']) if alpaca_order.get('stop_price') else None,
+                )
+            else:
+                result = alpaca_service.create_order(broker_account.alpaca_account_id, alpaca_order)
+
+            if result and result.get('error'):
                 broker_order.status = 'REJECTED'
-                broker_order.rejection_reason = str(result.get('error'))
+                broker_order.rejection_reason = str(result.get('error', result.get('detail', result)))
                 broker_order.alpaca_response = result
                 broker_order.save()
-                return PlaceOrder(success=False, error=str(result.get('error')))
-            
+                return PlaceOrder(success=False, error=str(result.get('error', result.get('detail', 'Order failed'))))
+
             if result:
                 broker_order.alpaca_order_id = result.get('id')
                 broker_order.status = result.get('status', 'NEW')
@@ -372,16 +422,17 @@ class PlaceOptionsOrder(graphene.Mutation):
         
         try:
             broker_account = BrokerAccount.objects.get(user=user)
-            
+
             if not broker_account.alpaca_account_id:
                 return PlaceOptionsOrder(success=False, error="Account not created yet")
-            
-            if broker_account.kyc_status != 'APPROVED':
+
+            trading_svc, use_oauth = _get_trading_service_for_user(user)
+            if not use_oauth and broker_account.kyc_status != 'APPROVED':
                 return PlaceOptionsOrder(
                     success=False,
                     error=f"Account not approved. Status: {broker_account.kyc_status}"
                 )
-            
+
             # Build contract symbol
             try:
                 contract_symbol = PlaceOptionsOrder._build_contract_symbol(
@@ -431,19 +482,29 @@ class PlaceOptionsOrder(graphene.Mutation):
                 guardrail_checks_passed=True,
             )
             
-            # Prepare options order for Alpaca
+            # Submit options order (Trading API with OAuth for Connect users, else Broker API)
             limit_price = kwargs.get('limit_price')
-            result = alpaca_service.create_options_order(
-                account_id=broker_account.alpaca_account_id,
-                contract_symbol=contract_symbol,
-                side=side.lower(),
-                quantity=quantity,
-                order_type=kwargs.get('order_type', 'MARKET').lower(),
-                limit_price=limit_price,
-                time_in_force=kwargs.get('time_in_force', 'DAY').lower()
-            )
-            
-            if result and 'error' in result:
+            if use_oauth and trading_svc:
+                result = trading_svc.create_order(
+                    symbol=contract_symbol,
+                    qty=quantity,
+                    side=side.lower(),
+                    order_type=kwargs.get('order_type', 'MARKET').lower(),
+                    time_in_force=kwargs.get('time_in_force', 'DAY').lower(),
+                    limit_price=limit_price,
+                )
+            else:
+                result = alpaca_service.create_options_order(
+                    account_id=broker_account.alpaca_account_id,
+                    contract_symbol=contract_symbol,
+                    side=side.lower(),
+                    quantity=quantity,
+                    order_type=kwargs.get('order_type', 'MARKET').lower(),
+                    limit_price=limit_price,
+                    time_in_force=kwargs.get('time_in_force', 'DAY').lower()
+                )
+
+            if result and result.get('error'):
                 broker_order.status = 'REJECTED'
                 broker_order.rejection_reason = str(result.get('error'))
                 broker_order.alpaca_response = result

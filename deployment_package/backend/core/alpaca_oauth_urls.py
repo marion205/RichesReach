@@ -8,6 +8,7 @@ from .alpaca_oauth_views import (
     alpaca_oauth_initiate,
     alpaca_oauth_callback,
     alpaca_oauth_disconnect,
+    alpaca_oauth_success,
 )
 
 app_name = 'alpaca_oauth'
@@ -16,5 +17,6 @@ urlpatterns = [
     path('initiate', alpaca_oauth_initiate, name='oauth_initiate'),
     path('callback', alpaca_oauth_callback, name='oauth_callback'),
     path('disconnect', alpaca_oauth_disconnect, name='oauth_disconnect'),
+    path('success', alpaca_oauth_success, name='oauth_success'),
 ]
 

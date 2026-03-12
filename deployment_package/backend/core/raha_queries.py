@@ -262,8 +262,8 @@ class RAHAQueries(graphene.ObjectType):
     
     def resolve_strategies(self, info, market_type=None, category=None, include_custom=False):
         """Get available strategies with optional filters (cached)"""
-        user = info.context.user
-        if not user.is_authenticated:
+        user = getattr(info.context, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
             return []
         
         # Check cache
@@ -307,8 +307,8 @@ class RAHAQueries(graphene.ObjectType):
     
     def resolve_strategy(self, info, id=None, slug=None):
         """Get a specific strategy (cached)"""
-        user = info.context.user
-        if not user.is_authenticated:
+        user = getattr(info.context, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
             return None
         
         # Check cache
@@ -340,8 +340,8 @@ class RAHAQueries(graphene.ObjectType):
     
     def resolve_userStrategySettings(self, info):
         """Get user's strategy settings (cached)"""
-        user = info.context.user
-        if not user.is_authenticated:
+        user = getattr(info.context, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
             return []
         
         # Check cache
@@ -377,8 +377,8 @@ class RAHAQueries(graphene.ObjectType):
     def resolve_rahaSignals(self, info, symbol=None, timeframe=None, strategy_version_id=None, limit=20, offset=0):
         """Get RAHA signals with optional filters and pagination (cached).
         Never pass client-supplied IDs (e.g. strategy_version_id) to UUIDField without _normalize_uuid."""
-        user = info.context.user
-        if not user.is_authenticated:
+        user = getattr(info.context, 'user', None)
+        if not user or not getattr(user, 'is_authenticated', False):
             return []
         # Normalize so "fallback" or invalid IDs never hit the DB (ValidationError)
         strategy_version_id = _normalize_uuid(strategy_version_id)
@@ -467,8 +467,8 @@ class RAHAQueries(graphene.ObjectType):
     
     def resolve_backtest_run(self, info, id):
         """Get a specific backtest run (cached)"""
-        user = info.context.user
-        if not user.is_authenticated:
+        user = getattr(info.context, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
             return None
         
         # Check cache
@@ -497,8 +497,8 @@ class RAHAQueries(graphene.ObjectType):
     
     def resolve_user_backtests(self, info, strategy_version_id=None, status=None, limit=20, offset=0):
         """Get user's backtest runs with pagination (cached)"""
-        user = info.context.user
-        if not user.is_authenticated:
+        user = getattr(info.context, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
             return []
         
         strategy_version_id = _normalize_uuid(strategy_version_id)
@@ -540,8 +540,8 @@ class RAHAQueries(graphene.ObjectType):
     
     def resolve_raha_metrics(self, info, strategy_version_id, period="ALL_TIME"):
         """Get aggregated performance metrics for a strategy (cached)"""
-        user = info.context.user
-        if not user.is_authenticated:
+        user = getattr(info.context, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
             return None
         
         strategy_version_id = _normalize_uuid(strategy_version_id)
@@ -682,8 +682,8 @@ class RAHAQueries(graphene.ObjectType):
     
     def resolve_strategy_dashboard(self, info):
         """Get dashboard data for all user's enabled strategies (cached)"""
-        user = info.context.user
-        if not user.is_authenticated:
+        user = getattr(info.context, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
             return []
         
         # Check cache
@@ -712,8 +712,8 @@ class RAHAQueries(graphene.ObjectType):
     
     def resolve_ml_models(self, info, strategy_version_id=None, model_type=None):
         """Get user's trained ML models (cached, optimized to prevent N+1)"""
-        user = info.context.user
-        if not user.is_authenticated:
+        user = getattr(info.context, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
             return []
         
         # Check cache
@@ -772,8 +772,8 @@ class RAHAQueries(graphene.ObjectType):
     
     def resolve_strategy_blends(self, info, is_active=None):
         """Get user's strategy blends"""
-        user = info.context.user
-        if not user.is_authenticated:
+        user = getattr(info.context, "user", None)
+        if not user or not getattr(user, "is_authenticated", False):
             return []
         
         if StrategyBlend is None:
