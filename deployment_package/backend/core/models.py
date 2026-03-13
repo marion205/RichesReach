@@ -421,6 +421,9 @@ class StockMoment(models.Model):
         return f"{self.symbol} @ {self.timestamp} ({self.category})"
 
 
+# Import net worth snapshot model so Django detects it for migrations
+from .net_worth_models import NetWorthSnapshot  # noqa: F401
+
 # Import paper trading models so Django can detect them for migrations
 from .paper_trading_models import (
     PaperTradingAccount,

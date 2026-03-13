@@ -639,6 +639,56 @@ def retrain_production_model_task():
 
 
 @shared_task
+def capture_net_worth_snapshots():
+    """
+    Daily task (6 AM UTC): capture a net worth snapshot for every user
+    who has at least one active bank account linked.
+
+    Idempotent — uses get_or_create so safe to call multiple times per day.
+    Users without sufficient financial data are silently skipped.
+    """
+    try:
+        from django.contrib.auth import get_user_model
+        from .banking_models import BankProviderAccount
+        from .net_worth_service import NetWorthService
+
+        User = get_user_model()
+        svc = NetWorthService()
+
+        # Only process users with at least one active Yodlee connection
+        user_ids = (
+            BankProviderAccount.objects
+            .filter(status='ACTIVE')
+            .values_list('user_id', flat=True)
+            .distinct()
+        )
+
+        captured = 0
+        skipped = 0
+        for user_id in user_ids:
+            try:
+                user = User.objects.get(pk=user_id)
+                point = svc.capture_today(user, source='scheduled')
+                if point is not None:
+                    captured += 1
+                else:
+                    skipped += 1
+            except Exception as e:
+                logger.warning(f"Net worth capture failed for user {user_id}: {e}")
+                skipped += 1
+
+        logger.info(
+            f"capture_net_worth_snapshots: {captured} captured, {skipped} skipped "
+            f"(no data or already captured today)"
+        )
+        return {'status': 'success', 'captured': captured, 'skipped': skipped}
+
+    except Exception as e:
+        logger.error(f"Error in capture_net_worth_snapshots: {e}", exc_info=True)
+        return {'status': 'failed', 'error': str(e)}
+
+
+@shared_task
 def generate_daily_brief_task():
     """
     Weekday task (14:30 UTC = 9:30 AM ET, Mon–Fri): regenerate the AI

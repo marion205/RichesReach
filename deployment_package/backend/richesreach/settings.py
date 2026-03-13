@@ -319,11 +319,23 @@ REDIS_HOST = os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT = int(os.getenv('REDIS_PORT', 6379))
 REDIS_DB = int(os.getenv('REDIS_DB', 0))
 REDIS_PASSWORD = os.getenv('REDIS_PASSWORD', None)
+# Use TLS (rediss://) when REDIS_SSL=true, or in production unless REDIS_SSL=false
+_env = os.getenv('ENVIRONMENT', '').lower()
+_redis_ssl = os.getenv('REDIS_SSL', '').lower()
+REDIS_USE_SSL = (
+    _redis_ssl == 'true' or
+    (_env == 'production' and _redis_ssl != 'false')
+)
+REDIS_SCHEME = 'rediss' if REDIS_USE_SSL else 'redis'
+if REDIS_PASSWORD:
+    REDIS_URL = f'{REDIS_SCHEME}://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
+else:
+    REDIS_URL = f'{REDIS_SCHEME}://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
 # Cache Configuration
 CACHES = {
 'default': {
 'BACKEND': 'django_redis.cache.RedisCache',
-'LOCATION': f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}',
+'LOCATION': REDIS_URL,
 'OPTIONS': {
 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
 'PASSWORD': REDIS_PASSWORD,
@@ -358,9 +370,9 @@ STOCK_ANALYSIS_CONFIG = {
 'MAX_CONCURRENT_BATCHES': 3,
 }
 }
-# Celery Configuration
-CELERY_BROKER_URL = f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
-CELERY_RESULT_BACKEND = f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'
+# Celery Configuration (uses REDIS_URL for TLS in production / when REDIS_SSL=true)
+CELERY_BROKER_URL = REDIS_URL
+CELERY_RESULT_BACKEND = REDIS_URL
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 
@@ -491,13 +503,18 @@ CELERY_BEAT_SCHEDULE = {
 'task': 'core.celery_tasks.generate_daily_brief_task',
 'schedule': crontab(hour=14, minute=30, day_of_week='1-5'),  # 9:30 AM ET Mon-Fri
 },
+# --- Net Worth Engine: daily snapshot capture ---
+'capture-net-worth-snapshots': {
+'task': 'core.celery_tasks.capture_net_worth_snapshots',
+'schedule': crontab(hour=6, minute=30),  # 6:30 AM UTC daily
+},
 }
 # Channels Configuration
 CHANNEL_LAYERS = {
 'default': {
 'BACKEND': 'channels_redis.core.RedisChannelLayer',
 'CONFIG': {
-"hosts": [f'redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}'],
+"hosts": [REDIS_URL],
 },
 },
 }
