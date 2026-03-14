@@ -40,6 +40,7 @@ import { familySharingService, FamilyGroup, FamilyMember } from '../../family/se
 import { DawnRitualScreen } from '../../rituals/screens/DawnRitualScreen';
 import { CreditQuestScreen } from '../../credit/screens/CreditQuestScreen';
 import PortfolioKellyMetricsCard from '../../../components/quant/PortfolioKellyMetricsCard';
+import PortfolioBiasAlert from '../../../components/PortfolioBiasAlert';
 import TransparencyDashboardCard from '../../../components/quant/TransparencyDashboardCard';
 import TradeDebriefScreen from '../../trading/screens/TradeDebriefScreen';
 
@@ -889,8 +890,19 @@ return (
   </View>
 )}
 
+{/* Behavioral Bias Alert */}
+<View style={{ marginTop: 24, marginBottom: 0, paddingHorizontal: 16 }}>
+  <PortfolioBiasAlert onPress={() => {
+    try {
+      if (navigateTo) navigateTo('InvestorProfile');
+      else if (navigation) (navigation as any).navigate('InvestorProfile');
+      else globalNavigate('InvestorProfile');
+    } catch (e) { globalNavigate('InvestorProfile'); }
+  }} />
+</View>
+
 {/* Portfolio Kelly Metrics - Risk Overview */}
-<View style={{ marginTop: 24, marginBottom: 8, paddingHorizontal: 16 }}>
+<View style={{ marginTop: 16, marginBottom: 8, paddingHorizontal: 16 }}>
   <PortfolioKellyMetricsCard />
 </View>
 

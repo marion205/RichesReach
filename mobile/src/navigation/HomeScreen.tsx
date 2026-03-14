@@ -1634,10 +1634,38 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   <View style={{ backgroundColor: '#10B981', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
-                    <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>6 TOOLS</Text>
+                    <Text style={{ color: '#FFFFFF', fontSize: 10, fontWeight: '700' }}>8 TOOLS</Text>
                   </View>
                   <Icon name="chevron-right" size={16} color="#10B981" />
                 </View>
+              </TouchableOpacity>
+
+              {/* ── Next Best Action (NBA) ─────────────────────────────── */}
+              <TouchableOpacity
+                style={[styles.learningCard, { backgroundColor: '#1A0505', borderWidth: 1.5, borderColor: '#EF4444' }]}
+                onPress={() => {
+                  try {
+                    if (navigateTo) { navigateTo('LeakRedirect'); }
+                    else { navigation.navigate('LeakRedirect' as never); }
+                  } catch (e) { globalNavigate('LeakRedirect'); }
+                }}
+              >
+                <View style={{ position: 'absolute', top: 8, left: 8, backgroundColor: '#EF4444', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                  <Text style={{ color: '#FFFFFF', fontSize: 9, fontWeight: '800' }}>PRIORITY #1</Text>
+                </View>
+                <View style={[styles.learningCardIcon, { backgroundColor: '#EF4444', marginTop: 20 }]}>
+                  <Icon name="alert-circle" size={22} color="#FFFFFF" />
+                </View>
+                <View style={[styles.learningCardContent, { marginTop: 20 }]}>
+                  <Text style={[styles.learningCardTitle, { color: '#FFFFFF' }]}>Stop $127/mo in Leaks</Text>
+                  <Text style={[styles.learningCardDescription, { color: '#94A3B8' }]}>
+                    4 subscriptions draining your wealth
+                  </Text>
+                  <Text style={[styles.learningCardMeta, { color: '#10B981', fontWeight: '600' }]}>
+                    Worth $63,450 in 20 years
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#EF4444" style={{ marginTop: 20 }} />
               </TouchableOpacity>
 
             </View>

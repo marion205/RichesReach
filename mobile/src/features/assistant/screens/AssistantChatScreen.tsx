@@ -12,7 +12,24 @@ import {
 import { assistantQuery } from '../../../services/aiClient';
 import UserProfileService, { ExtendedUserProfile } from '../../user/services/UserProfileService';
 import realTimePortfolioService, { PortfolioMetrics } from '../../portfolio/services/RealTimePortfolioService';
+import { DEMO_INVESTOR_PROFILE, DEMO_IDENTITY_GAPS } from '../../../services/demoMockData';
 import type { ScreenName } from '../../../navigation/types';
+
+interface InvestorBehavioralProfile {
+  archetype: string;
+  archetypeTitle: string;
+  archetypeEmoji: string;
+  coachingTone: string;
+  maturityStage: string;
+  dimensions: {
+    riskTolerance: number;
+    lossAversion: number;
+  };
+  activeBiases: Array<{
+    biasType: string;
+    score: number;
+  }>;
+}
 
 interface Message {
   id: string;
@@ -31,12 +48,13 @@ interface ActionCard {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Build a compact text context block from profile + portfolio. */
+/** Build a compact text context block from profile + portfolio + behavioral profile. */
 function buildContext(
   profile: ExtendedUserProfile | null,
   portfolio: PortfolioMetrics | null,
+  behavioral: InvestorBehavioralProfile | null,
 ): Record<string, unknown> | undefined {
-  if (!profile && !portfolio) return undefined;
+  if (!profile && !portfolio && !behavioral) return undefined;
   const ctx: Record<string, unknown> = {};
   if (profile) {
     ctx.experience = profile.experienceLevel;
@@ -53,11 +71,29 @@ function buildContext(
       .slice(0, 5)
       .map(h => ({ symbol: h.symbol, pct: portfolio.totalValue > 0 ? +(h.totalValue / portfolio.totalValue * 100).toFixed(1) : 0 }));
     ctx.top_holdings = topHoldings;
-    // Concentration risk: largest holding weight
     const maxWeight = topHoldings.reduce((m, h) => Math.max(m, h.pct), 0);
     ctx.max_holding_weight_pct = maxWeight;
   }
+  if (behavioral) {
+    ctx.investor_archetype = behavioral.archetypeTitle;
+    ctx.coaching_tone = behavioral.coachingTone;
+    ctx.maturity_stage = behavioral.maturityStage;
+    ctx.behavioral_risk_tolerance = behavioral.dimensions.riskTolerance;
+    ctx.loss_aversion = behavioral.dimensions.lossAversion;
+    ctx.active_biases = behavioral.activeBiases.map(b => b.biasType);
+  }
   return ctx;
+}
+
+/** Get coaching persona prompt based on tone. */
+function getCoachingPersonaPrompt(tone: string): string {
+  const personas: Record<string, string> = {
+    'the_guardian': `Speak with empathy about market volatility. Emphasize how saving money creates a safety net. Use phrases like "Protecting your downside" and "Guaranteed wins". Focus on security and risk mitigation.`,
+    'the_architect': `Speak with logic and precision. Focus on compounding and automation. Use phrases like "Optimizing the system" and "Time-in-market vs. Timing-the-market". The math is what matters.`,
+    'the_scout': `Speak with energy and forward-looking vision. Focus on "Alpha" and strategic positioning. Use phrases like "Capturing growth" and "Strategic allocation". Be direct and action-oriented.`,
+    'the_stabilizer': `Speak with calm reassurance. Focus on consistency and the long-term plan. Acknowledge emotions while guiding back to fundamentals. Reduce anxiety through clarity.`,
+  };
+  return personas[tone] || personas['the_architect'];
 }
 
 /** Detect which action card (if any) is relevant for an assistant response. */
@@ -126,11 +162,12 @@ export default function AssistantChatScreen() {
 
   const [profile, setProfile] = useState<ExtendedUserProfile | null>(null);
   const [portfolio, setPortfolio] = useState<PortfolioMetrics | null>(null);
+  const [behavioral, setBehavioral] = useState<InvestorBehavioralProfile | null>(null);
   const [loadingContext, setLoadingContext] = useState(true);
 
   const flatListRef = useRef<FlatList>(null);
 
-  // Load profile + portfolio once on mount
+  // Load profile + portfolio + behavioral profile on mount
   useEffect(() => {
     let cancelled = false;
     async function load() {
@@ -142,6 +179,22 @@ export default function AssistantChatScreen() {
         if (!cancelled) {
           setProfile(p);
           setPortfolio(port ?? null);
+          // Load behavioral profile from demo data
+          setBehavioral({
+            archetype: DEMO_INVESTOR_PROFILE.archetype,
+            archetypeTitle: DEMO_INVESTOR_PROFILE.archetypeTitle,
+            archetypeEmoji: DEMO_INVESTOR_PROFILE.archetypeEmoji,
+            coachingTone: DEMO_INVESTOR_PROFILE.coachingTone,
+            maturityStage: DEMO_INVESTOR_PROFILE.maturityStage,
+            dimensions: {
+              riskTolerance: DEMO_INVESTOR_PROFILE.dimensions.riskTolerance,
+              lossAversion: DEMO_INVESTOR_PROFILE.dimensions.lossAversion,
+            },
+            activeBiases: DEMO_INVESTOR_PROFILE.biasMatrix.activeBiases.map(b => ({
+              biasType: b.biasType,
+              score: b.score,
+            })),
+          });
         }
       } catch {
         // context is best-effort; silently ignore
@@ -163,7 +216,11 @@ export default function AssistantChatScreen() {
     setInput('');
     setSending(true);
     try {
-      const ctx = buildContext(profile, portfolio);
+      const ctx = buildContext(profile, portfolio, behavioral);
+      // Add coaching persona instruction to context
+      if (behavioral?.coachingTone) {
+        (ctx as any).coaching_persona = getCoachingPersonaPrompt(behavioral.coachingTone);
+      }
       const res = await assistantQuery({ user_id: userId, prompt, context: ctx });
       const answer =
         typeof res?.answer === 'string'
@@ -217,14 +274,25 @@ export default function AssistantChatScreen() {
     </View>
   );
 
+  const coachingToneLabel = behavioral?.coachingTone
+    ? behavioral.coachingTone.replace('the_', '').replace('_', ' ')
+    : null;
+
   const contextBanner =
-    !loadingContext && (profile || portfolio) ? (
+    !loadingContext && (profile || portfolio || behavioral) ? (
       <View style={styles.contextBanner}>
         <Text style={styles.contextBannerText}>
           {portfolio && portfolio.totalValue > 0
             ? `Using your portfolio ($${portfolio.totalValue.toLocaleString('en-US', { maximumFractionDigits: 0 })}) + profile`
             : 'Using your profile'}
         </Text>
+        {coachingToneLabel && (
+          <View style={styles.personaBadge}>
+            <Text style={styles.personaBadgeText}>
+              {behavioral?.archetypeEmoji} {coachingToneLabel.toUpperCase()} MODE
+            </Text>
+          </View>
+        )}
       </View>
     ) : null;
 
@@ -309,13 +377,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#eff6ff',
     borderBottomWidth: 1,
     borderBottomColor: '#bfdbfe',
-    paddingVertical: 6,
+    paddingVertical: 8,
     paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   contextBannerText: {
     fontSize: 11,
     color: '#3b82f6',
     fontWeight: '500',
+  },
+  personaBadge: {
+    backgroundColor: '#6366F1',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  personaBadgeText: {
+    fontSize: 9,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 
   listContent: { padding: 16, paddingBottom: 8 },

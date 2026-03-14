@@ -61,6 +61,26 @@ interface ModuleConfig {
 
 const MODULES: ModuleConfig[] = [
   {
+    key: 'identity',
+    screen: 'InvestorQuiz',
+    title: 'Investor Identity',
+    subtitle: 'Discover your behavioral type',
+    icon: 'user',
+    color: D.purple,
+    faint: '#F3E8FF',
+    tags: ['Quiz', 'Archetype', 'Biases'],
+  },
+  {
+    key: 'digest',
+    screen: 'WeeklyDigest',
+    title: 'Weekly Digest',
+    subtitle: 'Your personalized wealth report',
+    icon: 'bar-chart-2',
+    color: D.indigo,
+    faint: D.indigoFaint,
+    tags: ['Progress', 'Coaching', 'Goals'],
+  },
+  {
     key: 'networth',
     screen: 'NetWorth',
     title: 'Net Worth',

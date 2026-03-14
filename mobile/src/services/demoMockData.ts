@@ -1357,3 +1357,240 @@ export const DEMO_BUILD_PORTFOLIO = {
   dataQuality: 'actual',
   __typename: 'PortfolioBuilderResult',
 };
+
+// ─── Investor Profile & Behavioral Identity ──────────────────────────────────
+
+export const DEMO_QUIZ_QUESTIONS = [
+  {
+    id: 'q1_market_drop',
+    text: "A stock you own drops 15% in one week. What's your gut reaction?",
+    subtext: 'Be honest — what would you actually do?',
+    questionType: 'single_choice',
+    options: [
+      { id: 'a', text: 'Sell immediately to protect what\'s left', __typename: 'QuizOption' },
+      { id: 'b', text: 'Do nothing and wait for recovery', __typename: 'QuizOption' },
+      { id: 'c', text: 'Buy more at the "discount"', __typename: 'QuizOption' },
+      { id: 'd', text: 'Research why it dropped before deciding', __typename: 'QuizOption' },
+    ],
+    __typename: 'QuizQuestion',
+  },
+  {
+    id: 'q2_wealth_view',
+    text: 'Which statement best describes your view on wealth?',
+    questionType: 'single_choice',
+    options: [
+      { id: 'a', text: 'I want to ensure I never backslide into financial stress', __typename: 'QuizOption' },
+      { id: 'b', text: 'I want my money to work as hard as I do', __typename: 'QuizOption' },
+      { id: 'c', text: 'I want to find opportunities before others do', __typename: 'QuizOption' },
+      { id: 'd', text: 'I just want simple, automatic growth', __typename: 'QuizOption' },
+    ],
+    __typename: 'QuizQuestion',
+  },
+  {
+    id: 'q3_luck_vs_skill',
+    text: 'How much of financial success is your decisions vs. luck?',
+    subtext: 'Slide toward which factor you believe matters more.',
+    questionType: 'slider',
+    sliderMin: 0,
+    sliderMax: 10,
+    sliderLabels: ['Mostly Luck', '50/50', 'Mostly My Decisions'],
+    __typename: 'QuizQuestion',
+  },
+];
+
+export const DEMO_INVESTOR_PROFILE = {
+  userId: 'demo-user-1',
+  archetype: 'steady_builder',
+  archetypeTitle: 'The Steady Builder',
+  archetypeDescription: 'You believe in systems and automation. You trust the power of compounding and prefer a disciplined, low-maintenance approach to wealth building.',
+  archetypeFocus: 'Efficiency, systems, and the math of time',
+  dimensions: {
+    riskTolerance: 65,
+    locusOfControl: 70,
+    lossAversion: 40,
+    sophistication: 55,
+    __typename: 'QuizDimensions',
+  },
+  maturityStage: 'builder',
+  coachingTone: 'the_architect',
+  defaultStrategy: 'simple_path_core',
+  biasMatrix: {
+    concentrationScore: 55,
+    recencyScore: 25,
+    lossAversionScore: 30,
+    familiarityScore: 48,
+    overconfidenceScore: 20,
+    overallBiasScore: 38,
+    activeBiases: [
+      {
+        biasType: 'concentration',
+        score: 55,
+        signalDescription: 'Top 3 holdings = 42% of portfolio. Tech sector = 45%',
+        coachingMessage: "Your portfolio is showing concentration in a few names. The Simple Path suggests broad diversification — a small shift to VTI would optimize your system's resilience.",
+        __typename: 'BiasScore',
+      },
+      {
+        biasType: 'familiarity',
+        score: 48,
+        signalDescription: '52% of portfolio in well-known consumer/tech names',
+        coachingMessage: 'You\'re invested in companies you know well — that\'s natural. Consider adding VTI to capture growth from companies you haven\'t discovered yet.',
+        __typename: 'BiasScore',
+      },
+    ],
+    __typename: 'BiasMatrix',
+  },
+  quizCompleted: true,
+  __typename: 'InvestorProfile',
+};
+
+export const DEMO_NEXT_BEST_ACTIONS = [
+  {
+    id: 'leak_critical',
+    actionType: 'cancel_leak',
+    priority: 1,
+    priorityScore: 95,
+    headline: 'Stop $127/mo in leaks',
+    description: 'We found 4 subscriptions draining your wealth.',
+    impactText: 'Worth $63,450 in 20 years',
+    monthlyAmount: 127,
+    totalImpact: 63450,
+    timeImpactDays: 142,
+    actionLabel: 'Review Leaks',
+    actionScreen: 'LeakDetector',
+    reasoning: 'These recurring charges are the easiest money to redirect. Cancel what you don\'t use and watch your millionaire date move closer.',
+    __typename: 'NextBestAction',
+  },
+  {
+    id: 'emergency_fund',
+    actionType: 'build_emergency_fund',
+    priority: 2,
+    priorityScore: 80,
+    headline: 'Build your fortress to 3 months',
+    description: 'You have 1.9 months of expenses saved. Target: 3-6 months.',
+    impactText: 'Need $5,040 to hit 3-month target',
+    monthlyAmount: 420,
+    totalImpact: 5040,
+    timeImpactDays: 0,
+    actionLabel: 'Start Saving',
+    actionScreen: 'FinancialHealth',
+    reasoning: 'Before aggressive investing, you need a safety net. This protects you from having to sell investments at the worst time.',
+    __typename: 'NextBestAction',
+  },
+  {
+    id: 'capture_match',
+    actionType: 'capture_match',
+    priority: 3,
+    priorityScore: 82,
+    headline: 'Capture $1,300/year in free money',
+    description: 'Your employer match is the best investment you\'ll ever make — instant 50-100% return.',
+    impactText: '100% guaranteed return',
+    monthlyAmount: 108,
+    totalImpact: 26000,
+    timeImpactDays: 89,
+    actionLabel: 'Increase 401k',
+    actionScreen: 'FinancialHealth',
+    reasoning: 'Never leave free money on the table. Increase your 401k contribution to at least capture the full match.',
+    __typename: 'NextBestAction',
+  },
+];
+
+export const DEMO_LEAK_REDIRECT = {
+  actionType: 'redirect_savings',
+  headline: 'Redirect $127/mo to your Millionaire Path',
+  description: 'This becomes $63,450 over 20 years.',
+  impactText: 'Moves your goal 142 days closer',
+  monthlyAmount: 127,
+  totalImpact: 63450,
+  timeImpactDays: 142,
+  suggestedEtf: 'VTI',
+  actionScreen: 'AIPortfolioBuilder',
+  reasoning: 'Your foundation is solid. VTI is a low-cost way to capture broad market growth — the "Simple Path" to wealth.',
+  __typename: 'LeakRedirectSuggestion',
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// WEEKLY WEALTH DIGEST
+// ══════════════════════════════════════════════════════════════════════════════
+
+export const DEMO_WEEKLY_DIGEST = {
+  userId: 'demo-user',
+  weekEnding: 'March 9, 2026',
+  portfolioValue: 47832,
+  portfolioChangeAmount: 1247,
+  portfolioChangePercent: 2.68,
+  daysCloserToGoal: 14,
+  goalProgressPercent: 4.78,
+  estimatedGoalDate: 'August 2041',
+  leaksRedirectedAmount: 127,
+  contributionsThisWeek: 287,
+  contributionStreakDays: 23,
+  sp500ChangePercent: 1.92,
+  beatMarket: true,
+  highlights: [
+    {
+      type: 'portfolio_growth',
+      headline: 'Portfolio Growth',
+      value: '+$1,247',
+      subtext: '+2.68% this week',
+      icon: 'trending-up',
+      color: '#10B981',
+      isPositive: true,
+      __typename: 'DigestHighlight',
+    },
+    {
+      type: 'leak_savings',
+      headline: 'Leaks Redirected',
+      value: '$127/mo',
+      subtext: 'Worth $63,450 in 20 years',
+      icon: 'shield',
+      color: '#6366F1',
+      isPositive: true,
+      __typename: 'DigestHighlight',
+    },
+    {
+      type: 'goal_acceleration',
+      headline: 'Goal Acceleration',
+      value: '14 days closer',
+      subtext: 'To your millionaire date',
+      icon: 'zap',
+      color: '#10B981',
+      isPositive: true,
+      __typename: 'DigestHighlight',
+    },
+    {
+      type: 'market_beat',
+      headline: 'Beat the Market',
+      value: '+0.76%',
+      subtext: 'S&P 500 was +1.92%',
+      icon: 'award',
+      color: '#F59E0B',
+      isPositive: true,
+      __typename: 'DigestHighlight',
+    },
+  ],
+  coachingHeadline: 'The System Is Working',
+  coachingMessage: "+$1,247 this week — the math of compounding in action. You're now 14 days ahead of schedule. Plus, you redirected $127/mo in leaks — worth $63,450 long-term!",
+  coachingTone: 'the_architect',
+  nextActionHeadline: 'Review your portfolio allocation',
+  nextActionScreen: 'AIPortfolioBuilder',
+  __typename: 'WeeklyWealthDigest',
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// IDENTITY GAP DETECTION
+// ══════════════════════════════════════════════════════════════════════════════
+
+export const DEMO_IDENTITY_GAPS = [
+  {
+    gapType: 'anxiety_gap',
+    severity: 'mild',
+    statedBehavior: 'Loss aversion: 45/100 (quiz)',
+    actualBehavior: 'Checking app 4.2x/day, 8 times during volatility',
+    gapScore: 28,
+    headline: 'System Check: Anxiety Detected',
+    message: "Data shows 4.2 app opens per day — above your baseline. This pattern often indicates anxiety overriding your systematic approach. The math hasn't changed. Your 20-year projection is still on track.",
+    suggestedAction: 'See your 20-year projection',
+    actionScreen: 'WealthArrival',
+    __typename: 'IdentityGap',
+  },
+];

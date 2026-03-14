@@ -41,6 +41,12 @@ import {
   DEMO_LIFE_DECISION,
   DEMO_REALLOCATION_STRATEGIES,
   DEMO_BUILD_PORTFOLIO,
+  DEMO_QUIZ_QUESTIONS,
+  DEMO_INVESTOR_PROFILE,
+  DEMO_NEXT_BEST_ACTIONS,
+  DEMO_LEAK_REDIRECT,
+  DEMO_WEEKLY_DIGEST,
+  DEMO_IDENTITY_GAPS,
 } from '../services/demoMockData';
 
 // Build swing signals with full GetSwingSignals schema (triggeredAt, signalType, stopPrice, etc.)
@@ -1113,6 +1119,20 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
   // AI Portfolio Builder
   BuildPortfolio: { buildPortfolio: DEMO_BUILD_PORTFOLIO },
   GetBuildPortfolio: { buildPortfolio: DEMO_BUILD_PORTFOLIO },
+  
+  // Investor Profile & Behavioral Identity
+  GetInvestorQuizQuestions: { investorQuizQuestions: DEMO_QUIZ_QUESTIONS },
+  InvestorQuizQuestions: { investorQuizQuestions: DEMO_QUIZ_QUESTIONS },
+  GetInvestorProfile: { investorProfile: DEMO_INVESTOR_PROFILE },
+  InvestorProfile: { investorProfile: DEMO_INVESTOR_PROFILE },
+  GetNextBestActions: { nextBestActions: DEMO_NEXT_BEST_ACTIONS },
+  NextBestActions: { nextBestActions: DEMO_NEXT_BEST_ACTIONS },
+  GetLeakRedirectSuggestion: { leakRedirectSuggestion: DEMO_LEAK_REDIRECT },
+  LeakRedirectSuggestion: { leakRedirectSuggestion: DEMO_LEAK_REDIRECT },
+  GetWeeklyDigest: { weeklyWealthDigest: DEMO_WEEKLY_DIGEST },
+  WeeklyWealthDigest: { weeklyWealthDigest: DEMO_WEEKLY_DIGEST },
+  GetIdentityGaps: { identityGaps: DEMO_IDENTITY_GAPS },
+  IdentityGaps: { identityGaps: DEMO_IDENTITY_GAPS },
   
   // Alternative operation name variants (snake_case → camelCase)
   getReallocationStrategies: { reallocationStrategies: DEMO_REALLOCATION_STRATEGIES },

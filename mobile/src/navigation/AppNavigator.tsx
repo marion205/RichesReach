@@ -183,6 +183,12 @@ import OpportunityDiscoveryScreen from '../features/invest/screens/OpportunityDi
 
 // Financial GPS screens
 import FinancialGPSScreen from '../features/wealth/screens/FinancialGPSScreen';
+import InvestorQuizScreen from '../features/wealth/screens/InvestorQuizScreen';
+import AdaptiveOnboardingScreen from '../features/onboarding/screens/AdaptiveOnboardingScreen';
+import InvestorProfileScreen from '../features/wealth/screens/InvestorProfileScreen';
+import LeakRedirectScreen from '../features/wealth/screens/LeakRedirectScreen';
+import WeeklyDigestScreen from '../features/wealth/screens/WeeklyDigestScreen';
+import MillionairePathScreen from '../features/wealth/screens/MillionairePathScreen';
 import NetWorthScreen from '../features/wealth/screens/NetWorthScreen';
 import WealthArrivalScreen from '../features/wealth/screens/WealthArrivalScreen';
 import LeakDetectorScreen from '../features/wealth/screens/LeakDetectorScreen';
@@ -308,6 +314,18 @@ function HomeStack() {
       {/* Financial GPS screens */}
       <Stack.Screen name="FinancialGPS" component={FinancialGPSScreen} options={{ headerShown: false }} />
       <Stack.Screen name="financial-gps" component={FinancialGPSScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="AdaptiveOnboarding" component={AdaptiveOnboardingScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="adaptive-onboarding" component={AdaptiveOnboardingScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="InvestorQuiz" component={InvestorQuizScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="investor-quiz" component={InvestorQuizScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="InvestorProfile" component={InvestorProfileScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="investor-profile" component={InvestorProfileScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="LeakRedirect" component={LeakRedirectScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="leak-redirect" component={LeakRedirectScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="WeeklyDigest" component={WeeklyDigestScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="weekly-digest" component={WeeklyDigestScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="MillionairePath" component={MillionairePathScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="millionaire-path" component={MillionairePathScreen} options={{ headerShown: false }} />
       <Stack.Screen name="NetWorth" component={NetWorthScreen} options={{ headerShown: false }} />
       <Stack.Screen name="net-worth" component={NetWorthScreen} options={{ headerShown: false }} />
       <Stack.Screen name="WealthArrival" component={WealthArrivalScreen} options={{ headerShown: false }} />
@@ -477,6 +495,18 @@ function InvestStack() {
       {/* Financial GPS screens (also accessible from Invest tab) */}
       <Stack.Screen name="FinancialGPS" component={FinancialGPSScreen} options={{ headerShown: false }} />
       <Stack.Screen name="financial-gps" component={FinancialGPSScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="AdaptiveOnboarding" component={AdaptiveOnboardingScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="adaptive-onboarding" component={AdaptiveOnboardingScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="InvestorQuiz" component={InvestorQuizScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="investor-quiz" component={InvestorQuizScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="InvestorProfile" component={InvestorProfileScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="investor-profile" component={InvestorProfileScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="LeakRedirect" component={LeakRedirectScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="leak-redirect" component={LeakRedirectScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="WeeklyDigest" component={WeeklyDigestScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="weekly-digest" component={WeeklyDigestScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="MillionairePath" component={MillionairePathScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="millionaire-path" component={MillionairePathScreen} options={{ headerShown: false }} />
       <Stack.Screen name="NetWorth" component={NetWorthScreen} options={{ headerShown: false }} />
       <Stack.Screen name="net-worth" component={NetWorthScreen} options={{ headerShown: false }} />
       <Stack.Screen name="WealthArrival" component={WealthArrivalScreen} options={{ headerShown: false }} />

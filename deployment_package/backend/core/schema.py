@@ -139,6 +139,20 @@ except (ImportError, SyntaxError):
         pass
 
 try:
+    from .investor_profile_queries import InvestorProfileQueries, InvestorProfileMutations
+except (ImportError, SyntaxError):
+    class InvestorProfileQueries(graphene.ObjectType):
+        pass
+    class InvestorProfileMutations(graphene.ObjectType):
+        pass
+
+try:
+    from .wealth_digest_queries import WealthDigestQueries
+except (ImportError, SyntaxError):
+    class WealthDigestQueries(graphene.ObjectType):
+        pass
+
+try:
     from .financial_graph_types import FinancialGraphQueries
 except (ImportError, SyntaxError) as e:
     logger.warning(f"FinancialGraphQueries not available: {e}")
@@ -368,7 +382,7 @@ except (ImportError, SyntaxError) as e:
     class DiscussionsQuery(graphene.ObjectType):
         pass
 
-class ExtendedQuery(PremiumQueries, BrokerQueries, TradingQuery, BudgetSpendingQuery, SocialQuery, MarketDataQuery, AnalyticsQuery, SecurityQuery, SignalsQuery, OptionsRustQuery, DiscussionsQuery, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, RiskManagementQueries, OptionsAlertQueries, BlockchainQueries, DefiQueries, CryptoQueries, RAHAQueries, ChanQuantQueries, TransparencyQueries, SpeedOptimizationQueries, OptionsQueries, RepairQueries, FinancialGraphQueries, OpportunityDiscoveryQueries, WealthArrivalQueries, LeakDetectorQueries, NetWorthQueries, FinancialHealthQueries, LifeDecisionQueries, IncomeIntelligenceQueries, ReallocationStrategyQueries, PortfolioBuilderQueries, Query, graphene.ObjectType):
+class ExtendedQuery(PremiumQueries, BrokerQueries, TradingQuery, BudgetSpendingQuery, SocialQuery, MarketDataQuery, AnalyticsQuery, SecurityQuery, SignalsQuery, OptionsRustQuery, DiscussionsQuery, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, RiskManagementQueries, OptionsAlertQueries, BlockchainQueries, DefiQueries, CryptoQueries, RAHAQueries, ChanQuantQueries, TransparencyQueries, SpeedOptimizationQueries, OptionsQueries, RepairQueries, FinancialGraphQueries, OpportunityDiscoveryQueries, WealthArrivalQueries, LeakDetectorQueries, NetWorthQueries, FinancialHealthQueries, LifeDecisionQueries, IncomeIntelligenceQueries, ReallocationStrategyQueries, PortfolioBuilderQueries, InvestorProfileQueries, WealthDigestQueries, Query, graphene.ObjectType):
     """
     Final Query type exposed by the schema.
 
@@ -487,7 +501,7 @@ except (ImportError, SyntaxError):
     class OptionsAlertMutations(graphene.ObjectType):
         pass
 
-class ExtendedMutation(PremiumMutations, BrokerMutations, BankingMutations, SBLOCMutations, PaperTradingMutations, SocialMutations, PrivacyMutations, AIInsightsMutations, OptionsAlertMutations, DefiMutations, CryptoMutations, RAHAMutations, RAHAAdvancedMutations, Mutation, graphene.ObjectType):
+class ExtendedMutation(PremiumMutations, BrokerMutations, BankingMutations, SBLOCMutations, PaperTradingMutations, SocialMutations, PrivacyMutations, AIInsightsMutations, OptionsAlertMutations, DefiMutations, CryptoMutations, RAHAMutations, RAHAAdvancedMutations, InvestorProfileMutations, Mutation, graphene.ObjectType):
     """
     Final Mutation type exposed by the schema.
 
