@@ -722,8 +722,241 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
       },
     ],
   },
-  GetUserBacktests: { userBacktests: [] },
+  GetUserBacktests: (() => {
+    const now = Date.now();
+    
+    // Generate equity curve helper
+    const generateEquityCurve = (startEquity: number, totalReturn: number, days: number, volatility: number) => {
+      const curve = [];
+      let equity = startEquity;
+      const dailyReturn = Math.pow(1 + totalReturn, 1 / days) - 1;
+      
+      for (let i = 0; i < days; i++) {
+        const timestamp = new Date(now - (days - i) * 86400000).toISOString();
+        const randomFactor = 1 + (Math.random() - 0.5) * volatility;
+        equity = equity * (1 + dailyReturn) * randomFactor;
+        curve.push({ timestamp, equity: parseFloat(equity.toFixed(2)), __typename: 'EquityPoint' });
+      }
+      return curve;
+    };
+
+    return {
+      userBacktests: [
+        {
+          id: 'bt-1',
+          symbol: 'AAPL',
+          timeframe: '4H',
+          startDate: new Date(now - 90 * 86400000).toISOString().split('T')[0],
+          endDate: new Date(now - 1 * 86400000).toISOString().split('T')[0],
+          status: 'COMPLETED',
+          parameters: { rsiPeriod: 14, rsiOverbought: 70, rsiOversold: 30 },
+          metrics: {
+            winRate: 0.68,
+            sharpeRatio: 1.85,
+            maxDrawdown: -0.12,
+            expectancy: 1.42,
+            totalTrades: 47,
+            winningTrades: 32,
+            losingTrades: 15,
+            avgWin: 245.80,
+            avgLoss: 142.30,
+            profitFactor: 2.31,
+            __typename: 'BacktestMetrics',
+          },
+          equityCurve: generateEquityCurve(10000, 0.28, 90, 0.02),
+          tradeLog: [],
+          createdAt: new Date(now - 2 * 86400000).toISOString(),
+          completedAt: new Date(now - 2 * 86400000 + 180000).toISOString(),
+          strategyVersion: {
+            id: 'v1-1',
+            strategy: { id: 'strat-1', name: 'RSI Momentum Breakout', __typename: 'Strategy' },
+            __typename: 'StrategyVersion',
+          },
+          __typename: 'BacktestRun',
+        },
+        {
+          id: 'bt-2',
+          symbol: 'MSFT',
+          timeframe: 'D',
+          startDate: new Date(now - 180 * 86400000).toISOString().split('T')[0],
+          endDate: new Date(now - 5 * 86400000).toISOString().split('T')[0],
+          status: 'COMPLETED',
+          parameters: { macdFast: 12, macdSlow: 26, macdSignal: 9 },
+          metrics: {
+            winRate: 0.62,
+            sharpeRatio: 1.52,
+            maxDrawdown: -0.18,
+            expectancy: 1.15,
+            totalTrades: 28,
+            winningTrades: 17,
+            losingTrades: 11,
+            avgWin: 412.50,
+            avgLoss: 198.40,
+            profitFactor: 1.92,
+            __typename: 'BacktestMetrics',
+          },
+          equityCurve: generateEquityCurve(10000, 0.22, 175, 0.025),
+          tradeLog: [],
+          createdAt: new Date(now - 7 * 86400000).toISOString(),
+          completedAt: new Date(now - 7 * 86400000 + 240000).toISOString(),
+          strategyVersion: {
+            id: 'v1-2',
+            strategy: { id: 'strat-2', name: 'MACD Crossover Pro', __typename: 'Strategy' },
+            __typename: 'StrategyVersion',
+          },
+          __typename: 'BacktestRun',
+        },
+        {
+          id: 'bt-3',
+          symbol: 'NVDA',
+          timeframe: '1H',
+          startDate: new Date(now - 60 * 86400000).toISOString().split('T')[0],
+          endDate: new Date(now - 3 * 86400000).toISOString().split('T')[0],
+          status: 'COMPLETED',
+          parameters: { volumeMultiplier: 1.5, lookbackPeriod: 20 },
+          metrics: {
+            winRate: 0.71,
+            sharpeRatio: 2.12,
+            maxDrawdown: -0.09,
+            expectancy: 1.78,
+            totalTrades: 63,
+            winningTrades: 45,
+            losingTrades: 18,
+            avgWin: 186.20,
+            avgLoss: 124.80,
+            profitFactor: 2.65,
+            __typename: 'BacktestMetrics',
+          },
+          equityCurve: generateEquityCurve(10000, 0.35, 57, 0.03),
+          tradeLog: [],
+          createdAt: new Date(now - 4 * 86400000).toISOString(),
+          completedAt: new Date(now - 4 * 86400000 + 120000).toISOString(),
+          strategyVersion: {
+            id: 'v1-3',
+            strategy: { id: 'strat-3', name: 'Volume Surge Momentum', __typename: 'Strategy' },
+            __typename: 'StrategyVersion',
+          },
+          __typename: 'BacktestRun',
+        },
+        {
+          id: 'bt-4',
+          symbol: 'BTC/USD',
+          timeframe: '4H',
+          startDate: new Date(now - 120 * 86400000).toISOString().split('T')[0],
+          endDate: new Date(now - 10 * 86400000).toISOString().split('T')[0],
+          status: 'COMPLETED',
+          parameters: { emaPeriod: 21, trendFilter: true },
+          metrics: {
+            winRate: 0.58,
+            sharpeRatio: 1.34,
+            maxDrawdown: -0.24,
+            expectancy: 0.92,
+            totalTrades: 38,
+            winningTrades: 22,
+            losingTrades: 16,
+            avgWin: 520.40,
+            avgLoss: 285.60,
+            profitFactor: 1.68,
+            __typename: 'BacktestMetrics',
+          },
+          equityCurve: generateEquityCurve(10000, 0.18, 110, 0.04),
+          tradeLog: [],
+          createdAt: new Date(now - 12 * 86400000).toISOString(),
+          completedAt: new Date(now - 12 * 86400000 + 300000).toISOString(),
+          strategyVersion: {
+            id: 'v1-10',
+            strategy: { id: 'strat-10', name: 'BTC Trend Rider', __typename: 'Strategy' },
+            __typename: 'StrategyVersion',
+          },
+          __typename: 'BacktestRun',
+        },
+        {
+          id: 'bt-5',
+          symbol: 'SPY',
+          timeframe: 'D',
+          startDate: new Date(now - 365 * 86400000).toISOString().split('T')[0],
+          endDate: new Date(now - 15 * 86400000).toISOString().split('T')[0],
+          status: 'COMPLETED',
+          parameters: { bbPeriod: 20, bbStdDev: 2, squeezeThreshold: 0.05 },
+          metrics: {
+            winRate: 0.65,
+            sharpeRatio: 1.68,
+            maxDrawdown: -0.15,
+            expectancy: 1.28,
+            totalTrades: 52,
+            winningTrades: 34,
+            losingTrades: 18,
+            avgWin: 328.90,
+            avgLoss: 178.50,
+            profitFactor: 2.18,
+            __typename: 'BacktestMetrics',
+          },
+          equityCurve: generateEquityCurve(10000, 0.42, 350, 0.015),
+          tradeLog: [],
+          createdAt: new Date(now - 20 * 86400000).toISOString(),
+          completedAt: new Date(now - 20 * 86400000 + 600000).toISOString(),
+          strategyVersion: {
+            id: 'v1-5',
+            strategy: { id: 'strat-5', name: 'Bollinger Squeeze Reversal', __typename: 'Strategy' },
+            __typename: 'StrategyVersion',
+          },
+          __typename: 'BacktestRun',
+        },
+      ],
+    };
+  })(),
   
+  // Single backtest detail (used when clicking on a backtest card)
+  GetBacktestRun: (() => {
+    const now = Date.now();
+    const generateEquityCurve = (startEquity: number, totalReturn: number, days: number, volatility: number) => {
+      const curve = [];
+      let equity = startEquity;
+      const dailyReturn = Math.pow(1 + totalReturn, 1 / days) - 1;
+      for (let i = 0; i < days; i++) {
+        const timestamp = new Date(now - (days - i) * 86400000).toISOString();
+        const randomFactor = 1 + (Math.random() - 0.5) * volatility;
+        equity = equity * (1 + dailyReturn) * randomFactor;
+        curve.push({ timestamp, equity: parseFloat(equity.toFixed(2)), __typename: 'EquityPoint' });
+      }
+      return curve;
+    };
+    return {
+      backtestRun: {
+        id: 'bt-1',
+        symbol: 'AAPL',
+        timeframe: '4H',
+        startDate: new Date(now - 90 * 86400000).toISOString().split('T')[0],
+        endDate: new Date(now - 1 * 86400000).toISOString().split('T')[0],
+        status: 'COMPLETED',
+        parameters: { rsiPeriod: 14, rsiOverbought: 70, rsiOversold: 30 },
+        metrics: {
+          winRate: 0.68,
+          sharpeRatio: 1.85,
+          maxDrawdown: -0.12,
+          expectancy: 1.42,
+          totalTrades: 47,
+          winningTrades: 32,
+          losingTrades: 15,
+          avgWin: 245.80,
+          avgLoss: 142.30,
+          profitFactor: 2.31,
+          __typename: 'BacktestMetrics',
+        },
+        equityCurve: generateEquityCurve(10000, 0.28, 90, 0.02),
+        tradeLog: [],
+        createdAt: new Date(now - 2 * 86400000).toISOString(),
+        completedAt: new Date(now - 2 * 86400000 + 180000).toISOString(),
+        strategyVersion: {
+          id: 'v1-1',
+          strategy: { id: 'strat-1', name: 'RSI Momentum Breakout', __typename: 'Strategy' },
+          __typename: 'StrategyVersion',
+        },
+        __typename: 'BacktestRun',
+      },
+    };
+  })(),
+
   // Single strategy detail (used when clicking on a strategy card)
   GetStrategy: {
     strategy: {

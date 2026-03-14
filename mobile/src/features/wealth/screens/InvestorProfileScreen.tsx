@@ -170,7 +170,7 @@ const DEMO_ACTIONS = [
     headline: 'Capture $1,300/year in free money',
     description: 'Your employer match is the best investment you\'ll ever make.',
     impact: '100% guaranteed return',
-    screen: 'FinancialHealth',
+    screen: 'Reallocate',
     color: D.green,
     icon: 'gift' as const,
   },

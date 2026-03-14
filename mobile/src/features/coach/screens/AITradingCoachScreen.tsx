@@ -280,23 +280,23 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
       // Create a personalized demo strategy based on user inputs
       const demoStrategy = {
         ...FALLBACK_STRATEGY,
-        strategy_name: `${riskTolerance.charAt(0).toUpperCase() + riskTolerance.slice(1)} ${asset} Strategy`,
-        description: `A ${riskTolerance} risk strategy for ${asset} trading. This demo strategy is tailored to your risk tolerance and goals: ${goals.join(', ')}.`,
-        risk_level: (riskTolerance === 'conservative' ? 'low' : riskTolerance === 'aggressive' ? 'high' : 'medium') as 'low' | 'medium' | 'high',
-        expected_return: riskTolerance === 'conservative' ? 0.05 : riskTolerance === 'aggressive' ? 0.15 : 0.08,
+        strategy_name: `${(riskTolerance || 'moderate').charAt(0).toUpperCase() + (riskTolerance || 'moderate').slice(1)} ${asset || 'Options'} Strategy`,
+        description: `A ${riskTolerance || 'moderate'} risk strategy for ${asset || 'options'} trading. This demo strategy is tailored to your risk tolerance and goals: ${(goals || []).join(', ')}.`,
+        risk_level: ((riskTolerance || 'moderate') === 'conservative' ? 'low' : (riskTolerance || 'moderate') === 'aggressive' ? 'high' : 'medium') as 'low' | 'medium' | 'high',
+        expected_return: (riskTolerance || 'moderate') === 'conservative' ? 0.05 : (riskTolerance || 'moderate') === 'aggressive' ? 0.15 : 0.08,
         suitable_for: [
-          `${riskTolerance} risk traders`,
-          ...goals.map(goal => `${goal} focused investors`)
+          `${riskTolerance || 'moderate'} risk traders`,
+          ...(goals || []).map(goal => `${goal} focused investors`)
         ],
         steps: [
-          `Research ${asset} fundamentals and current market conditions`,
-          `Set up position sizing based on your ${riskTolerance} risk tolerance`,
+          `Research ${asset || 'asset'} fundamentals and current market conditions`,
+          `Set up position sizing based on your ${riskTolerance || 'moderate'} risk tolerance`,
           `Execute your chosen strategy with proper risk management`,
           `Monitor position and adjust based on market movements`,
           `Close position when targets are met or stop-loss is triggered`
         ],
         market_conditions: {
-          volatility: riskTolerance === 'conservative' ? 'low' : riskTolerance === 'aggressive' ? 'high' : 'moderate',
+          volatility: (riskTolerance || 'moderate') === 'conservative' ? 'low' : (riskTolerance || 'moderate') === 'aggressive' ? 'high' : 'moderate',
           trend: 'bullish',
           current_price: marketTicker
         },
@@ -726,7 +726,7 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
                 >
                   <View style={styles.riskKnob} />
                 </LinearGradient>
-                <Text style={styles.riskValue}>{riskTolerance.toUpperCase()}</Text>
+                <Text style={styles.riskValue}>{(riskTolerance || 'moderate').toUpperCase()}</Text>
               </Animated.View>
             </PanGestureHandler>
           </View>
@@ -817,7 +817,7 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
                 <TouchableOpacity style={styles.metaCard} onLongPress={() => Alert.alert('Risk Tip', 'Long-press for more!')}>
                   <Ionicons name="shield" size={24} color="#10b981" />
                   <Text style={styles.metaLabel}>Risk Mode</Text>
-                  <Text style={styles.metaValue}>{strategy.risk_level.toUpperCase()}</Text>
+                  <Text style={styles.metaValue}>{(strategy.risk_level || 'medium').toUpperCase()}</Text>
                 </TouchableOpacity>
                 {strategy.expected_return && (
                   <TouchableOpacity style={styles.metaCard}>
@@ -1116,8 +1116,8 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
               }}
               contentInset={{ top: 20, bottom: 20, left: 10, right: 10 }}
               numberOfTicks={4}
-              gridMin={Math.min(...chartData.map(d => d.y)) - 5}
-              gridMax={Math.max(...chartData.map(d => d.y)) + 5}
+              gridMin={chartData.length > 0 ? Math.min(...chartData.map(d => d.y)) - 5 : 0}
+              gridMax={chartData.length > 0 ? Math.max(...chartData.map(d => d.y)) + 5 : 100}
               yAxisLabel="$"
               xAccessor={({ index }) => index}
               yAccessor={({ item }) => item.y}
@@ -1181,7 +1181,7 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
             <View style={styles.insightsGrid}>
               <View style={styles.insightCard}>
                 <Text style={styles.insightTitle}>Strengths</Text>
-                {analysis.strengths.map((strength, index) => (
+                {(analysis.strengths || []).map((strength, index) => (
                   <TouchableOpacity key={index} style={styles.insightItem} onPress={() => Alert.alert('Strength Tip', strength)}>
                     <Ionicons name="checkmark-circle" size={16} color="#10b981" />
                     <Text style={styles.insightText}>{strength}</Text>
@@ -1189,10 +1189,10 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
                 ))}
               </View>
 
-              {analysis.mistakes.length > 0 && (
+              {(analysis.mistakes || []).length > 0 && (
                 <View style={styles.insightCard}>
                   <Text style={styles.insightTitle}>Improvements</Text>
-                  {analysis.mistakes.map((mistake, index) => (
+                  {(analysis.mistakes || []).map((mistake, index) => (
                     <TouchableOpacity key={index} style={styles.insightItem} onPress={() => Alert.alert('Improvement Tip', mistake)}>
                       <Ionicons name="alert-circle" size={16} color="#f59e0b" />
                       <Text style={styles.insightText}>{mistake}</Text>
@@ -1205,7 +1205,7 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
             <View style={styles.lessonsCard}>
               <Text style={styles.sectionTitle}>Lessons Learned</Text>
               <FlatList
-                data={analysis.lessons_learned}
+                data={analysis.lessons_learned || []}
                 renderItem={({ item, index }) => (
                   <View style={styles.lessonItem}>
                     <Text style={styles.lessonNumber}>{index + 1}.</Text>
@@ -1317,7 +1317,7 @@ export default function AITradingCoachScreen({ onNavigate }: AITradingCoachScree
 
             <View style={styles.tipsSection}>
               <Text style={styles.sectionTitle}>Quick Action Tips</Text>
-              {confidence.tips.map((tip, index) => (
+              {(confidence.tips || []).map((tip, index) => (
                 <View key={index} style={styles.tipItem}>
                   <Ionicons name="bulb-outline" size={16} color="#f59e0b" />
                   <Text style={styles.tipText}>{tip}</Text>

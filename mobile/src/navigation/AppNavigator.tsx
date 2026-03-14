@@ -282,9 +282,30 @@ function HomeScreenWrapper(props: any) {
     <HomeScreen
       navigateTo={(screen, params) => {
         try {
-          props.navigation.navigate(screen as never, params as never);
+          // RAHA screens use custom navigation system (not React Navigation)
+          const customScreens = ['pro-labs', 'the-whisper', 'strategy-builder', 'strategy-dashboard', 
+                                  'ml-training', 'strategy-blend', 'strategy-detail', 'auto-trading-settings',
+                                  'notification-preferences', 'backtest-viewer'];
+          
+          if (customScreens.includes(screen)) {
+            // Use the global custom navigation
+            if (typeof window !== 'undefined') {
+              if ((window as any).__navigateToGlobal) {
+                (window as any).__navigateToGlobal(screen, params);
+              } else if ((window as any).__setCurrentScreen) {
+                (window as any).__setCurrentScreen(screen);
+              }
+            }
+          } else {
+            // Use React Navigation for standard screens
+            props.navigation.navigate(screen as never, params as never);
+          }
         } catch (e) {
           logger.error('HomeScreen navigate error:', e);
+          // Fallback: try custom navigation
+          if (typeof window !== 'undefined' && (window as any).__setCurrentScreen) {
+            (window as any).__setCurrentScreen(screen);
+          }
         }
       }}
     />

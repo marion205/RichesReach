@@ -981,9 +981,9 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
         
         await new Promise(resolve => setTimeout(resolve, 200)); // Additional wait
         
-        // Allow up to 3 retries (increased from 2)
-        if (retryCountRef.current <= 3) {
-          logger.log(`🎤 Retrying recording start (attempt ${retryCountRef.current})...`);
+        // Allow up to 2 retries (consistent with check at top of function)
+        if (retryCountRef.current < 2) {
+          logger.log(`🎤 Retrying recording start (attempt ${retryCountRef.current + 1})...`);
           isStartingRef.current = false;
           
             // Much longer delay for retries - iOS needs significant time to release audio session
@@ -1007,7 +1007,15 @@ export default function VoiceAIAssistant({ onClose, onInsightGenerated }: VoiceA
             
             await new Promise(resolve => setTimeout(resolve, 2000)); // Increased from 1000ms to 2000ms
           
-          return startListening();
+          // Wrap recursive call in try-catch to prevent unhandled errors
+          try {
+            return await startListening();
+          } catch (retryErr) {
+            logger.warn('⚠️ Retry attempt failed:', retryErr);
+            isStartingRef.current = false;
+            setIsListening(false);
+            return;
+          }
         } else {
           // Max retries reached - show helpful error message
           logger.error('❌ Max retry attempts reached - recording conflict persists');
