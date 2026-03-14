@@ -92,11 +92,12 @@ class LoginView(View):
                     logger.error(f"Error during manual auth: {e}")
                     user = None
             
-            # Method 3: Development fallback - create/get demo user
-            if not user:
+            # Method 3: Development fallback - create/get demo user (never in production)
+            _is_production = os.getenv("ENVIRONMENT", "").lower() == "production" or os.getenv("NODE_ENV", "").lower() == "production"
+            if not user and not _is_production:
                 logger.info("Authentication failed, checking for demo user...")
                 try:
-                    # For demo@example.com, always allow login in development
+                    # For demo@example.com, allow login in development only
                     if email.lower() == 'demo@example.com':
                         user, created = User.objects.get_or_create(
                             email='demo@example.com',

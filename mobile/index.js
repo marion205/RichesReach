@@ -5,6 +5,12 @@ import './polyfills/errorutils.js';
 // This may already set ErrorUtils, but our polyfill ensures it exists first
 import 'react-native/Libraries/Core/InitializeCore';
 
+// 3) Initialize react-native-screens EARLY (before any navigation imports)
+// This prevents "Tried to register two views with the same name RNSScreen" error
+// during hot reload by ensuring screens are only enabled once
+import { enableScreens } from 'react-native-screens';
+enableScreens(true);
+
 // Quick verification - should print true in Metro logs very early
 console.log('[boot]', 'ErrorUtils ready?', !!global.ErrorUtils?.getGlobalHandler);
 

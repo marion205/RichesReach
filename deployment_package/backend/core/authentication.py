@@ -2,6 +2,7 @@
 from django.contrib.auth.backends import BaseBackend
 from django.contrib.auth import get_user_model
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +41,9 @@ def get_user_from_token(token):
         return None
     
     # DEVELOPMENT / DEMO MODE: Handle dev and demo tokens (mobile app uses DEMO_TOKEN_*)
-    if token.startswith('dev-token-') or token.startswith('DEMO_TOKEN'):
+    # Never allow this bypass in production.
+    _is_production = os.getenv("ENVIRONMENT", "").lower() == "production" or os.getenv("NODE_ENV", "").lower() == "production"
+    if not _is_production and (token.startswith('dev-token-') or token.startswith('DEMO_TOKEN')):
         # In development, try to get/create a user for dev/demo tokens
         # Priority: 1) demo@example.com (default login), 2) test@example.com (fallback)
         try:

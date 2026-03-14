@@ -271,56 +271,39 @@ class BrokerQueries(graphene.ObjectType):
             }
     
     def resolve_trading_quote(self, info, symbol):
-        """Get trading quote (bid/ask) for a symbol - returns mock data immediately for fast response"""
+        """Get trading quote (bid/ask) for a symbol - fetches real market data"""
         from datetime import datetime
-        
+        import asyncio
+
         symbol = symbol.upper()
-        
-        # Return mock data immediately for fast response
-        # In production, this could be enhanced to fetch real data asynchronously
-        # For now, use realistic mock prices based on symbol
-        mock_prices = {
-            'AAPL': {'bid': 189.50, 'ask': 190.00},
-            'MSFT': {'bid': 374.50, 'ask': 375.00},
-            'GOOGL': {'bid': 139.50, 'ask': 140.00},
-            'AMZN': {'bid': 149.50, 'ask': 150.00},
-            'TSLA': {'bid': 244.50, 'ask': 245.00},
-            'META': {'bid': 489.50, 'ask': 490.00},
-            'NVDA': {'bid': 124.50, 'ask': 125.00},
-        }
-        
-        # Get price for symbol or use default
-        price_data = mock_prices.get(symbol, {'bid': 149.50, 'ask': 150.00})
-        bid = price_data['bid']
-        ask = price_data['ask']
-        bid_size = 100
-        ask_size = 200
-        
-        # Try to fetch real data in background (non-blocking) via facade
+
+        bid = None
+        ask = None
+        bid_size = 0
+        ask_size = 0
+
         try:
             from .market_data_manager import get_market_data_service
-            import asyncio
-            import threading
 
-            def fetch_real_data_async():
-                """Fetch real data in background thread"""
-                try:
-                    async def fetch():
-                        service = get_market_data_service()
-                        return await service.get_stock_quote(symbol)
+            async def fetch():
+                service = get_market_data_service()
+                return await service.get_stock_quote(symbol)
 
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    result = loop.run_until_complete(fetch())
-                    loop.close()
-                    return result
-                except Exception:
-                    return None
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                quote = loop.run_until_complete(fetch())
+            finally:
+                loop.close()
 
-            threading.Thread(target=fetch_real_data_async, daemon=True).start()
+            if quote:
+                bid = quote.get('bid') or quote.get('price')
+                ask = quote.get('ask') or quote.get('price')
+                bid_size = quote.get('bidSize') or quote.get('bid_size') or 0
+                ask_size = quote.get('askSize') or quote.get('ask_size') or 0
         except Exception:
             pass
-        
+
         return TradingQuoteType(
             symbol=symbol,
             bid=bid,

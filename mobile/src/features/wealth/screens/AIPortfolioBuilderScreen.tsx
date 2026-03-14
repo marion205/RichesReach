@@ -28,6 +28,7 @@ import {
   Animated,
   StatusBar,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Feather from '@expo/vector-icons/Feather';
@@ -375,14 +376,38 @@ export default function AIPortfolioBuilderScreen() {
   };
   
   const handleApplyPlan = () => {
-    navigation.navigate('OpportunityDiscovery', {
-      source: 'portfolio_builder',
-      allocations: allocations.map(a => ({
-        strategyId: a.strategyId,
-        etf: a.primaryEtf,
-        percentage: a.percentage,
-      })),
-    });
+    console.log('[AIPortfolioBuilder] handleApplyPlan called, allocations:', allocations.length);
+    
+    // Show confirmation with plan details
+    Alert.alert(
+      'Plan Activated! 🎉',
+      `Your ${result?.riskProfile || 'balanced'} portfolio plan is ready.\n\n` +
+      `• ${allocations.length} asset allocations\n` +
+      `• ${fmt(monthlyAmount)}/month investing\n` +
+      `• Target: ${fmtK(result?.projected30yr || 0)} in 30 years\n\n` +
+      'Go to Invest Hub to start buying your ETFs.',
+      [
+        {
+          text: 'Stay Here',
+          style: 'cancel',
+        },
+        {
+          text: 'Go to Invest',
+          onPress: () => {
+            try {
+              // Try navigating to Invest tab/hub
+              navigation.navigate('Invest' as never);
+            } catch {
+              try {
+                navigation.navigate('InvestHub' as never);
+              } catch {
+                navigation.goBack();
+              }
+            }
+          },
+        },
+      ]
+    );
   };
   
   return (
@@ -528,17 +553,24 @@ export default function AIPortfolioBuilderScreen() {
             
             {/* Apply Plan CTA */}
             <Pressable
-              style={({ pressed }) => [styles.applyCta, { opacity: pressed ? 0.9 : 1 }]}
-              onPress={handleApplyPlan}
+              onPress={() => {
+                console.log('[AIPortfolioBuilder] Start This Plan pressed');
+                handleApplyPlan();
+              }}
+              style={({ pressed }) => [
+                styles.applyCta,
+                { opacity: pressed ? 0.85 : 1, transform: [{ scale: pressed ? 0.98 : 1 }] },
+              ]}
             >
               <LinearGradient
                 colors={['#7C3AED', '#6366F1']}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.applyCtaGradient}
+                pointerEvents="none"
               >
                 <Feather name="check-circle" size={22} color={D.white} />
-                <View style={{ flex: 1, marginLeft: 14 }}>
+                <View style={{ flex: 1, marginLeft: 14 }} pointerEvents="none">
                   <Text style={styles.applyCtaTitle}>Start This Plan</Text>
                   <Text style={styles.applyCtaSubtitle}>
                     Explore assets and begin investing
@@ -708,10 +740,11 @@ const styles = StyleSheet.create({
   timelineLabel: { fontSize: 12, color: D.textSecondary, marginTop: 2 },
   
   // Apply CTA
-  applyCta: { marginTop: 8, marginBottom: 12 },
+  applyCta: { marginTop: 8, marginBottom: 12, borderRadius: 16, overflow: 'hidden' },
   applyCtaGradient: {
     flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 16,
     shadowColor: D.purple, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 4,
+    minHeight: 70,
   },
   applyCtaTitle: { fontSize: 17, fontWeight: '800', color: D.white },
   applyCtaSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 },

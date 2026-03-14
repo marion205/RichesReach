@@ -4983,6 +4983,57 @@ async def graphql_endpoint(request: Request):
         if variables:
             variables = normalize_value(variables)
         
+        # --- Production security: introspection off, depth limit ---
+        _is_production = (os.getenv("ENVIRONMENT", "").lower() == "production" or
+                          os.getenv("NODE_ENV", "").lower() == "production")
+        if _is_production and query_str:
+            # Block introspection in production (__schema, __type(name: ...)); allow __typename
+            _q = query_str.strip()
+            if "__schema" in _q:
+                return JSONResponse(
+                    status_code=403,
+                    content={"errors": [{"message": "Introspection is disabled in production."}]},
+                )
+            if "__type(" in _q:
+                return JSONResponse(
+                    status_code=403,
+                    content={"errors": [{"message": "Introspection is disabled in production."}]},
+                )
+            # GraphQL query depth limit (e.g. 15) to reduce abuse
+            try:
+                from graphql import parse
+                from graphql.language.visitor import visit, Visitor
+                ast = parse(query_str)
+                depth = [0]
+                max_depth = [0]
+
+                class DepthVisitor(Visitor):
+                    def enter_selection_set(self, node, key, parent, path, ancestors):
+                        depth[0] += 1
+                        if depth[0] > max_depth[0]:
+                            max_depth[0] = depth[0]
+                        return None
+                    def leave_selection_set(self, node, key, parent, path, ancestors):
+                        depth[0] -= 1
+                        return None
+
+                visit(ast, DepthVisitor())
+                _max_allowed = 15
+                if max_depth[0] > _max_allowed:
+                    return JSONResponse(
+                        status_code=400,
+                        content={"errors": [{"message": f"Query depth {max_depth[0]} exceeds maximum allowed ({_max_allowed})."}]},
+                    )
+            except Exception as _depth_err:
+                # If parsing fails, reject in production for safety
+                import logging
+                _log = logging.getLogger(__name__)
+                _log.warning(f"GraphQL depth check failed: {_depth_err}")
+                return JSONResponse(
+                    status_code=400,
+                    content={"errors": [{"message": "Invalid query."}]},
+                )
+        
         # Enhanced debug logging
         print(f"DEBUG: GraphQL operation={operation_name}, query_preview={query_str[:150]}...")
         
@@ -5002,8 +5053,8 @@ async def graphql_endpoint(request: Request):
                 token = auth_header.split(" ", 1)[1].strip()
             
             if token:
-                # DEV MODE: Handle dev-token-* by auto-logging in as test user
-                if token.startswith("dev-token-"):
+                # DEV MODE ONLY: Handle dev-token-* by auto-logging in as test user (never in production)
+                if not _is_production and token.startswith("dev-token-"):
                     from django.contrib.auth import get_user_model
                     User = get_user_model()
                     # Run in executor since it uses Django ORM
