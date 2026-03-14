@@ -182,9 +182,15 @@ import PrivateMarketsLearnScreen from '../features/invest/screens/PrivateMarkets
 import OpportunityDiscoveryScreen from '../features/invest/screens/OpportunityDiscoveryScreen';
 
 // Financial GPS screens
+import FinancialGPSScreen from '../features/wealth/screens/FinancialGPSScreen';
 import NetWorthScreen from '../features/wealth/screens/NetWorthScreen';
 import WealthArrivalScreen from '../features/wealth/screens/WealthArrivalScreen';
 import LeakDetectorScreen from '../features/wealth/screens/LeakDetectorScreen';
+import FinancialHealthScreen from '../features/wealth/screens/FinancialHealthScreen';
+import LifeDecisionScreen from '../features/wealth/screens/LifeDecisionScreen';
+import IncomeIntelligenceScreen from '../features/wealth/screens/IncomeIntelligenceScreen';
+import ReallocateScreen from '../features/wealth/screens/ReallocateScreen';
+import AIPortfolioBuilderScreen from '../features/wealth/screens/AIPortfolioBuilderScreen';
 
 // Swing Trading screens
 import SwingTradingDashboard from '../features/swingTrading/screens/SwingTradingDashboard';
@@ -300,12 +306,24 @@ function HomeStack() {
       {/* V2 utility routes triggered from Home cards */}
       <Stack.Screen name="oracle-insights" component={OracleInsightsScreen} />
       {/* Financial GPS screens */}
+      <Stack.Screen name="FinancialGPS" component={FinancialGPSScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="financial-gps" component={FinancialGPSScreen} options={{ headerShown: false }} />
       <Stack.Screen name="NetWorth" component={NetWorthScreen} options={{ headerShown: false }} />
       <Stack.Screen name="net-worth" component={NetWorthScreen} options={{ headerShown: false }} />
       <Stack.Screen name="WealthArrival" component={WealthArrivalScreen} options={{ headerShown: false }} />
       <Stack.Screen name="wealth-arrival" component={WealthArrivalScreen} options={{ headerShown: false }} />
       <Stack.Screen name="LeakDetector" component={LeakDetectorScreen} options={{ headerShown: false }} />
       <Stack.Screen name="leak-detector" component={LeakDetectorScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="FinancialHealth" component={FinancialHealthScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="financial-health" component={FinancialHealthScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="LifeDecision" component={LifeDecisionScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="life-decision" component={LifeDecisionScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="IncomeIntelligence" component={IncomeIntelligenceScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="income-intelligence" component={IncomeIntelligenceScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Reallocate" component={ReallocateScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="reallocate" component={ReallocateScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="AIPortfolioBuilder" component={AIPortfolioBuilderScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ai-portfolio-builder" component={AIPortfolioBuilderScreen} options={{ headerShown: false }} />
       <Stack.Screen name="voice-ai" component={VoiceAIAssistant} />
       <Stack.Screen name="blockchain-integration" component={BlockchainIntegration} />
       <Stack.Screen name="bridge-screen" component={BridgeScreen} options={{ headerShown: true, title: 'Cross-Chain Bridge' }} />
@@ -457,12 +475,24 @@ function InvestStack() {
       <Stack.Screen name="OpportunityDetail" component={OpportunityDiscoveryScreen} options={{ headerShown: true, title: 'Opportunity Detail' }} />
 
       {/* Financial GPS screens (also accessible from Invest tab) */}
+      <Stack.Screen name="FinancialGPS" component={FinancialGPSScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="financial-gps" component={FinancialGPSScreen} options={{ headerShown: false }} />
       <Stack.Screen name="NetWorth" component={NetWorthScreen} options={{ headerShown: false }} />
       <Stack.Screen name="net-worth" component={NetWorthScreen} options={{ headerShown: false }} />
       <Stack.Screen name="WealthArrival" component={WealthArrivalScreen} options={{ headerShown: false }} />
       <Stack.Screen name="wealth-arrival" component={WealthArrivalScreen} options={{ headerShown: false }} />
       <Stack.Screen name="LeakDetector" component={LeakDetectorScreen} options={{ headerShown: false }} />
       <Stack.Screen name="leak-detector" component={LeakDetectorScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="FinancialHealth" component={FinancialHealthScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="financial-health" component={FinancialHealthScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="LifeDecision" component={LifeDecisionScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="life-decision" component={LifeDecisionScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="IncomeIntelligence" component={IncomeIntelligenceScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="income-intelligence" component={IncomeIntelligenceScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Reallocate" component={ReallocateScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="reallocate" component={ReallocateScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="AIPortfolioBuilder" component={AIPortfolioBuilderScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="ai-portfolio-builder" component={AIPortfolioBuilderScreen} options={{ headerShown: false }} />
 
       {/* Legacy aliases to avoid breaking existing navigate calls */}
       <Stack.Screen name="stock" component={StockScreenWrapper} options={{ headerShown: true, title: 'Stocks' }} />

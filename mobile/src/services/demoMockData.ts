@@ -1001,3 +1001,359 @@ export const DEMO_HOLDING_INSIGHTS: Record<string, DemoHoldingInsightShape> = {
 export function getDemoHoldingInsight(ticker: string): DemoHoldingInsightShape {
   return DEMO_HOLDING_INSIGHTS[ticker.toUpperCase()] ?? DEMO_HOLDING_INSIGHTS.DEFAULT;
 }
+
+// ─── Financial GPS: Leak Detector ──────────────────────────────────────────────
+export const DEMO_FINANCIAL_LEAKS = {
+  totalMonthlyLeak: 287,
+  totalAnnualLeak: 3444,
+  savingsImpact5yr: 19842,
+  headlineSentence: 'You have 8 recurring subscriptions draining $287/month. Cancelling unused ones could grow to $19,842 in 5 years.',
+  topLeak: {
+    merchantName: 'Adobe Creative Cloud',
+    normalizedName: 'Adobe Creative Cloud',
+    cadence: 'monthly',
+    confidence: 0.95,
+    monthlyEquivalent: 79.99,
+    category: 'Software/Tools',
+    easyToForget: true,
+    __typename: 'DetectedSubscription',
+  },
+  detectedSubscriptions: [
+    { merchantName: 'Adobe Creative Cloud', normalizedName: 'Adobe Creative Cloud', cadence: 'monthly', confidence: 0.95, monthlyEquivalent: 79.99, annualEquivalent: 959.88, category: 'Software/Tools', easyToForget: true, occurrenceCount: 12, lastSeen: new Date(Date.now() - 5 * 86400000).toISOString(), amountVariance: 0, __typename: 'DetectedSubscription' },
+    { merchantName: 'Netflix', normalizedName: 'Netflix', cadence: 'monthly', confidence: 0.98, monthlyEquivalent: 22.99, annualEquivalent: 275.88, category: 'Streaming', easyToForget: false, occurrenceCount: 12, lastSeen: new Date(Date.now() - 3 * 86400000).toISOString(), amountVariance: 0, __typename: 'DetectedSubscription' },
+    { merchantName: 'Spotify', normalizedName: 'Spotify Premium', cadence: 'monthly', confidence: 0.97, monthlyEquivalent: 15.99, annualEquivalent: 191.88, category: 'Music', easyToForget: false, occurrenceCount: 12, lastSeen: new Date(Date.now() - 2 * 86400000).toISOString(), amountVariance: 0, __typename: 'DetectedSubscription' },
+    { merchantName: 'iCloud Storage', normalizedName: 'iCloud+ 200GB', cadence: 'monthly', confidence: 0.92, monthlyEquivalent: 2.99, annualEquivalent: 35.88, category: 'Cloud Storage', easyToForget: true, occurrenceCount: 12, lastSeen: new Date(Date.now() - 8 * 86400000).toISOString(), amountVariance: 0, __typename: 'DetectedSubscription' },
+    { merchantName: 'Headspace', normalizedName: 'Headspace', cadence: 'monthly', confidence: 0.88, monthlyEquivalent: 12.99, annualEquivalent: 155.88, category: 'Health/Fitness', easyToForget: true, occurrenceCount: 6, lastSeen: new Date(Date.now() - 10 * 86400000).toISOString(), amountVariance: 0, __typename: 'DetectedSubscription' },
+    { merchantName: 'Amazon Prime', normalizedName: 'Amazon Prime', cadence: 'yearly', confidence: 0.99, monthlyEquivalent: 11.58, annualEquivalent: 139.00, category: 'Shopping/Prime', easyToForget: false, occurrenceCount: 1, lastSeen: new Date(Date.now() - 45 * 86400000).toISOString(), amountVariance: 0, __typename: 'DetectedSubscription' },
+    { merchantName: 'HBO Max', normalizedName: 'HBO Max', cadence: 'monthly', confidence: 0.94, monthlyEquivalent: 15.99, annualEquivalent: 191.88, category: 'Streaming', easyToForget: true, occurrenceCount: 8, lastSeen: new Date(Date.now() - 12 * 86400000).toISOString(), amountVariance: 0, __typename: 'DetectedSubscription' },
+    { merchantName: 'Hinge', normalizedName: 'Hinge Premium', cadence: 'monthly', confidence: 0.85, monthlyEquivalent: 29.99, annualEquivalent: 359.88, category: 'Dating', easyToForget: true, occurrenceCount: 4, lastSeen: new Date(Date.now() - 15 * 86400000).toISOString(), amountVariance: 0, __typename: 'DetectedSubscription' },
+  ],
+  __typename: 'FinancialLeaksType',
+};
+
+// ─── Financial GPS: Wealth Arrival ─────────────────────────────────────────────
+export const DEMO_WEALTH_ARRIVAL = {
+  userId: 1,
+  currentNetWorth: 145000,
+  estimatedMonthlyIncome: 8500,
+  investableSurplusMonthly: 2200,
+  annualContribution: 26400,
+  savingsRatePct: 25.9,
+  projectionYears: 30,
+  riskTolerance: 'moderate',
+  targetNetWorth: 1000000,
+  currentAge: 32,
+  headlineSentence: 'At your current pace, you could reach $1M in 18 years (age 50).',
+  dataQuality: 'actual',
+  primary: {
+    scenario: 'moderate',
+    annualReturn: 0.07,
+    wealthArrivalYears: 18,
+    finalNetWorth: 1024000,
+    totalContributions: 475200,
+    totalGrowth: 548800,
+    milestones: [
+      { targetAmount: 200000, yearsAway: 2, arrivalYear: 2028, alreadyAchieved: false, label: '$200K' },
+      { targetAmount: 500000, yearsAway: 9, arrivalYear: 2035, alreadyAchieved: false, label: 'Half Million' },
+      { targetAmount: 750000, yearsAway: 14, arrivalYear: 2040, alreadyAchieved: false, label: '$750K' },
+      { targetAmount: 1000000, yearsAway: 18, arrivalYear: 2044, alreadyAchieved: false, label: 'Millionaire' },
+    ],
+    yearByYear: Array.from({ length: 30 }, (_, i) => ({
+      year: 2026 + i,
+      netWorth: Math.round(145000 * Math.pow(1.07, i) + 26400 * ((Math.pow(1.07, i) - 1) / 0.07)),
+      portfolioValue: Math.round(120000 * Math.pow(1.07, i) + 26400 * ((Math.pow(1.07, i) - 1) / 0.07)),
+      annualContribution: 26400,
+    })),
+    __typename: 'WealthArrivalScenario',
+  },
+  scenarios: [
+    { scenario: 'conservative', annualReturn: 0.05, wealthArrivalYears: 22, finalNetWorth: 820000, yearByYear: [] },
+    { scenario: 'moderate', annualReturn: 0.07, wealthArrivalYears: 18, finalNetWorth: 1024000, yearByYear: [] },
+    { scenario: 'aggressive', annualReturn: 0.10, wealthArrivalYears: 14, finalNetWorth: 1380000, yearByYear: [] },
+  ],
+  __typename: 'WealthArrivalType',
+};
+
+// ─── Financial GPS: Net Worth History ──────────────────────────────────────────
+export const DEMO_NET_WORTH_HISTORY = {
+  userId: 'demo-user-1',
+  currentNetWorth: 145000,
+  currentPortfolioValue: 120000,
+  currentSavingsBalance: 35000,
+  currentDebt: 10000,
+  change7d: 1250,
+  change30d: 4800,
+  change90d: 12500,
+  change1yr: 32000,
+  changePct30d: 3.4,
+  allTimeHigh: 148000,
+  allTimeHighDate: new Date(Date.now() - 7 * 86400000).toISOString(),
+  allTimeLow: 98000,
+  allTimeLowDate: new Date(Date.now() - 365 * 86400000).toISOString(),
+  increaseStreakDays: 12,
+  snapshotCapturedToday: true,
+  headlineSentence: 'Your net worth grew $4,800 this month — up 3.4% and on a 12-day winning streak.',
+  dataQuality: 'live',
+  history: Array.from({ length: 90 }, (_, i) => {
+    const capturedAt = new Date(Date.now() - (89 - i) * 86400000);
+    const base = 130000 + i * 170;
+    const noise = (Math.random() - 0.5) * 2000;
+    return {
+      capturedAt: capturedAt.toISOString(),
+      netWorth: Math.round(base + noise),
+      portfolioValue: Math.round((base + noise) * 0.83),
+      savingsBalance: Math.round((base + noise) * 0.24),
+      debt: 10000,
+      __typename: 'NetWorthDataPoint',
+    };
+  }),
+  breakdown: {
+    portfolioValue: 120000,
+    savingsBalance: 35000,
+    realEstateEquity: 0,
+    otherAssets: 0,
+    totalDebt: 10000,
+    __typename: 'NetWorthBreakdown',
+  },
+  __typename: 'NetWorthHistoryType',
+};
+
+// ─── Financial GPS: Financial Health Score ─────────────────────────────────────
+export const DEMO_FINANCIAL_HEALTH = {
+  userId: 'demo-user-1',
+  score: 72,
+  grade: 'B',
+  headlineSentence: 'Your financial health is strong with room to optimize savings rate and debt payoff.',
+  dataQuality: 'live',
+  savingsRatePct: 26,
+  monthlyIncome: 8500,
+  monthlyDebtService: 1870,
+  debtToIncomePct: 22,
+  emergencyFundMonths: 4.1,
+  creditUtilizationPct: 18,
+  pillars: [
+    { name: 'savings_rate', label: 'Savings Rate', score: 78, grade: 'B', value: 26, unit: '%', weight: 0.25, insight: 'Saving 26% of income — above the recommended 20%', action: 'Consider automating an extra $200/month to max out tax-advantaged accounts', __typename: 'FinancialHealthPillar' },
+    { name: 'emergency_fund', label: 'Emergency Fund', score: 68, grade: 'C', value: 4.1, unit: 'months', weight: 0.25, insight: '4.1 months of expenses covered', action: 'Build to 6 months for full protection', __typename: 'FinancialHealthPillar' },
+    { name: 'debt_ratio', label: 'Debt-to-Income', score: 62, grade: 'C', value: 22, unit: '%', weight: 0.25, insight: 'Debt-to-income ratio at 22%', action: 'Prioritize paying down high-interest credit card debt', __typename: 'FinancialHealthPillar' },
+    { name: 'credit_utilization', label: 'Credit Utilization', score: 82, grade: 'B', value: 18, unit: '%', weight: 0.25, insight: 'Credit utilization at 18% — under the 30% threshold', action: 'Keep utilization below 10% for optimal credit score impact', __typename: 'FinancialHealthPillar' },
+  ],
+  __typename: 'FinancialHealthType',
+};
+
+// ─── Financial GPS: Income Intelligence ────────────────────────────────────────
+export const DEMO_INCOME_INTELLIGENCE = {
+  userId: 'demo-user-1',
+  totalMonthlyIncome: 8500,
+  totalAnnualIncome: 102000,
+  primaryIncomeMonthly: 7200,
+  secondaryIncomeMonthly: 1300,
+  incomeDiversityScore: 68,
+  streamCount: 4,
+  lookbackDays: 90,
+  headlineSentence: 'Your income is 85% salary-dependent. Consider building passive income streams.',
+  dataQuality: 'live',
+  streams: [
+    { streamType: 'salary', label: 'Primary Salary', monthlyAmount: 7200, annualAmount: 86400, transactionCount: 3, topSources: ['Acme Corp'], pctOfTotal: 84.7, insight: 'Stable W-2 income — backbone of your finances', __typename: 'IncomeStream' },
+    { streamType: 'side_hustle', label: 'Side Consulting', monthlyAmount: 800, annualAmount: 9600, transactionCount: 6, topSources: ['Freelance clients'], pctOfTotal: 9.4, insight: 'Variable 1099 income — consider raising rates', __typename: 'IncomeStream' },
+    { streamType: 'passive', label: 'Dividend Income', monthlyAmount: 350, annualAmount: 4200, transactionCount: 12, topSources: ['SCHD', 'VYM', 'O'], pctOfTotal: 4.1, insight: 'Growing passive stream — reinvest for compounding', __typename: 'IncomeStream' },
+    { streamType: 'passive', label: 'Interest Income', monthlyAmount: 150, annualAmount: 1800, transactionCount: 3, topSources: ['HYSA', 'Treasury Bills'], pctOfTotal: 1.8, insight: 'Safe yield from savings — consider I-bonds', __typename: 'IncomeStream' },
+  ],
+  __typename: 'IncomeIntelligenceType',
+};
+
+// ─── Financial GPS: Life Decision Simulator ────────────────────────────────────
+export const DEMO_LIFE_DECISION = {
+  userId: 1,
+  currentNetWorth: 145000,
+  monthlyIncome: 8500,
+  monthlySurplus: 2200,
+  dataQuality: 'actual',
+  recentSimulations: [
+    {
+      id: 'sim-1',
+      title: 'Buy a $60K car',
+      category: 'purchase',
+      upfrontCost: 60000,
+      monthlyImpact: -850,
+      opportunityCost10yr: 142000,
+      wealthImpact10yr: -98000,
+      verdict: 'significant_impact',
+      summary: 'This purchase would delay your millionaire goal by 4.2 years.',
+      alternatives: ['Consider a $35K car — saves $42K over 10 years', 'Lease for $450/month to preserve capital'],
+      __typename: 'LifeDecisionSimulation',
+    },
+    {
+      id: 'sim-2',
+      title: 'Have a baby',
+      category: 'life_event',
+      upfrontCost: 15000,
+      monthlyImpact: -1200,
+      opportunityCost10yr: 185000,
+      wealthImpact10yr: -142000,
+      verdict: 'major_impact',
+      summary: 'Adding a child reduces your savings rate significantly but builds invaluable life experiences.',
+      alternatives: ['Start a 529 plan now to prepare', 'Build to 12-month emergency fund first'],
+      __typename: 'LifeDecisionSimulation',
+    },
+  ],
+  __typename: 'LifeDecisionType',
+};
+
+// ─── Money Reallocation Engine ─────────────────────────────────────────────────
+export const DEMO_REALLOCATION_STRATEGIES = {
+  userId: 1,
+  monthlyAmount: 287,
+  annualAmount: 3444,
+  headlineSentence: 'Investing $287/month could grow to $271,000 in 30 years at 7% return.',
+  currentPortfolioSummary: '45% tech, 30% ETF, 15% bonds, 10% cash',
+  dataQuality: 'actual',
+  strategies: [
+    {
+      id: 'growth_etf',
+      name: 'Growth ETF Investing',
+      tagline: 'Long-term capital appreciation via broad market exposure',
+      icon: 'trending-up',
+      color: '#3B82F6',
+      riskLevel: 'moderate',
+      timeHorizon: 'long',
+      fitScore: 82,
+      graphRationale: 'Growth ETFs align well with your moderate risk profile and long time horizon.',
+      warning: null,
+      examples: [
+        { symbol: 'VTI', name: 'Vanguard Total Stock Market', description: 'Entire U.S. stock market in one ETF.', assetClass: 'etf', __typename: 'ExampleAsset' },
+        { symbol: 'VOO', name: 'Vanguard S&P 500', description: 'Tracks the 500 largest U.S. companies.', assetClass: 'etf', __typename: 'ExampleAsset' },
+        { symbol: 'QQQ', name: 'Invesco QQQ Trust', description: 'Nasdaq-100 for tech-heavy growth.', assetClass: 'etf', __typename: 'ExampleAsset' },
+      ],
+      projections: [
+        { returnRate: 0.05, returnLabel: '5% (conservative)', value10yr: 44500, value20yr: 117500, value30yr: 237000, __typename: 'ProjectedOutcome' },
+        { returnRate: 0.07, returnLabel: '7% (moderate)', value10yr: 49700, value20yr: 149300, value30yr: 350000, __typename: 'ProjectedOutcome' },
+        { returnRate: 0.10, returnLabel: '10% (aggressive)', value10yr: 58600, value20yr: 212000, value30yr: 658000, __typename: 'ProjectedOutcome' },
+      ],
+      __typename: 'StrategyCategory',
+    },
+    {
+      id: 'dividend_income',
+      name: 'Dividend Income',
+      tagline: 'Generate passive income through dividend-paying stocks',
+      icon: 'dollar-sign',
+      color: '#10B981',
+      riskLevel: 'moderate',
+      timeHorizon: 'medium',
+      fitScore: 75,
+      graphRationale: 'Dividend investing generates passive income while you wait for growth.',
+      warning: null,
+      examples: [
+        { symbol: 'SCHD', name: 'Schwab U.S. Dividend Equity', description: 'Quality dividend growers, ~3.5% yield.', assetClass: 'etf', __typename: 'ExampleAsset' },
+        { symbol: 'VYM', name: 'Vanguard High Dividend Yield', description: 'High-dividend stocks, ~3% yield.', assetClass: 'etf', __typename: 'ExampleAsset' },
+        { symbol: 'O', name: 'Realty Income Corp', description: 'Monthly dividend REIT, ~5% yield.', assetClass: 'reit', __typename: 'ExampleAsset' },
+      ],
+      projections: [
+        { returnRate: 0.05, returnLabel: '5% (conservative)', value10yr: 44500, value20yr: 117500, value30yr: 237000, __typename: 'ProjectedOutcome' },
+        { returnRate: 0.07, returnLabel: '7% (moderate)', value10yr: 49700, value20yr: 149300, value30yr: 350000, __typename: 'ProjectedOutcome' },
+        { returnRate: 0.10, returnLabel: '10% (aggressive)', value10yr: 58600, value20yr: 212000, value30yr: 658000, __typename: 'ProjectedOutcome' },
+      ],
+      __typename: 'StrategyCategory',
+    },
+    {
+      id: 'ai_sector',
+      name: 'AI & Tech Growth',
+      tagline: 'Exposure to artificial intelligence and technology leaders',
+      icon: 'cpu',
+      color: '#7C3AED',
+      riskLevel: 'high',
+      timeHorizon: 'long',
+      fitScore: 58,
+      graphRationale: 'Your portfolio is already 45% in tech. Consider diversifying into other sectors.',
+      warning: 'High concentration risk',
+      examples: [
+        { symbol: 'NVDA', name: 'NVIDIA Corporation', description: 'Leading AI chip maker.', assetClass: 'stock', __typename: 'ExampleAsset' },
+        { symbol: 'MSFT', name: 'Microsoft Corporation', description: 'Cloud + AI integration (Azure, Copilot).', assetClass: 'stock', __typename: 'ExampleAsset' },
+        { symbol: 'BOTZ', name: 'Global X Robotics & AI ETF', description: 'Basket of robotics and AI companies.', assetClass: 'etf', __typename: 'ExampleAsset' },
+      ],
+      projections: [
+        { returnRate: 0.07, returnLabel: '7% (moderate)', value10yr: 49700, value20yr: 149300, value30yr: 350000, __typename: 'ProjectedOutcome' },
+        { returnRate: 0.10, returnLabel: '10% (aggressive)', value10yr: 58600, value20yr: 212000, value30yr: 658000, __typename: 'ProjectedOutcome' },
+        { returnRate: 0.12, returnLabel: '12% (optimistic)', value10yr: 64200, value20yr: 264000, value30yr: 1020000, __typename: 'ProjectedOutcome' },
+      ],
+      __typename: 'StrategyCategory',
+    },
+    {
+      id: 'fixed_income',
+      name: 'Fixed Income & Bonds',
+      tagline: 'Stable, predictable returns with lower volatility',
+      icon: 'shield',
+      color: '#6366F1',
+      riskLevel: 'low',
+      timeHorizon: 'short',
+      fitScore: 68,
+      graphRationale: 'Fixed income provides stability and predictable returns.',
+      warning: null,
+      examples: [
+        { symbol: 'BND', name: 'Vanguard Total Bond Market', description: 'Entire U.S. bond market. Low risk.', assetClass: 'etf', __typename: 'ExampleAsset' },
+        { symbol: 'SGOV', name: 'iShares 0-3 Month Treasury', description: 'Ultra-short T-bills, ~5% yield.', assetClass: 'etf', __typename: 'ExampleAsset' },
+        { symbol: 'TIP', name: 'iShares TIPS Bond ETF', description: 'Inflation-protected bonds.', assetClass: 'etf', __typename: 'ExampleAsset' },
+      ],
+      projections: [
+        { returnRate: 0.04, returnLabel: '4% (low risk)', value10yr: 42000, value20yr: 103000, value30yr: 194000, __typename: 'ProjectedOutcome' },
+        { returnRate: 0.05, returnLabel: '5% (moderate)', value10yr: 44500, value20yr: 117500, value30yr: 237000, __typename: 'ProjectedOutcome' },
+        { returnRate: 0.06, returnLabel: '6% (optimistic)', value10yr: 47000, value20yr: 132000, value30yr: 287000, __typename: 'ProjectedOutcome' },
+      ],
+      __typename: 'StrategyCategory',
+    },
+    {
+      id: 'real_estate',
+      name: 'Real Estate (REITs)',
+      tagline: 'Real estate exposure without buying property',
+      icon: 'home',
+      color: '#F59E0B',
+      riskLevel: 'moderate',
+      timeHorizon: 'medium',
+      fitScore: 72,
+      graphRationale: 'REITs add real estate exposure without the hassle of property management.',
+      warning: null,
+      examples: [
+        { symbol: 'VNQ', name: 'Vanguard Real Estate ETF', description: 'Broad REIT exposure, ~4% yield.', assetClass: 'etf', __typename: 'ExampleAsset' },
+        { symbol: 'STAG', name: 'STAG Industrial', description: 'Industrial warehouses, monthly dividend.', assetClass: 'reit', __typename: 'ExampleAsset' },
+        { symbol: 'AMT', name: 'American Tower Corp', description: 'Cell tower infrastructure.', assetClass: 'reit', __typename: 'ExampleAsset' },
+      ],
+      projections: [
+        { returnRate: 0.06, returnLabel: '6% (conservative)', value10yr: 47000, value20yr: 132000, value30yr: 287000, __typename: 'ProjectedOutcome' },
+        { returnRate: 0.08, returnLabel: '8% (moderate)', value10yr: 52400, value20yr: 168000, value30yr: 428000, __typename: 'ProjectedOutcome' },
+        { returnRate: 0.10, returnLabel: '10% (optimistic)', value10yr: 58600, value20yr: 212000, value30yr: 658000, __typename: 'ProjectedOutcome' },
+      ],
+      __typename: 'StrategyCategory',
+    },
+  ],
+  __typename: 'ReallocationSuggestion',
+};
+
+// ─── AI Portfolio Builder ──────────────────────────────────────────────────────
+export const DEMO_BUILD_PORTFOLIO = {
+  userId: 1,
+  monthlyAmount: 287,
+  annualAmount: 3444,
+  riskProfile: 'moderate',
+  riskRationale: 'A balanced approach suits your current situation with 4+ months emergency fund and stable income.',
+  allocations: [
+    { strategyId: 'growth_etf', strategyName: 'Growth ETF', percentage: 40, monthlyAmount: 114.80, annualAmount: 1377.60, color: '#3B82F6', icon: 'trending-up', primaryEtf: 'VTI', primaryEtfName: 'Vanguard Total Stock Market', rationale: 'Core holding for long-term wealth building', __typename: 'AllocationSlice' },
+    { strategyId: 'dividend_income', strategyName: 'Dividend Income', percentage: 25, monthlyAmount: 71.75, annualAmount: 861.00, color: '#10B981', icon: 'dollar-sign', primaryEtf: 'SCHD', primaryEtfName: 'Schwab U.S. Dividend Equity', rationale: 'Balance growth with passive income', __typename: 'AllocationSlice' },
+    { strategyId: 'fixed_income', strategyName: 'Fixed Income', percentage: 20, monthlyAmount: 57.40, annualAmount: 688.80, color: '#6366F1', icon: 'shield', primaryEtf: 'BND', primaryEtfName: 'Vanguard Total Bond Market', rationale: 'Stability during market volatility', __typename: 'AllocationSlice' },
+    { strategyId: 'ai_sector', strategyName: 'AI & Tech Growth', percentage: 10, monthlyAmount: 28.70, annualAmount: 344.40, color: '#7C3AED', icon: 'cpu', primaryEtf: 'QQQ', primaryEtfName: 'Invesco QQQ Trust', rationale: 'Targeted exposure to technology growth', __typename: 'AllocationSlice' },
+    { strategyId: 'real_estate', strategyName: 'Real Estate', percentage: 5, monthlyAmount: 14.35, annualAmount: 172.20, color: '#F59E0B', icon: 'home', primaryEtf: 'VNQ', primaryEtfName: 'Vanguard Real Estate ETF', rationale: 'Real asset diversification', __typename: 'AllocationSlice' },
+  ],
+  projected10yr: 49700,
+  projected20yr: 149300,
+  projected30yr: 350000,
+  expectedReturnRate: 0.075,
+  milestones: [
+    { years: 3, value: 10000, label: 'First $10K milestone', __typename: 'ProjectedMilestone' },
+    { years: 10, value: 50000, label: '$50K — Serious portfolio', __typename: 'ProjectedMilestone' },
+    { years: 16, value: 100000, label: '$100K — The hardest milestone', __typename: 'ProjectedMilestone' },
+    { years: 26, value: 250000, label: '$250K — Quarter millionaire', __typename: 'ProjectedMilestone' },
+  ],
+  headline: 'Investing $287/month with a moderate approach could grow to $350,000 in 30 years.',
+  portfolioAdjustments: ['Reduced tech allocation (you already have 45% tech)'],
+  warnings: [],
+  dataQuality: 'actual',
+  __typename: 'PortfolioBuilderResult',
+};

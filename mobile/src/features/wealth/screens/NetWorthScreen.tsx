@@ -720,8 +720,8 @@ const styles = StyleSheet.create({
   heroTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 20,
+    marginTop: 4,
+    marginBottom: 10,
     gap: 10,
   },
   backBtn: {
@@ -744,7 +744,7 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   heroTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
     color: D.white,
     letterSpacing: -0.5,
@@ -779,12 +779,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   heroBigNumBlock: {
-    marginBottom: 16,
+    marginBottom: 8,
     alignItems: 'flex-start',
-    gap: 10,
+    gap: 8,
   },
   heroBigNum: {
-    fontSize: 48,
+    fontSize: 44,
     fontWeight: '800',
     color: D.white,
     letterSpacing: -1.5,
@@ -823,9 +823,9 @@ const styles = StyleSheet.create({
   sparkContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    height: 52,
+    height: 48,
     gap: 2,
-    marginBottom: 16,
+    marginBottom: 10,
     paddingHorizontal: 2,
   },
   sparkBar: {
@@ -838,8 +838,8 @@ const styles = StyleSheet.create({
   timeRangeRow: {
     flexDirection: 'row',
     gap: 6,
-    paddingBottom: 20,
-    paddingTop: 4,
+    paddingBottom: 14,
+    paddingTop: 2,
   },
   rangeTab: {
     flex: 1,
@@ -865,7 +865,7 @@ const styles = StyleSheet.create({
   // ── Scroll body ───────────────────────────────────────────────────────────
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 20,
+    paddingTop: 14,
   },
   sectionLabel: {
     fontSize: 10,

@@ -491,6 +491,25 @@ export default function LeakDetectorScreen() {
               </View>
             )}
 
+            {/* ── Invest This Money CTA ─────────────────────────────────────── */}
+            {totalMonthly > 0 && (
+              <Pressable
+                style={({ pressed }) => [styles.investCta, { opacity: pressed ? 0.85 : 1 }]}
+                onPress={() => navigation.navigate('Reallocate', { monthlyAmount: totalMonthly })}
+              >
+                <View style={styles.investCtaIcon}>
+                  <Feather name="refresh-cw" size={20} color={D.white} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.investCtaTitle}>Invest This Money</Text>
+                  <Text style={styles.investCtaSubtitle}>
+                    Turn {fmtMonthly(totalMonthly)} into wealth-building strategies
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={22} color={D.white} />
+              </Pressable>
+            )}
+
             <View style={{ height: 32 }} />
           </>
         )}
@@ -507,13 +526,13 @@ const styles = StyleSheet.create({
   // ── Hero ──────────────────────────────────────────────────────────────────
   hero: {
     paddingHorizontal: 20,
-    paddingBottom: 24,
+    paddingBottom: 14,
   },
   heroTop: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 20,
+    marginBottom: 10,
   },
   backBtn: {
     width: 36,
@@ -532,7 +551,7 @@ const styles = StyleSheet.create({
     marginBottom: 3,
   },
   heroTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
     color: D.white,
     letterSpacing: -0.5,
@@ -555,32 +574,32 @@ const styles = StyleSheet.create({
     borderRadius: D.r16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.14)',
-    padding: 20,
-    marginBottom: 16,
+    padding: 14,
+    marginBottom: 10,
     alignItems: 'center',
   },
   glassAmount: {
-    fontSize: 48,
+    fontSize: 40,
     fontWeight: '800',
     color: D.white,
     letterSpacing: -1.5,
-    lineHeight: 54,
+    lineHeight: 46,
   },
   glassAnnual: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     color: D.amber,
-    marginTop: 2,
+    marginTop: 0,
   },
   glassFive: {
-    fontSize: 14,
+    fontSize: 13,
     color: 'rgba(255,255,255,0.75)',
-    marginTop: 6,
+    marginTop: 4,
   },
   glassIfInvested: {
-    fontSize: 12,
+    fontSize: 11,
     color: 'rgba(255,255,255,0.4)',
-    marginTop: 2,
+    marginTop: 1,
   },
 
   // Count pill
@@ -593,8 +612,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(239,68,68,0.35)',
     borderRadius: 99,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
   countPillText: {
     fontSize: 11,
@@ -606,22 +625,22 @@ const styles = StyleSheet.create({
   // ── Scroll body ────────────────────────────────────────────────────────────
   scrollContent: {
     paddingHorizontal: 16,
-    paddingTop: 20,
+    paddingTop: 14,
   },
 
   // Impact row
   impactRow: {
     flexDirection: 'row',
     gap: 10,
-    marginBottom: 20,
+    marginBottom: 12,
   },
   impactCard: {
     flex: 1,
     borderRadius: D.r16,
     borderWidth: 1,
-    padding: 16,
+    padding: 12,
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
   },
   impactAmount: {
     fontSize: 22,
@@ -889,5 +908,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
+  },
+
+  // ── Invest This Money CTA ───────────────────────────────────────────────────
+  investCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: '#10B981',
+    borderRadius: 18,
+    padding: 18,
+    marginTop: 16,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 4,
+  },
+  investCtaIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  investCtaTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+  },
+  investCtaSubtitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
   },
 });

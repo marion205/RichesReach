@@ -33,6 +33,14 @@ import {
   DEMO_TRANSPARENCY_DASHBOARD,
   DEMO_TRANSPARENCY_PERFORMANCE,
   DEMO_ORACLE_INSIGHTS,
+  DEMO_FINANCIAL_LEAKS,
+  DEMO_WEALTH_ARRIVAL,
+  DEMO_NET_WORTH_HISTORY,
+  DEMO_FINANCIAL_HEALTH,
+  DEMO_INCOME_INTELLIGENCE,
+  DEMO_LIFE_DECISION,
+  DEMO_REALLOCATION_STRATEGIES,
+  DEMO_BUILD_PORTFOLIO,
 } from '../services/demoMockData';
 
 // Build swing signals with full GetSwingSignals schema (triggeredAt, signalType, stopPrice, etc.)
@@ -1051,6 +1059,67 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
       },
     ],
   },
+
+  // ── Financial GPS Screens ───────────────────────────────────────────────────
+  
+  // Leak Detector
+  GetFinancialLeaks: { financialLeaks: DEMO_FINANCIAL_LEAKS },
+  
+  // Wealth Arrival
+  GetWealthArrival: { wealthArrival: DEMO_WEALTH_ARRIVAL },
+  
+  // Net Worth
+  GetNetWorthHistory: { netWorthHistory: DEMO_NET_WORTH_HISTORY },
+  
+  // Financial Health Score
+  GetFinancialHealth: { financialHealth: DEMO_FINANCIAL_HEALTH },
+  
+  // Income Intelligence
+  GetIncomeIntelligence: { incomeIntelligence: DEMO_INCOME_INTELLIGENCE },
+  
+  // Life Decision Simulator
+  GetLifeDecision: { lifeDecision: DEMO_LIFE_DECISION },
+  SimulateDecision: {
+    simulateDecision: {
+      userId: 1,
+      decisionType: 'major_purchase',
+      description: 'Buy a $60K car',
+      amount: 60000,
+      monthlyCost: 850,
+      opportunityCost10yr: 142000,
+      netWorthDelta10yr: -98000,
+      monthlySurplusImpact: -850,
+      breakEvenYears: null,
+      currentNetWorth: 145000,
+      investableSurplusMonthly: 2200,
+      returnRate: 0.07,
+      projectionYears: 10,
+      headlineSentence: 'This purchase would delay your millionaire goal by 4.2 years.',
+      recommendation: 'Consider a more affordable option or delay the purchase to minimize impact on your wealth trajectory.',
+      dataQuality: 'actual',
+      yearByYear: Array.from({ length: 10 }, (_, i) => {
+        const year = 2026 + i;
+        const withoutPurchase = Math.round(145000 * Math.pow(1.07, i) + 26400 * ((Math.pow(1.07, i) - 1) / 0.07));
+        const withPurchase = Math.round(85000 * Math.pow(1.07, i) + 16200 * ((Math.pow(1.07, i) - 1) / 0.07));
+        return { year, netWorthWith: withPurchase, netWorthWithout: withoutPurchase, delta: withPurchase - withoutPurchase };
+      }),
+      __typename: 'DecisionSimulationType',
+    },
+  },
+  
+  // Money Reallocation Engine
+  GetReallocationStrategies: { reallocationStrategies: DEMO_REALLOCATION_STRATEGIES },
+  
+  // AI Portfolio Builder
+  BuildPortfolio: { buildPortfolio: DEMO_BUILD_PORTFOLIO },
+  GetBuildPortfolio: { buildPortfolio: DEMO_BUILD_PORTFOLIO },
+  
+  // Alternative operation name variants (snake_case → camelCase)
+  getReallocationStrategies: { reallocationStrategies: DEMO_REALLOCATION_STRATEGIES },
+  getFinancialLeaks: { financialLeaks: DEMO_FINANCIAL_LEAKS },
+  getWealthArrival: { wealthArrival: DEMO_WEALTH_ARRIVAL },
+  getFinancialHealth: { financialHealth: DEMO_FINANCIAL_HEALTH },
+  getIncomeIntelligence: { incomeIntelligence: DEMO_INCOME_INTELLIGENCE },
 
   // Mutations — return success shapes
   GenerateAIRecommendations: {

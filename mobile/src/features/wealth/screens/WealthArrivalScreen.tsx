@@ -789,13 +789,13 @@ const styles = StyleSheet.create({
   // Hero
   hero: {
     paddingHorizontal: 20,
-    paddingBottom: 24,
+    paddingBottom: 14,
   },
   heroTop: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 20,
-    paddingTop: 4,
+    marginBottom: 10,
+    paddingTop: 2,
   },
   heroEyebrow: {
     fontSize: 10,
@@ -805,7 +805,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   heroTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '800',
     color: D.white,
     letterSpacing: -0.5,
@@ -852,7 +852,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.18)',
-    padding: 20,
+    padding: 14,
     alignItems: 'center',
   },
   glassEyebrow: {
@@ -860,24 +860,24 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: 'rgba(255,255,255,0.5)',
     letterSpacing: 2,
-    marginBottom: 6,
+    marginBottom: 2,
   },
   glassYearRow: {
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
   },
   glassYear: {
-    fontSize: 64,
+    fontSize: 52,
     fontWeight: '800',
     color: D.white,
     letterSpacing: -2,
-    lineHeight: 68,
+    lineHeight: 56,
   },
   glassYearSub: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
     color: 'rgba(255,255,255,0.55)',
-    marginTop: 2,
+    marginTop: 0,
   },
   scenarioPillsRow: {
     flexDirection: 'row',
@@ -885,13 +885,13 @@ const styles = StyleSheet.create({
   },
   scenarioYrPill: {
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
     backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.15)',
-    minWidth: 72,
+    minWidth: 68,
   },
   scenarioYrLabel: {
     fontSize: 9,
@@ -910,12 +910,12 @@ const styles = StyleSheet.create({
   scenarioToggleRow: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 16,
+    marginBottom: 10,
   },
   scenarioTogglePill: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 8,
     borderRadius: 12,
     backgroundColor: D.card,
     borderWidth: StyleSheet.hairlineWidth,
@@ -1235,7 +1235,7 @@ const styles = StyleSheet.create({
   // List container
   listContent: {
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 10,
   },
 
   // Empty state
