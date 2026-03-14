@@ -1609,6 +1609,80 @@ const IS_DEMO = process.env.EXPO_PUBLIC_DEMO_MODE === 'true';
                 </View>
                 <Icon name="chevron-right" size={16} color="#8E8E93" />
               </TouchableOpacity>
+
+              {/* ── Financial GPS ─────────────────────────────── */}
+              <TouchableOpacity
+                style={[styles.learningCard, { backgroundColor: '#0D1B2E', borderWidth: 1, borderColor: '#1E3A5F' }]}
+                onPress={() => {
+                  try {
+                    if (navigateTo) { navigateTo('NetWorth'); }
+                    else { navigation.navigate('NetWorth' as never); }
+                  } catch (e) { globalNavigate('NetWorth'); }
+                }}
+              >
+                <View style={[styles.learningCardIcon, { backgroundColor: '#10B981' }]}>
+                  <Icon name="trending-up" size={22} color="#FFFFFF" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={[styles.learningCardTitle, { color: '#FFFFFF' }]}>Net Worth</Text>
+                  <Text style={[styles.learningCardDescription, { color: '#94A3B8' }]}>
+                    Track & grow your total wealth
+                  </Text>
+                  <Text style={[styles.learningCardMeta, { color: '#10B981', fontWeight: '600' }]}>
+                    History • Breakdown • Records
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#10B981" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.learningCard, { backgroundColor: '#0D0B2A', borderWidth: 1, borderColor: '#2D2070' }]}
+                onPress={() => {
+                  try {
+                    if (navigateTo) { navigateTo('WealthArrival'); }
+                    else { navigation.navigate('WealthArrival' as never); }
+                  } catch (e) { globalNavigate('WealthArrival'); }
+                }}
+              >
+                <View style={[styles.learningCardIcon, { backgroundColor: '#6366F1' }]}>
+                  <Icon name="flag" size={22} color="#FFFFFF" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={[styles.learningCardTitle, { color: '#FFFFFF' }]}>Wealth Arrival</Text>
+                  <Text style={[styles.learningCardDescription, { color: '#94A3B8' }]}>
+                    When will you hit your goal?
+                  </Text>
+                  <Text style={[styles.learningCardMeta, { color: '#818CF8', fontWeight: '600' }]}>
+                    3 Scenarios • Year-by-Year
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#818CF8" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.learningCard, { backgroundColor: '#1A0505', borderWidth: 1, borderColor: '#4A1010' }]}
+                onPress={() => {
+                  try {
+                    if (navigateTo) { navigateTo('LeakDetector'); }
+                    else { navigation.navigate('LeakDetector' as never); }
+                  } catch (e) { globalNavigate('LeakDetector'); }
+                }}
+              >
+                <View style={[styles.learningCardIcon, { backgroundColor: '#EF4444' }]}>
+                  <Icon name="alert-circle" size={22} color="#FFFFFF" />
+                </View>
+                <View style={styles.learningCardContent}>
+                  <Text style={[styles.learningCardTitle, { color: '#FFFFFF' }]}>Leak Detector</Text>
+                  <Text style={[styles.learningCardDescription, { color: '#94A3B8' }]}>
+                    Find subscriptions draining cash
+                  </Text>
+                  <Text style={[styles.learningCardMeta, { color: '#F87171', fontWeight: '600' }]}>
+                    Subscriptions • 5yr Cost • FV
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={16} color="#F87171" />
+              </TouchableOpacity>
+
             </View>
           </View>
 

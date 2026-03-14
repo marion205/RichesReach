@@ -40,6 +40,9 @@ export default function InvestHubScreen({ navigateTo: navigateToProp }: InvestHu
       { key: 'trade', title: 'Trading', subtitle: 'Live & options', icon: 'activity', to: 'trading' },
       { key: 'portfolio', title: 'Portfolio', subtitle: 'Positions & P/L', icon: 'pie-chart', to: 'Portfolio' },
       { key: 'forex', title: 'Forex', subtitle: '24/7 market coverage', icon: 'globe', to: 'Forex' },
+      { key: 'networth', title: 'Net Worth', subtitle: 'History & breakdown', icon: 'trending-up', to: 'NetWorth' },
+      { key: 'wealtharrival', title: 'Wealth Arrival', subtitle: 'When you hit your goal', icon: 'flag', to: 'WealthArrival' },
+      { key: 'leaks', title: 'Leak Detector', subtitle: 'Kill hidden subscriptions', icon: 'alert-circle', to: 'LeakDetector' },
     ],
     []
   );
