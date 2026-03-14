@@ -167,6 +167,27 @@ except (ImportError, SyntaxError) as e:
         pass
 
 try:
+    from .financial_health_types import FinancialHealthQueries
+except (ImportError, SyntaxError) as e:
+    logger.warning(f"FinancialHealthQueries not available: {e}")
+    class FinancialHealthQueries(graphene.ObjectType):
+        pass
+
+try:
+    from .life_decision_types import LifeDecisionQueries
+except (ImportError, SyntaxError) as e:
+    logger.warning(f"LifeDecisionQueries not available: {e}")
+    class LifeDecisionQueries(graphene.ObjectType):
+        pass
+
+try:
+    from .income_intelligence_types import IncomeIntelligenceQueries
+except (ImportError, SyntaxError) as e:
+    logger.warning(f"IncomeIntelligenceQueries not available: {e}")
+    class IncomeIntelligenceQueries(graphene.ObjectType):
+        pass
+
+try:
     from .opportunity_discovery_types import OpportunityDiscoveryQueries
 except (ImportError, SyntaxError) as e:
     logger.warning(f"OpportunityDiscoveryQueries not available: {e}")
@@ -333,7 +354,7 @@ except (ImportError, SyntaxError) as e:
     class DiscussionsQuery(graphene.ObjectType):
         pass
 
-class ExtendedQuery(PremiumQueries, BrokerQueries, TradingQuery, BudgetSpendingQuery, SocialQuery, MarketDataQuery, AnalyticsQuery, SecurityQuery, SignalsQuery, OptionsRustQuery, DiscussionsQuery, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, RiskManagementQueries, OptionsAlertQueries, BlockchainQueries, DefiQueries, CryptoQueries, RAHAQueries, ChanQuantQueries, TransparencyQueries, SpeedOptimizationQueries, OptionsQueries, RepairQueries, FinancialGraphQueries, OpportunityDiscoveryQueries, WealthArrivalQueries, LeakDetectorQueries, NetWorthQueries, Query, graphene.ObjectType):
+class ExtendedQuery(PremiumQueries, BrokerQueries, TradingQuery, BudgetSpendingQuery, SocialQuery, MarketDataQuery, AnalyticsQuery, SecurityQuery, SignalsQuery, OptionsRustQuery, DiscussionsQuery, BankingQueries, SBLOCQueries, PaperTradingQueries, SocialQueries, PrivacyQueries, AIInsightsQueries, AIScansQueries, RiskManagementQueries, OptionsAlertQueries, BlockchainQueries, DefiQueries, CryptoQueries, RAHAQueries, ChanQuantQueries, TransparencyQueries, SpeedOptimizationQueries, OptionsQueries, RepairQueries, FinancialGraphQueries, OpportunityDiscoveryQueries, WealthArrivalQueries, LeakDetectorQueries, NetWorthQueries, FinancialHealthQueries, LifeDecisionQueries, IncomeIntelligenceQueries, Query, graphene.ObjectType):
     """
     Final Query type exposed by the schema.
 
