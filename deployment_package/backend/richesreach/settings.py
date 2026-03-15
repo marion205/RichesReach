@@ -508,6 +508,16 @@ CELERY_BEAT_SCHEDULE = {
 'task': 'core.celery_tasks.capture_net_worth_snapshots',
 'schedule': crontab(hour=6, minute=30),  # 6:30 AM UTC daily
 },
+# --- Behavioral ML: ranking feedback loop ---
+'update-ranking-weights': {
+'task': 'core.celery_tasks.update_ranking_weights_task',
+'schedule': crontab(hour=3, minute=0),  # 3 AM UTC daily
+},
+# --- Behavioral ML: learn drift centroids from engagement data ---
+'learn-drift-centroids': {
+'task': 'core.celery_tasks.learn_drift_centroids_task',
+'schedule': crontab(hour=3, minute=30),  # 3:30 AM UTC daily (after ranking weights)
+},
 }
 # Channels Configuration
 CHANNEL_LAYERS = {

@@ -1458,6 +1458,7 @@ export const DEMO_NEXT_BEST_ACTIONS = [
     actionLabel: 'Review Leaks',
     actionScreen: 'LeakDetector',
     reasoning: 'These recurring charges are the easiest money to redirect. Cancel what you don\'t use and watch your millionaire date move closer.',
+    toneVariant: 'default',
     __typename: 'NextBestAction',
   },
   {
@@ -1474,6 +1475,7 @@ export const DEMO_NEXT_BEST_ACTIONS = [
     actionLabel: 'Start Saving',
     actionScreen: 'FinancialHealth',
     reasoning: 'Before aggressive investing, you need a safety net. This protects you from having to sell investments at the worst time.',
+    toneVariant: 'default',
     __typename: 'NextBestAction',
   },
   {
@@ -1490,6 +1492,7 @@ export const DEMO_NEXT_BEST_ACTIONS = [
     actionLabel: 'Increase 401k',
     actionScreen: 'FinancialHealth',
     reasoning: 'Never leave free money on the table. Increase your 401k contribution to at least capture the full match.',
+    toneVariant: 'default',
     __typename: 'NextBestAction',
   },
 ];

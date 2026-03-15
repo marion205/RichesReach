@@ -232,6 +232,15 @@ class InvestorProfileService:
             sophistication=normalize(raw_scores["sophistication"]),
         )
 
+    def get_profile(self, user_id: str) -> Optional[InvestorProfile]:
+        """
+        Look up a user's stored investor profile (quiz result).
+        MVP: returns None when profiles are not persisted.
+        In production, replace with DB lookup (e.g. InvestorProfile.objects.get(user_id=user_id)).
+        Used by learn_drift_centroids to group users by archetype.
+        """
+        return None
+
     def determine_archetype(self, dimensions: QuizDimensions) -> InvestorArchetype:
         """
         Determine the investor archetype from dimension scores.

@@ -22,6 +22,12 @@ from .next_best_action_service import (
     ActionPriority,
     ActionType,
 )
+from .behavioral_ranking_service import reorder as behavioral_reorder
+from . import behavioral_events as behavioral_events_module
+from .behavioral_consistency_service import get_consistency_result
+from .behavioral_bias_signal import get_behavioral_bias_signal
+from .ranking_config import get_shadow_mode, get_ml_traffic_fraction, should_serve_ml_order
+from .tone_optimization_service import get_tone_variants_for_recs
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -167,18 +173,22 @@ class NextBestActionType(ObjectType):
     action_type = String(required=True)
     priority = Int(required=True)
     priority_score = Float(required=True)
-    
+
     headline = String(required=True)
     description = String(required=True)
     impact_text = String(required=True)
-    
+
     monthly_amount = Float()
     total_impact = Float()
     time_impact_days = Int()
-    
+
     action_label = String(required=True)
     action_screen = String()
     reasoning = String()
+
+    # Phase 1 Messenger: which tone variant the backend selected for this rec.
+    # Values: "default" | "direct" | "encouraging" | "minimal"
+    tone_variant = String()
 
 
 class LeakRedirectSuggestionType(ObjectType):
@@ -193,6 +203,27 @@ class LeakRedirectSuggestionType(ObjectType):
     suggested_etf = String()
     action_screen = String(required=True)
     reasoning = String(required=True)
+
+
+class DriftSignalType(ObjectType):
+    """Phase 2: Archetype drift signal (non-accusatory)."""
+    suggested_archetype = String(required=True)
+    confidence_match = Float(required=True)
+    message_key = String(required=True)
+    show_nudge = Boolean(required=True)
+
+
+class BehavioralConsistencyType(ObjectType):
+    """Phase 2: Consistency score and optional drift."""
+    consistency_score = Float(required=True)
+    drift = Field(DriftSignalType)
+
+
+class BehavioralBiasSignalType(ObjectType):
+    """Phase 3: Bias-from-behavior signal (feeds into rule-based bias; rules own final flag)."""
+    suggested_bias_types = List(String, required=True)
+    confidence = Float(required=True)
+    show_in_ui = Boolean(required=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -262,6 +293,20 @@ class InvestorProfileQueries(ObjectType):
         user_id=String(required=True),
         leak_amount=Float(required=True),
         description="Get suggestion for where to redirect savings from a canceled leak"
+    )
+    
+    # Phase 2: Behavioral consistency + drift
+    behavioral_consistency = Field(
+        BehavioralConsistencyType,
+        user_id=String(required=True),
+        description="Consistency score (quiz vs behavior) and optional drift signal"
+    )
+    
+    # Phase 3: Bias-from-behavior (input to rule-based bias; rules own final flag)
+    behavioral_bias_signal = Field(
+        BehavioralBiasSignalType,
+        user_id=String(required=True),
+        description="Suggested bias types from engagement; for display and future rule input"
     )
     
     def resolve_investor_quiz_questions(self, info):
@@ -400,7 +445,45 @@ class InvestorProfileQueries(ObjectType):
         actions = next_best_action_service.get_next_best_actions(
             profile, state, max_actions
         )
-        
+        ranked = behavioral_reorder(
+            actions, user_id, profile.archetype.value,
+            segment=profile.archetype.value,
+        )
+        rule_ids = [a.id for a in actions]
+        ml_ids = [a.id for a in ranked]
+        rec_types = [a.action_type.value for a in actions]
+        rec_types_ml = [a.action_type.value for a in ranked]
+        variants_rule = get_tone_variants_for_recs(user_id, rule_ids, rec_types)
+        variants_ml = get_tone_variants_for_recs(user_id, ml_ids, rec_types_ml)
+
+        shadow_mode = get_shadow_mode()
+        ml_frac = get_ml_traffic_fraction()
+
+        if shadow_mode:
+            behavioral_events_module.log_impression_with_shadow(
+                user_id, rule_ids, ml_ids, rec_types=rec_types, variants=variants_rule
+            )
+            to_return = actions
+            serving_variants = dict(zip(rule_ids, variants_rule))
+        elif ml_frac >= 1.0:
+            behavioral_events_module.log_impression(
+                user_id, ml_ids, rec_types=rec_types_ml, variants=variants_ml
+            )
+            to_return = ranked
+            serving_variants = dict(zip(ml_ids, variants_ml))
+        elif ml_frac > 0:
+            behavioral_events_module.log_impression_with_shadow(
+                user_id, rule_ids, ml_ids, rec_types=rec_types, variants=variants_rule
+            )
+            to_return = ranked if should_serve_ml_order(user_id) else actions
+            serving_variants = dict(zip(ml_ids, variants_ml)) if to_return is ranked else dict(zip(rule_ids, variants_rule))
+        else:
+            behavioral_events_module.log_impression_with_shadow(
+                user_id, rule_ids, ml_ids, rec_types=rec_types, variants=variants_rule
+            )
+            to_return = actions
+            serving_variants = dict(zip(rule_ids, variants_rule))
+
         return [
             NextBestActionType(
                 id=a.id,
@@ -416,10 +499,45 @@ class InvestorProfileQueries(ObjectType):
                 action_label=a.action_label,
                 action_screen=a.action_screen,
                 reasoning=a.reasoning,
+                tone_variant=serving_variants.get(a.id, "default"),
             )
-            for a in actions
+            for a in to_return
         ]
     
+    def resolve_behavioral_consistency(self, info, user_id: str):
+        """Phase 2: Consistency score and optional drift signal."""
+        from .investor_profile_types import QuizDimensions, ARCHETYPE_METADATA
+        dimensions = QuizDimensions(
+            risk_tolerance=65,
+            locus_of_control=70,
+            loss_aversion=40,
+            sophistication=55,
+        )
+        archetype = investor_profile_service.determine_archetype(dimensions)
+        result = get_consistency_result(user_id, archetype.value)
+        drift_type = None
+        if result.drift:
+            d = result.drift
+            drift_type = DriftSignalType(
+                suggested_archetype=d.suggested_archetype,
+                confidence_match=d.confidence_match,
+                message_key=d.message_key,
+                show_nudge=d.show_nudge,
+            )
+        return BehavioralConsistencyType(
+            consistency_score=result.consistency_score,
+            drift=drift_type,
+        )
+
+    def resolve_behavioral_bias_signal(self, info, user_id: str):
+        """Phase 3: Bias-from-behavior signal."""
+        result = get_behavioral_bias_signal(user_id)
+        return BehavioralBiasSignalType(
+            suggested_bias_types=result.suggested_bias_types,
+            confidence=result.confidence,
+            show_in_ui=result.show_in_ui,
+        )
+
     def resolve_leak_redirect_suggestion(
         self, info, user_id: str, leak_amount: float
     ):
@@ -558,9 +676,54 @@ class SubmitInvestorQuiz(graphene.Mutation):
             )
 
 
+class LogBehavioralEvent(graphene.Mutation):
+    """Log a behavioral event (impression or interaction) for NBA ranking refinement."""
+
+    class Arguments:
+        user_id = String(required=True)
+        rec_id = String(required=True)
+        event_type = String(required=True)  # "impression" | "interaction"
+        action = String()  # "click" | "dismiss" | "save" (for interaction)
+        time_to_interact_ms = Int()
+        rec_type = String()
+
+    success = Boolean(required=True)
+    error = String()
+
+    def mutate(
+        self,
+        info,
+        user_id: str,
+        rec_id: str,
+        event_type: str,
+        action: str = None,
+        time_to_interact_ms: int = None,
+        rec_type: str = None,
+    ):
+        try:
+            if event_type == "impression":
+                behavioral_events_module.log_impression(
+                    user_id, [rec_id], rec_types=[rec_type] if rec_type else None
+                )
+            elif event_type == "interaction":
+                behavioral_events_module.log_interaction(
+                    user_id,
+                    rec_id,
+                    action=action or "click",
+                    time_to_interact_ms=time_to_interact_ms,
+                    rec_type=rec_type,
+                )
+            else:
+                return LogBehavioralEvent(success=False, error="event_type must be impression or interaction")
+            return LogBehavioralEvent(success=True)
+        except Exception as e:
+            return LogBehavioralEvent(success=False, error=str(e))
+
+
 class InvestorProfileMutations(ObjectType):
     """Mutations for the Investor Profile system."""
     submit_investor_quiz = SubmitInvestorQuiz.Field()
+    log_behavioral_event = LogBehavioralEvent.Field()
 
 
 # Import for schema registration

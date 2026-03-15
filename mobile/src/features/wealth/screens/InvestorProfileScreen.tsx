@@ -5,7 +5,7 @@
  * and Next Best Actions.
  */
 
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import { useQuery, useMutation, gql } from '@apollo/client';
 import BiasDetectionService, { BiasAnalysis } from '../services/BiasDetectionService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -175,6 +176,168 @@ const DEMO_ACTIONS = [
     icon: 'gift' as const,
   },
 ];
+
+// GraphQL: Next Best Actions (backend applies behavioral ranking + tone selection)
+const GET_NEXT_BEST_ACTIONS = gql`
+  query GetNextBestActions($userId: String!, $maxActions: Int) {
+    nextBestActions(userId: $userId, maxActions: $maxActions) {
+      id
+      actionType
+      priority
+      priorityScore
+      headline
+      description
+      impactText
+      actionLabel
+      actionScreen
+      toneVariant
+    }
+  }
+`;
+
+const GET_BEHAVIORAL_CONSISTENCY = gql`
+  query GetBehavioralConsistency($userId: String!) {
+    behavioralConsistency(userId: $userId) {
+      consistencyScore
+      drift {
+        suggestedArchetype
+        confidenceMatch
+        messageKey
+        showNudge
+      }
+    }
+  }
+`;
+
+const GET_BEHAVIORAL_BIAS_SIGNAL = gql`
+  query GetBehavioralBiasSignal($userId: String!) {
+    behavioralBiasSignal(userId: $userId) {
+      suggestedBiasTypes
+      confidence
+      showInUi
+    }
+  }
+`;
+
+const LOG_BEHAVIORAL_EVENT = gql`
+  mutation LogBehavioralEvent(
+    $userId: String!
+    $recId: String!
+    $eventType: String!
+    $action: String
+    $timeToInteractMs: Int
+    $recType: String
+  ) {
+    logBehavioralEvent(
+      userId: $userId
+      recId: $recId
+      eventType: $eventType
+      action: $action
+      timeToInteractMs: $timeToInteractMs
+      recType: $recType
+    ) {
+      success
+      error
+    }
+  }
+`;
+
+// Map API action type to card color/icon (same as DEMO_ACTIONS)
+const ACTION_STYLE: Record<string, { color: string; icon: 'alert-circle' | 'shield' | 'gift' | 'trending-up' | 'credit-card' }> = {
+  cancel_leak: { color: D.red, icon: 'alert-circle' },
+  build_emergency_fund: { color: D.amber, icon: 'shield' },
+  capture_match: { color: D.green, icon: 'gift' },
+  pay_debt: { color: D.red, icon: 'credit-card' },
+  start_investing: { color: D.green, icon: 'trending-up' },
+  increase_contribution: { color: D.indigo, icon: 'trending-up' },
+  rebalance: { color: D.indigo, icon: 'trending-up' },
+  reduce_concentration: { color: D.amber, icon: 'trending-up' },
+  tax_loss_harvest: { color: D.green, icon: 'trending-up' },
+  reduce_fees: { color: D.green, icon: 'trending-up' },
+  redirect_savings: { color: D.green, icon: 'trending-up' },
+};
+
+// Phase 1 Messenger: per-variant copy overrides.
+// Keys are tone variant names; values are partial overrides applied on top of
+// the rule-engine copy. Only fields present in an entry are overridden —
+// undefined fields fall back to the rule-engine default.
+// Content still owned by rules; this only adjusts framing/emphasis.
+type ToneCopy = { headline?: string; description?: string; actionLabel?: string };
+type ActionToneMap = Partial<Record<string, ToneCopy>>;
+
+const ACTION_TONE_COPY: Record<string, ActionToneMap> = {
+  cancel_leak: {
+    direct:      { headline: 'Cut $127/mo in waste now', description: 'You have 4 unused subscriptions. Cancel them today.' },
+    encouraging: { headline: 'Free up $127/mo for your goals', description: 'Small cuts add up — you\'re this close to redirecting real money.' },
+    minimal:     { description: 'Review and cancel unused subscriptions.' },
+  },
+  build_emergency_fund: {
+    direct:      { headline: 'Add $5,040 to your safety net', description: 'You\'re 1.1 months short. Fix the gap.' },
+    encouraging: { headline: 'Your fortress is almost there', description: 'Just $5,040 away from real financial security. You can do this.' },
+    minimal:     { description: 'Build to 3 months of expenses.' },
+  },
+  capture_match: {
+    direct:      { headline: 'Claim $1,300 in free match money', description: 'Your employer owes you this. Adjust contributions now.' },
+    encouraging: { headline: '$1,300/year is waiting for you', description: 'This is the single best return available to you right now.' },
+    minimal:     { description: 'Increase 401k to capture full employer match.' },
+  },
+  pay_debt: {
+    direct:      { headline: 'Eliminate high-interest debt', description: 'Every day costs you money. Pay it off.' },
+    encouraging: { headline: 'You\'re close to debt freedom', description: 'Knocking this out unlocks so much more flexibility.' },
+    minimal:     { description: 'Pay down highest-rate debt first.' },
+  },
+  start_investing: {
+    direct:      { headline: 'Start investing this month', description: 'Waiting is the most expensive decision you can make.' },
+    encouraging: { headline: 'The market is ready when you are', description: 'Starting small is still starting — and that\'s what matters.' },
+    minimal:     { description: 'Open a brokerage and make your first investment.' },
+  },
+  increase_contribution: {
+    direct:      { headline: 'Bump your contribution rate', description: 'Your future self needs more than you\'re putting in today.' },
+    encouraging: { headline: 'A small increase goes a long way', description: 'Even 1% more today compounds into thousands over time.' },
+    minimal:     { description: 'Increase your retirement contribution percentage.' },
+  },
+  rebalance: {
+    direct:      { headline: 'Rebalance your portfolio', description: 'You\'ve drifted from your target allocation. Correct it.' },
+    encouraging: { headline: 'Stay on your target path', description: 'A quick rebalance keeps you aligned with your long-term plan.' },
+    minimal:     { description: 'Restore your target asset allocation.' },
+  },
+  reduce_concentration: {
+    direct:      { headline: 'Reduce single-stock risk now', description: 'Too much in one position. Diversify before it hurts you.' },
+    encouraging: { headline: 'Spread your wins across more opportunities', description: 'Diversifying locks in gains and protects your portfolio.' },
+    minimal:     { description: 'Reduce exposure to top holdings.' },
+  },
+  tax_loss_harvest: {
+    direct:      { headline: 'Harvest losses before year-end', description: 'These paper losses can offset gains. Act now.' },
+    encouraging: { headline: 'Turn a loss into a tax win', description: 'Smart investors use down positions to reduce their tax bill.' },
+    minimal:     { description: 'Sell underwater positions to offset capital gains.' },
+  },
+  reduce_fees: {
+    direct:      { headline: 'Cut fund fees immediately', description: 'High expense ratios silently erode your returns every year.' },
+    encouraging: { headline: 'Keep more of what you earn', description: 'Switching to low-cost funds is one of the easiest wins available.' },
+    minimal:     { description: 'Move to lower expense-ratio funds.' },
+  },
+  redirect_savings: {
+    direct:      { headline: 'Put idle cash to work', description: 'Savings sitting still is money losing to inflation.' },
+    encouraging: { headline: 'Your savings can work harder for you', description: 'Redirecting even a small amount now accelerates your timeline.' },
+    minimal:     { description: 'Redirect surplus cash to an investment account.' },
+  },
+};
+
+/** Merge rule-engine copy with the tone-variant override (if any). */
+function applyToneCopy(
+  actionType: string,
+  toneVariant: string | undefined | null,
+  base: { headline: string; description: string; actionLabel: string },
+): { headline: string; description: string; actionLabel: string } {
+  if (!toneVariant || toneVariant === 'default') return base;
+  const override = ACTION_TONE_COPY[actionType]?.[toneVariant];
+  if (!override) return base;
+  return {
+    headline: override.headline ?? base.headline,
+    description: override.description ?? base.description,
+    actionLabel: override.actionLabel ?? base.actionLabel,
+  };
+}
 
 // ── Bias Gauge Component ─────────────────────────────────────────────────────
 
@@ -378,6 +541,8 @@ function DimensionBar({
 
 // ── Main Component ───────────────────────────────────────────────────────────
 
+const DEMO_USER_ID = 'demo-user';
+
 export default function InvestorProfileScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
@@ -387,6 +552,61 @@ export default function InvestorProfileScreen() {
 
   const [biasAnalysis, setBiasAnalysis] = useState<BiasAnalysis | null>(null);
   const [loadingBiases, setLoadingBiases] = useState(true);
+
+  const { data: nbaData } = useQuery(GET_NEXT_BEST_ACTIONS, {
+    variables: { userId: DEMO_USER_ID, maxActions: 3 },
+  });
+  const { data: consistencyData } = useQuery(GET_BEHAVIORAL_CONSISTENCY, {
+    variables: { userId: DEMO_USER_ID },
+  });
+  const { data: biasSignalData } = useQuery(GET_BEHAVIORAL_BIAS_SIGNAL, {
+    variables: { userId: DEMO_USER_ID },
+  });
+  const [logBehavioralEvent] = useMutation(LOG_BEHAVIORAL_EVENT);
+  const impressionLoggedRef = useRef(false);
+
+  const displayActions = useMemo(() => {
+    const list = nbaData?.nextBestActions;
+    if (list?.length) {
+      return list.map((a: { id: string; actionType: string; priority: number; headline: string; description: string; impactText: string; actionScreen: string; actionLabel: string; toneVariant?: string }, i: number) => {
+        const style = ACTION_STYLE[a.actionType] || { color: D.indigo, icon: 'trending-up' as const };
+        const tonedCopy = applyToneCopy(a.actionType, a.toneVariant, {
+          headline: a.headline,
+          description: a.description,
+          actionLabel: a.actionLabel || 'Take Action',
+        });
+        return {
+          id: a.id,
+          type: a.actionType,
+          priority: (i + 1) as 1 | 2 | 3,
+          headline: tonedCopy.headline,
+          description: tonedCopy.description,
+          impact: a.impactText,
+          screen: a.actionType === 'capture_match' ? 'Reallocate' : a.actionScreen,
+          color: style.color,
+          icon: style.icon,
+          toneVariant: a.toneVariant || 'default',
+        };
+      });
+    }
+    return DEMO_ACTIONS;
+  }, [nbaData?.nextBestActions]);
+
+  useEffect(() => {
+    if (displayActions.length > 0 && !impressionLoggedRef.current) {
+      impressionLoggedRef.current = true;
+      displayActions.forEach((action: typeof DEMO_ACTIONS[0], index: number) => {
+        logBehavioralEvent({
+          variables: {
+            userId: DEMO_USER_ID,
+            recId: action.id,
+            eventType: 'impression',
+            recType: action.type,
+          },
+        }).catch(() => {});
+      });
+    }
+  }, [displayActions, logBehavioralEvent]);
 
   // Load real bias data from portfolio
   useEffect(() => {
@@ -449,13 +669,27 @@ export default function InvestorProfileScreen() {
     },
   ] : DEMO_BIASES;
 
-  const handleActionPress = (screen: string) => {
+  const handleActionPress = (screen: string, action: typeof DEMO_ACTIONS[0]) => {
+    logBehavioralEvent({
+      variables: {
+        userId: DEMO_USER_ID,
+        recId: action.id,
+        eventType: 'interaction',
+        action: 'click',
+        recType: action.type,
+      },
+    }).catch(() => {});
     navigation.navigate(screen);
   };
 
   const handleRetakeQuiz = () => {
     navigation.navigate('InvestorQuiz');
   };
+
+  const driftNudge = consistencyData?.behavioralConsistency?.drift;
+  const showDriftNudge = driftNudge?.showNudge === true;
+  const biasSignal = biasSignalData?.behavioralBiasSignal;
+  const showBiasSignal = biasSignal?.showInUi === true && (biasSignal?.suggestedBiasTypes?.length ?? 0) > 0;
 
   return (
     <View style={styles.root}>
@@ -498,6 +732,19 @@ export default function InvestorProfileScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Phase 2: Drift nudge (non-accusatory) */}
+        {showDriftNudge && (
+          <View style={styles.driftNudge}>
+            <Feather name="info" size={18} color={D.indigo} />
+            <Text style={styles.driftNudgeText}>
+              Your recent activity suggests your investing style may be evolving.
+            </Text>
+            <Pressable style={styles.driftNudgeBtn} onPress={handleRetakeQuiz}>
+              <Text style={styles.driftNudgeBtnText}>Review profile</Text>
+              <Feather name="chevron-right" size={14} color={D.indigo} />
+            </Pressable>
+          </View>
+        )}
         {/* Dimensions Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Your Dimensions</Text>
@@ -541,7 +788,18 @@ export default function InvestorProfileScreen() {
           <Text style={styles.sectionSubtitle}>
             Based on your quiz answers and portfolio behavior
           </Text>
-          
+          {showBiasSignal && (
+            <View style={styles.biasSignalBanner}>
+              <Feather name="activity" size={14} color={D.amber} />
+              <Text style={styles.biasSignalText}>
+                Your actions sometimes align with{' '}
+                {(biasSignal?.suggestedBiasTypes ?? [])
+                  .map((t: string) => t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()))
+                  .join(' and ')}{' '}
+                — see tips below.
+              </Text>
+            </View>
+          )}
           {loadingBiases ? (
             <View style={{ alignItems: 'center', paddingVertical: 20 }}>
               <ActivityIndicator size="small" color={D.indigo} />
@@ -569,12 +827,12 @@ export default function InvestorProfileScreen() {
             Based on your financial state and goals
           </Text>
           
-          {DEMO_ACTIONS.map((action, index) => (
+          {displayActions.map((action, index) => (
             <ActionCard
               key={action.id}
               action={action}
               index={index}
-              onPress={() => handleActionPress(action.screen)}
+              onPress={() => handleActionPress(action.screen, action)}
             />
           ))}
         </View>
@@ -675,7 +933,51 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 20,
   },
-  
+  driftNudge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: D.indigoFaint,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: D.indigo + '30',
+  },
+  driftNudgeText: {
+    flex: 1,
+    fontSize: 13,
+    color: D.textPrimary,
+    lineHeight: 18,
+  },
+  driftNudgeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  driftNudgeBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: D.indigo,
+  },
+  biasSignalBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: D.amberFaint,
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 10,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: D.amber + '40',
+  },
+  biasSignalText: {
+    flex: 1,
+    fontSize: 12,
+    color: D.textPrimary,
+    lineHeight: 17,
+  },
   // Section
   section: {
     marginBottom: 24,

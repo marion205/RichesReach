@@ -1602,7 +1602,37 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
   WeeklyWealthDigest: { weeklyWealthDigest: DEMO_WEEKLY_DIGEST },
   GetIdentityGaps: { identityGaps: DEMO_IDENTITY_GAPS },
   IdentityGaps: { identityGaps: DEMO_IDENTITY_GAPS },
-  
+  GetBehavioralConsistency: {
+    behavioralConsistency: {
+      consistencyScore: 0.85,
+      drift: null,
+      __typename: 'BehavioralConsistency',
+    },
+  },
+  BehavioralConsistency: {
+    behavioralConsistency: {
+      consistencyScore: 0.85,
+      drift: null,
+      __typename: 'BehavioralConsistency',
+    },
+  },
+  GetBehavioralBiasSignal: {
+    behavioralBiasSignal: {
+      suggestedBiasTypes: [] as string[],
+      confidence: 0,
+      showInUi: false,
+      __typename: 'BehavioralBiasSignal',
+    },
+  },
+  BehavioralBiasSignal: {
+    behavioralBiasSignal: {
+      suggestedBiasTypes: [] as string[],
+      confidence: 0,
+      showInUi: false,
+      __typename: 'BehavioralBiasSignal',
+    },
+  },
+
   // Alternative operation name variants (snake_case → camelCase)
   getReallocationStrategies: { reallocationStrategies: DEMO_REALLOCATION_STRATEGIES },
   getFinancialLeaks: { financialLeaks: DEMO_FINANCIAL_LEAKS },
@@ -1640,6 +1670,7 @@ const MOCK_RESPONSES: Record<string, Record<string, unknown>> = {
   EnableStrategy:  { enableStrategy: { success: true } },
   DisableStrategy: { disableStrategy: { success: true } },
   RunBacktest:     { runBacktest: { id: 'bt-demo-1', status: 'running' } },
+  LogBehavioralEvent: { logBehavioralEvent: { success: true } },
 };
 
 // ─── Mock terminating link ────────────────────────────────────────────────────

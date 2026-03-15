@@ -703,3 +703,37 @@ def generate_daily_brief_task():
     except Exception as e:
         logger.error(f"Error in generate daily brief task: {e}", exc_info=True)
         return {'status': 'failed', 'error': str(e)}
+
+
+@shared_task
+def update_ranking_weights_task():
+    """
+    Daily task: feedback loop for behavioral ML ranking. Computes rule vs ML CTR
+    from shadow impressions and optionally updates ranking weights.
+    Schedule via CELERY_BEAT_SCHEDULE (e.g. 3 AM UTC).
+    """
+    try:
+        from django.core.management import call_command
+        call_command("update_ranking_weights", "--update-weights")
+        logger.info("Ranking weights feedback task completed.")
+        return {'status': 'success'}
+    except Exception as e:
+        logger.error(f"Error in update_ranking_weights task: {e}", exc_info=True)
+        return {'status': 'failed', 'error': str(e)}
+
+
+@shared_task
+def learn_drift_centroids_task():
+    """
+    Daily task: learn per-archetype engagement centroids from recent click data
+    and write drift_centroids.json so get_drift_signal() uses data-driven centroids.
+    Schedule via CELERY_BEAT_SCHEDULE (e.g. 3:30 AM UTC, after ranking weights job).
+    """
+    try:
+        from django.core.management import call_command
+        call_command("learn_drift_centroids")
+        logger.info("Drift centroids learning task completed.")
+        return {'status': 'success'}
+    except Exception as e:
+        logger.error(f"Error in learn_drift_centroids task: {e}", exc_info=True)
+        return {'status': 'failed', 'error': str(e)}
